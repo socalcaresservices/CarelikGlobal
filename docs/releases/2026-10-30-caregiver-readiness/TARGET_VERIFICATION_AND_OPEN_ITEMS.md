@@ -56,3 +56,6 @@ Reported PASS (as reported by Stella Okereke; not independently verified): AWS a
 | C | Owner provides an existing approved path I do not know of (a standing read-only access route that avoids SG, host and secret) | none | If one exists, name it and Stella uses it |
 | D | Do not verify now | none | 0086 stays blocked; Phase C cannot start |
 If the host is stopped, starting it is a separate written step (not covered by A unless stated). Whatever the owner chooses, it should name the window, the single person, the exact steps, who re-checks the restore, and that nothing else changes.
+
+## 8. Update 2026-10-31: Option A approved (D14, A7)
+Part 2 is authorized for verification only: Stella, one window, procedure in `STELLA_READONLY_VERIFICATION.md` Part 2b. Not yet run; V1-V6 unknown. Passing Part 2 clears only the target-verification blocker. After her report, Claude records results and the SG restore confirmation here and in `CHECKLIST.md` C0. A non-null V5 is reported to the owner first.

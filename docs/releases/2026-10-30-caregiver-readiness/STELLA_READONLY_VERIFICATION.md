@@ -40,6 +40,16 @@ If any of 1 to 3 is needed, the owner must authorize that one specific step in w
 
 **Owner decision D13 (2026-10-31, `DECISION_RECORD.md` A5) settles Part 2a: least-privilege path only.** Use an existing lower-privilege login role that can `SET ROLE ogevia_readonly`. Do **not** use the master secret, start/stop `ogevia-db-admin-temp`, attach or change any security group, or create any network path. If the only way in needs one of those, **STOP and report the exact requirement** (what, why, which resource) before doing anything. Record in the results which login role was used (name only).
 
+## Part 2b. Authorized window procedure (owner decision D14, `DECISION_RECORD.md` A7)
+**Scope: Stella only, one window, Part 2 only.** The identifiers below are last-recorded values from `docs/aws/TEST_SLICE_DEPLOYMENT_APPROVAL.md` and are **NOT VERIFIED LIVE**: confirm each in step 1 before any change. Any mismatch: STOP and report.
+1. **Before (read-only):** `aws ec2 describe-instances --instance-ids i-0ce8db2d7e5839dd5` — record the state (must be `running`; if stopped, **STOP**, starting it is not authorized), the tag name `ogevia-db-admin-temp`, and the current groups (expect only `sg-00e01e2ca80442c1f`). Confirm AppSG `sg-064ffce3bcbe8eb3b` is the group named for the app and that RDS SG `sg-00530a1f4f7648e65` admits 5432 only from it. Record the window start time.
+2. **Attach (the one authorized change):** `aws ec2 modify-instance-attribute --instance-id i-0ce8db2d7e5839dd5 --groups sg-00e01e2ca80442c1f sg-064ffce3bcbe8eb3b` — run inside a script with an `EXIT` trap that always restores `--groups sg-00e01e2ca80442c1f`, so a failure or interrupt still restores.
+3. **Connect:** the documented SSM port-forward to `ogevia-prod-postgres` (command in `docs/aws/CLOUDSHELL_READONLY_INVENTORY.md`), database `ogevia_sv_test`. Read the master secret into a shell variable only; never `echo`, log, or write it; unset it when done. Do not open the secret in the console. Do not use `ogevia_prd`.
+4. **Run:** `STELLA_READONLY_VERIFICATION.sql` unchanged (it contains `begin read only; set local role ogevia_readonly; … rollback;`). The first output must show `ogevia_sv_test`; otherwise stop at once. Save the output (counts and settings only).
+5. **Restore and re-check (immediately):** close the tunnel and unset the variable. Confirm the instance groups are `sg-00e01e2ca80442c1f` only, no network interface uses AppSG, and RDS SG `sg-00530a1f4f7648e65` is unchanged. Record the window end time.
+6. **Report:** V1-V6, the **login role name** used (expected: the master login role, name only), confirmation of restore and re-check with times, and confirmation that no other change was made. Return it here.
+**If at any step something unexpected happens or a prohibited step is needed: restore the groups first, then stop and report.**
+
 ## Part 4. Do NOT do
 Do not run `cdk deploy`, `cdk bootstrap`, `cdk import`, `db:migrate`, `db:verify` writes, create a snapshot, call any `POST` route, press any activation button, change Cognito or security groups, or touch `ogevia_prd`. The real `cdk diff` (checklist C4a) waits for the owner's window and GO; it is not part of this checklist.
 
