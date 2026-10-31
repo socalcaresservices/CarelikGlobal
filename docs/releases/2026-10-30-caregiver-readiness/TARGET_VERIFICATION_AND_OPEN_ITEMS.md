@@ -37,3 +37,6 @@
 6. Reviewer completes and signs `SECURITY_REVIEW.md`.
 7. ~~Owner records the due-days and enforcement decisions~~ DONE (D9, D10).
 8. Phase C, then Phase D UAT with all four validators, then the release record update (D7).
+
+## 6. Update 2026-10-31: Operator report, Part 1
+Reported PASS (as reported by Stella Okereke; not independently verified): AWS account 300094796789, region us-west-2, `Ogevia-prod-*` stacks present, `ogevia-prod-postgres` available, publicly accessible = false, CloudFront banner confirmed. Package seen in Git at `015c6a2…`. **Part 2 (V1-V6) is blocked on the database access path** (`STELLA_READONLY_VERIFICATION.md` Part 2a: the earlier route needs a security-group change and the master credential; both need an owner decision). Enforcement value, organization count and ledger are still UNKNOWN. Parts 1 items 5-6 (API id, Cognito client, backup) and Part 3 not yet reported.

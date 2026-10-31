@@ -31,6 +31,13 @@ Use the SQL file `STELLA_READONLY_VERIFICATION.sql` (it is wrapped in `begin rea
 | 8 | Is there a mailbox you control that can receive Cognito invitation email for UAT? | yes, address kept out of documents | |
 | 9 | Git: on the Operator machine, `git fetch origin claude/practical-tesla-r07odb` then `git rev-parse origin/claude/practical-tesla-r07odb` and the diff command in `CHECKLIST.md` line 11 | the diff against `54894411f0e69ac29bec762006e47f7d943b94f2` over deployable paths is **empty** | |
 
+## Part 2a. Database access path (added 2026-10-31 after Stella's Part 1 report)
+Earlier rehearsals (`docs/aws/TEST_PILOT_DEPLOYMENT_PLAN.md`, `docs/aws/CLOUDSHELL_READONLY_INVENTORY.md`) reached the private database with an SSM port-forward through `ogevia-db-admin-temp`. Two parts of that route **conflict with this checklist** and need an owner decision before use:
+1. **Security-group change.** The rehearsal route attached the app security group to the admin host (or added one temporary ingress rule) for the window and restored it afterwards. That is an environment change. This checklist authorizes none. **If the route needs it, stop and ask the owner.**
+2. **Credential.** `ogevia_readonly` is `NOLOGIN`; it can only be reached with `set local role` from a login role, which in earlier rehearsals meant reading the database master secret (`get-secret-value`) into a shell variable. Reading it is not a change, but it is the most powerful credential. Never print, paste or store it. If a lower-privilege login role that can `set role ogevia_readonly` exists, use that instead and record which.
+3. **Admin host state.** On 2026-10-21 the host was recorded as running (`INVENTORY_RECONCILIATION_2026-10-21.md` item 18). **Do not start or stop it without approval.** If it is stopped, report that and wait.
+If any of 1 to 3 is needed, the owner must authorize that one specific step in writing first. Do not run Part 2 by another route (no public RDS, no new endpoint, no new host).
+
 ## Part 4. Do NOT do
 Do not run `cdk deploy`, `cdk bootstrap`, `cdk import`, `db:migrate`, `db:verify` writes, create a snapshot, call any `POST` route, press any activation button, change Cognito or security groups, or touch `ogevia_prd`. The real `cdk diff` (checklist C4a) waits for the owner's window and GO; it is not part of this checklist.
 
