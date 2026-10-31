@@ -7,7 +7,7 @@
 #   REPO=<checkout at the pinned SHA, deps installed> bash STELLA_PHASE_C_DB.sh probe      S2: read-only baseline (window only)
 #   bash STELLA_PHASE_C_DB.sh snapshot                       S5: one manual RDS snapshot (window only); prints the snapshot id
 #   REPO=... SNAPSHOT_ID=<id> bash STELLA_PHASE_C_DB.sh migrate    S6+S7: apply 0086 only, verify, post-probe (window only)
-#   bash STELLA_PHASE_C_DB.sh final                          S11: read-only closing read
+#   bash STELLA_PHASE_C_DB.sh final                          S11: read-only closing read (window only: G1 is within the window; start it before 12:00 PDT)
 #   REPO=... SNAPSHOT_ID=<id> bash STELLA_PHASE_C_DB.sh rollback   only after a stop condition; allowed after the window to restore known-good
 # Never touches ogevia_prd. Never starts or stops a host. Never prints a secret. Connects to ogevia_sv_test only (hard-coded, checked).
 set +x +H
@@ -89,7 +89,7 @@ fi
 case "$MODE" in probe|snapshot|migrate|final|rollback) ;; *) stop "usage: selftest | probe | snapshot | migrate | final | rollback (see header)";; esac
 exec > >(tee -a "$LOG") 2>&1
 echo "START (UTC): $(date -u +%FT%TZ)  mode=$MODE  log=$LOG"
-case "$MODE" in probe|snapshot|migrate) need_window;; esac
+case "$MODE" in probe|snapshot|migrate|final) need_window;; esac
 for c in aws jq; do command -v "$c" >/dev/null 2>&1 || stop "missing tool: $c"; done
 [[ "$(aws sts get-caller-identity --query Account --output text)" == "$ACCOUNT" ]] || stop "wrong AWS account"
 
@@ -115,7 +115,11 @@ fi
 for c in psql session-manager-plugin; do command -v "$c" >/dev/null 2>&1 || stop "missing tool: $c"; done
 [[ -f "$SQL" ]] || stop "cannot find $SQL"
 if [[ "$MODE" == migrate || "$MODE" == rollback ]]; then command -v pnpm >/dev/null 2>&1 || stop "missing tool: pnpm"; check_repo; if [[ "$MODE" == migrate ]]; then snapshot_check fresh; else snapshot_check; fi; fi
-confirm "G1 AUTHORIZED" "This mode temporarily attaches AppSG $APP_SG to the admin host and uses the TEST database admin credential in memory only, on $DB. That needs the owner's WRITTEN G1 authorization (PHASE_C_RUN_SHEET.md). Do you have it?"
+if [[ "$MODE" == rollback ]]; then
+  confirm "OWNER AUTHORIZED DB ROLLBACK ACCESS" "G1 as approved names steps S2, S6, S7 and S11 only (within the window). A DATABASE ROLLBACK needs the same security-group attach and credential, which G1 does NOT name. Type the phrase only if the owner has authorized it in writing for this rollback."
+else
+  confirm "G1 AUTHORIZED" "This mode temporarily attaches AppSG $APP_SG to the admin host and uses the TEST database admin credential in memory only, on $DB, WITHIN THE WINDOW (G1 as approved: steps S2, S6, S7 and S11). Do you have it?"
+fi
 IID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$TAG" "Name=instance-state-name,Values=running" --query 'Reservations[0].Instances[0].InstanceId' --output text)
 [[ "$IID" == "$IID_EXPECT" ]] || stop "admin host is not the expected running instance ('$IID'). Do not start it."
 [[ "$(host_groups)" == "$ADMIN_SG" ]] || stop "admin host groups are '$(host_groups)', expected only $ADMIN_SG"
