@@ -95,7 +95,7 @@ Formula (as the product states it): **Hours left = Authorized − Billable (used
 | A4 | Confirm that a Not ready caregiver's attempt to be scheduled (S3) did **not** reserve any minutes | Reserved unchanged | | |
 
 ## 5a. Cross-agency isolation (decision D11; conditional)
-Operator first counts organizations on TEST read-only and records the number: ____ . If it is 1, mark X1 to X3 **NOT RUN (single organization)** and the reviewer's written acceptance of the limitation is required.
+Operator's count (Part 2, V6, 2026-10-31): **4 organizations**, so X1 to X3 apply (the Operator names the two organizations with synthetic sign-in users; do not use real people). If the count were 1, mark X1 to X3 **NOT RUN (single organization)** and the reviewer's written acceptance of the limitation is required.
 | Step | Action | Expected | Result | Notes |
 |---|---|---|---|---|
 | X1 | Signed in to organization A as the Owner, open Care Team and Accounts | No person from organization B appears | | |

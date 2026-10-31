@@ -78,3 +78,16 @@ Stella reports the Part 2b pre-checks done (host running, baseline `sg-00e01e2ca
 
 ## 11. Script review (revision 2, 2026-10-31; owner asked for a code review before it is run; not executed)
 Findings in `STELLA_PART2_WINDOW.sh` at `c8f72d3`, fixed within D14 scope: (1) **read-only was only the SQL file's own transaction**: now also `default_transaction_read_only=on` for the session, plus a pre-run scan that refuses the SQL file if it lacks `begin read only` / `set local role ogevia_readonly`, contains a psql meta-command, or contains a write/DDL keyword outside comments; (2) **tunnel wait was a blind 8-second sleep that only proved the process existed**: now polls the local port for up to 30 seconds; (3) **psql failure was hidden by the `tee` pipe**: exit status now checked; (4) **restore was not verified**: now compares the host groups and the RDS security-group sources to the baseline, prints `RESTORE VERIFIED` or `RESTORE NOT VERIFIED` with `!!!` lines, and returns a non-zero exit status on failure; (5) **signals**: explicit INT/TERM/HUP handlers route to the one cleanup, a second Ctrl-C is ignored during restore, the tunnel child processes are killed; (6) **credential hygiene**: secret handled with builtin `printf` and a pipe (no temp file), stray `PG*` variables cleared, `umask 077` for the results file; (7) **pre-checks before any change**: required tools, RDS security-group sources equal AppSG only, RDS not public. No scope was added. Residual risks: a kill -9 or loss of the CloudShell session cannot run any trap (then restore by hand with the printed command); CloudShell can time out during a long window.
+
+## 12. Part 2 results received (Operator, window 2026-10-31T00:42:39Z to 00:43:01Z UTC) — PARTIAL, V1/V2/login role not yet seen
+Version run: commit `2d9960e722e2ec4e01cadea904e92cc41295e53b`; hashes match (`STELLA_PART2_WINDOW.sh` `891802f0…`, SQL `038bae27…`). Restore: `RESTORE VERIFIED` (admin host `sg-00e01e2ca80442c1f` only; RDS SG `sg-00530a1f4f7648e65` sources `sg-064ffce3bcbe8eb3b`, unchanged). Operator's confirmation of "no other change" is requested in the reply (not yet received).
+| Query | Result | Status |
+|---|---|---|
+| V1 guard (`ogevia_sv_test`) | not seen in the pasted output | **INFERRED** only: the script stops unless `current_database()` equals `ogevia_sv_test` before running the SQL, and it ran |
+| V2 migration ledger | not seen | **OPEN (needed)** |
+| V3 `already_has_0086` | empty (null) | PASS: 0086 not applied |
+| V4 | ready_or_active **5** of **6** caregivers | recorded baseline |
+| V5 enforcement | `enforcement_active_from` **empty for all 4 organizations**; `service_checks` empty (no settings row) | **PASS: enforcement OFF in TEST** (D10 holds; UAT step S4 report-only check can run as designed) |
+| V6 organizations | **4** (4 active): `http-iso-a-04ba3a61`, `http-iso-b-4ed578b8`, `ogevia-test-slice`, `scs-pilot-synthetic` | **2+ organizations: D11 manual cross-agency UAT (X1-X3) applies.** `http-iso-*` look like HTTP-isolation test fixtures (INFERRED); the Operator picks two organizations with synthetic sign-in users for X1-X3 |
+| Login role | not seen | OPEN |
+**Target verification is NOT yet complete**: V2 (ledger), V1 as printed, and the login role name are still needed. No gate advances. 0086 stays NOT RELEASABLE.
