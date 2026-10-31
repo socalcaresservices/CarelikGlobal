@@ -91,3 +91,14 @@ Version run: commit `2d9960e722e2ec4e01cadea904e92cc41295e53b`; hashes match (`S
 | V6 organizations | **4** (4 active): `http-iso-a-04ba3a61`, `http-iso-b-4ed578b8`, `ogevia-test-slice`, `scs-pilot-synthetic` | **2+ organizations: D11 manual cross-agency UAT (X1-X3) applies.** `http-iso-*` look like HTTP-isolation test fixtures (INFERRED); the Operator picks two organizations with synthetic sign-in users for X1-X3 |
 | Login role | not seen | OPEN |
 **Target verification is NOT yet complete**: V2 (ledger), V1 as printed, and the login role name are still needed. No gate advances. 0086 stays NOT RELEASABLE.
+
+## 13. Part 2 results, now complete V1-V6 (Operator paste of the saved results file, 2026-10-31)
+| Query | Result | Status |
+|---|---|---|
+| V1 | db `ogevia_sv_test`, `role_in_use` `ogevia_readonly`, `is_test_db` = t | **PASS** (VERIFIED from the results file) |
+| V2 | 85 migrations, latest `0085`; last five 0085, 0084, 0083, 0082, 0081 | **PASS: ledger as expected; only 0086 would be applied; contiguity rule satisfied** |
+| V3 | `already_has_0086` empty | PASS: 0086 not applied |
+| V4 | ready_or_active 5, caregivers 6 | baseline recorded |
+| V5 | `enforcement_active_from` empty for all four organizations | PASS: enforcement OFF (D10 holds) |
+| V6 | 4 organizations, 4 active | D11: manual cross-agency X1-X3 applies |
+**D14 required report items still outstanding:** (a) the login role name (the `LOGIN ROLE USED` line; `role_in_use` above is the role after `SET ROLE`, not the login role), (b) the Operator's written confirmation that no other change was made. Restore was verified by the script (host `sg-00e01e2ca80442c1f` only, RDS SG sources unchanged). **Target verification will be marked complete when (a) and (b) are received.** This clears the target-verification blocker only; no other gate advances. 0086 stays NOT RELEASABLE.
