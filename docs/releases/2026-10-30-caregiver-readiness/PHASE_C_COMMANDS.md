@@ -74,7 +74,7 @@ Every command below runs from `$D` after `export D=... R=...` (section 0) and `e
 | S11 | `REPO=$R bash STELLA_PHASE_C_DB.sh final` | ledger 86, counts as post-state; `RESTORE VERIFIED` | any difference |
 Timing: a step that has STARTED before 18:00 PDT is allowed to finish; none may BEGIN after (A12). Start the snapshot early, because it can take many minutes.
 
-## 2. Rollback (only after a stop condition; allowed after 12:00 PDT solely to restore known-good; DB rollback access authorized by A14)
+## 2. Rollback (only after a stop condition; allowed after 18:00 PDT solely to restore known-good; DB rollback access authorized by A14)
 Order: web, API, database. Each asks for a typed confirmation.
 ```bash
 cd "$D"

@@ -2,7 +2,7 @@
 
 **Authority:** `GO_DRAFT.md` (GO given as relayed, `DECISION_RECORD.md` A11/A12). **TEST/pilot only.** Window **2026-10-31 14:00-18:00 PDT** (21:00 UTC to 01:00 UTC on 2026-11-01; D26/A19; the first 09:00-12:00 PDT window lapsed unused). **Only approved commit: `54894411f0e69ac29bec762006e47f7d943b94f2`** (reconfirmed A12). Migration **0086 only**. After 18:00 PDT **no new deployment activity**; rollback is allowed only to restore TEST to known-good. Nothing here touches `ogevia_prd`, `Ogevia-prd-*`, enforcement, or any other commit.
 
-## Two gaps to close BEFORE 09:00 PDT (the owner decides; Claude cannot)
+## Two gaps (both CLOSED before the window: G1 approved A13/A14, command set written; kept for the record)
 | # | Gap | Why it matters | Proposed one-line fix |
 |---|---|---|---|
 | G1 | **APPROVED AS WRITTEN 2026-10-31 (`DECISION_RECORD.md` A13).** Wording (verbatim): "Stella may, within the window, temporarily attach AppSG `sg-064ffce3bcbe8eb3b` to `ogevia-db-admin-temp` (restored and re-checked), and use the existing TEST database admin credential in memory only, for steps S2, S6, S7 and S11 on `ogevia_sv_test` only." **Covers S2, S6, S7, S11 within the window. EXTENDED 2026-10-31 (A14) to the database rollback "solely to restore known-good"** (with A12, also after the window end for that purpose). The DB script's rollback prompt still asks for the typed phrase `OWNER AUTHORIZED DB ROLLBACK ACCESS`; A14 is the owner's authorization for it. Snapshot restore (a new instance) is not covered. | | |
@@ -13,7 +13,7 @@
 ## Order of execution
 | Step | Action (source) | PASS | STOP if | Capture |
 |---|---|---|---|---|
-| S0 | **09:00 PDT.** Record start time. `aws sts get-caller-identity` = `300094796789`, `us-west-2`; admin host `i-0ce8db2d7e5839dd5` running, groups = `sg-00e01e2ca80442c1f` only | all match | any differs | times, account, groups |
+| S0 | **14:00 PDT.** Record start time. `aws sts get-caller-identity` = `300094796789`, `us-west-2`; admin host `i-0ce8db2d7e5839dd5` running, groups = `sg-00e01e2ca80442c1f` only | all match | any differs | times, account, groups |
 | S1 | **Pin check.** Work from a checkout at the SHA: `git rev-parse HEAD` = `54894411…`; `sha256sum` migration = `d9c8cc37…c568ee`, rollback = `fe47381c…520e29`; the diff command in `CHECKLIST.md` line 11 prints nothing. Do the build in `/tmp` (CloudShell home disk was full before; `df -h ~` first) | all equal | any differs, or SHA is not the one above | output of those commands |
 | S2 | **Re-probe, read-only** (the SQL output now also prints V7: counts of active memberships by role in the two UAT organizations, D23) on `ogevia_sv_test` (`RUNBOOK.md` B; first `current_database()`). Expect: ledger 85/`0085`, `0086` absent, 5 of 6 Ready/Active, enforcement empty in all 4 orgs | equals the Part 2 baseline | database is not `ogevia_sv_test`; any value differs | the query output (counts/slugs only) |
 | S3 | **Real `cdk diff`**, TEST API stack `Ogevia-prod-ServiceVerificationApi` (`RUNBOOK.md` C4/E2) | only 8 `AWS::ApiGatewayV2::Route` (+ their integration permission) + one Lambda code asset (+ CDK metadata string) | anything else: IAM, network, replacement/deletion, another stack | full diff text |
@@ -25,12 +25,12 @@
 | S9 | **Deploy web** (`RUNBOOK.md` E3): build with `VITE_AUTH_PROVIDER=cognito` + TEST settings; upload; CloudFront invalidation | served bundle is the new build; banner "TEST — synthetic data only" | wrong site/distribution; production hostname | invalidation id, served file hash |
 | S10 | **Phase C checks** (`RUNBOOK.md` F1-F8), synthetic caregivers only: invitation email once; email has no client/health data; temporary-password validity (record the days); 8 routes 200/401/403/404; phone view; legacy approvals; Task 8 query (read-only) saved for the owner; regression R and smoke S | each ticked | any failure or cross-agency read | results per check |
 | S11 | **Close:** final DB read (ledger 86, counts), restore AppSG and re-check (host groups = `sg-00e01e2ca80442c1f`, RDS SG unchanged), record end time | restored and verified | not restored: fix first | final counts, restore proof |
-| S12 | **UAT fit check.** Start `PHASE_D_UAT_SCRIPTS.md` only if all four validators can finish before 12:00 PDT. Otherwise **stop after Phase C** and ask the owner for a separate UAT window and GO | decision recorded | n/a | the decision and time |
+| S12 | **UAT fit check.** Start `PHASE_D_UAT_SCRIPTS.md` only if all four validators can finish before 18:00 PDT. Otherwise **stop after Phase C** and ask the owner for a separate UAT window and GO | decision recorded | n/a | the decision and time |
 
 ## Stop conditions (any one: stop, change nothing further, report; roll back only if a migration/deploy already changed TEST)
 Wrong database or account; commit/hash mismatch; ledger, count or enforcement value differs from baseline; a `cdk diff` item outside S3; no verified snapshot; migration or verify error; a caregiver Ready/Active before cannot be scheduled; any cross-agency read; unexpected 5xx on the new routes; a step with no approved command; window end reached.
 
-## Rollback (only after a stop condition, and after 12:00 PDT only to restore known-good)
+## Rollback (only after a stop condition, and after 18:00 PDT only to restore known-good)
 Order web, API, then database (`RUNBOOK.md` G; down script is BACKUP REQUIRED and the snapshot from S5 must exist). **Restoring the snapshot creates a new RDS instance and is NOT covered by the GO: stop and ask the owner.** Re-check the TEST baseline after (ledger 85, 5 of 6, enforcement empty). Record exactly what was done.
 
 ## Pass / fail
