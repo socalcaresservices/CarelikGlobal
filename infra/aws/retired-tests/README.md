@@ -15,3 +15,22 @@
 | `2026-10-19-prd-readiness/prd-rehearsal.db.test.ts` (`db/test/`) | same | Same family; **8 of 14 fail on the unmodified code** |
 
 Left in place on purpose (they pass and are not pin tests): `rehearsal-diff-gate`, `rehearsal-deploy-guard`, `rehearsal-migrate`, `rehearsal-ledger-recheck`, `prd-ledger-read`, `auth-separation`, `prd-release-discovery`, `prd-deploy-scripts`, the fixtures `test/rehearsal-fixtures.ts` and `test/fixtures/`. They can be retired later with the same procedure if the owner wants.
+
+## Retired 2026-10-31: tests of the TEST line's staff operator packages (release 2026-10-26 to 2026-10-29)
+**Why.** The readiness release was integrated onto the TEST line (`fb491a5`). That integration promoted the staff migrations "0086" and "0087" from `db/pending/` into the ledger set (`db/migrations/`, `db/rollback/`) and put the readiness migration at 0088. The staff operator packages (`docs/releases/2026-10-26-redesign-operator`, `...-redesign-prd-operator`) were built for the opposite layout: migrations 0001-0085 pinned by hash and count, 0086/0087 pending and applied outside the ledger, "0086 inside db/migrations is refused". Their pin and refusal tests therefore fail by design on the integrated tree. The TEST package was executed on 2026-10-29; the production package was never executed and is superseded by the integrated release. **Moved, not deleted. Not re-pinned.** A new baseline is created only for the new release candidate.
+
+| File (restore to) | Package | Failures on the unmodified TEST line `fb491a5` -> on the integrated tree |
+|---|---|---|
+| `2026-10-26-redesign-operator/operator-0086-tarball.test.ts` (`test/`) | TEST package | 5 -> 18 |
+| `2026-10-26-redesign-operator/operator-0086-procedure.test.ts` (`test/`) | TEST package | 1 -> 1 |
+| `2026-10-26-redesign-operator/operator-0087-apply.test.ts` (`test/`) | TEST upgrade package | 0 -> 60 |
+| `2026-10-26-redesign-operator/operator-0087-sql.db.test.ts` (`db/test/`) | TEST upgrade package | 0 -> all 9 skipped (the pending files no longer exist) |
+| `2026-10-26-redesign-operator/operator-prd-apply.test.ts` (`test/`) | production package | 0 -> 60 |
+| `2026-10-26-redesign-operator/operator-prd-deploy-guard.test.ts` (`test/`) | production package | 0 -> 7 |
+| `2026-10-26-redesign-operator/operator-prd-gate.test.ts` (`test/`) | production package | 0 -> 1 |
+| `2026-10-26-redesign-operator/operator-prd-procedure.test.ts` (`test/`) | production package | 1 -> 1 |
+| `2026-10-26-redesign-operator/operator-prd-web-record.test.ts` (`test/`) | production package | 0 -> 1 |
+| `2026-10-26-redesign-operator/prd-discovery-package.test.ts` (`test/`) | production discovery package | 0 -> 1 |
+| `2026-10-26-redesign-operator/operator-prd-sql.db.test.ts` (`db/test/`) | production package | 0 -> 5 (reads the pending files) |
+
+The 7 failures that already exist on `fb491a5` (3 files) are pre-existing on the TEST line and are listed here for the record. Left in place (they pass on the integrated tree): `operator-0086-deploy-guard`, `operator-0086-diff-gate`, `operator-0086-ledger-recheck`, `operator-0086-scripts`, `operator-prd-ledger-recheck`, `operator-prd-snapshot-smoke`, `operator-prd-tarball` and the rest of the unit suite.
