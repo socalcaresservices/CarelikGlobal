@@ -126,3 +126,9 @@ Stella reports the login role name used in Part 2 was not recorded in her notes.
 
 ## 18. Login role name, derived (Operator output, 2026-10-31)
 Read-only `describe-db-instances` for `ogevia-prod-postgres` (us-west-2) returned `MasterUsername` = **`ogevia_admin`**. **Status: INFERRED, not observed.** The Part 2 script took its login from the instance's RDS-managed master secret, whose username is the instance's master user, so the login used in the window was most likely `ogevia_admin`. The terminal line that would have confirmed it (`LOGIN ROLE USED (name only): …`) was not saved. No secret was read and no connection made to obtain this. Name only; no credential was seen. If the CloudShell scrollback for the window still exists, copying that one line would upgrade this to VERIFIED. The owner decides whether INFERRED satisfies the D14 report item. Still outstanding from Stella: the written no-other-change confirmation; the completed security review, outcome and signature. 0086 stays NOT RELEASABLE.
+
+## 19. D14 report items received; target verification CLOSED (2026-10-31)
+Received in the conversation (unsigned; relayed text, no separate signed form):
+- **Operator confirmation:** "No other changes were made beyond the authorized Part 2 verification procedure."
+- **Login role name accepted for the D14 report item:** `ogevia_admin` (INFERRED from the instance's MasterUsername, not independently verified; accepted as such).
+**D14 report items status:** V1-V6 received (section 13); login role name accepted (inferred); security group restore verified by the script (`RESTORE VERIFIED`); no-other-change confirmation received. **Target verification (Part 2) is COMPLETE.** This clears the target-verification blocker only. No other gate advances. Security review outcome remains PENDING (`SECURITY_REVIEW.md` not completed or signed). 0086 stays NOT RELEASABLE.
