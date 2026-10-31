@@ -51,9 +51,9 @@
 ## C. Final summary
 **CLOSED:** 1 approval workflow; 2 CPR/TB logic (code); 3 manager vs administrator permissions; 4 readiness calculations (code); 7 background-check model; 10 enforcement-off validation (Part 2); 11 migration 0086 scope; 20 security review outcome (with an evidence gap); 21 B9. Also from section B: the D1 defect, the 41 test failures, the date-dependent tests, the target designation, Part 2 verification, the due-days API-only decision, the "no Request button" decision, replacement of the old pinned scripts, S12, the signed record, GO and G1 with its rollback extension.
 
-**MITIGATED:** 5 legacy migration (tested locally); 6 contact handling (restricted; real email unverified); 8 tenant isolation (automated; manual proof pending); 12 rollback; 13 snapshot creation; 14 security-group restore; 15 production protection (procedural); 16 CDK diff gate; 17 API deployment; 18 web deployment; 19 TLS verification; role overlap; window overrun rule; the stale DB-rollback prompt wording; CloudShell disk, Node and session limits.
+**MITIGATED:** 9 multi-organization testing (decided in D22/D23; confirmed at S2 and UAT start); 5 legacy migration (tested locally); 6 contact handling (restricted; real email unverified); 8 tenant isolation (automated; manual proof pending); 12 rollback; 13 snapshot creation; 14 security-group restore; 15 production protection (procedural); 16 CDK diff gate; 17 API deployment; 18 web deployment; 19 TLS verification; role overlap; window overrun rule; the stale DB-rollback prompt wording; CloudShell disk, Node and session limits.
 
-**OPEN:** 22 Phase C validation (not run); 23 Phase D coverage (not run); 24 release record requirements (D7, `DEPLOYED_RECORD_0086_TEST.md`, G5 tick); Stella's ticked review copy and four reviewer-only answers.
+**OPEN:** 13 snapshot **restore** (new instance; not authorized, not rehearsed); 22 Phase C validation (not run); 23 Phase D coverage (not run); 24 release record requirements (D7, `DEPLOYED_RECORD_0086_TEST.md`, G5 tick); Stella's ticked review copy and four reviewer-only answers.
 
 **DEFERRED:** blocking CPR/TB behaviour with enforcement on (item 2); Task 8 gap report (before any enforcement activation); a new release-pin baseline; a due-days screen.
 
