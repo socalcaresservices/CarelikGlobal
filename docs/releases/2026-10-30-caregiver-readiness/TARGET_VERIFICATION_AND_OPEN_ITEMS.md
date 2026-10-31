@@ -72,3 +72,6 @@ Part 2 is authorized for verification only: Stella, one window, procedure in `ST
 Notes: (1) the stray line `sg-00e01e2ca80442c1f` ran as a shell command and failed (`command not found`); harmless, no effect. (2) **No change has been made** in the output shown. (3) Part 2 (V1-V6) still NOT RUN.
 
 **Existing CloudShell scripts (not reviewed by Claude; names only):** `window.sh` under the `2026-10-19-prd-readiness` package sets `DB_EXPECT=ogevia_prd` and targets the production stack, so it **must not be used** for this window. `db-window-run.sh` and `ledger-check-temp-access.sh` may attach AppSG and may do more than read-only. None of the three is authorized for Part 2 unless reviewed and shown to (a) touch only `ogevia_sv_test`, (b) run only the verification SQL, (c) restore the group on exit. Safest: use the Part 2b steps by hand, or paste a script here (secret-free) for review before use.
+
+## 10. Window script (2026-10-31)
+Stella reports the Part 2b pre-checks done (host running, baseline `sg-00e01e2ca80442c1f` only, app and RDS groups match, window started). No usable command sequence existed; `STELLA_PART2_WINDOW.sh` was added. **Not run.** Correction made: the restore re-check is on the admin host's own interface; AppSG is legitimately used by other interfaces (API Lambda).
