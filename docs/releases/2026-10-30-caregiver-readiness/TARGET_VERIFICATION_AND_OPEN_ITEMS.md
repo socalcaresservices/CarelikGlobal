@@ -115,3 +115,11 @@ Security reviewer: **Stella Okereke**. Outstanding reviewer actions: review `REV
 
 ## 16. S12 decision (2026-10-31, D16 / A9)
 S12 may remain optional and unreviewed; no second reviewer. Required review scope and the four outstanding items are in `DECISION_RECORD.md` A9. 0086 stays NOT RELEASABLE.
+
+## 17. Login role name: UNKNOWN as observed (Stella Okereke, 2026-10-31)
+Stella reports the login role name used in Part 2 was not recorded in her notes. **Status: UNKNOWN (not observed).** Where it was and was not captured: the script printed it once to the terminal (`LOGIN ROLE USED (name only): …`), but that line was not written to the results file (only the SQL output is), and V1's `role_in_use` shows `ogevia_readonly`, the role after `SET ROLE`, not the login. So the saved evidence does not contain it.
+**Allowed ways to settle it (none touches the secret, none changes anything):**
+1. **Terminal scrollback.** If the CloudShell tab from the window is still open, scroll up (do not close the tab) and copy the one line `LOGIN ROLE USED (name only): …`. This would make it **VERIFIED**.
+2. **Derive it, read-only (INFERRED, label it so):** `aws rds describe-db-instances --region us-west-2 --db-instance-identifier ogevia-prod-postgres --query 'DBInstances[0].MasterUsername' --output text`. The script took the username from the instance's RDS-managed master secret (the ARN came from `MasterUserSecret` on the same instance), and that username is the instance's master user, so this should match. It is an inference from how the script works, not an observation of that session.
+**Not authorized to settle it:** reading the master secret again, or any new database connection (D14 covered one window only).
+**If neither is available the record stays "UNKNOWN"** with the inference above, and the owner decides whether that satisfies the D14 reporting item. 0086 stays NOT RELEASABLE.
