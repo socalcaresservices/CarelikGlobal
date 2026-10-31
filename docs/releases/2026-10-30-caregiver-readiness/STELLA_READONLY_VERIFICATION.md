@@ -38,6 +38,8 @@ Earlier rehearsals (`docs/aws/TEST_PILOT_DEPLOYMENT_PLAN.md`, `docs/aws/CLOUDSHE
 3. **Admin host state.** On 2026-10-21 the host was recorded as running (`INVENTORY_RECONCILIATION_2026-10-21.md` item 18). **Do not start or stop it without approval.** If it is stopped, report that and wait.
 If any of 1 to 3 is needed, the owner must authorize that one specific step in writing first. Do not run Part 2 by another route (no public RDS, no new endpoint, no new host).
 
+**Owner decision D13 (2026-10-31, `DECISION_RECORD.md` A5) settles Part 2a: least-privilege path only.** Use an existing lower-privilege login role that can `SET ROLE ogevia_readonly`. Do **not** use the master secret, start/stop `ogevia-db-admin-temp`, attach or change any security group, or create any network path. If the only way in needs one of those, **STOP and report the exact requirement** (what, why, which resource) before doing anything. Record in the results which login role was used (name only).
+
 ## Part 4. Do NOT do
 Do not run `cdk deploy`, `cdk bootstrap`, `cdk import`, `db:migrate`, `db:verify` writes, create a snapshot, call any `POST` route, press any activation button, change Cognito or security groups, or touch `ogevia_prd`. The real `cdk diff` (checklist C4a) waits for the owner's window and GO; it is not part of this checklist.
 
@@ -51,6 +53,7 @@ Do not run `cdk deploy`, `cdk bootstrap`, `cdk import`, `db:migrate`, `db:verify
 | V6 organizations | |
 | Part 1 and Part 3 differences | |
 | Anything unexpected | |
+| Login role used (name only; no secret) | |
 | Operator signature | ______________________________ |
 
 Claude then records the results in `CHECKLIST.md` (C0) and `TARGET_VERIFICATION_AND_OPEN_ITEMS.md`. Passing this check removes one blocker only; the window, GO, `cdk diff`, B9 acceptance, security review and signed decision record are still required.

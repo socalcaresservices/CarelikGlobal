@@ -40,3 +40,5 @@
 
 ## 6. Update 2026-10-31: Operator report, Part 1
 Reported PASS (as reported by Stella Okereke; not independently verified): AWS account 300094796789, region us-west-2, `Ogevia-prod-*` stacks present, `ogevia-prod-postgres` available, publicly accessible = false, CloudFront banner confirmed. Package seen in Git at `015c6a2…`. **Part 2 (V1-V6) is blocked on the database access path** (`STELLA_READONLY_VERIFICATION.md` Part 2a: the earlier route needs a security-group change and the master credential; both need an owner decision). Enforcement value, organization count and ledger are still UNKNOWN. Parts 1 items 5-6 (API id, Cognito client, backup) and Part 3 not yet reported.
+
+**D13 (2026-10-31):** Part 2 proceeds by an existing lower-privilege login role that can `SET ROLE ogevia_readonly` only. Master secret, host start/stop, security-group or network changes are not authorized; Stella stops and reports the exact requirement. No gate advances on Part 1; Part 2 results (V1-V6) are required.
