@@ -191,3 +191,6 @@ The authorized window (09:00-12:00 PDT) ended with **no Phase C step run**: no p
 
 ## 33. New window and GO (2026-10-31, D26 / A19)
 Window 14:00-18:00 PDT (21:00 UTC to 01:00 UTC on 2026-11-01), GO `GO-0086-TEST-20261031-B`, same scope, G1 and its DB-rollback extension included. Scripts re-issued with the new window and reference: `STELLA_PHASE_C_DB.sh` `38c8fb4296e39353b7ed9b75727c80a63648a7c2c6a0240f754d83a9624f4284`, `STELLA_PHASE_C_DEPLOY.sh` `30d8c2fb67e25ea94b2bddc9e7a17523f6f2c77bc3049f45ff3342337ce9f40c`; gate and SQL unchanged. Stella re-verifies hashes, rebuilds `/tmp`, runs `synth`, then Phase C from S0 at 14:00 PDT. Nothing has run in AWS under this window yet. 0086 stays NOT RELEASABLE.
+
+## 34. Preparation for the 14:00-18:00 PDT window, Operator-reported (2026-10-31; local only, no AWS change)
+Scripts checkout `docs-checkout4` at `c8a4f6afdad69e24a251d9a7fa39041414d63ca8`; application checkout at exactly `54894411f0e69ac29bec762006e47f7d943b94f2`; the four hashes matched the values in section 33; Node `v22.22.0`; `pnpm install --frozen-lockfile` succeeded; `synth` passed every check (five `Ogevia-prod-*` stacks, Handler `c3f09ddf…`, IdentityHandler `7c5f8eb6…`, 236 routes). Ready to start S0 at 14:00 PDT under `GO-0086-TEST-20261031-B`. Nothing has run in AWS under this window. 0086 stays NOT RELEASABLE.
