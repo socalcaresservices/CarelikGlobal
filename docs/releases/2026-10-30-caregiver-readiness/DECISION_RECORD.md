@@ -40,11 +40,11 @@ Wording follows what the owner wrote in the conversation on 2026-10-30; the righ
 ## 4. Signature
 | Field | Entry |
 |---|---|
-| Owner (full name) | ______________________________ |
-| Role | ______________________________ |
-| Signature | ______________________________ |
-| Date | ______________________________ |
-| Decisions confirmed (tick) | ☐ D1 ☐ D2 ☐ D3 ☐ D4 ☐ D5 ☐ D6 ☐ D7 ☐ D8 |
+| Owner (full name) | **Stella Okereke** (as stated in the conversation 2026-10-31; see the role note under A11) |
+| Role | not stated |
+| Signature | **"Signed."** Typed statement relayed in the conversation, not a system or wet signature |
+| Date | 2026-10-31 |
+| Decisions confirmed (tick) | ☒ D1 ☒ D2 ☒ D3 ☒ D4 ☒ D5 ☒ D6 ☒ D7 ☒ D8 (the owner's statement "Signed" is recorded as covering D1 to D17 and amendments A1 to A10; the amendment signature cells below stay blank because no separate per-amendment signature was given) |
 | Corrections to the wording above (if any) | |
 
 Operator acknowledgement (D1: Operator is Stella Okereke; she runs nothing against a shared environment until a target is designated):
@@ -52,8 +52,8 @@ Operator acknowledgement (D1: Operator is Stella Okereke; she runs nothing again
 | Field | Entry |
 |---|---|
 | Operator (full name) | Stella Okereke |
-| Signature | ______________________________ |
-| Date | ______________________________ |
+| Signature | **"Acknowledged."** Typed, relayed in the conversation |
+| Date | 2026-10-31 |
 
 ## 5. Amendments (append only; date and sign each)
 | # | Date | Change | Owner signature |
@@ -68,6 +68,7 @@ Operator acknowledgement (D1: Operator is Stella Okereke; she runs nothing again
 | A8 | 2026-10-31 | **Owner decision D15: security reviewer designated: Stella Okereke** (unsigned). Reviewer actions outstanding: review `REVIEWER_PACKET.md`; complete `SECURITY_REVIEW.md`; record the outcome (APPROVED / CHANGES REQUESTED / REJECTED); record all findings, including any objection to the manager-approve decision; sign and date. **Also outstanding from Stella (Part 2 verification):** login role name (name only) and the written confirmation "No other changes were made beyond the authorized Part 2 verification procedure." **Role overlap noted by Claude (not a decision):** Stella is also the Operator (Part 2 window, the real `cdk diff`, Phase C). Her review should not cover her own window script: item S12 in `SECURITY_REVIEW.md` is optional and does not gate 0086; the owner decides whether S12 gets a second reader or is accepted as the Operator's own report. Reviewing the migration, routes and tests is independent of her operator work. 0086 stays NOT RELEASABLE until the outcome is recorded and all remaining gates are satisfied. | ____________ |
 | A9 | 2026-10-31 | **Owner decision D16 (unsigned): S12 (Part 2 window script) may remain optional and unreviewed; no second reviewer required.** Rationale: S12 is not a release gate, not part of 0086, grants no deployment authority, and documents the Operator's own Part 2 window. **Required review scope unchanged:** `REVIEWER_PACKET.md`, `SECURITY_REVIEW.md`, migration and rollback review, route and permission review, test review, findings and outcome (APPROVED / CHANGES REQUESTED / REJECTED). Any finding classed Blocker keeps 0086 NOT RELEASABLE. **Outstanding:** (1) Stella's login role name (name only); (2) her written confirmation "No other changes were made beyond the authorized Part 2 verification procedure."; (3) completion of `SECURITY_REVIEW.md`; (4) review outcome and signature. 0086 stays NOT RELEASABLE. | ____________ |
 | A10 | 2026-10-31 | **Owner decision D17 (unsigned): security review accepted as recorded** (outcome APPROVED, no findings, 6a not applicable, relayed by the reviewer). The reviewer's per-box copy is not in the repository; the reviewer commits her file when convenient. This does not block the GO. **GO text drafted** in `GO_DRAFT.md`: NOT GIVEN until the owner fills the window and signs section 8. 0086 stays NOT RELEASABLE. | ____________ |
+| A11 | 2026-10-31 | **Owner decisions D18 (unsigned per amendment; stated in conversation):** (a) the Decision Record is signed (section 4); (b) the **six package decisions are ACCEPTED** as written in the README (Active = approved and has a current assignment or any visit; managers approve, only the administrator extends CPR/TB; waived training counts as met; no Request CPR/TB button; Recruiting board gets a link; missing CPR/TB blocks only after the due date); (c) **B9 accepted by Stella Okereke**; (d) **GO for Phase C APPROVED FOR TEST EXECUTION ONLY**, window **2026-10-31 09:00 to 12:00 PDT**, Operator Stella Okereke, TEST/pilot only, commit `54894411f0e69ac29bec762006e47f7d943b94f2`, migration **0086 only**, subject to all stop conditions in `GO_DRAFT.md`; Stella acknowledged. **Role note (Claude, not a decision):** the same name, Stella Okereke, is recorded as owner signer, Operator, security reviewer and B9 acceptor. The documents do not forbid it; it means no second person has checked her work. **Clarifications the owner may add (not assumed):** whether rollback to the pre-release state is permitted after 12:00 PDT if a stop condition occurs mid-apply; whether UAT that does not fit in the window needs a new GO. 0086 stays NOT RELEASABLE. | stated in conversation |
 
 | Field | Value |
 |---|---|

@@ -1,12 +1,12 @@
 # GO for Phase C: release 2026-10-30-caregiver-readiness (migration 0086), TEST slice only
 
-**Status: DRAFT. NOT GIVEN. NOT SIGNED. Nothing in this document authorizes anything until the owner fills the two blanks in section 1, edits or accepts the text, and signs section 8.** Claude drafted it; the owner decides it. Production is out of scope. 0086 stays NOT RELEASABLE until the checklist says otherwise (decision D7).
+**Status: GIVEN AS RELAYED 2026-10-31 (owner's statement in the conversation, `DECISION_RECORD.md` A11): "APPROVED FOR TEST EXECUTION ONLY, subject to all stop conditions in GO_DRAFT.md". Window 2026-10-31 09:00 to 12:00 PDT. Operator Stella Okereke acknowledged. NOT RUN YET.** The signature cells in section 8 are not filled by hand; the statement above is the record. Claude drafted this text; the owner decided it. Production is out of scope. 0086 stays NOT RELEASABLE until the checklist says otherwise (decision D7).
 
 ## 1. Blanks only the owner can fill
 | Item | Entry |
 |---|---|
-| Window start (date, time, time zone) | ______________________ |
-| Window end (hard stop; nothing runs after this) | ______________________ |
+| Window start (date, time, time zone) | **2026-10-31 09:00 PDT** (16:00 UTC) |
+| Window end (hard stop; nothing runs after this) | **2026-10-31 12:00 PDT** (19:00 UTC) |
 
 ## 2. Scope this GO covers (and nothing else)
 | Item | Value |
@@ -39,22 +39,22 @@ It does not make 0086 releasable or production-approved. Phase E (production) is
 ## 7. Preconditions still open when this draft was written (2026-10-31)
 | Precondition | State |
 |---|---|
-| `DECISION_RECORD.md` D1-D17 signed by the owner and acknowledged by Stella | open |
-| Six package decisions confirmed | open |
-| B9 accepted by a human | open |
+| `DECISION_RECORD.md` D1-D17 signed by the owner and acknowledged by Stella | **done 2026-10-31 (typed, relayed)** |
+| Six package decisions confirmed | **done 2026-10-31: all six ACCEPTED** |
+| B9 accepted by a human | **done 2026-10-31: accepted by Stella Okereke** |
 | Security review | outcome APPROVED relayed and accepted as recorded (D17); per-box copy not in the repository |
-| Window start and end | open (section 1) |
+| Window start and end | **set** (section 1) |
 | Two organizations with synthetic sign-in users named for X1-X3 | open |
 
-## 8. Owner's GO (unsigned)
+## 8. Owner's GO (given as relayed)
 > I authorize the Operator, Stella Okereke, to carry out section 3 on the TEST/pilot slice only, within the window in section 1, at commit `54894411f0e69ac29bec762006e47f7d943b94f2`, and subject to sections 4 and 5. This GO expires at the window end.
 
 | Field | Entry |
 |---|---|
-| Owner (full name) | ______________________________ |
-| Signature | ______________________________ |
-| Date and time (time zone) | ______________________________ |
+| Owner (full name) | Stella Okereke (as stated; see the role note in `DECISION_RECORD.md` A11) |
+| Signature | Typed statement relayed in the conversation, not a system or wet signature |
+| Date and time (time zone) | 2026-10-31 (time of statement not given) |
 
 | Operator acknowledgement | Entry |
 |---|---|
-| Stella Okereke | ______________________________  date ______________ |
+| Stella Okereke | "Acknowledged." typed, relayed 2026-10-31 |
