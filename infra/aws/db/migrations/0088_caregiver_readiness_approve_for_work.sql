@@ -1,4 +1,4 @@
--- 0086 Caregiver readiness: ONE readiness source, Approve for work, CPR/TB due-date setting and extensions (owner decisions 2026-10-30).
+-- 0088 Caregiver readiness: ONE readiness source, Approve for work, CPR/TB due-date setting and extensions (owner decisions 2026-10-30).
 --
 -- OWNER-DEFINED PRODUCT RULES (2026-10-30). These are the agency's own rules, not verified legal requirements.
 --   * HARD requirements before a caregiver can be approved: a VERIFIED APPROVED background check, at least one app sign-in, and the required
@@ -786,7 +786,7 @@ begin
   -- enforcement is active, a Warning while the agency is report-only). The 14-day period from the hire date (0055) no longer lets work go ahead; it still governs only
   -- when an automatic compliance HOLD is opened (ogevia.compliance_blockers, unchanged). The period is no longer read here.
   for d in select * from ogevia.document_readiness(p_organization_id, p_caregiver_record_id, p_starts, p_ends) loop
-    -- 0086 (owner decision 2026-10-30): a MISSING or only-uploaded CPR/TB is a warning until its due date (hire date + the agency's days, or the
+    -- 0088 (owner decision 2026-10-30): a MISSING or only-uploaded CPR/TB is a warning until its due date (hire date + the agency's days, or the
     -- administrator's extension). After that date it is blocked (a Warning while the agency is report-only). Rejected, expired, expiring before the
     -- work ends, or a rule that is not set up still block at once.
     if d.status in ('missing', 'awaiting_review') then
@@ -958,7 +958,7 @@ begin
   if v_inv.existing_account then
     raise exception 'This caregiver already had a sign-in; ask them to sign in with it, or reset it from the sign-in page' using errcode = 'OGC09';
   end if;
-  -- 0086: at least a minute between sends, and at most 5 resends in any 24 hours (counted from the audit trail).
+  -- 0088: at least a minute between sends, and at most 5 resends in any 24 hours (counted from the audit trail).
   if v_inv.last_sent_at > now() - interval '60 seconds' then
     raise exception 'A sign-in link was just sent. Wait a minute before sending another.' using errcode = 'OGC09';
   end if;
@@ -1030,8 +1030,9 @@ begin
     select u.id as user_id,
            coalesce(nullif(btrim(u.display_name), ''), case when cr.id is not null then coalesce(cr.preferred_name, cr.first_name) || ' ' || cr.last_name end) as display_name,
            m.role::text as role, m.status::text as membership_status,
-           case when m.status = 'suspended' or u.status = 'disabled' then 'disabled'
-                when m.status = 'invited' or (i.id is not null and i.first_signed_in_at is null) then 'invitation_pending'
+           case when m.status = 'invited' then 'invitation_pending'                                    -- staff invitations (0087): invited is pending before anything else
+                when m.status = 'suspended' or u.status = 'disabled' then 'disabled'
+                when i.id is not null and i.first_signed_in_at is null then 'invitation_pending'
                 else 'active' end as account_status,
            cr.id as caregiver_record_id, cr.caregiver_code as caregiver_code,
            case when cr.id is not null then coalesce(cr.preferred_name, cr.first_name) || ' ' || cr.last_name end as caregiver_name,
@@ -1060,7 +1061,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Grants (same shape as 0055)
+-- Grants (same shape as 0055). list_accounts above keeps 0087's account_status order (staff invitations) and adds the readiness columns.
 -- ---------------------------------------------------------------------------
 revoke all on function ogevia.append_only_guard() from public;
 revoke all on function ogevia.compliance_grace_days() from public;

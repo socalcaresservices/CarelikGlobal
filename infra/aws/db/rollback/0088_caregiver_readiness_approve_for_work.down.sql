@@ -1,5 +1,5 @@
--- ROLLBACK 0086 | CLASS: BACKUP REQUIRED (drops tables, with their rows: CPR/TB extensions, work approvals, caregiver contacts, the due-days setting).
--- Restores the 0081/0066/0064/0055/0054/0048/0025 function definitions and the 14-day rule, and re-activates the onboarding requirements 0086 retired
+-- ROLLBACK 0088 | CLASS: BACKUP REQUIRED (drops tables, with their rows: CPR/TB extensions, work approvals, caregiver contacts, the due-days setting).
+-- Restores the 0087/0081/0066/0064/0055/0054/0048/0025 function definitions (list_accounts as 0087 left it, with the staff-invitation account_status order) and the 14-day rule, and re-activates the onboarding requirements 0086 retired
 -- (only those whose category is background_check, document or clearance). Status and onboarding items are untouched. Run only after a verified backup.
 
 drop function if exists ogevia_api.get_caregiver_readiness(uuid, uuid);
@@ -429,8 +429,9 @@ begin
     select u.id as user_id,
            coalesce(nullif(btrim(u.display_name), ''), case when cr.id is not null then coalesce(cr.preferred_name, cr.first_name) || ' ' || cr.last_name end) as display_name,
            m.role::text as role, m.status::text as membership_status,
-           case when m.status = 'suspended' or u.status = 'disabled' then 'disabled'
-                when m.status = 'invited' or (i.id is not null and i.first_signed_in_at is null) then 'invitation_pending'
+           case when m.status = 'invited' then 'invitation_pending'
+                when m.status = 'suspended' or u.status = 'disabled' then 'disabled'
+                when i.id is not null and i.first_signed_in_at is null then 'invitation_pending'
                 else 'active' end as account_status,
            cr.id as caregiver_record_id, cr.caregiver_code as caregiver_code,
            case when cr.id is not null then coalesce(cr.preferred_name, cr.first_name) || ' ' || cr.last_name end as caregiver_name,

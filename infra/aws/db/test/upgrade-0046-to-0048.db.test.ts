@@ -56,7 +56,9 @@ afterAll(async () => db?.drop());
 describe("upgrade from 0046 to 0048 on a populated database", () => {
   it("changes no existing row; adds one permission and its owner grant; legacy overrides stay readable; the runner applies exactly 0047 and 0048", async () => {
     // Put the database back at 0046 (the state production is expected to be in), exactly as the rollback does.
-    await runDown("0086_caregiver_readiness_approve_for_work.down.sql");
+    await runDown("0088_caregiver_readiness_approve_for_work.down.sql");
+    await runDown("0087_staff_invitation_acceptance.down.sql");
+    await runDown("0086_staff_management.down.sql");
     await runDown("0085_create_caregiver_gate_no_service_void.down.sql");
     await runDown("0084_action_needed_over_limit.down.sql");
     await runDown("0083_owner_hours_reopen_guard_correct_closed.down.sql");

@@ -1,4 +1,4 @@
-// 0086 and 0087 (PENDING: infra/aws/db/pending): staff management and its invitation-acceptance fixes (M-1, L-1, L-2, L-3). Staff types (labels, no authority), staff profiles, supported system roles, staff invitations, history. SYNTHETIC data only.
+// 0086 and 0087 (staff management; promoted from infra/aws/db/pending into the ledger set by the readiness integration): staff management and its invitation-acceptance fixes (M-1, L-1, L-2, L-3). Staff types (labels, no authority), staff profiles, supported system roles, staff invitations, history. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -515,7 +515,10 @@ describe("0087 rolls back on its own to the 0086 behaviour and applies again", (
         const pending = await mk("Pending Pat");
         await c("select * from ogevia_api.complete_staff_invitation($1,$2,'pat.pending@example.test',$3,true,'staff')", [world.orgA, pending, world.managerB.sub]);
         expect((await own.admin.query("select m.status::text s from ogevia.organization_memberships m join ogevia.app_users u on u.id = m.user_id where m.organization_id = $1 and u.cognito_sub = $2", [world.orgA, world.managerB.sub])).rows[0].s).toBe("invited");
-        const down = readFileSync(new URL("../pending/rollback/0087_staff_invitation_acceptance.down.sql", import.meta.url), "utf8");
+        // 0088 (readiness) re-creates list_accounts on top of 0087, so it is rolled back first
+        const runFile = async (dir: string, name: string) => { const sql = readFileSync(new URL(`../${dir}/${name}`, import.meta.url), "utf8"); await client.query("begin"); await client.query("set local role ogevia_owner"); await client.query(sql); await client.query("reset role"); await client.query("commit"); };
+        await runFile("rollback", "0088_caregiver_readiness_approve_for_work.down.sql");
+        const down = readFileSync(new URL("../rollback/0087_staff_invitation_acceptance.down.sql", import.meta.url), "utf8");
         await client.query("begin"); await client.query("set local role ogevia_owner"); await client.query(down); await client.query("reset role"); await client.query("commit");
         expect(await hasFn("accept_staff_invitation")).toBe(0);
         expect(await hasFn("list_my_staff_invitations")).toBe(0);
@@ -524,9 +527,10 @@ describe("0087 rolls back on its own to the 0086 behaviour and applies again", (
         const second = await mk("Old Behaviour");
         const r = await c("select * from ogevia_api.complete_staff_invitation($1,$2,'old.behaviour@example.test',$3,true,'staff')", [world.orgA, second, randomUUID()]);
         expect(Object.keys(r[0]!).sort()).toEqual(["existing_account", "profile_id"]);               // the 0086 reply shape is back
-        const up = readFileSync(new URL("../pending/migrations/0087_staff_invitation_acceptance.sql", import.meta.url), "utf8");
+        const up = readFileSync(new URL("../migrations/0087_staff_invitation_acceptance.sql", import.meta.url), "utf8");
         await client.query("begin"); await client.query("set local role ogevia_owner"); await client.query(up); await client.query("reset role"); await client.query("commit");
         expect(await hasFn("accept_staff_invitation")).toBe(1);
+        await runFile("migrations", "0088_caregiver_readiness_approve_for_work.sql");              // and the readiness migration goes back on top
       } finally { client.release(); }
     } finally { await own.drop(); }
   });

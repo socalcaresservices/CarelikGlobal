@@ -1,12 +1,14 @@
-// PENDING migrations (infra/aws/db/pending): written and tested, not yet part of any release, so NOT applied by `db:migrate`, the release packages or createTestDb().
-// A test that needs them creates its database with createTestDbWithPending(). Releasing one means moving it into migrations/ and rollback/ and re-pinning the release package.
+// Staff management (0086, 0087) was PENDING (infra/aws/db/pending) until the readiness release integrated it into the ledger set: the files now live in
+// migrations/ and rollback/, so createTestDb() applies them. These helpers keep the old names for the staff tests that roll the staff migrations back and
+// re-apply them. Staff is rolled back TOGETHER WITH 0088 (the readiness migration re-creates list_accounts on top of 0087), newest first, and re-applied oldest first.
 import { readdirSync, readFileSync } from "node:fs";
 import type { ClientBase } from "pg";
 import { createTestDb, type TestDb } from "./harness.js";
 
-const UP = new URL("../pending/migrations/", import.meta.url);
-const DOWN = new URL("../pending/rollback/", import.meta.url);
-const files = (dir: URL, suffix: string) => readdirSync(dir).filter((f) => f.endsWith(suffix)).sort();
+const UP = new URL("../migrations/", import.meta.url);
+const DOWN = new URL("../rollback/", import.meta.url);
+const STAGED = /^(0086_staff_management|0087_staff_invitation_acceptance|0088_caregiver_readiness_approve_for_work)/;
+const files = (dir: URL, suffix: string) => readdirSync(dir).filter((f) => f.endsWith(suffix) && STAGED.test(f)).sort();
 
 async function run(client: ClientBase, label: string, sql: string) {
   await client.query("begin");
@@ -21,30 +23,21 @@ async function run(client: ClientBase, label: string, sql: string) {
   }
 }
 
-/** Applies every pending migration, in order, on top of the released set (no ledger row: a pending migration is not part of a release). */
+/** Re-applies 0086, 0087 and 0088 in order (no ledger row is written: the ledger already holds them). */
 export async function applyPendingMigrations(client: ClientBase): Promise<string[]> {
   const names = files(UP, ".sql");
   for (const name of names) await run(client, `Pending migration ${name}`, readFileSync(new URL(name, UP), "utf8"));
   return names;
 }
 
-/** Runs the pending rollback scripts, newest first. */
+/** Runs the rollback scripts of 0088, 0087 and 0086, newest first. */
 export async function rollBackPendingMigrations(client: ClientBase): Promise<string[]> {
   const names = files(DOWN, ".down.sql").reverse();
   for (const name of names) await run(client, `Pending rollback ${name}`, readFileSync(new URL(name, DOWN), "utf8"));
   return names;
 }
 
+/** Kept for the staff tests: createTestDb() already includes 0086 and 0087 (and 0088). */
 export async function createTestDbWithPending(): Promise<TestDb> {
-  const db = await createTestDb();
-  const client = await db.admin.connect();
-  try {
-    await applyPendingMigrations(client);
-  } catch (error) {
-    client.release();
-    await db.drop();
-    throw error;
-  }
-  client.release();
-  return db;
+  return createTestDb();
 }
