@@ -14,6 +14,7 @@ import { StatusChip } from "./ui/status-chip";
 import { formatDateTime } from "@/lib/service-verification";
 import { ShortHelp } from "./help-text";
 import { actionBtn, actionBtnPrimary, linkClass } from "./ui-classes";
+import { InfoTip } from "./ui/info-tip";
 
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -452,7 +453,7 @@ export function DocumentsPage() {
       {canManage ? (
         <Disclosure summary="Document types and reminder days" className="rounded-og border border-og-line bg-og-card px-3">
           <div className="space-y-3 pb-2">
-            <p className="text-xs">Set expiry only where the document has one. Reminder periods follow your agency's own requirements.</p>
+            <InfoTip label="Help">Set expiry only where the document has one. Reminder periods follow your agency's own requirements.</InfoTip>
             <TypesForm types={types.data ?? []} onDone={refresh} />
             <ReminderDaysForm types={types.data ?? []} onDone={refresh} />
           </div>

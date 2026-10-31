@@ -10,6 +10,7 @@ import { CaregiverServices } from "./service-approvals";
 import { CaregiverExperience, MatchingLocation } from "./matching-inputs";
 import { MyExperience } from "./my-experience";
 import { SummarySection } from "../ui/summary-section";
+import { InfoTip } from "../ui/info-tip";
 
 /**
  * The caregiver record's readiness sections, each kept separate: Availability, Approved services, Documents.
@@ -33,7 +34,7 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
             <div className="space-y-3">
               <section aria-label="Approved hours"><h3 className="text-sm font-semibold text-slate-900">Approved</h3><div className="mt-1"><CurrentAvailability state={q.data} /></div></section>
               <section aria-label="Pending changes"><h3 className="text-sm font-semibold text-slate-900">Pending</h3><div className="mt-1"><RequestHistory rows={q.data.pending} /></div></section>
-              {editing ? <div className="border-t border-slate-200 pt-3"><p className="mb-2 text-xs text-slate-600">An administrator edit takes effect immediately and is recorded with your reason.</p><AvailabilityRequestForm state={q.data} mode="administrator" /></div> : null}
+              {editing ? <div className="border-t border-slate-200 pt-3"><InfoTip label="Help">An administrator edit takes effect immediately and is recorded with your reason.</InfoTip><AvailabilityRequestForm state={q.data} mode="administrator" /></div> : null}
             </div>
           ) : null}
         </SummarySection>

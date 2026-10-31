@@ -24,6 +24,7 @@ import { useClientAuthorizations } from "./client-admin";
 import { useAssignments } from "./assignments-data";
 import { applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, NO_FILTERS, stateOfShift, stepAnchor, viewRange, type CalendarView, type ShiftFilters } from "./schedule-model";
 import { FilterBar, MonthGrid, ReplacementSuggestions, SchedulingOverview, ViewTabs } from "./schedule-views";
+import { InfoTip } from "./ui/info-tip";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -329,7 +330,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       {calledOut && s.lastCalloutReason ? <p className="text-red-800">Reason: {s.lastCalloutReason}</p> : null}
       {s.availabilityOverride ? <p className="font-medium text-amber-900">Assigned with Admin override (availability was No Match){s.availabilityOverrideReason ? `: ${s.availabilityOverrideReason}` : ""}</p> : null}
       {s.makeupForShiftId ? <p className="font-medium text-violet-900">Make-up visit for missed time</p> : null}
-      {s.seriesId ? <p className="text-slate-600">Repeats on a schedule. Changes here affect this date only; change the series under Manage repeating shifts.</p> : null}
+      {s.seriesId ? <InfoTip label="Help">Repeats on a schedule. Changes here affect this date only; change the series under Manage repeating shifts.</InfoTip> : null}
       {s.fromCareRequest ? <p className="text-slate-600">From a Care Request; manage it on the <Link className="underline" to="/schedule/shift-requests">Care Requests</Link> page.</p> : null}
     </>
   );
@@ -444,7 +445,7 @@ export function SchedulePage() {
   return (
     <div className="max-w-5xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <h1 className="text-xl font-semibold text-slate-950">Scheduling</h1>
+        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Schedule</h1><InfoTip label="About Schedule" title="Schedule">View and manage caregiver assignments.</InfoTip></div>
         {canManage ? (
           <div className="flex flex-wrap items-center gap-x-3">
             <Button type="button" className="min-h-11" onClick={() => { setAdding((x) => !x); setRepeating(false); setNotice(null); }} aria-expanded={adding}>{adding ? "Close" : "Add shift"}</Button>
@@ -616,7 +617,7 @@ export function MyShiftsPage() {
   }
   return (
     <div className="max-w-xl space-y-3">
-      <h1 className="text-xl font-semibold text-slate-950">My shifts</h1>
+      <h1 className="text-xl font-bold tracking-tight text-og-ink">My Schedule</h1>
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
       <OpenShiftsSection onPicked={(text) => setState({ busy: false, error: null, done: text })} />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}

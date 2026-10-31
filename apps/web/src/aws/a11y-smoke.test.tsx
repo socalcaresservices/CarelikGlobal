@@ -68,7 +68,7 @@ function expectStructure() {
 
 const SCREENS: { name: string; path: string; ready: () => Promise<unknown> }[] = [
   { name: "Home", path: "/", ready: () => screen.findByRole("heading", { level: 1 }) },
-  { name: "Schedule", path: "/schedule", ready: () => screen.findByRole("heading", { level: 1, name: /Scheduling/ }) },
+  { name: "Schedule", path: "/schedule", ready: () => screen.findByRole("heading", { level: 1, name: /Schedule/ }) },
   { name: "Care Team", path: "/care-team", ready: () => screen.findByRole("heading", { level: 1 }) },
   { name: "Documents", path: "/documents", ready: () => screen.findByRole("heading", { level: 1 }) },
   { name: "Client detail", path: `/clients/${CLIENT}`, ready: () => screen.findByRole("heading", { level: 1 }) },

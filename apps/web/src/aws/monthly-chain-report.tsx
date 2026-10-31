@@ -115,7 +115,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
       {q.data && rows.length === 0 ? <p className="text-sm text-slate-600" role="status">No authorization overlaps this month.</p> : null}
       {rows.length > 0 ? (
         failing.length === 0
-          ? <p role="status" className="text-sm font-semibold text-emerald-800" data-testid="chain-checks">All checks pass: reserved, visits and authorization add up on every row.</p>
+          ? <p role="status" className="text-sm font-semibold text-emerald-800" data-testid="chain-checks">All checks pass.</p>
           : <p role="alert" className="text-sm font-semibold text-red-700" data-testid="chain-checks">{failing.length} row{failing.length === 1 ? " does" : "s do"} not add up. The difference is shown on each row; do not rely on those totals.</p>
       ) : null}
       {rows.length > 0 ? (
@@ -124,6 +124,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
             <caption className="sr-only">Full chain by client, service and authorization for the selected month</caption>
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-600">
+                <th scope="col" className="w-8 py-1 pr-2 text-right">No.</th>
                 <th scope="col" className="py-1 pr-2">Client · service</th>
                 <th scope="col" className="px-2 py-1 text-right">Authorized</th>
                 <th scope="col" className="px-2 py-1 text-right">Scheduled</th>
@@ -145,8 +146,9 @@ export function MonthlyChainReport({ month }: { month: string }) {
               </tr>
             </thead>
             <tbody className="tabular-nums text-slate-900">
-              {rows.map((r) => (
+              {rows.map((r, i) => (
                 <tr key={r.authorizationLineageId} className="border-b border-slate-100 last:border-0">
+                  <td className="w-8 py-1 pr-2 text-right text-slate-600" data-testid="row-no">{i + 1}</td>
                   <th scope="row" className="py-1 pr-2 text-left font-semibold">{clientLabel(r, true)} · {r.serviceName}</th>
                   <td className="px-2 py-1 text-right">{m(r.authorizedMinutes)}</td>
                   <td className="px-2 py-1 text-right">{m(r.scheduledMinutes)}</td>

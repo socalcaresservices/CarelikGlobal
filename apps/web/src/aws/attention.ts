@@ -199,7 +199,7 @@ export type UrgentBadge =
   | { kind: "hidden" }
   | { kind: "checking" | "unknown"; label: string; icon: string; count: null; aria: string; tone: "neutral" }
   | { kind: "urgent"; label: string; icon: string; count: number; aria: string; tone: Tone }
-  | { kind: "clear"; label: string; icon: string; count: 0; aria: string; tone: "neutral" };
+  | { kind: "clear"; label: string; icon: string; count: null; aria: string; tone: "neutral" };
 
 /**
  * The header badge. It counts only "Needs attention now" items (unique shifts and visits), never the sum of every list.
@@ -211,7 +211,7 @@ export function urgentBadge(loading: boolean, failed: boolean, o: AttentionOverv
   if (failed || !o) return { kind: "unknown", label: "Unable to check", icon: "?", count: null, aria: "Unable to check what needs attention now", tone: "neutral" };
   if (!o.urgent) return { kind: "hidden" };
   const n = o.urgent.itemCount;
-  if (n === 0) return { kind: "clear", label: "Nothing urgent", icon: "✓", count: 0, aria: "Nothing needs attention now", tone: "neutral" };
+  if (n === 0) return { kind: "clear", label: "No urgent items", icon: "✓", count: null, aria: "No urgent items", tone: "neutral" };
   const tone: Tone = o.urgent.items.some((i) => itemTone(i, Date.parse(o.asOf)) === "red") ? "red" : "amber";
   return { kind: "urgent", label: "Needs attention now", icon: TONE[tone].icon, count: n, aria: `Needs attention now: ${n} ${n === 1 ? "item" : "items"}`, tone };
 }

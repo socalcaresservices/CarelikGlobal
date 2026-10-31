@@ -88,7 +88,7 @@ export function ReportingPage() {
             </dl>
             {!canBill ? <p className="text-xs text-og-sub">Ready-for-review and approved counts need billing access.</p> : null}
             <Disclosure summary="About these counts">
-              <p>Approval is a person&apos;s decision and is not submission or payment. “Reviewed, not billable” visits are a separate outcome ({formatDuration(sum(rows, "reviewedNotBillableMinutes"))}) and are never counted as ready or approved. There is no submitted or billed state.</p>
+              <InfoTip label="Help">Approval is a person&apos;s decision and is not submission or payment. “Reviewed, not billable” visits are a separate outcome ({formatDuration(sum(rows, "reviewedNotBillableMinutes"))}) and are never counted as ready or approved. There is no submitted or billed state.</InfoTip>
             </Disclosure>
             {canBill ? <Link className="inline-flex min-h-[44px] items-center font-semibold text-og-link underline md:min-h-[28px]" to="/billing-review">Open billing review</Link> : null}
           </Card>
@@ -131,12 +131,12 @@ export function ReportingPage() {
               <div><dt className="text-xs text-og-sub">Missed visits</dt><dd data-testid="missed-visits" className="text-sm font-semibold text-og-ink">Not published</dd></div>
             </dl>
             <Disclosure summary="Definitions and what is not measured">
-              <p>Shifts are counted by their start date in the agency&apos;s time zone. Uncovered means a scheduled shift that has not ended and has no caregiver, including one whose caregiver called out.</p>
-              <p className="mt-1">Utilization is committed time (billable + approved rounding adjustments + reserved) divided by authorized time, rounded down.</p>
+              <InfoTip label="Help">Shifts are counted by their start date in the agency&apos;s time zone. Uncovered means a scheduled shift that has not ended and has no caregiver, including one whose caregiver called out.</InfoTip>
+              <InfoTip label="Help">Utilization is committed time (billable + approved rounding adjustments + reserved) divided by authorized time, rounded down.</InfoTip>
               <p className="mt-1" data-testid="missed-note">{perf.data.missedVisitsNote}</p>
               <p className="mt-1">{perf.data.cancellationNote}</p>
               <p className="mt-1">{perf.data.noShowNote}</p>
-              <p className="mt-1">“Ended, no visit record” is the list on Schedule and Home waiting for a person to decide what happened. It does not say the caregiver failed to go.</p>
+              <InfoTip label="Help">“Ended, no visit record” is the list on Schedule and Home waiting for a person to decide what happened. It does not say the caregiver failed to go.</InfoTip>
             </Disclosure>
           </Card>
         ) : null}

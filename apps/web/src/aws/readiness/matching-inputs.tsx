@@ -6,6 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { actionError } from "./format";
 import { useGuardedMutate } from "./use-guarded";
+import { InfoTip } from "../ui/info-tip";
 
 type Tag = { tagId: string; label: string };
 type Experience = { reviewed: boolean; reviewedAt: string | null; tags: { tagId: string; label: string; status: string }[] };
@@ -43,7 +44,7 @@ function ExperienceForm({ caregiverRecordId, tags, current, onDone }: { caregive
     <fieldset><legend className="text-sm font-medium">Confirmed experience</legend>
       {tags.length === 0 ? <p className="text-sm text-slate-600">No experience tags yet.</p> : tags.map((t) => <label key={t.tagId} className="flex min-h-[44px] items-center gap-2 text-sm"><input type="checkbox" className="h-5 w-5" checked={selected.has(t.tagId)} onChange={(e) => setSelected((old) => { const next = new Set(old); if (e.target.checked) next.add(t.tagId); else next.delete(t.tagId); return next; })} />{t.label}</label>)}
     </fieldset>
-    <p className="text-xs text-slate-600">Saving with no tags records a review with no confirmed experience. Experience tags do not establish certification.</p>
+    <InfoTip label="Help">Saving with no tags records a review with no confirmed experience. Experience tags do not establish certification.</InfoTip>
     <label className="block text-sm">Review note<textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} className={inputClass} /></label>
     {save.isError ? <p role="alert" className="text-sm text-red-700">{actionError(save.error, "Experience could not be saved.")}</p> : null}
     <Button type="submit" disabled={save.isPending || note.trim().length < 3}>Save review</Button>
@@ -82,7 +83,7 @@ function RequirementsForm({ clientId, tags, current, onDone }: { clientId: strin
   const save = useMutation({ mutationFn: () => api.post(`/v1/clients/${clientId}/experience-requirements`, { organizationId: activeOrganizationId, requirements: Object.entries(values).filter(([, v]) => v !== "none").map(([tagId, v]) => ({ tagId, mandatory: v === "mandatory" })), reason: reason.trim() }), onSuccess: onDone });
   const send = useGuardedMutate(save);
   return <form className="space-y-2" aria-label="Client experience preferences" onSubmit={(e) => { e.preventDefault(); if (reason.trim().length >= 3) send(); }}>
-    <p className="text-xs text-slate-600">Optional preferences affect matching only. Mandatory requirements block assignments until confirmed.</p>
+    <InfoTip label="Help">Optional preferences affect matching only. Mandatory requirements block assignments until confirmed.</InfoTip>
     {tags.map((t) => <label key={t.tagId} className="block text-sm">{t.label}<select className={inputClass} value={values[t.tagId] ?? "none"} onChange={(e) => setValues((old) => ({ ...old, [t.tagId]: e.target.value as "optional" | "mandatory" | "none" }))}><option value="none">Not requested</option><option value="optional">Optional preference</option><option value="mandatory">Mandatory requirement</option></select></label>)}
     <label className="block text-sm">Reason for preferences<textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} className={inputClass} /></label>
     {save.isError ? <p role="alert">{actionError(save.error, "Preferences could not be saved.")}</p> : null}

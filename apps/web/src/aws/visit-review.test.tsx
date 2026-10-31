@@ -95,7 +95,7 @@ describe("Visit review page", () => {
     expect(await screen.findByRole("heading", { name: "Synthetic Client Bravo" })).toBeInTheDocument();
     expect(screen.getByText("SYN-BRAVO")).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("link").filter((a) => a.getAttribute("aria-current") === "page").map((a) => a.textContent)).toEqual(["Visit records"]);
+    expect(within(nav).getAllByRole("link").filter((a) => a.getAttribute("aria-current") === "page").map((a) => a.textContent)).toEqual(["Reports"]);
     expect(screen.getByText("Pilot Caregiver B")).toBeInTheDocument();
     expect(screen.getByText("11:23 PM – 11:27 PM")).toBeInTheDocument();
     expect(screen.getByText("Client asleep; parent not home")).toBeInTheDocument();

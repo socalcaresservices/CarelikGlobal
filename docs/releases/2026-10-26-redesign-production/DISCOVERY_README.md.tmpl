@@ -1,0 +1,29 @@
+# Ogevia production DISCOVERY package (staff-management / redesign release)
+
+Source commit @COMMIT@. **Read-only. Nothing in this package deploys, migrates or changes anything.** It answers one question before any production release is written: what does production run and hold today?
+
+## Release under review
+- Handler Lambda code asset: `@HANDLER_KEY@` (the same build the TEST release 7870a04 runs); Identity Lambda: `@IDENTITY_KEY@`
+- API routes in the release: @ROUTES@ (228 earlier + the 13 staff routes)
+- Seven release templates in `release-templates/`: the six `Ogevia-prd-*` stacks (including `Ogevia-prd-Auth`) and the shared `Ogevia-prod-NetworkEgress`.
+
+## Run (CloudShell, us-west-2, the same account 300094796789)
+```
+tar -xzf ogevia-prd-discovery.tar.gz && cd ogevia-prd-discovery && sha256sum -c --quiet MANIFEST.sha256 && echo MANIFEST OK && cat BUILD_INFO.json
+bash scripts/p0-baseline-capture.sh      # read-only AWS reads and downloads; writes ~/ogevia-prd-before
+bash scripts/p1-diff-report.sh           # local files only; compares live against the release templates
+```
+Needs `aws`, `jq`, `curl`, `python3`, `sha256sum`, `openssl`, `base64`. A stack that does not exist (for example `Ogevia-prd-Auth`) is reported as information, not a failure.
+
+## Optional, YELLOW: the production database (ledger and counts)
+Adds ONE temporary inbound rule (tcp 5432 from the admin host's own IP as /32) to the shared RDS security group, reads, removes it and verifies the group is identical to before. Type the phrase it asks for only after reading the proposed change.
+```
+OGEVIA_PRD_READ_COUNTS=1 OGEVIA_EXPECT_HOST_IP=<admin host private IP> bash scripts/ledger-prd-read.sh prd --host-ip
+```
+It reports: the migration ledger (count, latest version, the five newest rows), the enforcement count, and with `OGEVIA_PRD_READ_COUNTS=1` the **row counts only** of organizations, users, memberships, audit events, caregivers, clients, shifts and visits, and the span of the audit events. No names, no identifiers.
+
+## Paste back
+The whole terminal output of each script. The lines that matter most: the Lambda's CodeSha256, last-modified date and asset key; the web's version string and API host; the route count; whether `Ogevia-prd-Auth` exists; the diff summaries; the ledger and the counts.
+
+## Stop rules
+Any `STOP:` or `FAIL`: paste the output and wait. Do not work around it.

@@ -81,6 +81,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly method: apigw.HttpMethod;
   readonly path: string;
   readonly public?: boolean;
+  /** Added to an environment's API only when that environment's `features` switch is on. */
+  readonly feature?: "staffManagement";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -139,6 +141,21 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/accounts" },
   { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/disable" },
   { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/enable" },
+  // Staff management (0086).
+  { method: apigw.HttpMethod.GET, path: "/v1/staff-types", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-types", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-types/{staffTypeId}/rename", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-types/{staffTypeId}/active", feature: "staffManagement" },
+  { method: apigw.HttpMethod.GET, path: "/v1/staff", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-members/{userId}/profile", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}/invitation", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}/invitation/resend", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-roles/{userId}", feature: "staffManagement" },
+  { method: apigw.HttpMethod.GET, path: "/v1/role-permissions", feature: "staffManagement" },
+  { method: apigw.HttpMethod.GET, path: "/v1/staff-audit", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/me/staff-invitations/{organizationId}/accept", feature: "staffManagement" },   // 0087: the invited person accepts
   { method: apigw.HttpMethod.GET, path: "/v1/shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts" },
   { method: apigw.HttpMethod.GET, path: "/v1/shift-series/preview" },
@@ -690,7 +707,7 @@ export class ServiceVerificationApiStack extends Stack {
     // non-public route decides that, not this permission.
     const integration = new HttpLambdaIntegration("Handler", this.handler, { scopePermissionToRoute: false });
     assertPublicRoutesApproved(SERVICE_VERIFICATION_ROUTES);
-    for (const route of SERVICE_VERIFICATION_ROUTES) {
+    for (const route of SERVICE_VERIFICATION_ROUTES.filter((r) => !r.feature || config.features[r.feature])) {
       const created = this.api.addRoutes({
         path: route.path,
         methods: [route.method],

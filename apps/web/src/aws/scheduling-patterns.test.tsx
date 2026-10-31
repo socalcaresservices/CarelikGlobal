@@ -126,7 +126,7 @@ afterEach(() => vi.clearAllMocks());
 describe("Scheduling page", () => {
   it("sends the chosen repeat rule with the preview and the saved series", async () => {
     const api = renderAt("/schedule");
-    expect(await screen.findByRole("heading", { name: "Scheduling" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Schedule" })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Repeat visits" }));
     await screen.findByRole("option", { name: /Synthetic Client Alpha/ });
     await screen.findByRole("option", { name: /Personal care/ });

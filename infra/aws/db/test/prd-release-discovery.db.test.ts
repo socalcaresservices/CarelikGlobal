@@ -75,6 +75,12 @@ describe("p0 baseline capture", () => {
     for (const v of new Set(verbs)) expect(v, `unexpected verb ${v}`).toMatch(/^(sts get-caller-identity|cloudformation (describe-stacks|get-template|list-stack-resources)|lambda (get-function-configuration|get-function)|s3api (head-object|list-buckets|get-bucket-versioning|get-public-access-block)|apigatewayv2 get-routes|events list-rules|s3 sync|ec2 describe-vpc-endpoints|rds describe-(db-instances|db-snapshots)|cognito-idp (list-user-pools|describe-user-pool)|secretsmanager describe-secret)$/);
     expect(calls()).not.toContain("get-secret-value"); expect(existsSync(join(MOCK, "unexpected.log"))).toBe(false);
   });
+  it("includes the Ogevia-prd-Auth stack: captured when it exists, reported as information (never a failure) when it is not deployed", async () => {
+    const r = await run("p0-baseline-capture.sh");
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toMatch(/Ogevia-prd-Auth (status=|is not deployed|\()|stack Ogevia-prd-Auth is not deployed/);
+    expect(r.out).not.toMatch(/FAIL.*Ogevia-prd-Auth/);
+  });
   it("keeps environment variable VALUES out of its records except DB_NAME and OGEVIA_ENV", () => {
     const c = readFileSync(join(OUT, "lambda-config-before.json"), "utf8");
     expect(c).toContain("SOME_SECRET_ARN"); expect(c).not.toContain("arn:aws:secretsmanager"); expect(c).toContain('"DB_NAME": "ogevia_prd"');

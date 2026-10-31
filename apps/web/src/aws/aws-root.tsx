@@ -12,6 +12,7 @@ import { AuthorizationImpactsPage } from "./amendment-impacts";
 import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 import { useOrganization } from "@/providers/organization-provider";
+import { RolesPermissionsPage, StaffPage, StaffTypesPage } from "./staff-pages";
 import { AuthCallbackPage, AwsLoginPage, AwsProtectedRoute } from "./aws-auth-pages";
 import { AwsOrganizationProvider } from "./aws-organization-provider";
 import { AwsLanding, AwsShell } from "./aws-shell";
@@ -92,6 +93,9 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path={SHIFT_REQUESTS_PATH} element={<CareRequestsPage api={api} />} />
                     <Route path="/care-requests" element={<MovedTo to={SHIFT_REQUESTS_PATH} />} />
                     <Route path="/accounts" element={<AccountsPage />} />
+                    <Route path="/staff" element={<StaffPage />} />
+                    <Route path="/settings/staff-types" element={<StaffTypesPage />} />
+                    <Route path="/settings/roles" element={<RolesPermissionsPage />} />
                     <Route path="/availability" element={<CaregiverAvailabilityPage api={api} />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />

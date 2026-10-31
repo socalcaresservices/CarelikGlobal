@@ -16,6 +16,7 @@ import { CompactAlert } from "./ui/compact-alert";
 import { linkClass } from "./ui-classes";
 import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
+import { InfoTip } from "./ui/info-tip";
 
 const sum = (rows: UtilisationRow[], key: keyof UtilisationRow) => rows.reduce((t, r) => t + Number(r[key] ?? 0), 0);
 
@@ -94,7 +95,7 @@ export function AwsHomePage() {
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Home"
+        title="Dashboard"
         action={
           <label className="flex items-center gap-2 text-xs font-semibold text-og-sub">
             Month
@@ -193,8 +194,8 @@ export function AwsHomePage() {
               <p className="mt-2">{HOURS_EQUATION_TEXT}</p>
               <p className="mt-1">Across authorizations: Authorized − Billable − Rounding − Pending − Reserved = Hours left − Over limit. {HOURS_TOTAL_NOTE}</p>
               <p className="mt-1">Billable is confirmed time. Pending is {HOURS_DEFINITIONS.pending.charAt(0).toLowerCase()}{HOURS_DEFINITIONS.pending.slice(1)} Reserved is {HOURS_DEFINITIONS.reserved.charAt(0).toLowerCase()}{HOURS_DEFINITIONS.reserved.slice(1)} Rounding is shown only when an approved adjustment exists.</p>
-              <p className="mt-1">Worked, not billable is outside the equation: time worked beyond what counts as Billable or Pending (the billing cap, or a review closed as not billable). It is shown so no worked time is hidden.</p>
-              <p className="mt-1">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above. An amended authorization counts once (its latest version).</p>
+              <InfoTip label="Help">Worked, not billable is outside the equation: time worked beyond what counts as Billable or Pending (the billing cap, or a review closed as not billable). It is shown so no worked time is hidden.</InfoTip>
+              <InfoTip label="Help">Healthy is below 80% committed, Near Limit 80% to below 95%, Critical 95% and above. An amended authorization counts once (its latest version).</InfoTip>
               <p className="mt-1"><Link className="font-semibold text-og-link underline" to="/service-verification/reports?view=reconciliation">Monthly reconciliation by client and authorization</Link></p>
             </Disclosure> : null}
           </div>
@@ -232,8 +233,8 @@ export function AwsHomePage() {
                 ))}
               </dl>
               <Disclosure summary="What these values mean">
-                <p>Billable value is billable hours × the authorization rate, not collected revenue. Approved for billing is fixed when a person approves it; it is not submitted or paid.</p>
-                <p className="mt-1">Unused hours are hours left × the rate: potential revenue not realized, not a loss. Caregiver cost and margin are not shown (no caregiver pay data).</p>
+                <InfoTip label="Help">Billable value is billable hours × the authorization rate, not collected revenue. Approved for billing is fixed when a person approves it; it is not submitted or paid.</InfoTip>
+                <InfoTip label="Help">Unused hours are hours left × the rate: potential revenue not realized, not a loss. Caregiver cost and margin are not shown (no caregiver pay data).</InfoTip>
               </Disclosure>
             </> : null}
           </div>

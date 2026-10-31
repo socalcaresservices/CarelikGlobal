@@ -262,7 +262,7 @@ export function AssignmentsCard({ clientId, caregiverRecordId }: { clientId?: st
     <>
       <div className="flex flex-wrap items-center gap-1.5">
           {side === "client" ? <h3 className="text-sm font-semibold text-slate-950">{title}</h3> : null}
-          <InfoTip label="About assignments">An assignment lets the caregiver see {side === "client" ? "this client" : "this person's clients"} and verify visits for that service between the first and last day. Assignments let the caregiver verify visits for that service. You can plan an assignment before the caregiver has a sign-in; it gives no access until they have signed in and are Approved or Active.</InfoTip>
+          <InfoTip label="About assignments">An assignment lets the caregiver see {side === "client" ? "this client" : "this person's clients"} and verify visits for that service between its first and last day. You can plan one before the caregiver signs in; it gives no access until they have signed in and are Approved or Active.</InfoTip>
         {canManage ? <Button type="button" variant="secondary" className="ml-auto min-h-[28px] px-3 py-0.5 text-sm [@media(pointer:coarse)]:min-h-[44px]" onClick={() => { setAdding((x) => !x); setAdded(null); setEndedText(null); }} aria-expanded={adding}>{adding ? "Close" : "Assign"}</Button> : null}
       </div>
       {adding ? <AddAssignmentForm clientId={clientId} caregiverRecordId={caregiverRecordId} onDone={(result) => { setAdding(false); setAdded(result); }} /> : null}

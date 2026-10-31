@@ -16,7 +16,9 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 minutes was too short once the production operator package tests were added (run 379 on PR 106 was cancelled by this limit after
+    # the web tests passed; the infra unit suite alone takes about 8 minutes). Same limit as the postgres job. No test is skipped or removed.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -48,7 +50,9 @@ jobs:
   # (PostgreSQL 18). Disposable service container; synthetic fixtures only; no AWS credentials involved.
   postgres:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Run 379 finished in about 25 minutes and the next run was cancelled at the old 30-minute limit while still in the API database tests
+    # (no test had failed): runner speed varies by several minutes and test:all now includes the production operator package tests.
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:18

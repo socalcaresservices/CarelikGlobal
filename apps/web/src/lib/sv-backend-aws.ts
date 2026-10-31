@@ -36,15 +36,24 @@ export interface AwsMembership {
   permissions: string[];
 }
 
+/** A staff invitation waiting for this person to accept it (0087). It grants nothing until accepted. */
+export interface AwsPendingInvitation {
+  organizationId: string;
+  organizationName: string;
+  role: string;
+}
+
 export interface AwsMe {
   memberships: AwsMembership[];
+  /** Invitations to other agencies awaiting this person's acceptance; empty on a server that does not have them. */
+  pendingInvitations: AwsPendingInvitation[];
   /** The signed-in person's own name; null when they have not set one (never invented). */
   displayName: string | null;
 }
 
 export async function fetchMe(api: AwsApiClient): Promise<AwsMe> {
-  const me = await api.get<{ memberships: AwsMembership[]; profile?: { displayName: string | null } }>("/v1/me");
-  return { memberships: me.memberships, displayName: me.profile?.displayName ?? null };
+  const me = await api.get<{ memberships: AwsMembership[]; pendingInvitations?: AwsPendingInvitation[]; profile?: { displayName: string | null } }>("/v1/me");
+  return { memberships: me.memberships, pendingInvitations: me.pendingInvitations ?? [], displayName: me.profile?.displayName ?? null };
 }
 
 export function createAwsServiceVerificationBackend(

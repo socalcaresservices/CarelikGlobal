@@ -10,7 +10,8 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, asActor, createTestDb, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
+import { ageVisit, api, asActor, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
+import { createTestDbWithPending } from "../../../infra/aws/db/test/pending";
 import { MemoryEvidenceStore } from "../src/evidence";
 import { createHandler } from "../src/handler";
 import { MemoryIdentityAdmin } from "../src/identity";
@@ -47,7 +48,7 @@ function blocks(): Record<string, string> {
 const BLOCKS = blocks();
 
 beforeAll(async () => {
-  db = await createTestDb();
+  db = await createTestDbWithPending();   // includes the PENDING migration (infra/aws/db/pending) so the staff routes are swept too
   w = await seedWorld(db, 600);
   const evidence = new MemoryEvidenceStore();
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), log: () => {} });
@@ -123,6 +124,11 @@ beforeAll(async () => {
   real("pickupRequestId", firstId(pk.body, ["requestId", "id"]));
   const csa = await make(w.ownerA, "POST /v1/caregiver-services", { caregiverRecordId: rec, serviceId: f.service });
   real("caregiverServiceApprovalId", csa.body.approvalId ?? csa.body.id);
+  // staff management (pending migration 0086): a real staff type and a real staff profile of org A
+  const st = await make(w.ownerA, "POST /v1/staff-types", { name: "Synthetic Staff Type" });
+  real("staffTypeId", st.body.staffType?.id);
+  const sp = await make(w.ownerA, "POST /v1/staff", { displayName: "Synthetic Staff", staffTypeId: ids.staffTypeId });
+  real("profileId", sp.body.staff?.id);
   // a care request through the client's portal link, and an offer on it
   try {
     const portal = await make(w.managerA, "POST /v1/care-portals");

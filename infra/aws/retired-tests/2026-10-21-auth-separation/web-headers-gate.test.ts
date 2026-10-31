@@ -9,6 +9,10 @@ import { buildOgeviaApp } from "../lib/app.js";
 import { ENVIRONMENTS } from "../lib/config.js";
 import { newApp } from "./helpers.js";
 
+// These gates test the authentication separation / web header releases against snapshots taken before the staff routes existed. The staff-routes switch is held OFF for
+// production here so the tests keep proving exactly what they were written to prove; the staff routes are covered by staff-routes-switch.test.ts and the production gate for this release.
+const withoutStaffRoutes = (env: "prod" | "prd") => (env === "prd" ? { ...ENVIRONMENTS.prd, features: { staffManagement: false } } : ENVIRONMENTS[env]);
+
 // The follow-up gate (web_headers_gate.py). LIVE = the templates deployed by the authentication release (fixtures/auth-separation/deployed, synthesized from commit 9e8582b);
 // NEW = what this code synthesizes. The real run compares the owner's actual live templates; this proves it accepts exactly one header change and nothing else.
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
@@ -30,11 +34,16 @@ function variant(name: string, fn: (d: { live: string; next: string }) => void) 
 beforeAll(() => {
   mkdirSync(NEW, { recursive: true });
   for (const env of ["prd", "prod"] as const) {
-    for (const p of buildOgeviaApp(newApp(), ENVIRONMENTS[env], "plan")) {
+    for (const p of buildOgeviaApp(newApp(), withoutStaffRoutes(env), "plan")) {
       if (env === "prod" && p.stack.stackName !== "Ogevia-prod-NetworkEgress") continue;
       write(NEW, p.stack.stackName, Template.fromStack(p.stack).toJSON());
     }
   }
+  // The authentication release did not change the API's code, and this gate requires the API stack to be equal. The API code has changed since (staff routes), so its
+  // Lambda asset references are pinned to the deployed ones here: the gate is still exercised on everything else (every resource, route and setting).
+  const api = "Ogevia-prd-ServiceVerificationApi", fresh = read(NEW, api), live = read(DEPLOYED, api);
+  for (const [id, r] of Object.entries<any>(fresh.Resources)) if (r.Type === "AWS::Lambda::Function" && live.Resources[id]?.Properties?.Code) r.Properties.Code = live.Resources[id].Properties.Code;
+  write(NEW, api, fresh);
 });
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 

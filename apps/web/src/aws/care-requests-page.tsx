@@ -8,6 +8,7 @@ import { MatchingPanel } from "./readiness/matching-panel";
 import { Hint } from "./hint";
 import { SummarySection } from "./ui/summary-section";
 import { clientLabel } from "./name-label";
+import { InfoTip } from "./ui/info-tip";
 
 
 type RequestRow = { requestId: string; clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceCode: string; serviceName: string; startsAt: string; endsAt: string; requestedMinutes: number; status: string; shortNotice: boolean; availableCount: number; awaitingCount: number; assignedCaregiverName: string | null };
@@ -130,7 +131,7 @@ export function CareRequestsPage({ api }: { api: AwsApiClient }) {
           <h2 className="font-semibold text-slate-950">Matches</h2>
           <Hint details="Checks: approved hours, documents, conflicts, and services where required.">Caregivers are checked first, then ranked. A score never makes a blocked caregiver assignable.</Hint>
           <div className="mt-3"><MatchingPanel requestId={selectedRequestId} onOffer={(id) => sendOffer.mutate(id)} offering={sendOffer.isPending} /></div>
-          {offerLink ? <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Secure fallback link. Caregivers with Ogevia access also see the opportunity in-app.</p><div className="mt-2 flex gap-2"><input readOnly value={offerLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" /><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(offerLink)}>Copy</Button></div></div> : null}
+          {offerLink ? <div className="mt-3 rounded-lg bg-slate-50 p-3"><InfoTip label="Help">Secure fallback link. Caregivers with Ogevia access also see the opportunity in-app.</InfoTip><div className="mt-2 flex gap-2"><input readOnly value={offerLink} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-xs" /><Button size="sm" variant="secondary" onClick={() => void navigator.clipboard.writeText(offerLink)}>Copy</Button></div></div> : null}
         </Card>
         <Card>
           <h2 className="font-semibold text-slate-950">Responses</h2>

@@ -107,7 +107,7 @@ export function CareTeamPage() {
   return (
     <div className="max-w-4xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-bold tracking-tight text-slate-950">Care Team</h1>
+        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Caregivers</h1><InfoTip label="About Caregivers" title="Caregivers">Manage caregiver profiles, services and onboarding.</InfoTip></div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add caregiver"}</Button> : null}
       </div>
       {adding ? <AddCaregiverForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
@@ -134,13 +134,15 @@ export function CareTeamPage() {
           <table className="w-full text-left text-sm" aria-label="Caregivers">
             <thead>
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+                <th scope="col" className="w-10 px-3 py-1 text-right font-semibold">No.</th>
                 <th scope="col" className="px-3 py-1 font-semibold">Caregiver</th>
                 <th scope="col" className="px-3 py-1 font-semibold">Status</th>
               </tr>
             </thead>
             <tbody>
-              {shown.map((c) => (
+              {shown.map((c, i) => (
                 <tr key={c.caregiverRecordId} className="border-b border-slate-100 last:border-0">
+                  <td className="w-10 px-3 py-1 text-right align-middle tabular-nums text-slate-600" data-testid="row-no">{i + 1}</td>
                   <th scope="row" className="px-3 py-1 font-normal">
                     <Link to={`/care-team/${c.caregiverRecordId}`} className="inline-flex min-h-[44px] flex-wrap items-baseline gap-x-3 gap-y-0 py-0.5 md:min-h-[30px]">
                       <span className="font-semibold text-slate-950 underline">{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</span>

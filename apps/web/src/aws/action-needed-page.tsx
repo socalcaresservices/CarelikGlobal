@@ -62,7 +62,7 @@ function IssueCard({ issue }: { issue: ActionIssue }) {
                 id: String(n), when: `${formatNumericDate(e.occurredAt)} ${formatClockTime(e.occurredAt)}`, who: e.observedByName,
                 summary: `${e.event.replace(/_/g, " ")}${e.severity ? ` (${e.severity})` : ""}`,
               }))} />
-              <p className="mt-0.5">Times are when the change was first seen by the system, not necessarily when it happened.</p>
+              <InfoTip label="Help">Times are when the change was first seen by the system, not necessarily when it happened.</InfoTip>
             </>
           )}
         </div>
@@ -253,9 +253,9 @@ export function ActionNeededPage() {
       <DeadlineSettings />
       <NotificationSettingsCard />
       <Disclosure summary="How this list is built">
-        <p>Each problem has one stable identity, so it is the same issue on Home, Scheduling and here; two problems on one visit stay two issues. Nothing here assigns anyone, approves a visit or sends a bill.</p>
-        <p className="mt-1">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline. Routine: waiting inside its deadline; routine queues are never added to the action total.</p>
-        <p className="mt-1">Over the monthly authorization is Urgent, never Critical by itself: all worked time is kept and paid, the time over the limit is not billed, and it clears when hours are back within the authorization.</p>
+        <InfoTip label="Help">Each problem has one stable identity, so it is the same issue on Home, Scheduling and here; two problems on one visit stay two issues. Nothing here assigns anyone, approves a visit or sends a bill.</InfoTip>
+        <InfoTip label="Help">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline. Routine: waiting inside its deadline; routine queues are never added to the action total.</InfoTip>
+        <InfoTip label="Help">Over the monthly authorization is Urgent, never Critical by itself: all worked time is kept and paid, the time over the limit is not billed, and it clears when hours are back within the authorization.</InfoTip>
       </Disclosure>
     </div>
   );

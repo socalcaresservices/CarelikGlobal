@@ -1,7 +1,8 @@
 import { HoursBreakdown } from "@/components/hours-breakdown";
 import { ShortHelp } from "@/aws/help-text";
 import { hoursLeftText } from "@/lib/hours-accounting";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -54,6 +55,7 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
+import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
@@ -184,6 +186,9 @@ function sumMinutes(
 ) {
   return rows.reduce((total, row) => total + (row[key] ?? 0), 0);
 }
+
+/** Chart legend text in the page's own ink colour: the series colour is shown by the swatch, and coloured text on white or dark backgrounds does not reach the contrast a reader needs. */
+const legendText = (value: string) => <span className="text-og-ink">{value}</span>;
 
 function csvQuote(value: unknown) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -427,6 +432,9 @@ export function ServiceVerificationReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  // The Export CSV buttons are written next to the data they export; they are shown in the page's action row (next to Print / PDF) through this slot.
+  const [exportSlot, setExportSlot] = useState<HTMLElement | null>(null);
+  const inActions = (node: ReactNode) => (exportSlot ? createPortal(node, exportSlot) : node);
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
   const location = useLocation();
@@ -1092,6 +1100,15 @@ export function ServiceVerificationReportsPage() {
   const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter]
     .filter(Boolean).length;
 
+  // Monthly reports are chosen by month; of the filters only the ones their data honours are shown.
+  const monthlyView = reportView === "calendar" || reportView === "reconciliation";
+  const rangeView = !monthlyView && reportView !== "staff-access";
+  const filterApplies = (key: "client" | "location" | "caregiver" | "service" | "status") => reportView !== "reconciliation" || key === "client" || key === "service";
+  function clearAllFilters() {
+    resetFilters();
+    if (!monthlyView) applyDatePreset("all");
+  }
+
   function resetFilters() {
     setClientFilter("");
     setServiceFilter("");
@@ -1260,13 +1277,14 @@ export function ServiceVerificationReportsPage() {
     <section className="mx-auto max-w-6xl space-y-3 pb-6 print:max-w-none print:space-y-2 print:pb-0">
       <div className="print:hidden">
         <PageHeader
-          title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Action needed" : "Reports"}
+          title={reportView === "visits" ? "Visit records" : reportView === "exceptions" ? "Visits to review" : "Reports"}
           {...(reportView === "calendar" ? { lead: "The calendar always covers the chosen client's whole month." } : {})}
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
-                Print / Save as PDF
+              <Button type="button" variant="secondary" icon={<Printer className="h-4 w-4" />} disabled={reportView === "calendar" && !clientFilter} onClick={handlePrint}>
+                Print / PDF
               </Button>
+              <span ref={setExportSlot} className="inline-flex items-center gap-2" />
             <details className="relative">
               <summary className="cursor-pointer list-none rounded-lg border border-slate-300 bg-og-card px-2 py-1.5 text-sm font-medium text-slate-700">
                 More actions
@@ -1295,39 +1313,6 @@ export function ServiceVerificationReportsPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <div className="flex min-w-64 max-w-md flex-1 items-center gap-2">
-            <label htmlFor="report-view" className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500">
-              Report
-            </label>
-            <select
-              id="report-view"
-              value={reportView}
-              onChange={(event) => {
-                const next = event.target.value as ReportView;
-                setReportView(next);
-                // Keep the address (and so the sidebar highlight) in step with the selection.
-                const params = new URLSearchParams(location.search);
-                if (next === defaultView) params.delete("view");
-                else params.set("view", next);
-                const search = params.toString();
-                navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
-                closeExpanded();
-              }}
-              className="min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
-            >
-              <option value="visits">Visit records</option>
-              <option value="exceptions">Action needed</option>
-              <option value="overview">Visits overview</option>
-              <option value="caregiver">Caregiver hours</option>
-              <option value="calendar">Client monthly calendar</option>
-              {viewAvailable("reconciliation") ? <option value="reconciliation">Monthly hours & billing</option> : null}
-              {viewAvailable("corrections") ? <option value="corrections">Correction history</option> : null}
-              {canManage ? <option value="staff-access">Staff access</option> : null}
-            </select>
-        </div>
-      </div>
-
       {canManage && reportView === "staff-access" ? (
         <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-sky-50 print:hidden">
           <div className="flex items-start gap-3">
@@ -1338,13 +1323,12 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-bold text-emerald-950">
                 One secure staff link
               </h3>
-              <p className="mt-1 text-sm text-emerald-900">
+              <InfoTip label="Help">
                 Send the same link to every caregiver. Each person signs in with
-                their own account and can only see clients and services assigned
-                to them. For an extra shift, a manager assigns that client and
-                service first; managers can correct a submitted visit when a
-                mistake is made.
-              </p>
+                their own account and sees only their assigned clients and
+                services. For an extra shift, assign the client and service
+                first; managers can correct a submitted visit.
+              </InfoTip>
               <a
                 href="/clients"
                 className="mt-2 inline-flex rounded-lg bg-emerald-700 px-2 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
@@ -1363,10 +1347,10 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 Caregiver folders
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
+              <InfoTip label="Help">
                 Open a caregiver folder to view, print, or bookmark only that
                 caregiver&apos;s sheets.
-              </p>
+              </InfoTip>
             </div>
             {caregiverFilter ? (
               <button
@@ -1402,63 +1386,106 @@ export function ServiceVerificationReportsPage() {
       ) : null}
 
       <style>{`@media print { @page { ${reportView === "visits" ? "size: letter landscape; " : ""}margin: 0.5in; @top-left { content: "${printRunningHeaderCss}"; font: 8pt sans-serif; color: #334155; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt sans-serif; color: #334155; } } }`}</style>
-      {/* The date range and filters do not apply to the client calendar (it is always one client, one full month), so they are not shown there. */}
-      {reportView !== "staff-access" && reportView !== "calendar" ? (
-        <Card className="print:hidden">
+      {/* One filter bar: the report, then only the filters that apply to it. A monthly report is chosen by month; the others by start and end date. */}
+      {(
+        <div role="search" aria-label="Report filters" className="space-y-2 border-y border-slate-200 py-2 print:hidden">
           <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label htmlFor="report-date-range" className="block text-xs font-medium text-slate-600">
-                Date range
+            <div className="flex min-w-64 max-w-md flex-1 items-center gap-2">
+            <label htmlFor="report-view" className="shrink-0 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Report
+            </label>
+            <select
+              id="report-view"
+              value={reportView}
+              onChange={(event) => {
+                const next = event.target.value as ReportView;
+                setReportView(next);
+                // Keep the address (and so the sidebar highlight) in step with the selection.
+                const params = new URLSearchParams(location.search);
+                if (next === defaultView) params.delete("view");
+                else params.set("view", next);
+                const search = params.toString();
+                navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
+                closeExpanded();
+              }}
+              className="min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
+            >
+              <option value="visits">Visit records</option>
+              <option value="exceptions">Visits to review</option>
+              <option value="overview">Visits overview</option>
+              <option value="caregiver">Caregiver hours</option>
+              <option value="calendar">Client monthly calendar</option>
+              {viewAvailable("reconciliation") ? <option value="reconciliation">Monthly hours & billing</option> : null}
+              {viewAvailable("corrections") ? <option value="corrections">Correction history</option> : null}
+              {canManage ? <option value="staff-access">Staff access</option> : null}
+            </select>
+        </div>
+            {reportView === "calendar" ? (
+              <label className="text-xs font-medium text-slate-600">
+                Calendar client
+                <select
+                  value={clientFilter}
+                  onChange={(event) => setClientFilter(event.target.value)}
+                  className="mt-0.5 block max-w-56 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                >
+                  <option value="">Choose a client…</option>
+                  {clientOptions.map(([id, label]) => (
+                    <option key={id} value={id}>{label}</option>
+                  ))}
+                </select>
               </label>
-              <select
-                id="report-date-range"
-                value={datePreset}
-                onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
-                className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
-              >
-                {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </div>
-            {datePreset === "custom" ? (
+            ) : null}
+            {monthlyView ? (
+              <label className="text-xs font-medium text-slate-600">
+                {reportView === "calendar" ? "Calendar month" : "Month"}
+                <input
+                  type="month"
+                  {...(reportView === "calendar" ? { "aria-label": "Calendar month" } : {})}
+                  value={reportMonth}
+                  onChange={(event) => setReportMonth(event.target.value)}
+                  className="mt-0.5 block min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                />
+              </label>
+            ) : rangeView ? (
               <>
                 <div>
-                  <label htmlFor="report-from" className="block text-xs font-medium text-slate-600">From</label>
-                  <input
-                    id="report-from"
-                    type="date"
-                    value={dateFrom}
-                    max={dateTo || undefined}
-                    onChange={(event) => setDateFrom(event.target.value)}
-                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
-                  />
+                  <label htmlFor="report-date-range" className="block text-xs font-medium text-slate-600">Date range</label>
+                  <select
+                    id="report-date-range"
+                    value={datePreset}
+                    onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
+                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                  >
+                    {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label htmlFor="report-to" className="block text-xs font-medium text-slate-600">To</label>
-                  <input
-                    id="report-to"
-                    type="date"
-                    value={dateTo}
-                    min={dateFrom || undefined}
-                    onChange={(event) => setDateTo(event.target.value)}
-                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
-                  />
+                  <label htmlFor="report-from" className="block text-xs font-medium text-slate-600">Start date</label>
+                  <input id="report-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDatePreset("custom"); setDateFrom(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
+                </div>
+                <div>
+                  <label htmlFor="report-to" className="block text-xs font-medium text-slate-600">End date</label>
+                  <input id="report-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDatePreset("custom"); setDateTo(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
                 </div>
               </>
             ) : null}
-          </div>
-          {datePreset === "custom" && dateFrom && dateTo && dateFrom > dateTo ? (
-            <p role="alert" className="mt-2 text-sm text-red-700">From must be on or before To.</p>
-          ) : null}
-          <details className="mt-1" open={activeFilterCount > 0}>
-            <summary className="flex min-h-[28px] cursor-pointer items-center text-sm font-medium text-slate-800 [@media(pointer:coarse)]:min-h-[44px]">
-              Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
-            </summary>
-            {activeFilterCount > 0 ? (
-              <button type="button" onClick={resetFilters} className="mt-2 text-xs font-medium text-sky-700 underline">
-                Clear filters
+            {activeFilterCount > 0 || (rangeView && datePreset !== "all") ? (
+              <button type="button" onClick={clearAllFilters} className="min-h-[32px] text-sm font-medium text-og-link underline [@media(pointer:coarse)]:min-h-[44px]">
+                Clear Filters
               </button>
             ) : null}
-          <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {rangeView ? <InfoTip label="Help">Use a custom start and end date for a pay period or any other range. These reports use actual signed visit time, not the schedule.</InfoTip> : null}
+          </div>
+          {rangeView && dateFrom && dateTo && dateFrom > dateTo ? (
+            <p role="alert" className="text-sm text-red-700">Start date must be on or before the end date.</p>
+          ) : null}
+          {reportView !== "calendar" && reportView !== "staff-access" ? (
+            <details open={activeFilterCount > 0 || reportView === "reconciliation"}>
+              <summary className="flex min-h-[28px] cursor-pointer items-center text-sm font-medium text-slate-800 [@media(pointer:coarse)]:min-h-[44px]">
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ""}
+              </summary>
+          <div className="mt-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {filterApplies("client") ? (
             <div>
               <label
                 htmlFor="report-client"
@@ -1480,6 +1507,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("location") ? (
             <div>
               <label
                 htmlFor="report-location"
@@ -1501,6 +1530,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("caregiver") ? (
             <div>
               <label
                 htmlFor="report-caregiver"
@@ -1522,6 +1553,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("service") ? (
             <div>
               <label
                 htmlFor="report-service"
@@ -1543,6 +1576,8 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
+            {filterApplies("status") ? (
             <div>
               <label
                 htmlFor="report-status"
@@ -1564,6 +1599,7 @@ export function ServiceVerificationReportsPage() {
                 ))}
               </select>
             </div>
+            ) : null}
             {reportView === "corrections" ? (
               <div>
                 <label
@@ -1588,17 +1624,14 @@ export function ServiceVerificationReportsPage() {
               </div>
             ) : null}
           </div>
-          </details>
-          <details className="mt-2 text-xs text-slate-500">
-            <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">Details</summary>
-            <p>Use Custom for a pay period or any other range. These reports use actual signed visit time, not the schedule.</p>
-          </details>
-        </Card>
-      ) : null}
+            </details>
+          ) : null}
+        </div>
+      )}
 
       {reportView === "overview" ? (
         <>
-          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="font-semibold underline" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
+          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="inline-flex min-h-[32px] items-center font-semibold underline [@media(pointer:coarse)]:min-h-[44px]" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
@@ -1704,7 +1737,7 @@ export function ServiceVerificationReportsPage() {
                         ))}
                       </Pie>
                       <Tooltip formatter={(value) => formatDuration(Number(value))} />
-                      <Legend />
+                      <Legend formatter={legendText} />
                     </PieChart>
                   ) : chartType === "line" ? (
                     <LineChart data={trendData}>
@@ -1712,7 +1745,7 @@ export function ServiceVerificationReportsPage() {
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
                       <Tooltip formatter={(value) => formatDuration(Number(value))} />
-                      <Legend />
+                      <Legend formatter={legendText} />
                       <Line
                         type="monotone"
                         dataKey="workedMinutes"
@@ -1734,7 +1767,7 @@ export function ServiceVerificationReportsPage() {
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tickFormatter={(value) => formatDuration(Number(value))} />
                       <Tooltip formatter={(value) => formatDuration(Number(value))} />
-                      <Legend />
+                      <Legend formatter={legendText} />
                       <Bar
                         dataKey="workedMinutes"
                         name="Worked hours"
@@ -1777,6 +1810,7 @@ export function ServiceVerificationReportsPage() {
               >
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="w-10 pb-2 pr-3 text-right font-medium">No.</th>
                     <th className="pb-2 font-medium">Caregiver</th>
                     <th className="pb-2 font-medium">Worked</th>
                     <th className="pb-2 font-medium">Billable</th>
@@ -1784,8 +1818,9 @@ export function ServiceVerificationReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {caregiverSubtotals.map((entry) => (
+                  {caregiverSubtotals.map((entry, index) => (
                     <tr key={entry.name} className="border-b border-slate-100">
+                      <td className="w-10 py-1 pr-3 text-right tabular-nums text-slate-600" data-testid="row-no">{index + 1}</td>
                       <td className="py-1 font-semibold text-slate-900">
                         {entry.name}
                       </td>
@@ -1863,44 +1898,21 @@ export function ServiceVerificationReportsPage() {
                 <h3 className="font-semibold text-slate-950 print:hidden">
                   Client monthly service calendar
                 </h3>
-                <p className="mt-1 text-sm text-slate-500 print:hidden">
+                <InfoTip label="Help">
                   Each date shows worked time per service, added up across caregivers.
                   Different services are never combined.
-                </p>
-                <p className="mt-1 text-xs text-slate-500 print:mt-0 print:text-[9px] print:text-slate-700">
-                  Includes confirmed visits and visits in review (shaded amber). Replaced
-                  originals and voided visits are left out, so corrections are not counted
-                  twice. Visits not yet complete are listed separately and not counted.
-                  <span className="print:hidden"> Always the full month for this client: the caregiver, service,
-                  status and date filters do not apply here.</span>
-                </p>
+                </InfoTip>
+                <InfoTip label="Help">
+                  Counts confirmed visits and visits in review (amber). Replaced and voided
+                  visits are left out; visits not yet complete are listed apart.
+                  <span className="print:hidden"> Always the client's full month: caregiver, service,
+                  status and date filters do not apply.</span>
+                </InfoTip>
+                <p className="hidden print:block print:text-[9px] print:text-slate-700">Amber = in review. Replaced and voided visits are excluded.</p>
               </div>
             </div>
             <div className="flex flex-wrap items-end gap-2 print:hidden">
               <style>{"@media print { @page { size: letter landscape; margin: 0.4in; } }"}</style>
-              <label className="text-xs font-medium text-slate-600">
-                Calendar client
-                <select
-                  value={clientFilter}
-                  onChange={(event) => setClientFilter(event.target.value)}
-                  className="mt-1 block max-w-56 rounded-lg border border-slate-200 bg-og-card px-2 py-1.5 text-sm text-slate-900"
-                >
-                  <option value="">Choose a client…</option>
-                  {clientOptions.map(([id, label]) => (
-                    <option key={id} value={id}>{label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-medium text-slate-600">
-                Calendar month
-                <input
-                  type="month"
-                  aria-label="Calendar month"
-                  value={reportMonth}
-                  onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
-                />
-              </label>
               <label className="flex items-center gap-2 self-center text-xs font-medium text-slate-600">
                 <input
                   type="checkbox"
@@ -1909,16 +1921,8 @@ export function ServiceVerificationReportsPage() {
                 />
                 Add a visit detail page
               </label>
-              <Button
-                type="button"
-                icon={<Printer className="h-4 w-4" />}
-                disabled={!clientFilter}
-                onClick={handlePrint}
-              >
-                Print calendar / Save as PDF
-              </Button>
               {canExport && clientFilter && monthlyServiceRows.length > 0 ? (
-                <Button
+                inActions(<Button
                   type="button"
                   variant="secondary"
                   icon={<Download className="h-4 w-4" />}
@@ -1958,8 +1962,8 @@ export function ServiceVerificationReportsPage() {
                     )
                   }
                 >
-                  CSV
-                </Button>
+                  Export CSV
+                </Button>)
               ) : null}
             </div>
           </div>
@@ -2087,12 +2091,12 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 Monthly hours & billing
               </h3>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              <InfoTip label="Help">
                 Each row is one client + service + authorization lineage.
                 Services are never combined. Worked and billable time remain
                 separate so documentation or authorization differences cannot
                 be hidden by a client-level total.
-              </p>
+              </InfoTip>
               <p className="mt-1 max-w-3xl text-xs text-slate-500">
                 <strong>Billable (eligible)</strong> is confirmed time within the
                 authorization; <strong>Approved</strong> is what a person approved
@@ -2111,17 +2115,8 @@ export function ServiceVerificationReportsPage() {
               ) : null}
             </div>
             <div className="flex items-end gap-2 print:hidden">
-              <label className="text-xs font-medium text-slate-600">
-                Month
-                <input
-                  type="month"
-                  value={reportMonth}
-                  onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-1 block rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
-                />
-              </label>
               {canExport && monthlyServiceRows.length > 0 ? (
-                <Button
+                inActions(<Button
                   type="button"
                   variant="secondary"
                   icon={<Download className="h-4 w-4" />}
@@ -2172,8 +2167,8 @@ export function ServiceVerificationReportsPage() {
                     )
                   }
                 >
-                  CSV
-                </Button>
+                  Export CSV
+                </Button>)
               ) : null}
             </div>
           </div>
@@ -2193,6 +2188,7 @@ export function ServiceVerificationReportsPage() {
               <table className="w-full text-left text-sm" aria-label="Monthly hours and billing reconciliation">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="w-10 pb-2 pr-3 text-right font-medium">No.</th>
                     <th className="pb-2 pr-3 font-medium">Client</th>
                     <th className="pb-2 pr-3 font-medium">Service</th>
                     <th className="pb-2 pr-3 font-medium">Authorized</th>
@@ -2211,10 +2207,11 @@ export function ServiceVerificationReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlyServiceRows.map((row) => {
+                  {monthlyServiceRows.map((row, index) => {
                     const difference = Math.max(0, row.workedMinutes - row.billableMinutes);
                     return (
                       <tr key={row.authorizationLineageId} className="border-b border-slate-100">
+                        <td className="w-10 py-1 pr-3 text-right tabular-nums text-slate-600" data-testid="row-no">{index + 1}</td>
                         <td className="py-1 pr-3"><ClientCell name={row.clientName} code={row.clientCode} duplicate={row.clientNameDuplicate} /></td>
                         <td className="py-1 pr-3">
                           <p className="font-medium text-slate-800">{row.serviceCode} · {row.serviceName}</p>
@@ -2268,11 +2265,11 @@ export function ServiceVerificationReportsPage() {
               </table>
             </div>
           )}
-          <p className="mt-2 text-xs text-slate-500">
+          <InfoTip label="Help">
             “Billable” means eligible to bill after visit verification and
             authorization controls. Actual submitted/billed totals will remain a
             separate ledger value; they must never be inferred from billable time.
-          </p>
+          </InfoTip>
         </Card>
       ) : null}
 
@@ -2283,13 +2280,13 @@ export function ServiceVerificationReportsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="font-semibold text-slate-950">Correction history</h3>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              <InfoTip label="Help">
                 Agency audit report of visit revisions. Original records remain
                 immutable; this report shows who changed what, why, and when.
-              </p>
+              </InfoTip>
             </div>
             {canExport && correctionRows.length > 0 ? (
-              <Button
+              inActions(<Button
                 type="button"
                 variant="secondary"
                 className="print:hidden"
@@ -2330,8 +2327,8 @@ export function ServiceVerificationReportsPage() {
                   )
                 }
               >
-                CSV
-              </Button>
+                Export CSV
+              </Button>)
             ) : null}
           </div>
           {!correctionHistoryReportQuery.isLoading && !correctionHistoryReportQuery.isError ? (
@@ -2748,9 +2745,9 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 By client and service
               </h3>
-              <p className="mt-1 text-xs text-slate-500">
+              <InfoTip label="Help">
                 Service totals remain separate even when one client has multiple services.
-              </p>
+              </InfoTip>
               <ul className="mt-2 divide-y divide-slate-100">
                 {clientServiceSubtotals.map((entry) => (
                   <li
@@ -2779,12 +2776,11 @@ export function ServiceVerificationReportsPage() {
           </h3>
           <details className="mt-1 text-xs text-slate-500">
           <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
-          <p>
-            Missing Time Out: still open past the scheduled shift end (or open{" "}
-            {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours with no scheduled shift). Not confirmed: signed out over an
-            hour ago without a client confirmation or a no-signer reason. Ask
-            the caregiver to finish the visit on their phone.
-          </p>
+          <InfoTip label="Help">
+            Missing Time Out: still open past the shift end (or {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours
+            with no shift). Not confirmed: signed out over an hour ago with no client confirmation or no-signer reason.
+            Ask the caregiver to finish the visit.
+          </InfoTip>
           </details>
           <ul className="mt-2 divide-y divide-slate-100">
             {incompleteVisits.map(({ row, issue }) => (
@@ -2832,10 +2828,10 @@ export function ServiceVerificationReportsPage() {
                       </p>
                     ) : (
                       <>
-                        <p className="text-xs text-slate-600">
+                        <InfoTip label="Help">
                           Enter when the visit actually ended. The caregiver&apos;s app then
                           asks for the client&apos;s confirmation, marked as entered by the agency.
-                        </p>
+                        </InfoTip>
                         {row.scheduled_ends_at ? (
                           <p className="text-xs text-slate-500">
                             Scheduled end: {formatVisitDate(row.scheduled_ends_at)}, {formatClockTime(row.scheduled_ends_at)}
@@ -2886,7 +2882,7 @@ export function ServiceVerificationReportsPage() {
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
           <details className="mt-1 text-xs text-slate-500">
             <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
-            <p>Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</p>
+            <InfoTip label="Help">Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</InfoTip>
           </details>
           <ul className="mt-2 divide-y divide-slate-100">
             {exceptionVisits.map((row) => (
