@@ -8,7 +8,7 @@
 | Migration / rollback | `infra/aws/db/migrations/0086_caregiver_readiness_approve_for_work.sql` / `infra/aws/db/rollback/0086_caregiver_readiness_approve_for_work.down.sql` |
 | API code | `apps/sv-api/src/routes.ts` (8 new routes; the D1 fix `withClientNames` keeps `Date` values) |
 | Web | not security-relevant beyond showing server answers (no eligibility rule lives in the browser) |
-| Reviewer (full name, role) | ______________________________ (assignment pending: the owner names the reviewer; not yet named as of 2026-10-31) |
+| Reviewer (full name, role) | **Stella Okereke**, designated by the owner 2026-10-31 (DECISION_RECORD A8/D15); also the release Operator, so S12 (her own Part 2 window) is optional and not for her to approve alone. Signature below is still blank |
 | Review started / finished | ______ / ______ |
 
 **How the repo checklist maps to this stack.** It was written for Supabase (`auth.uid()`, `public`). Here the identity is established by `ogevia_api.begin_request(<cognito sub>)` (the API calls it first in every transaction, as role `ogevia_app`); the actor is read with `ogevia.require_actor()`; membership by `ogevia.is_active_member(org)`; permissions by `ogevia.has_permission(org, key)`; the API schema is `ogevia_api`, internal helpers are `ogevia`. `ogevia_app` has **no table privileges** (only EXECUTE on `ogevia_api` functions), so a `SECURITY DEFINER` function is the only way to touch data. `anon` does not exist in this stack: nothing in 0086 is callable without a signed-in Cognito identity.
