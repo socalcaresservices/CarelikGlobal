@@ -6,7 +6,7 @@
 | Item | Entry |
 |---|---|
 | Window start (date, time, time zone) | **2026-10-31 09:00 PDT** (16:00 UTC) |
-| Window end (hard stop; nothing runs after this) | **2026-10-31 12:00 PDT** (19:00 UTC) |
+| Window end (hard stop for new activity; rollback to known-good only, per A12) | **2026-10-31 12:00 PDT** (19:00 UTC) |
 
 ## 2. Scope this GO covers (and nothing else)
 | Item | Value |
@@ -25,7 +25,8 @@
 5. **Deploy the TEST API stack** at the pinned commit, then **build and upload the web bundle** for the TEST site and invalidate CloudFront (runbook E, in the order database, API, web).
 6. **Phase C checks** (runbook F) with **synthetic caregivers only**: invitation email and content, temporary-password validity (record the days), the 8 routes (200/401/403/404), CloudFront bundle on a phone, migration on populated data, regression set R and smoke set S.
 7. **Phase D UAT** on TEST under `PHASE_D_UAT_SCRIPTS.md`, with the four validators, **enforcement OFF** (O13 and S4 not executed, D10), manual cross-agency steps X1-X3 (D11) with two organizations Stella names.
-8. **Rollback**, if a stop condition (section 5) occurs after step 4: runbook G, in the order web, API, database, restoring from the section-3 snapshot where needed. Stella records what she did and why.
+8. **Rollback**, if a stop condition (section 5) occurs after step 4: runbook G, in the order web, API, database. **Per A12 it may continue after the window end solely to restore TEST to a known-good state; no new deployment activity may begin after the window end.** Restoring the snapshot creates a new RDS instance and is **not** covered: stop and ask the owner. Stella records what she did and why.
+9. **If UAT (step 7) does not fit in the window, stop after Phase C** and request a separate UAT window and GO (A12).
 
 ## 4. Not authorized
 Production in any form (`ogevia_prd`, `Ogevia-prd-*`, Netlify, Supabase, DNS); activating enforcement; any other migration or code; changing Cognito pool settings, users other than synthetic ones, security groups or IAM beyond what the diff shows; starting or stopping the admin host; deleting snapshots or data; running anything after the window end; merging to `main`; any customer or real-person data; the Part 2 window script (it was a one-time D14 item).
