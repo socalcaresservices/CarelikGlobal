@@ -179,3 +179,6 @@ The owner reports a synthetic Owner exists in TEST; it is used for all owner-onl
 
 ## 29. Test mailbox confirmed (2026-10-31, D25 / A18)
 The designated test mailbox is under the owner's control and is for one synthetic caregiver ("UAT Ready", P1) only; no caregiver is created before Phase C is complete; creation is in the approved UAT data-prep step through the application. Still to state: no existing account in the shared pool for this address; the Owner's organization. P3 has no sign-in step (mailbox reserved for P1). UAT only; Phase C unchanged.
+
+## 30. Pre-window checks, Operator-reported (2026-10-31, before 09:00 PDT; local only, no AWS change)
+Script checkout `docs-checkout3` at `d4b899eee76480eada36ec092db9a118635f10be` (the branch tip when the checks were run); Node `v22.22.0`; all four hashes match: `STELLA_PHASE_C_DB.sh` `0d247068…`, `STELLA_PHASE_C_DEPLOY.sh` `4023b034…`, `diff_gate_0086.py` `4e86f8d5…`, `STELLA_READONLY_VERIFICATION.sql` `9e54d9d4…`. The DB selftest result was not stated in the report. The application checkout `app-5489` (pinned SHA) was verified earlier. Window opens 09:00 PDT; nothing has run in AWS. 0086 stays NOT RELEASABLE.
