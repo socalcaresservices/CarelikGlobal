@@ -8,7 +8,7 @@
 #   bash STELLA_PHASE_C_DB.sh snapshot                       S5: one manual RDS snapshot (window only); prints the snapshot id
 #   REPO=... SNAPSHOT_ID=<id> bash STELLA_PHASE_C_DB.sh adopt      S6a: record the staff migrations 0086 and 0087 (already on TEST, applied outside the ledger) in the ledger (window only)
 #   REPO=... SNAPSHOT_ID=<id> bash STELLA_PHASE_C_DB.sh migrate    S6b+S7: apply 0088 only, verify, post-probe (window only)
-#   bash STELLA_PHASE_C_DB.sh final                          S11: read-only closing read (window only: G1 is within the window; start it before 18:00 PDT)
+#   bash STELLA_PHASE_C_DB.sh final                          S11: read-only closing read (window only: G1 is within the window; start it before the window ends)
 #   REPO=... SNAPSHOT_ID=<id> bash STELLA_PHASE_C_DB.sh rollback   only after a stop condition; allowed after the window to restore known-good
 # Never touches ogevia_prd. Never starts or stops a host. Never prints a secret. Connects to ogevia_sv_test only (hard-coded, checked).
 set +x +H
@@ -31,7 +31,8 @@ STAFF86_SHA=8eb7b4a353300ba78156bd58a0df6cbc9857b677cec0e8ec51233fcda5a16a4f   #
 STAFF87_SHA=f9d75d8c776005873b6019ca2d76353d182772144b9946cadd3291cdbad4cf88   # 0087_staff_invitation_acceptance.sql: same
 IID_EXPECT=i-0ce8db2d7e5839dd5; ADMIN_SG=sg-00e01e2ca80442c1f; APP_SG=sg-064ffce3bcbe8eb3b; RDS_SG=sg-00530a1f4f7648e65
 RDS_ID=ogevia-prod-postgres; DB=ogevia_sv_test; ACCOUNT=300094796789; TAG=ogevia-db-admin-temp; LOCAL_PORT=15432
-WIN_START=$(date -u -d "2026-10-31 21:00:00" +%s 2>/dev/null); WIN_END=$(date -u -d "2026-11-01 01:00:00" +%s 2>/dev/null)
+WIN_START_TXT="__WIN_START_UTC__"; WIN_END_TXT="__WIN_END_UTC__"   # UTC, "YYYY-MM-DD HH:MM:SS"; filled from the owner's GO
+WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
 EXPECT_BEFORE="85/0085"; EXPECT_ADOPTED="87/0087"; EXPECT_AFTER="88/0088"; EXPECT_RA=5; EXPECT_CG=6
 ATTACHED=0; TUNNEL=""; CLEANED=0; RDS_SRC_BEFORE=""
 
@@ -58,14 +59,14 @@ cleanup() {                      # one time, on every exit: success, error, INT,
     [[ -z "$RDS_SRC_BEFORE" || "$s" == "$RDS_SRC_BEFORE" ]] || { echo "!!! RDS SG SOURCES DIFFER FROM BEFORE. Change nothing; tell the owner."; bad=1; }
     [[ "$bad" == 0 ]] && echo "RESTORE VERIFIED: admin host back to baseline, RDS SG unchanged." || { echo "RESTORE NOT VERIFIED (see !!! lines)"; [[ "$rc" == 0 ]] && rc=1; }
   fi
-  if [[ "$MODE" =~ ^(probe|snapshot|adopt|migrate)$ ]] && ! in_window; then echo "NOTE: this step finished after the window end (18:00 PDT). It was allowed to complete (A12 forbids BEGINNING new activity). Start NO further step; report. Rollback to known-good only."; fi
+  if [[ "$MODE" =~ ^(probe|snapshot|adopt|migrate)$ ]] && ! in_window; then echo "NOTE: this step finished after the window end (at the end of the authorized window). It was allowed to complete (A12 forbids BEGINNING new activity). Start NO further step; report. Rollback to known-good only."; fi
   echo "END (UTC): $(date -u +%FT%TZ)  mode=$MODE  exit=$rc  log=$LOG"
   exit "$rc"
 }
 trap cleanup EXIT; trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP
 
 in_window() { local n; n=$(date -u +%s); [[ -n "$WIN_START" && -n "$WIN_END" && "$n" -ge "$WIN_START" && "$n" -lt "$WIN_END" ]]; }
-need_window() { in_window || stop "outside the authorized window (2026-10-31 14:00-18:00 PDT = 21:00 UTC to 01:00 UTC on 2026-11-01). No new activity may begin. (rollback to known-good is the only exception)"; }
+need_window() { in_window || stop "outside the authorized window ($WIN_START_TXT to $WIN_END_TXT UTC). No new activity may begin. (rollback to known-good is the only exception)"; }
 confirm() { local want="$1"; local got; echo; echo "$2"; printf 'Type exactly  %s  to continue: ' "$want" > /dev/tty; read -r got < /dev/tty; [[ "$got" == "$want" ]] || stop "confirmation not given"; }
 
 check_repo() {
@@ -88,9 +89,9 @@ check_repo() {
 
 if [[ "$MODE" == selftest ]]; then
   echo "selftest (local only; no AWS, no database)"
-  [[ -n "$WIN_START" && "$WIN_END" -gt "$WIN_START" && $((WIN_END-WIN_START)) == 14400 ]] && echo "window math ok: $(date -u -d @$WIN_START +%FT%TZ) to $(date -u -d @$WIN_END +%FT%TZ) (4 h)" || stop "window math"
+  [[ -n "$WIN_START" && "$WIN_END" -gt "$WIN_START" ]] && echo "window math ok: $(date -u -d @$WIN_START +%FT%TZ) to $(date -u -d @$WIN_END +%FT%TZ)" || stop "window math (the window constants are not filled in?)"
   [[ "$(uri 'a b/c@d:e')" == "a%20b%2Fc%40d%3Ae" ]] && echo "uri-encoding ok" || stop "uri-encoding"
-  in_window && echo "now: inside the window" || echo "now: outside the window (expected before 14:00 PDT)"
+  in_window && echo "now: inside the window" || echo "now: outside the window (expected before the window starts)"
   [[ -n "${REPO:-}" ]] && check_repo || echo "REPO not set: pin check skipped (set REPO to test it)"
   echo "selftest done"; exit 0
 fi
@@ -216,7 +217,7 @@ SQL
     assert_adopted || exit 3 ;;
   migrate)
     assert_adopted || exit 2
-    confirm "MIGRATE 0088" "About to apply migration 0088 (only) to $DB. Snapshot $SNAPSHOT_ID is verified. Window ends 18:00 PDT (01:00 UTC)."
+    confirm "MIGRATE 0088" "About to apply migration 0088 (only) to $DB. Snapshot $SNAPSHOT_ID is verified. Window ends $WIN_END_TXT UTC."
     OUTF="$(mktemp)"
     ( cd "$REPO" && nodeenv OGEVIA_DATABASE_URL="$(dburl)" OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner pnpm --filter @carelik/infra-aws db:migrate ) > "$OUTF" 2>&1; RC=$?
     sed -E 's#postgres://[^ ]*#postgres://<redacted>#g' "$OUTF"

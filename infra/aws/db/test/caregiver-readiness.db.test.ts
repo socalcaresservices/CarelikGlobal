@@ -1,4 +1,4 @@
-// 0086 Caregiver readiness: one readiness source, Approve for work, the CPR/TB due-days setting (default 30) and per-caregiver extensions,
+// 0088 Caregiver readiness (numbered 0086 until it was integrated onto the TEST line after the staff migrations 0086 and 0087): one readiness source, Approve for work, the CPR/TB due-days setting (default 30) and per-caregiver extensions,
 // the restricted contact, the sign-in link rate limit and the calculated status. OWNER-DEFINED rules (2026-10-30), not verified legal requirements.
 // SYNTHETIC data only. Enforcement is switched on only inside this test database.
 import { randomUUID } from "node:crypto";
