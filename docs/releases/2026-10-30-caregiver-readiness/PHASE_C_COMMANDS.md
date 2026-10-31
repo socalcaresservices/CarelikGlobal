@@ -34,6 +34,17 @@ cd "$D" && REPO=$R bash STELLA_PHASE_C_DB.sh selftest        # expect: pins ok, 
 Stop on: any hash/commit mismatch, `ERR_PNPM_OUTDATED_LOCKFILE`, "No space left on device". The checkout at the branch tip may be a later documentation commit than the one the owner reviewed; that is fine for scripts (the app checkout is pinned separately).
 Optionally, read both scripts first (`sed -n '1,80p' STELLA_PHASE_C_DB.sh`, same for the deploy script) and check their hashes against the values in `PHASE_C_RUN_SHEET.md`.
 
+## 0a. Refresh after decision D23 (2026-10-31): the read-only SQL gained a count-only query V7
+`STELLA_READONLY_VERIFICATION.sql` changed (hash now `9e54d9d47b1639b1b1ad078e009b26e9392a6ab82ff8073336030f0e84868ca7`); the two scripts did not. Use a fresh directory, leave the others untouched:
+```bash
+cd /tmp/ogevia-phasec && git clone --depth 1 --filter=blob:none --sparse --branch claude/practical-tesla-r07odb https://github.com/socalcaresservices/CarelikGlobal.git docs-checkout3
+cd docs-checkout3 && git sparse-checkout set docs/releases/2026-10-30-caregiver-readiness && git rev-parse HEAD
+export D=/tmp/ogevia-phasec/docs-checkout3/docs/releases/2026-10-30-caregiver-readiness R=/tmp/ogevia-phasec/app-5489
+cd "$D" && sha256sum STELLA_PHASE_C_DB.sh STELLA_PHASE_C_DEPLOY.sh diff_gate_0086.py STELLA_READONLY_VERIFICATION.sql
+REPO=$R bash STELLA_PHASE_C_DB.sh selftest
+```
+Expected hashes: DB script `0d247068a8743c359954a1b526809bbf6c2f226eadf3d3df407fe99e07201f54`, deploy script `4023b034917d8032ed606151453b07723abdeba8edc99eceb7e7aa6d8a371a64`, gate `4e86f8d590f389faa72dd5d18250ef4246312f47b2d8b9b662a9d59484f27601`, SQL `9e54d9d47b1639b1b1ad078e009b26e9392a6ab82ff8073336030f0e84868ca7`. Use `docs-checkout3` for the window.
+
 ## 1. In the window (09:00-12:00 PDT = 16:00-19:00 UTC), in this order
 Every command below runs from `$D` after `export D=... R=...` (section 0) and `export OGEVIA_DEPLOY_APPROVAL=GO-0086-TEST-20261031`.
 | Step | Command | Expect | Stop if |

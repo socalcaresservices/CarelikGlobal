@@ -170,3 +170,6 @@ Org 1 `ogevia-test-slice`, Org 2 `scs-pilot-synthetic` (as reported; slugs both 
 
 ## 26. UAT accounts decided (2026-10-31, D22 / A15)
 X1-X3: Manager of `ogevia-test-slice` and Manager of `scs-pilot-synthetic` (separate synthetic accounts); Caregiver of `scs-pilot-synthetic` for visibility checks; Owner steps O11, O12 and due-days via a synthetic Owner if one exists, else the automated tests, with no new TEST user. Finding: verifying a background check and the Accounts page are owner-only, so a no-Owner cycle also cannot exercise the new-caregiver approval chain (table in `PHASE_D_UAT_SCRIPTS.md` 5a). Operator to confirm accounts and whether an Owner exists. Phase C unaffected.
+
+## 27. Owner-only UAT workflows decided (2026-10-31, D23 / A16)
+Check for a synthetic Owner first (V7, count-only, inside the S2 probe covered by G1; SQL hash now `9e54d9d47b1639b1b1ad078e009b26e9392a6ab82ff8073336030f0e84868ca7`, Stella refreshes to `docs-checkout3`). Owner exists: use it for O2, O5, O6, O9, O11, O12, C3 and due-days; none: those workflows rest on automated tests and review evidence; no new user, no production account. UAT only; Phase C and the window are unchanged.

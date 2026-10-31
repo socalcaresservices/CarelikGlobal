@@ -27,4 +27,11 @@ select o.slug, s.enforcement_active_from, s.service_checks
 -- V6 ORGANIZATIONS on TEST (decision D11). Record the number: 1 = cross-agency UAT not possible by hand; 2 or more = X1 to X3 apply.
 select count(*) as organizations, count(*) filter (where status = 'active') as active_organizations from ogevia.organizations;
 
+-- V7 UAT account roles (decision D23): counts of ACTIVE memberships per organization and role; no names, emails or ids.
+-- Answers "does a synthetic Owner exist in TEST?" (an organization_owner row in ogevia-test-slice or scs-pilot-synthetic). The Operator decides which accounts are synthetic.
+select o.slug, m.role, m.status, count(*) as accounts
+  from ogevia.organization_memberships m join ogevia.organizations o on o.id = m.organization_id
+ where o.slug in ('ogevia-test-slice', 'scs-pilot-synthetic')
+ group by o.slug, m.role, m.status order by o.slug, m.role, m.status;
+
 rollback;

@@ -110,15 +110,10 @@ Operator's count (Part 2, V6): **4 organizations**, so X1 to X3 apply. Organizat
 - **Owner:** if a synthetic Owner exists in TEST, use it for O11, O12 and the due-days validation (O14). If none exists, those three are covered by the automated tests for this cycle, and **no new TEST user is created** (outside the current GO).
 - The Operator confirms by role name (not email) that the two Managers and the Caregiver exist and are separate, and whether a synthetic Owner exists, before UAT starts.
 
-**Claude finding: the no-Owner fallback is wider than the three steps named.** The repository's seed scripts create no organization owner. Verifying a background check requires `caregivers.compliance.manage` (organization owner), and Approve requires a verified background check. If no synthetic Owner exists:
-| Step | Why it cannot run with a Manager only |
-|---|---|
-| Data prep P1-P3 (verify the background check) | verification is owner-only, so a new caregiver stays "Waiting on: Background check" |
-| O5, O6 (background states) | marking Completed / Not approved is owner-only |
-| O9, O10-O12 follow-ons, C3 (approval of P1) | Approve is blocked until the background check is verified |
-| O2 (Accounts page) | `accounts.manage` is owner-only |
-| O11, O12, O14 | owner-only (named in D22) |
-An already-approved or already-verified seeded caregiver may allow some of O9/C3 to run (unknown until the Operator looks). The owner has accepted only O11, O12 and the due-days check; **extending the acceptance to the rows above, or allowing a synthetic Owner, is an open owner decision.** What a Manager-only cycle can still show: O1, O3, O4 (view), O7, O8, O16-O20, S1-S7, C1-C8 (as applicable), A1-A4, X1-X3.
+**Owner-only workflows (owner decision D23, `DECISION_RECORD.md` A16).** Check first whether a synthetic Owner exists in TEST: the Phase C S2 probe prints query **V7** (count of active memberships by role in `ogevia-test-slice` and `scs-pilot-synthetic`; an `organization_owner` row means an Owner membership exists; the Operator decides whether that account is synthetic). 
+- **If a synthetic Owner exists:** use it for **O2, O5, O6, O9, O11, O12, C3 and the due-days validation (O14)**. No new user creation is authorized.
+- **If none exists:** the wider fallback is accepted for this TEST cycle. Mark those steps **"NOT RUN IN UAT: satisfied by automated tests and documented review evidence (D23)"**, together with the related approval-chain preparation (data prep P1-P3 background verification). No new TEST user is authorized or required; **no production account may be used.**
+Why these steps depend on an Owner: verifying a background check needs `caregivers.compliance.manage` (organization owner), Approve needs a verified background check, and the Accounts page needs `accounts.manage` (owner only). The automated evidence for the approval chain is RDY-01..04 in `FEATURE_TEST_PLAN.md` (DB `caregiver-readiness.db.test.ts`, 22 tests; HTTP 5 tests) and the security review. What a Manager-only cycle can still show: O1, O3, O4 (view), O7, O8, O16-O20, S1-S7, C1-C8 (as applicable), A1-A4, X1-X3.
 
 | Step | Action | Expected | Result | Notes |
 |---|---|---|---|---|
