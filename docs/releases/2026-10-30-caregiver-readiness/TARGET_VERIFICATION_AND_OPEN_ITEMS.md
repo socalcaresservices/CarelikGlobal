@@ -164,3 +164,6 @@ Reviewer **Stella Okereke**: **APPROVED**; findings: **none**; 6a: **not applica
 
 ## 24. Updated DB script verified by the Operator (2026-10-31 03:28 UTC; local only)
 Docs checkout `docs-checkout2` at `cca4bcba5e2cff79825f3e1c950af9649830383a`; hashes `STELLA_PHASE_C_DB.sh` `0d247068…`, `STELLA_PHASE_C_DEPLOY.sh` `4023b034…`, `diff_gate_0086.py` `4e86f8d5…` all match; DB selftest passed (window math, URI encoding, pins). G1 extended to DB rollback by A14. Use `docs-checkout2` for the window. Not done: anything in AWS or the database. 0086 stays NOT RELEASABLE.
+
+## 25. UAT organizations named (2026-10-31)
+Org 1 `ogevia-test-slice`, Org 2 `scs-pilot-synthetic` (as reported; slugs both appear in the Part 2 V5 output). Synthetic accounts: to be identified. Roles reported: Owner and Caregiver. Gaps recorded in `PHASE_D_UAT_SCRIPTS.md` section 5a: X3 needs office-level users (the Managers exist per the seed scripts); an Owner may not exist in either organization (needed for O11/O12). Phase C is unaffected. 0086 stays NOT RELEASABLE.

@@ -94,13 +94,25 @@ Formula (as the product states it): **Hours left = Authorized − Billable (used
 | A3 | On the amended client: open Authorization changes | The page lists the amendment with date and who; **no crash** | | |
 | A4 | Confirm that a Not ready caregiver's attempt to be scheduled (S3) did **not** reserve any minutes | Reserved unchanged | | |
 
-## 5a. Cross-agency isolation (decision D11; conditional)
-Operator's count (Part 2, V6, 2026-10-31): **4 organizations**, so X1 to X3 apply (the Operator names the two organizations with synthetic sign-in users; do not use real people). If the count were 1, mark X1 to X3 **NOT RUN (single organization)** and the reviewer's written acceptance of the limitation is required.
+## 5a. Cross-agency isolation (decision D11; conditional) — organizations named 2026-10-31
+Operator's count (Part 2, V6): **4 organizations**, so X1 to X3 apply. Organizations reported by the owner for X1-X3: **`ogevia-test-slice`** (Org 1) and **`scs-pilot-synthetic`** (Org 2). Slugs are as reported; the Operator verifies them in TEST (Part 2 V5 listed both). Synthetic accounts: **to be identified** (do not use real people; the sign-in pool may be shared with production).
+
+| | Organisation 1 | Organisation 2 |
+|---|---|---|
+| Slug | `ogevia-test-slice` | `scs-pilot-synthetic` |
+| Synthetic account | to be identified | to be identified |
+| Role as reported | Owner | Caregiver |
+| Roles the repository's seed scripts create | caregiver and manager (`02_seed_synthetic_test_slice.sql`) | manager and two caregivers (`04_seed_scs_pilot_synthetic.sql`); **no organization owner in either** |
+
+**Two issues with the roles as reported (open):**
+1. **X3 needs an office-level user in each organization.** A caregiver is refused office pages in any organization, so a Caregiver in Org 2 would test the role rule, not tenant isolation. Use the **Manager** of each organization for X1-X3 (both exist per the seed); keep the Org 2 Caregiver for the separate check "a caregiver sees only their own assignments".
+2. **An Owner account may not exist** in either organization (the seeds create none). UAT steps O11 and O12 (extend CPR/TB) and the due-days read need an organization-owner (`caregivers.compliance.manage`). Creating one is a TEST write (a membership and a Cognito user) that the GO does not cover; using a real production owner's account is not allowed. The Operator confirms whether a synthetic Owner exists; if not, the owner decides how O11/O12 are covered.
+
 | Step | Action | Expected | Result | Notes |
 |---|---|---|---|---|
-| X1 | Signed in to organization A as the Owner, open Care Team and Accounts | No person from organization B appears | | |
-| X2 | As the Owner of A, open a caregiver page of B by its address (Operator supplies the ID) | Refused or "not found"; no data shown | | |
-| X3 | As a user of B, repeat X1/X2 against A | Same | | |
+| X1 | Signed in to Org 1 as its Manager, open Care Team and Accounts | No person from Org 2 appears | | |
+| X2 | As Org 1's Manager, open a caregiver page of Org 2 by its address (Operator supplies the ID) | Refused or "not found"; no data shown | | |
+| X3 | As Org 2's Manager, repeat X1/X2 against Org 1 | Same | | |
 
 ## 6. Defect log (all validators)
 | # | Step | Class (Blocker / Major / Minor) | What happened (steps, screen) | Status | Owner exception (Major only) |
