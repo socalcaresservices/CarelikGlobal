@@ -167,3 +167,6 @@ Docs checkout `docs-checkout2` at `cca4bcba5e2cff79825f3e1c950af9649830383a`; ha
 
 ## 25. UAT organizations named (2026-10-31)
 Org 1 `ogevia-test-slice`, Org 2 `scs-pilot-synthetic` (as reported; slugs both appear in the Part 2 V5 output). Synthetic accounts: to be identified. Roles reported: Owner and Caregiver. Gaps recorded in `PHASE_D_UAT_SCRIPTS.md` section 5a: X3 needs office-level users (the Managers exist per the seed scripts); an Owner may not exist in either organization (needed for O11/O12). Phase C is unaffected. 0086 stays NOT RELEASABLE.
+
+## 26. UAT accounts decided (2026-10-31, D22 / A15)
+X1-X3: Manager of `ogevia-test-slice` and Manager of `scs-pilot-synthetic` (separate synthetic accounts); Caregiver of `scs-pilot-synthetic` for visibility checks; Owner steps O11, O12 and due-days via a synthetic Owner if one exists, else the automated tests, with no new TEST user. Finding: verifying a background check and the Accounts page are owner-only, so a no-Owner cycle also cannot exercise the new-caregiver approval chain (table in `PHASE_D_UAT_SCRIPTS.md` 5a). Operator to confirm accounts and whether an Owner exists. Phase C unaffected.

@@ -104,13 +104,25 @@ Operator's count (Part 2, V6): **4 organizations**, so X1 to X3 apply. Organizat
 | Role as reported | Owner | Caregiver |
 | Roles the repository's seed scripts create | caregiver and manager (`02_seed_synthetic_test_slice.sql`) | manager and two caregivers (`04_seed_scs_pilot_synthetic.sql`); **no organization owner in either** |
 
-**Two issues with the roles as reported (open):**
-1. **X3 needs an office-level user in each organization.** A caregiver is refused office pages in any organization, so a Caregiver in Org 2 would test the role rule, not tenant isolation. Use the **Manager** of each organization for X1-X3 (both exist per the seed); keep the Org 2 Caregiver for the separate check "a caregiver sees only their own assignments".
-2. **An Owner account may not exist** in either organization (the seeds create none). UAT steps O11 and O12 (extend CPR/TB) and the due-days read need an organization-owner (`caregivers.compliance.manage`). Creating one is a TEST write (a membership and a Cognito user) that the GO does not cover; using a real production owner's account is not allowed. The Operator confirms whether a synthetic Owner exists; if not, the owner decides how O11/O12 are covered.
+**Decided 2026-10-31 (owner decision D22, `DECISION_RECORD.md` A15):**
+- **X1-X3:** the **Manager** account in `ogevia-test-slice` and the **Manager** account in `scs-pilot-synthetic`; **separate synthetic sign-in accounts, not shared between organizations**.
+- **Caregiver-only visibility checks (C-steps):** a **Caregiver** account in `scs-pilot-synthetic`.
+- **Owner:** if a synthetic Owner exists in TEST, use it for O11, O12 and the due-days validation (O14). If none exists, those three are covered by the automated tests for this cycle, and **no new TEST user is created** (outside the current GO).
+- The Operator confirms by role name (not email) that the two Managers and the Caregiver exist and are separate, and whether a synthetic Owner exists, before UAT starts.
+
+**Claude finding: the no-Owner fallback is wider than the three steps named.** The repository's seed scripts create no organization owner. Verifying a background check requires `caregivers.compliance.manage` (organization owner), and Approve requires a verified background check. If no synthetic Owner exists:
+| Step | Why it cannot run with a Manager only |
+|---|---|
+| Data prep P1-P3 (verify the background check) | verification is owner-only, so a new caregiver stays "Waiting on: Background check" |
+| O5, O6 (background states) | marking Completed / Not approved is owner-only |
+| O9, O10-O12 follow-ons, C3 (approval of P1) | Approve is blocked until the background check is verified |
+| O2 (Accounts page) | `accounts.manage` is owner-only |
+| O11, O12, O14 | owner-only (named in D22) |
+An already-approved or already-verified seeded caregiver may allow some of O9/C3 to run (unknown until the Operator looks). The owner has accepted only O11, O12 and the due-days check; **extending the acceptance to the rows above, or allowing a synthetic Owner, is an open owner decision.** What a Manager-only cycle can still show: O1, O3, O4 (view), O7, O8, O16-O20, S1-S7, C1-C8 (as applicable), A1-A4, X1-X3.
 
 | Step | Action | Expected | Result | Notes |
 |---|---|---|---|---|
-| X1 | Signed in to Org 1 as its Manager, open Care Team and Accounts | No person from Org 2 appears | | |
+| X1 | Signed in to Org 1 (`ogevia-test-slice`) as its Manager, open Care Team and Accounts | No person from Org 2 appears | | |
 | X2 | As Org 1's Manager, open a caregiver page of Org 2 by its address (Operator supplies the ID) | Refused or "not found"; no data shown | | |
 | X3 | As Org 2's Manager, repeat X1/X2 against Org 1 | Same | | |
 
