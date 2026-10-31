@@ -12,7 +12,7 @@
 - The Operator and a second person are available to answer "is this expected?"; do not guess.
 
 ## 1. Data preparation (Operator and Owner, through the screens; before any validator starts)
-Record the actual names/codes you create in the table; validators use these. Mailbox: a test inbox the Operator controls (for example `uat.<name>@<domain you control>`); **it must receive real Cognito email** (that is part of the test).
+Record the actual names/codes you create in the table; validators use these. **Designated test inbox for P1 "UAT Ready" (owner's message 2026-10-31; the address is deliberately not stored in this repository).** It must be confirmed before use: (a) the owner controls the mailbox, (b) the address has no existing Ogevia or Cognito account in the shared pool (a collision could attach the invitation to a real identity), (c) it is used for one synthetic caregiver only. Created in the UAT data-prep step through the screens (Care Team, Add caregiver), in the organization that holds the synthetic Owner, not before Phase C is complete. General rule: Mailbox: a test inbox the Operator controls (for example `uat.<name>@<domain you control>`); **it must receive real Cognito email** (that is part of the test).
 
 | Ref | Person (synthetic) | How to create it (screens) | Expected state afterwards |
 |---|---|---|---|
