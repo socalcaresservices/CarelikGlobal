@@ -176,3 +176,6 @@ Check for a synthetic Owner first (V7, count-only, inside the S2 probe covered b
 
 ## 28. Synthetic Owner exists (owner statement 2026-10-31, D24 / A17)
 The owner reports a synthetic Owner exists in TEST; it is used for all owner-only UAT steps; no new user; the D23 fallback is not used. To confirm: V7 at S2 (expect an `organization_owner` row) and the Operator's confirmation that the account is synthetic and which organization it belongs to. UAT only; Phase C and the window unchanged.
+
+## 29. Test mailbox confirmed (2026-10-31, D25 / A18)
+The designated test mailbox is under the owner's control and is for one synthetic caregiver ("UAT Ready", P1) only; no caregiver is created before Phase C is complete; creation is in the approved UAT data-prep step through the application. Still to state: no existing account in the shared pool for this address; the Owner's organization. P3 has no sign-in step (mailbox reserved for P1). UAT only; Phase C unchanged.
