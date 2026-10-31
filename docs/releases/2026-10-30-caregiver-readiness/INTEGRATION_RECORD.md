@@ -32,3 +32,6 @@ Against the live TEST stack (`fb491a5`): exactly the 8 new readiness routes plus
 
 ## 7. Still to do before a new release candidate
 Finish the unit, API and web suites on the merged tree; set the final pins in `STELLA_PHASE_C_DB.sh`, `STELLA_PHASE_C_DEPLOY.sh` and `diff_gate_0086.py`; rewrite RUNBOOK, run sheet, commands and GO for the new candidate; new security review of the merge (staff and readiness together, `list_accounts`, the `adopt` write); new SHA; owner's window and GO (naming `adopt`).
+
+## 8. Operator confirmation (2026-10-31)
+Stella Okereke (Operator) reports she stopped at the gate: no deployment, migration, snapshot, API deployment or web publish; security groups at baseline; `~/ogevia-before-0086` retained (it holds the live fb491a5 state captured before the run and stays useful as the "before" capture). She asks to be told when a new approved release candidate, hashes, GO and window are ready. Claude has no channel to her: the owner relays. Nothing is to be run in AWS until all four exist.
