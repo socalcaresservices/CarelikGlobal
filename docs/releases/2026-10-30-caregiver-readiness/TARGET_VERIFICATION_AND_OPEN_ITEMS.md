@@ -141,3 +141,12 @@ Reviewer **Stella Okereke**: **APPROVED**; findings: **none**; 6a: **not applica
 3. The **date** (2026-10-30) precedes the reviewer designation (2026-10-31) and the packet. Confirm or correct.
 4. The reviewer is also the Operator; S12 stays optional and unreviewed (D16).
 **Effect:** the security-review gate has an APPROVED outcome recorded. 0086 stays NOT RELEASABLE: the decision record is unsigned, the six package decisions are unconfirmed, no window or GO exists, the real `cdk diff`, B9 acceptance, Phase C, Phase D and the release record update remain.
+
+## 21. Review of the recorded sign-off (2026-10-31)
+- **Reviewer name/role:** name Stella Okereke; role "Security Reviewer" (her own words); recorded. **Review start/finish times: NOT RECORDED** and not inferred.
+- **Date:** 2026-10-30 is consistent with a Pacific local date (see `SECURITY_REVIEW.md` Date row). The earlier "conflict" note in section 20 item 3 is withdrawn as a time-zone artifact, pending the reviewer's confirmation of her time zone.
+- **Signature:** typed text relayed in the conversation, not a system or wet signature; not evidence that checks passed.
+- **Boxes:** 30 lines in `SECURITY_REVIEW.md` still carry unticked boxes (sections 1 to 3 and the item rows); one outcome box is ticked. The reviewer's ticked copy was not received.
+- **D11:** consistent. Four organizations means 6a is not applicable and manual X1-X3 are required; **X1-X3 have not been run** and the two organizations have not been named.
+- **Conflicting sign-offs:** none found. `DECISION_RECORD.md` is unsigned by the owner, so no owner sign-off exists to conflict with or support the review.
+- **Technical evidence:** the author's re-run (`SECURITY_REVIEW.md` section 8) reproduced the measured facts. It is the author's, not the reviewer's.

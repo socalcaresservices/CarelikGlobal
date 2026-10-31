@@ -35,14 +35,15 @@ Check: `cd infra/aws/db/migrations && sha256sum 0086_caregiver_readiness_approve
 
 ## 5. Reproduce the author's facts (scratch local database only; never TEST or production)
 ```bash
-# 1. a local, throwaway PostgreSQL; the DB tests create and drop their own databases
-export OGEVIA_TEST_DATABASE_URL=postgres://<local admin>@127.0.0.1:<port>/postgres
+# 1. a local, throwaway PostgreSQL 16 that accepts a password login (the DB tests create and drop their own databases)
+export OGEVIA_TEST_DATABASE_URL='postgres://<local admin>:<local password>@127.0.0.1:<port>/postgres'
 pnpm install --frozen-lockfile
-pnpm --filter @carelik/infra-aws test:db -- caregiver-readiness       # DB refusal / isolation / concurrency tests
-pnpm --filter @carelik/sv-api  test:db -- caregiver-readiness-http    # HTTP layer incl. no-leak assertions
-pnpm --filter @carelik/sv-api  test    -- with-client-names           # the D1 fix
+# 2. run single files with vitest directly. ("pnpm … test:db -- <pattern>" does NOT filter: it runs all 99 DB files.)
+cd infra/aws && npx vitest run --config vitest.db.config.ts db/test/caregiver-readiness.db.test.ts        # 22 tests
+cd ../../apps/sv-api && npx vitest run --config vitest.db.config.ts test/caregiver-readiness-http.db.test.ts   # 5 tests
+npx vitest run test/with-client-names.test.ts                                                          # 4 tests
 ```
-Then run the two catalog queries printed in `SECURITY_REVIEW.md` ("How the facts below were obtained") against a scratch database migrated to 0086 (`OGEVIA_DATABASE_URL=<scratch> pnpm --filter @carelik/infra-aws db:migrate`). The runner refuses non-local hosts without an owner-approval variable; do not set it. Test commands are as recorded in the package scripts; if a filter pattern does not match, run the whole suite instead.
+Then run the two catalog queries printed in `SECURITY_REVIEW.md` ("How the facts below were obtained") against a scratch database migrated to 0086 (`OGEVIA_DATABASE_URL=<scratch> pnpm --filter @carelik/infra-aws db:migrate`). The runner refuses non-local hosts without an owner-approval variable; do not set it. Expected counts are from the author's run on 2026-10-31.
 
 ## 6. What the author measured, for you to check
 - All 13 `ogevia_api` functions: `SECURITY DEFINER`, pinned `search_path = ogevia, pg_temp`, EXECUTE revoked from PUBLIC, granted to `ogevia_app` only.

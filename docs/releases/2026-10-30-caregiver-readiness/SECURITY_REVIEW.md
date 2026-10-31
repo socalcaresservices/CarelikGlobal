@@ -8,8 +8,8 @@
 | Migration / rollback | `infra/aws/db/migrations/0086_caregiver_readiness_approve_for_work.sql` / `infra/aws/db/rollback/0086_caregiver_readiness_approve_for_work.down.sql` |
 | API code | `apps/sv-api/src/routes.ts` (8 new routes; the D1 fix `withClientNames` keeps `Date` values) |
 | Web | not security-relevant beyond showing server answers (no eligibility rule lives in the browser) |
-| Reviewer (full name, role) | **Stella Okereke**, designated by the owner 2026-10-31 (DECISION_RECORD A8/D15); also the release Operator, so S12 (her own Part 2 window) is optional and not for her to approve alone. Signature below is still blank |
-| Review started / finished | ______ / ______ |
+| Reviewer (full name, role) | **Stella Okereke**, Security Reviewer (role as stated by the reviewer); designated by the owner (DECISION_RECORD A8/D15); also the release Operator, so S12 (her own Part 2 window) is optional and not for her to approve alone |
+| Review started / finished | **NOT RECORDED** (the reviewer gave no times; none are inferred here). Reviewer to supply, with time zone |
 
 **How the repo checklist maps to this stack.** It was written for Supabase (`auth.uid()`, `public`). Here the identity is established by `ogevia_api.begin_request(<cognito sub>)` (the API calls it first in every transaction, as role `ogevia_app`); the actor is read with `ogevia.require_actor()`; membership by `ogevia.is_active_member(org)`; permissions by `ogevia.has_permission(org, key)`; the API schema is `ogevia_api`, internal helpers are `ogevia`. `ogevia_app` has **no table privileges** (only EXECUTE on `ogevia_api` functions), so a `SECURITY DEFINER` function is the only way to touch data. `anon` does not exist in this stack: nothing in 0086 is callable without a signed-in Cognito identity.
 
@@ -104,6 +104,13 @@ If TEST has only one organization, UAT cannot show cross-agency isolation by han
 | Outcome | ☒ **APPROVED** (as relayed from the reviewer; the individual boxes are not recorded in this file) ☐ **CHANGES REQUESTED** ☐ **REJECTED** |
 | Justifications for any box not ticked | None (reviewer's statement) |
 | Reviewer signature | Stella Okereke (typed, relayed in the conversation; not a wet or system signature) |
-| Date | 2026-10-30 as stated by the reviewer. **Note:** this date is earlier than the reviewer designation (2026-10-31, D15) and the packet; the reviewer should confirm or correct it |
+| Date | 2026-10-30 as stated by the reviewer. Records in this release use UTC dates; the packet was pushed 2026-10-31 00:49Z and the designation 01:06Z, which are 2026-10-30 17:49 and 18:06 in Pacific time, so 2026-10-30 is **consistent with a Pacific local date** (the organization time zone is America/Los_Angeles). The reviewer should confirm the time zone. |
 
 Per `docs/security-review-checklist.md`: do not approve without checking every box or giving an explicit written justification for why a box does not apply. Until this is signed, the release checklist item "security review" stays **OPEN**.
+
+## 8. Author re-run of the reproduction commands (2026-10-31, after the outcome was relayed). This is the author's evidence, not the reviewer's, and not a substitute for the reviewer's boxes
+On a scratch local PostgreSQL 16 (no AWS), at `8796aa1` (deployable paths unchanged from `54894411f0e69ac29bec762006e47f7d943b94f2`; migration and rollback hashes unchanged):
+- `db/test/caregiver-readiness.db.test.ts`: 22 passed. `test/caregiver-readiness-http.db.test.ts`: 5 passed. `test/with-client-names.test.ts`: 4 passed.
+- Fresh migrate to 0086: ledger 86 / `0086`. All 13 `ogevia_api` functions in section 1: `SECURITY DEFINER`, `search_path = ogevia, pg_temp`, not executable by PUBLIC, executable by `ogevia_app`, not executable by `ogevia_readonly`.
+- Tables: all four have RLS on; `ogevia_app` has no select or insert on any; `caregiver_contacts` has no policy and no `ogevia_readonly` select; the other three have one policy and `ogevia_readonly` select. These match section 2.
+Correction found in this re-run: the packet's earlier test commands (`pnpm … test:db -- <pattern>`) ran the **whole** DB suite and failed on a database password (a harness setup problem, not a product failure). `REVIEWER_PACKET.md` section 5 now gives working commands.
