@@ -1,6 +1,6 @@
 # Security review: migration 0086 and the new API routes (release 2026-10-30-caregiver-readiness)
 
-**Status: FILED FOR REVIEW. NOT REVIEWED.** Every reviewer verdict box below is empty on purpose. The "author evidence" columns are Claude Code's statements and measurements; the reviewer must check them, not rely on them. Required by `docs/security-review-checklist.md` (any new or changed `SECURITY DEFINER` function, RLS policy, grant or revoke) and by the release checklist (Phase A, "Migration touches SECURITY DEFINER, grants or tenant access").
+**Status: OUTCOME RECEIVED 2026-10-31 (relayed text): APPROVED by the designated reviewer, no findings. The per-function and per-table boxes (sections 1-3) were NOT received individually and are still shown unticked here; Claude has not ticked any box.** (Original filing note follows.)  Every reviewer verdict box below is empty on purpose. The "author evidence" columns are Claude Code's statements and measurements; the reviewer must check them, not rely on them. Required by `docs/security-review-checklist.md` (any new or changed `SECURITY DEFINER` function, RLS policy, grant or revoke) and by the release checklist (Phase A, "Migration touches SECURITY DEFINER, grants or tenant access").
 
 | Field | Value |
 |---|---|
@@ -92,18 +92,18 @@ Cognito configuration and invitation email content, the API authorizer and IAM p
 ## 6. Reviewer findings
 | # | Section / item | Finding | Severity (Blocker / Major / Minor) | Status |
 |---|---|---|---|---|
-| | | | | |
+| | | **No findings** (reviewer's statement, relayed in the conversation 2026-10-31) | n/a | n/a |
 
-## 6a. Cross-agency limitation (owner decision D11) — NOT TRIGGERED (updated 2026-10-31)
+## 6a. Cross-agency limitation (owner decision D11) — NOT TRIGGERED (updated 2026-10-31). Reviewer: **Not applicable**; TEST contains four organizations; manual cross-agency UAT will be performed.
 Part 2 V6 found **four** organizations on TEST, so manual cross-agency UAT (X1 to X3) will run and the single-organization limitation does not apply; the reviewer may record "not applicable". The text below is kept for the record.
 If TEST has only one organization, UAT cannot show cross-agency isolation by hand and relies on the automated tests (DB and sv-api HTTP suites with a second organization). The reviewer records here whether that is accepted: ☐ accepted ☐ not accepted (manual check needed). Organizations on TEST (Operator count): ____ . Reviewer initials/date: ________
 
 ## 7. Sign-off
 | Field | Entry |
 |---|---|
-| Outcome | ☐ **APPROVED** (every box ticked, or a written justification below) ☐ **CHANGES REQUESTED** ☐ **REJECTED** |
-| Justifications for any box not ticked | |
-| Reviewer signature | ______________________________ |
-| Date | ______________________________ |
+| Outcome | ☒ **APPROVED** (as relayed from the reviewer; the individual boxes are not recorded in this file) ☐ **CHANGES REQUESTED** ☐ **REJECTED** |
+| Justifications for any box not ticked | None (reviewer's statement) |
+| Reviewer signature | Stella Okereke (typed, relayed in the conversation; not a wet or system signature) |
+| Date | 2026-10-30 as stated by the reviewer. **Note:** this date is earlier than the reviewer designation (2026-10-31, D15) and the packet; the reviewer should confirm or correct it |
 
 Per `docs/security-review-checklist.md`: do not approve without checking every box or giving an explicit written justification for why a box does not apply. Until this is signed, the release checklist item "security review" stays **OPEN**.
