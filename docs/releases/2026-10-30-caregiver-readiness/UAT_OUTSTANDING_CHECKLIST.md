@@ -48,3 +48,7 @@ The deployment window (to 2026-11-02 02:00 UTC) covers the GO's named actions on
 4. X1-X3 (and X4 if chosen), S1, S2, S7, C8, O5, O7, O16, O17, F4, F8.
 5. After enforcement is decided: F7 Task 8.
 Stop rules unchanged (`PHASE_D_UAT_SCRIPTS.md` section 0): stop at the first Blocker; any sight of another agency's data is a P0 cross-tenant exposure.
+
+## F. Status after group A (2026-11-01 10:03 UTC)
+Group A was started at the owner's instruction. Results: **O11 and O12 passed (REPORTED)**. **NOT RUN, by owner decision (D37):** A1-A4, S4, S6, O18, C7, C1 second half (the owner replied "skip" to each, then "skip all"). Groups B and C and the decisions in D are unchanged and still open; no account was created, no email sent, no AWS change. The checklist stays as the plan if the owner reopens any item.
+
