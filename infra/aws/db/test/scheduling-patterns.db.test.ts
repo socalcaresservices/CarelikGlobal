@@ -11,7 +11,7 @@ const rec: Record<string, string> = {};
 beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 900);
-  today = await orgToday(db);
+  today = process.env.OGEVIA_TEST_TODAY ?? await orgToday(db); // OGEVIA_TEST_TODAY=YYYY-MM-DD only moves the month anchor, to prove the dates below do not depend on the calendar day the suite runs
   for (const r of (await db.admin.query("select id, caregiver_code from ogevia.caregiver_records where organization_id = $1", [w.orgA])).rows) rec[r.caregiver_code] = r.id;
 });
 afterAll(async () => db?.drop());
@@ -100,8 +100,9 @@ describe("caregiver hour limits", () => {
   it("report mode warns but does not block; block mode refuses a single shift and flags series dates, counting the series' own earlier dates", async () => {
     const m = monthStart(5);
     const fresh = await freshClient(db, w, w.caregiverA1, 6000, w.orgA, { before: 40, after: 600 });
-    const weekdays = datesOf(m, monthEnd(m), [1, 2, 3, 4, 5]);
-    const week = weekdays.slice(0, 5);
+    // one whole Monday-to-Friday calendar week (the weekly limit counts calendar weeks): the first Monday of the month and the four days after it. The first five weekdays of a month straddle two weeks whenever it does not start on a Monday.
+    const monday = datesOf(m, monthEnd(m), [1])[0]!;
+    const week = datesOf(monday, iso(new Date(Date.parse(`${monday}T12:00:00Z`) + 4 * 864e5)), [1, 2, 3, 4, 5]);
     await setLimit(w.managerA, rec["CG-A1"]!, 240, 360, "report");
     // report: everything is created
     const r = await preview(w.managerA, fresh.client, fresh.service, rec["CG-A1"]!, [1, 2, 3, 4, 5], "09:00", "11:00", week[0]!, week[4]!);
