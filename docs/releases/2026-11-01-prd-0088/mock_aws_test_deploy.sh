@@ -33,7 +33,7 @@ cat > "$W/bin/aws" <<'S'
 echo "aws $*" >> "$MOCK_LOG"; a="$*"; M="$MOCKDIR/mock"
 case "$a" in
   *"sts get-caller-identity"*) echo 300094796789 ;;
-  *"cloudformation describe-stacks"*"StackStatus"*) echo UPDATE_COMPLETE ;;
+  *"cloudformation describe-stacks"*"StackStatus"*) echo "${MOCK_STACK_STATUS:-UPDATE_COMPLETE}" ;;
   *"cloudformation get-template --stack-name "*) s=$(sed -E 's/.*--stack-name ([^ ]+).*/\1/' <<<"$a"); f="$M/live/$s.json"; [[ "${MOCK_DRIFT:-}" == "$s" ]] && { jq '.Description = "changed-by-someone"' "$f"; exit 0; }; cat "$f" ;;
   *"OutputKey=='ApiUrl'"*) echo https://zk527zk4ua.execute-api.us-west-2.amazonaws.com ;;
   *"OutputKey=='WebOrigin'"*) echo "file://$M/site" ;;
@@ -70,6 +70,8 @@ runm x capture MOCK_DRIFT=$APIT;   expect "a changed live API template stops the
 rm -rf "$W/before"; runm x capture MOCK_SHA=abc;      expect "changed Lambda code stops the capture (drift)" "API Lambda code CHANGED since the baseline"
 rm -rf "$W/before"; runm x capture MOCK_ROUTE=1;      expect "a changed route list stops the capture (drift)" "route list CHANGED since the baseline"
 rm -rf "$W/before"; runm x capture MOCK_WEB=1;        expect "a changed web file stops the capture (drift)" "web files CHANGED since the baseline"
+rm -rf "$W/before"; runm x capture >/dev/null 2>&1
+rm -rf "$W/before"; runm x capture MOCK_STACK_STATUS=UPDATE_ROLLBACK_COMPLETE; expect "capture: ONLY the API stack may be in UPDATE_ROLLBACK_COMPLETE (another stack is refused)" "Ogevia-prd-Auth is UPDATE_ROLLBACK_COMPLETE, not settled"; if grep -q "$APIT is UPDATE_ROLLBACK_COMPLETE, not settled" <<<"$OUTTXT"; then echo "FAIL the API stack in UPDATE_ROLLBACK_COMPLETE was refused"; fail=1; else echo "PASS the API stack in UPDATE_ROLLBACK_COMPLETE is accepted (its template is still compared)"; fi
 rm -rf "$W/before"; runm x capture >/dev/null 2>&1
 runm x check;                       expect "check: the production gate accepts exactly the release's difference" "added: 22 route\(s\) \(the 22 expected\)"; expect "check: EXPECTED-ONLY: YES" "EXPECTED-ONLY: YES"
 runm x deploy-api;                  expect "deploy-api without the database marker is refused" "database marker .* is missing"; refuse_no "no cdk deploy without the marker" "npx .*deploy"

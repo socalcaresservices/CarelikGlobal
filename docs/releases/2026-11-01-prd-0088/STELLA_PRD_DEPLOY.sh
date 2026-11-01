@@ -132,7 +132,7 @@ if [[ "$MODE" == capture ]]; then
   echo "== drift check against the recorded baseline ($BASE)"
   for S in $BASELINE_STACKS; do
     st=$(A cloudformation describe-stacks --stack-name "$S" --query 'Stacks[0].StackStatus' --output text) || stop "cannot read $S"
-    [[ "$st" == UPDATE_COMPLETE || "$st" == CREATE_COMPLETE ]] || { nope "$S is $st, not settled"; continue; }
+    [[ "$st" == UPDATE_COMPLETE || "$st" == CREATE_COMPLETE || ( "$S" == "$API" && "$st" == UPDATE_ROLLBACK_COMPLETE ) ]] || { nope "$S is $st, not settled"; continue; }   # UPDATE_ROLLBACK_COMPLETE of the API stack is settled (CloudFormation allows the next update); its template must still equal the baseline below
     A cloudformation get-template --stack-name "$S" --template-stage Original --query TemplateBody --output json > "$B/live/$S.json" && jq -e 'has("Resources")' "$B/live/$S.json" >/dev/null || stop "cannot read the live template of $S"
     [[ -f "$BASE/live/$S.json" ]] || { nope "$S: no baseline file"; continue; }
     if [[ "$(jq -S . "$B/live/$S.json" | sha256sum)" == "$(jq -S '.TemplateBody // .' "$BASE/live/$S.json" | sha256sum)" ]]; then ok "$S equals the recorded baseline"; else nope "$S CHANGED since the recorded baseline"; fi
@@ -162,7 +162,7 @@ fi
 
 gate() {
   local st; st=$(A cloudformation describe-stacks --stack-name $API --query 'Stacks[0].StackStatus' --output text) || stop "cannot read $API"
-  [[ "$st" == UPDATE_COMPLETE || "$st" == CREATE_COMPLETE ]] || stop "$API is $st, not settled"
+  [[ "$st" == UPDATE_COMPLETE || "$st" == CREATE_COMPLETE || "$st" == UPDATE_ROLLBACK_COMPLETE ]] || stop "$API is $st, not settled"   # UPDATE_ROLLBACK_COMPLETE: the first attempt of 2026-11-01 was rolled back; the live template is compared with the baseline by capture and by the gate
   prd_env_guard
   A cloudformation get-template --stack-name $API --template-stage Original --query TemplateBody --output json > "$B/gate-live.json" && jq -e 'has("Resources")' "$B/gate-live.json" >/dev/null || stop "cannot read the live template"
   assembly_ok || stop "the assembly is not the release"
