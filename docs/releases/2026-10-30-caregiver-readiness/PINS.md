@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Application commit (only approved deployment commit) | `464dea64cb939c49fbca624b652f34b2863db2f2` |
-| `STELLA_PHASE_C_DB.sh` sha256 | `d2195de4463c6586407e0f41a4acb51494da72c9505b3be63e1ecb270284a7d2` |
+| `STELLA_PHASE_C_DB.sh` sha256 (**A23**, 2026-11-01) | `d8a5461c3778d802245edcdd063b70f5eabd9534efc8a9c28bb12d4a8eefb05d` (supersedes `d2195de4463c6586407e0f41a4acb51494da72c9505b3be63e1ecb270284a7d2`, which stopped at S2; see `INTEGRATION_RECORD.md` section 17) |
 | `STELLA_PHASE_C_DEPLOY.sh` sha256 | `69ecbdd3c4648da1fbcbf16b2efd861c4b99bd514cc402f2fc2a502a6a072b0c` |
 | `diff_gate_0086.py` sha256 | `4e86f8d590f389faa72dd5d18250ef4246312f47b2d8b9b662a9d59484f27601` |
 | `STELLA_READONLY_VERIFICATION.sql` sha256 | `9e54d9d47b1639b1b1ad078e009b26e9392a6ab82ff8073336030f0e84868ca7` |

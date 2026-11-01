@@ -174,7 +174,7 @@ ro() { PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000
 state() {
   LEDGER=$(ro "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations")
   HAS_RD=$(ro "select coalesce(to_regclass('ogevia.caregiver_work_approvals')::text,'absent')")
-  STAFF=$(ro "select (to_regclass('ogevia.staff_types') is not null and to_regclass('ogevia.staff_profiles') is not null and to_regprocedure('ogevia_api.accept_staff_invitation(uuid)') is not null)::text")
+  STAFF=$(ro "select (to_regclass('ogevia.staff_types') is not null and to_regclass('ogevia.staff_profiles') is not null and exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname = 'accept_staff_invitation' and p.pronargs = 1 and p.proargtypes[0] = 'uuid'::regtype::oid))::text")
   RA=$(ro "select count(*) filter (where status in ('ready','active'))||'/'||count(*) from ogevia.caregiver_records where deleted_at is null")
   ENF=$(ro "select count(*) from ogevia.organization_readiness_settings where enforcement_active_from is not null")
   echo "state: ledger=$LEDGER  readiness_table=$HAS_RD  staff_objects_present=$STAFF  ready_or_active/caregivers=$RA  orgs_enforcing=$ENF"
