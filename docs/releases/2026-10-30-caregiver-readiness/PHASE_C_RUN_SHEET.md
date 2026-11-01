@@ -1,40 +1,34 @@
-# Phase C run sheet: 0086 on TEST (Operator: Stella Okereke) — DRAFT, NOT RUN
+# Phase C run sheet: caregiver readiness (0088) integrated onto the TEST line (Operator: Stella Okereke) — DRAFT, NOT RUN
 
-**Authority:** `GO_DRAFT.md` (GO given as relayed, `DECISION_RECORD.md` A11/A12). **TEST/pilot only.** Window **2026-10-31 14:00-18:00 PDT** (21:00 UTC to 01:00 UTC on 2026-11-01; D26/A19; the first 09:00-12:00 PDT window lapsed unused). **Only approved commit: `54894411f0e69ac29bec762006e47f7d943b94f2`** (reconfirmed A12). Migration **0086 only**. After 18:00 PDT **no new deployment activity**; rollback is allowed only to restore TEST to known-good. Nothing here touches `ogevia_prd`, `Ogevia-prd-*`, enforcement, or any other commit.
+**Authority:** `GO_DRAFT.md` (NOT GIVEN yet). **TEST/pilot only.** Window and GO reference: the owner's (`GO_DRAFT.md` section 1). **Only approved commit: `464dea64cb939c49fbca624b652f34b2863db2f2`.** Migration **0088 only**, preceded by the ledger step `adopt` for the staff migrations 0086/0087 already on TEST. Exact commands: `PHASE_C_COMMANDS.md`. After the window end **no new deployment activity**; rollback is allowed only to restore known-good.
 
-## Two gaps (both CLOSED before the window: G1 approved A13/A14, command set written; kept for the record)
-| # | Gap | Why it matters | Proposed one-line fix |
-|---|---|---|---|
-| G1 | **APPROVED AS WRITTEN 2026-10-31 (`DECISION_RECORD.md` A13).** Wording (verbatim): "Stella may, within the window, temporarily attach AppSG `sg-064ffce3bcbe8eb3b` to `ogevia-db-admin-temp` (restored and re-checked), and use the existing TEST database admin credential in memory only, for steps S2, S6, S7 and S11 on `ogevia_sv_test` only." **Covers S2, S6, S7, S11 within the window. EXTENDED 2026-10-31 (A14) to the database rollback "solely to restore known-good"** (with A12, also after the window end for that purpose). The DB script's rollback prompt still asks for the typed phrase `OWNER AUTHORIZED DB ROLLBACK ACCESS`; A14 is the owner's authorization for it. Snapshot restore (a new instance) is not covered. | | |
-| G2 | **RESOLVED (draft, tested locally, not run in AWS):** `STELLA_PHASE_C_DB.sh` (probe, snapshot, migrate, final, rollback) and `STELLA_PHASE_C_DEPLOY.sh` (synth, capture, check, deploy-api, post-api, web, web-verify, rollback-web, rollback-api) with `diff_gate_0086.py` replace the 2026-10-19 scripts, whose pins were specific to `e80b770`. Exact commands: `PHASE_C_COMMANDS.md`. Hashes at commit time: DB script `38c8fb4296e39353b7ed9b75727c80a63648a7c2c6a0240f754d83a9624f4284`, deploy script `30d8c2fb67e25ea94b2bddc9e7a17523f6f2c77bc3049f45ff3342337ce9f40c`, gate `4e86f8d590f389faa72dd5d18250ef4246312f47b2d8b9b662a9d59484f27601`. | Improvising on the day was the risk. | Stella follows `PHASE_C_COMMANDS.md` only. |
-**Do not start S2 until G1 is answered; the script itself refuses until "G1 AUTHORIZED" is typed. Do not improvise commands: if a step has no command, stop and ask.**
-**Exact commands, two-checkout setup, TLS finding and rollback are in `PHASE_C_COMMANDS.md`.** **Database script (use these modes; each outside-window mode refuses after 12:00 PDT):** S2 `probe`, S5 `snapshot`, S6+S7 `migrate`, S11 `final`, rollback `rollback`. Two checkouts: the **docs checkout** (branch tip) holds the script; `REPO` is a **separate checkout at `54894411…`** with dependencies installed (build in `/tmp`; the home disk filled before). First `bash STELLA_PHASE_C_DB.sh selftest` with `REPO` set: local only, checks pins.
+## What changed since the first attempt (and why this sheet differs)
+The first Phase C stopped at its expected-only gate (open items section 38): TEST runs the staff-management line (`fb491a5`), so the first candidate would have removed 14 routes and overwritten `list_accounts`. The release was **integrated onto that line** (`INTEGRATION_RECORD.md`): staff 0086/0087 promoted into the ledger set, readiness renumbered 0088, `list_accounts` merged, new pins, new scripts. TEST's ledger still reads 85 because the staff migrations were applied outside it, hence `adopt`.
 
 ## Order of execution
-| Step | Action (source) | PASS | STOP if | Capture |
+| Step | Action | PASS | STOP if | Capture |
 |---|---|---|---|---|
-| S0 | **14:00 PDT.** Record start time. `aws sts get-caller-identity` = `300094796789`, `us-west-2`; admin host `i-0ce8db2d7e5839dd5` running, groups = `sg-00e01e2ca80442c1f` only | all match | any differs | times, account, groups |
-| S1 | **Pin check.** Work from a checkout at the SHA: `git rev-parse HEAD` = `54894411…`; `sha256sum` migration = `d9c8cc37…c568ee`, rollback = `fe47381c…520e29`; the diff command in `CHECKLIST.md` line 11 prints nothing. Do the build in `/tmp` (CloudShell home disk was full before; `df -h ~` first) | all equal | any differs, or SHA is not the one above | output of those commands |
-| S2 | **Re-probe, read-only** (the SQL output now also prints V7: counts of active memberships by role in the two UAT organizations, D23) on `ogevia_sv_test` (`RUNBOOK.md` B; first `current_database()`). Expect: ledger 85/`0085`, `0086` absent, 5 of 6 Ready/Active, enforcement empty in all 4 orgs | equals the Part 2 baseline | database is not `ogevia_sv_test`; any value differs | the query output (counts/slugs only) |
-| S3 | **Real `cdk diff`**, TEST API stack `Ogevia-prod-ServiceVerificationApi` (`RUNBOOK.md` C4/E2) | only 8 `AWS::ApiGatewayV2::Route` (+ their integration permission) + one Lambda code asset (+ CDK metadata string) | anything else: IAM, network, replacement/deletion, another stack | full diff text |
-| S4 | **Rollback material** (`RUNBOOK.md` C3): previous web bundle (S3 object versions), previous API template/commit, Lambda `CodeSha256` and `DB_NAME` | recorded | cannot be captured | the identifiers |
-| S5 | **One manual RDS snapshot** `ogevia-prod-postgres-pre-0086-<UTC stamp>`; wait `available`; confirm encrypted | status `available` | not available / fails (do not migrate) | snapshot id, status |
-| S6 | **Migrate** (`RUNBOOK.md` E1): `db:migrate` (applies only 0086), then `db:verify` | "applying 0086"; verify all PASS; ledger 86/`0086` | any error; any other file applies | full output |
-| S7 | **Post-migration probe:** `caregiver_work_approvals` where `source='legacy_status'` = **5**; Ready/Active still 5 of 6; nobody deactivated; enforcement still empty | equal | any differs | counts |
-| S8 | **Deploy API** at the pinned commit (`RUNBOOK.md` E2). CDK must not ask for an IAM approval; if it does, answer `n` and STOP | stack `UPDATE_COMPLETE`; Lambda `DB_NAME=ogevia_sv_test` | IAM prompt; a stack other than the one named | stack status, new `CodeSha256` |
-| S9 | **Deploy web** (`RUNBOOK.md` E3): build with `VITE_AUTH_PROVIDER=cognito` + TEST settings; upload; CloudFront invalidation | served bundle is the new build; banner "TEST — synthetic data only" | wrong site/distribution; production hostname | invalidation id, served file hash |
-| S10 | **Phase C checks** (`RUNBOOK.md` F1-F8), synthetic caregivers only: invitation email once; email has no client/health data; temporary-password validity (record the days); 8 routes 200/401/403/404; phone view; legacy approvals; Task 8 query (read-only) saved for the owner; regression R and smoke S | each ticked | any failure or cross-agency read | results per check |
-| S11 | **Close:** final DB read (ledger 86, counts), restore AppSG and re-check (host groups = `sg-00e01e2ca80442c1f`, RDS SG unchanged), record end time | restored and verified | not restored: fix first | final counts, restore proof |
-| S12 | **UAT fit check.** Start `PHASE_D_UAT_SCRIPTS.md` only if all four validators can finish before 18:00 PDT. Otherwise **stop after Phase C** and ask the owner for a separate UAT window and GO | decision recorded | n/a | the decision and time |
+| S0 | Start time; account `300094796789`; admin host `i-0ce8db2d7e5839dd5` running with only `sg-00e01e2ca80442c1f` | all match | any differs | times, groups |
+| S1 | Rebuild `/tmp`, hashes against `PINS.md`, selftests, `synth` (`PHASE_C_COMMANDS.md` section 0) | `PASS all checks`; 250 routes; Handler asset as pinned | any hash/commit mismatch | outputs |
+| S2 | `probe`: ledger 85/0085, readiness absent, **staff objects present**, 5 of 6, enforcement 0; V7 shows the synthetic Owner | `BASELINE MATCHES`, restore verified | any difference | the output |
+| S3 | `capture`, then `check`: the real `cdk diff` and the expected-only gate | exactly 8 routes + Handler asset | anything else (IAM, networking, a removed route, another stack) | full diff text |
+| S5 | `snapshot` | `available`, encrypted | not available (do not write) | snapshot id |
+| S6a | `adopt`: the TEST line's `verify-0086.sql` (110) and `verify-0087.sql` (24) all ok, then two ledger rows | ledger 87/0087, readiness still absent | any check failing | counts, output |
+| S6b | `migrate`: 0088 only | `applied 1, already applied 87`; verify PASS; 88/0088; 5 legacy approvals; staff present | any error or difference | output |
+| S8 | `deploy-api` | `POST-API OK`; environment unchanged; 401 on `/v1/me`, `/v1/compliance/settings` | IAM prompt; other stack | stack status, `CodeSha256` |
+| S9 | `web` | `WEB VERIFIED` | wrong site; production hostname | served hash |
+| S10 | Phase C checks (`RUNBOOK.md` F1-F8) **plus the staff regression check** | each passes | any failure, or any staff page/route that worked before and fails | results |
+| S11 | `final` | ledger 88/0088; restore verified | any difference | final counts |
+| S12 | UAT fit check | decision recorded | n/a | the decision |
 
-## Stop conditions (any one: stop, change nothing further, report; roll back only if a migration/deploy already changed TEST)
-Wrong database or account; commit/hash mismatch; ledger, count or enforcement value differs from baseline; a `cdk diff` item outside S3; no verified snapshot; migration or verify error; a caregiver Ready/Active before cannot be scheduled; any cross-agency read; unexpected 5xx on the new routes; a step with no approved command; window end reached.
+## Stop conditions (stop, change nothing further, report; roll back only if TEST was already changed)
+Wrong database or account; commit/hash mismatch; any baseline difference (ledger, readiness table, staff objects, enforcement); the TEST line's staff checks not all ok; a `cdk diff` item outside S3; no verified snapshot; a migration or verify error; a staff route, screen or invitation flow that regresses; a Ready/Active caregiver who cannot be scheduled; any cross-agency read; unexpected 5xx on the new routes; a step with no approved command; the window end reached.
 
-## Rollback (only after a stop condition, and after 18:00 PDT only to restore known-good)
-Order web, API, then database (`RUNBOOK.md` G; down script is BACKUP REQUIRED and the snapshot from S5 must exist). **Restoring the snapshot creates a new RDS instance and is NOT covered by the GO: stop and ask the owner.** Re-check the TEST baseline after (ledger 85, 5 of 6, enforcement empty). Record exactly what was done.
+## Rollback
+Order web, API, then database (`PHASE_C_COMMANDS.md` section 2); the DB rollback removes 0088 only and leaves the staff objects and their ledger rows. Restoring the snapshot (a new instance) is not authorized.
 
 ## Pass / fail
-**Phase C PASS** = S0-S11 all PASS with their evidence. **FAIL** = any stop condition (state whether TEST was changed and whether rolled back). Passing Phase C does **not** make 0086 releasable: UAT, sign-off and the release record update (D7) follow.
+**Phase C PASS** = S0-S11 pass with evidence. **FAIL** = any stop condition. Passing Phase C does **not** make the release releasable: UAT, sign-off and the release record (D7) follow.
 
-## Outputs to return (text, no secrets, no real-person data)
-Window start/end times (UTC and PDT); SHA and hashes (S1); baseline probe (S2); full `cdk diff` (S3); rollback identifiers (S4); snapshot id/status (S5); migration and verify output (S6); legacy-approval counts (S7); stack status and `CodeSha256` (S8); web invalidation and served-file hash (S9); F1-F8 results incl. password validity days and the saved Task 8 output (S10); final counts and security-group restore proof (S11); the S12 decision; any deviation, with times. Claude records them in `CHECKLIST.md` section C and a new `DEPLOYED_RECORD_0086_TEST.md`, and ticks nothing it was not given.
+## Outputs to return (text, no secrets)
+Window times; commit and hashes; the S2 output (with V7); the full `cdk diff`; rollback identifiers; snapshot id; the `adopt` and `migrate` outputs; stack status and `CodeSha256`; web invalidation and served hash; F1-F8 and the staff regression results; final counts and security-group restore proof; deviations with times. Claude records them in `CHECKLIST.md` and a new `DEPLOYED_RECORD_0088_TEST.md` and ticks nothing it was not given.

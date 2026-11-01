@@ -1,63 +1,65 @@
-# GO for Phase C: release 2026-10-30-caregiver-readiness (migration 0086), TEST slice only
+# GO for Phase C: caregiver readiness (migration 0088) integrated onto the TEST line — TEST slice only
 
-> **SUPERSEDED WINDOW (2026-10-31).** The first window (09:00-12:00 PDT) lapsed with no step run. **Current window: 2026-10-31 14:00-18:00 PDT (21:00 UTC to 01:00 UTC on 2026-11-01), GO `GO-0086-TEST-20261031-B`, `DECISION_RECORD.md` A19.** Everything below applies with that window and reference; scope unchanged.
-
-**Status: GIVEN AS RELAYED 2026-10-31 (owner's statement in the conversation, `DECISION_RECORD.md` A11): "APPROVED FOR TEST EXECUTION ONLY, subject to all stop conditions in GO_DRAFT.md". Window 2026-10-31 09:00 to 12:00 PDT. Operator Stella Okereke acknowledged. NOT RUN YET.** The signature cells in section 8 are not filled by hand; the statement above is the record. Claude drafted this text; the owner decided it. Production is out of scope. 0086 stays NOT RELEASABLE until the checklist says otherwise (decision D7).
+**Status: DRAFT. NOT GIVEN. NOT SIGNED.** Nothing here authorizes anything until the owner fills section 1, accepts or edits the text, and signs section 8. Claude drafted it; the owner decides it. It replaces the first GO (`GO_SUPERSEDED_first_candidate_54894411.md`, void: Phase C stopped at its gate). Production is out of scope. The release stays NOT RELEASABLE until Phase C, UAT and the release record are complete (D7).
 
 ## 1. Blanks only the owner can fill
 | Item | Entry |
 |---|---|
-| Window start (date, time, time zone) | **2026-10-31 09:00 PDT** (16:00 UTC) |
-| Window end (hard stop for new activity; rollback to known-good only, per A12) | **2026-10-31 12:00 PDT** (19:00 UTC) |
+| Window start (date, time, time zone) | ______________________ |
+| Window end (hard stop for new activity; rollback to known-good only afterwards, per A12) | ______________________ |
+| GO reference (6-64 characters of A-Za-z0-9._-; the scripts require this exact value) | ______________________ |
 
 ## 2. Scope this GO covers (and nothing else)
 | Item | Value |
 |---|---|
-| Environment | The existing **TEST/pilot slice** (`DECISION_RECORD.md` A1): CDK `-c env=prod`, stacks `Ogevia-prod-*`; database **`ogevia_sv_test`** on RDS `ogevia-prod-postgres` (account `300094796789`, `us-west-2`). **Never** `Ogevia-prd-*` or `ogevia_prd` (production). |
-| Code | Commit **`54894411f0e69ac29bec762006e47f7d943b94f2`** on `claude/practical-tesla-r07odb`. Operator re-runs the diff in `CHECKLIST.md` line 11 first and expects **no output**. Any other commit needs a new GO. |
-| Migration | `0086_caregiver_readiness_approve_for_work.sql` sha256 `d9c8cc372011e68221868767e83922da641457535e796b9de23b836881c568ee`; rollback `fe47381cb9c888e8cb541936dbd8402a550aac83b5926a64d736a1463f520e29`; migrations 0001-0085 set `de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef` (unchanged). |
+| Environment | The existing **TEST/pilot slice**: CDK `-c env=prod`, stacks `Ogevia-prod-*`; database **`ogevia_sv_test`** on RDS `ogevia-prod-postgres` (account `300094796789`, `us-west-2`). **Never** `Ogevia-prd-*` or `ogevia_prd`. |
+| Code (only approved deployment commit) | **`464dea64cb939c49fbca624b652f34b2863db2f2`** on `claude/practical-tesla-r07odb`: the readiness release merged onto the TEST line `fb491a554c0fdc484102025179c9c993f694b4e0` (what TEST runs today). Later commits may only touch documents and the two Phase C scripts; the Operator re-runs the deployable-paths diff first and expects no output (`PHASE_C_COMMANDS.md` section 0). |
+| Migrations | **0088** `0088_caregiver_readiness_approve_for_work.sql` is the only migration applied. The staff migrations **0086** and **0087** are already on TEST (applied outside the ledger on 2026-10-29); they are only **recorded in the ledger** (the `adopt` step, section 3 step 5). |
+| Live difference expected | exactly 8 new readiness routes plus the Handler code asset on `Ogevia-prod-ServiceVerificationApi`; 14 staff routes unchanged; the web bundle (readiness screens added, staff screens untouched). |
 | Operator | **Stella Okereke** only. |
-| Starting state (VERIFIED by Part 2) | Ledger 85 / `0085`; `0086` absent; 5 of 6 caregivers Ready/Active; enforcement empty in all four organizations. |
+| Starting state (VERIFIED by Phase C Part 2 and `capture`) | ledger 85 / `0085`; staff objects present; readiness objects absent; 5 of 6 caregivers Ready/Active; enforcement empty in all four organizations; live Lambda `CodeSha256` `VFN/cMO326y63xaTOQERNhyvp+mHC19EM3/xN4IWeE4=`. |
 
-## 3. Authorized actions, in this order (the Operator follows `RUNBOOK.md`)
-1. **Re-probe, read-only** (runbook B, `current_database()` must be `ogevia_sv_test`). If the ledger is not 85 / `0085`, or `0086` is present, or enforcement is non-null anywhere: **STOP and report.**
-2. **Real `cdk diff`** for the TEST slice API stack(s) and web. It must show **only**: 8 new routes plus a Lambda asset per API stack (plus the CDK metadata string). Anything else (IAM, networking, replacement, deletion, another stack): **STOP and report; do not deploy.**
-3. **One manual RDS snapshot** of `ogevia-prod-postgres` (a small recurring storage cost, accepted by this GO), record its identifier, wait for `available`. Without a verified snapshot, **do not migrate.**
-4. **Apply migration 0086** to `ogevia_sv_test` only, with the runner and the owner-approval variable in the runbook; then `db:verify` (ledger 86 / `0086`); then the probe: `legacy_status` approvals equal the pre-release 5, nobody deactivated.
-5. **Deploy the TEST API stack** at the pinned commit, then **build and upload the web bundle** for the TEST site and invalidate CloudFront (runbook E, in the order database, API, web).
-6. **Phase C checks** (runbook F) with **synthetic caregivers only**: invitation email and content, temporary-password validity (record the days), the 8 routes (200/401/403/404), CloudFront bundle on a phone, migration on populated data, regression set R and smoke set S.
-7. **Phase D UAT** on TEST under `PHASE_D_UAT_SCRIPTS.md`, with the four validators, **enforcement OFF** (O13 and S4 not executed, D10), manual cross-agency steps X1-X3 (D11) with two organizations Stella names.
-8. **Rollback**, if a stop condition (section 5) occurs after step 4: runbook G, in the order web, API, database. **Per A12 it may continue after the window end solely to restore TEST to a known-good state; no new deployment activity may begin after the window end.** Restoring the snapshot creates a new RDS instance and is **not** covered: stop and ask the owner. Stella records what she did and why.
-9. **If UAT (step 7) does not fit in the window, stop after Phase C** and request a separate UAT window and GO (A12).
+## 3. Authorized actions, in this order (the Operator follows `PHASE_C_COMMANDS.md`)
+1. **Rebuild and verify locally** (`/tmp` checkouts, install, selftests, `synth`): no AWS change.
+2. **Re-probe, read-only** (`probe`): must match the starting state. Any difference: STOP.
+3. **Real `cdk diff`** (`capture`, `check`): must show **only** the 8 routes and the Handler asset. Anything else: STOP.
+4. **One manual RDS snapshot**, verified `available` and encrypted. Without it, do not write to the database.
+5. **`adopt`: record the staff migrations in the ledger.** After the TEST line's own read-only checks pass (`verify-0086.sql` 110 rows, `verify-0087.sql` 24 rows, all ok), **two rows are inserted into `ogevia_meta.schema_migrations`** (`0086_staff_management.sql`, `0087_staff_invitation_acceptance.sql`) with the checksums of the repository files, which equal the bytes already applied to TEST (pinned in the TEST-line procedure). No object is created or changed. Expected afterwards: ledger 87 / `0087`. **This is a data write that no earlier authorization covered.**
+6. **`migrate`: apply 0088 only** (`applied 1, already applied 87`), `db:verify`, then the post-state check: ledger 88 / `0088`, 5 `legacy_status` approvals, 5 of 6 unchanged, enforcement still empty, staff objects present.
+7. **Deploy the API stack** (the one gate-checked stack), then **publish the web bundle**, then their post-checks.
+8. **Phase C checks** (`RUNBOOK.md` F) with **synthetic data only**, including that the staff screens and routes still work (staff list, staff types, invite, accounts).
+9. **Phase D UAT** only if all validators can finish before the window ends; otherwise stop after Phase C and request a separate UAT window and GO.
+10. **Rollback**, if a stop condition occurs after step 5: web, API, then the database (`rollback` mode removes 0088 only; the staff objects and their two ledger rows stay), solely to restore known-good, allowed after the window end (A12). Restoring the RDS snapshot creates a new instance and is **not** covered.
+
+**Access for steps 2, 5, 6 and 10:** the temporary attach of AppSG `sg-064ffce3bcbe8eb3b` to `ogevia-db-admin-temp` (restored and re-checked), and the existing TEST database admin credential in memory only, on `ogevia_sv_test` only, within the window (rollback: as step 10 says). Full TLS verification through the tunnel; no fallback.
 
 ## 4. Not authorized
-Production in any form (`ogevia_prd`, `Ogevia-prd-*`, Netlify, Supabase, DNS); activating enforcement; any other migration or code; changing Cognito pool settings, users other than synthetic ones, security groups or IAM beyond what the diff shows; starting or stopping the admin host; deleting snapshots or data; running anything after the window end; merging to `main`; any customer or real-person data; the Part 2 window script (it was a one-time D14 item).
+Production in any form; enforcement activation; any other migration, ledger row or code; Cognito settings or non-synthetic users; security groups or IAM beyond what the diff shows; starting or stopping the admin host; deleting snapshots or data; anything after the window end except rollback; merging to `main`; real-person data; restoring the snapshot; reusing the Part 2 script.
 
-## 5. Stop conditions (stop, report to the owner, change nothing further)
-`current_database()` not `ogevia_sv_test`; the commit diff is not empty; a ledger or enforcement value different from section 2; any `cdk diff` item outside section 3 step 2; no verified snapshot; a migration or verify error; a caregiver who was Ready/Active before cannot be scheduled; any cross-agency read; an unexpected 5xx on the new routes; the window end is reached.
+## 5. Stop conditions
+`current_database()` not `ogevia_sv_test`; commit diff not empty; ledger, readiness-table, staff-object or enforcement state different from section 2; `verify-0086.sql`/`verify-0087.sql` not all ok; a `cdk diff` item outside section 3 step 3; no verified snapshot; a migration or verify error; a staff route, screen or sign-in flow that worked before and fails after; a caregiver Ready/Active before who cannot be scheduled; any cross-agency read; unexpected 5xx on the new routes; the window end is reached.
 
 ## 6. What this GO does not change
-It does not make 0086 releasable or production-approved. Phase E (production) is a separate request. The owner decides releasability only after UAT execution and sign-off (owner instruction 2026-10-31).
+It does not make the release releasable or production-approved. Production (Phase E) is separate, and now includes shipping the staff migrations 0086/0087 together with 0088 as ordinary ledger migrations.
 
-## 7. Preconditions still open when this draft was written (2026-10-31)
+## 7. Preconditions still open when this draft was written
 | Precondition | State |
 |---|---|
-| `DECISION_RECORD.md` D1-D17 signed by the owner and acknowledged by Stella | **done 2026-10-31 (typed, relayed)** |
-| Six package decisions confirmed | **done 2026-10-31: all six ACCEPTED** |
-| B9 accepted by a human | **done 2026-10-31: accepted by Stella Okereke** |
-| Security review | outcome APPROVED relayed and accepted as recorded (D17); per-box copy not in the repository |
-| Window start and end | **set** (section 1) |
-| Two organizations with synthetic sign-in users named for X1-X3 | open |
+| Unit, API, web and database suites on the integrated tree | passed except 8 DB tests that also fail on the unmodified TEST line (6 month-end, 2 environment); month-end re-run after the month rolls over: see `INTEGRATION_RECORD.md` |
+| Security review of the merged result (staff + readiness, `list_accounts`, the `adopt` write) | **open**: `SECURITY_REVIEW.md` covered the first candidate only |
+| Owner's window, GO reference and signature | **open** (section 1, section 8) |
+| Script pins filled (`fill_pins.py`) and re-verified by Stella | **open** until section 1 is filled |
+| UAT accounts (Managers of both organizations, a Caregiver, the synthetic Owner in `scs-pilot-synthetic`) | decided (D22-D25); confirmed by V7 at `probe` |
 
-## 8. Owner's GO (given as relayed)
-> I authorize the Operator, Stella Okereke, to carry out section 3 on the TEST/pilot slice only, within the window in section 1, at commit `54894411f0e69ac29bec762006e47f7d943b94f2`, and subject to sections 4 and 5. This GO expires at the window end.
+## 8. Owner's GO (unsigned)
+> I authorize the Operator, Stella Okereke, to carry out section 3 on the TEST/pilot slice only, within the window in section 1, at commit `464dea64cb939c49fbca624b652f34b2863db2f2`, including the `adopt` ledger write, and subject to sections 4 and 5. This GO expires at the window end (rollback to known-good excepted).
 
 | Field | Entry |
 |---|---|
-| Owner (full name) | Stella Okereke (as stated; see the role note in `DECISION_RECORD.md` A11) |
-| Signature | Typed statement relayed in the conversation, not a system or wet signature |
-| Date and time (time zone) | 2026-10-31 (time of statement not given) |
+| Owner (full name) | ______________________________ |
+| Signature | ______________________________ |
+| Date and time (time zone) | ______________________________ |
 
 | Operator acknowledgement | Entry |
 |---|---|
-| Stella Okereke | "Acknowledged." typed, relayed 2026-10-31 |
+| Stella Okereke | ______________________________  date ______________ |
