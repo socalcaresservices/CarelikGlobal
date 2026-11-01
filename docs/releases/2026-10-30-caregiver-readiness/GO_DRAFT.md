@@ -1,13 +1,13 @@
 # GO for Phase C: caregiver readiness (migration 0088) integrated onto the TEST line — TEST slice only
 
-**Status: DRAFT. NOT GIVEN. NOT SIGNED.** Nothing here authorizes anything until the owner fills section 1, accepts or edits the text, and signs section 8. Claude drafted it; the owner decides it. It replaces the first GO (`GO_SUPERSEDED_first_candidate_54894411.md`, void: Phase C stopped at its gate). Production is out of scope. The release stays NOT RELEASABLE until Phase C, UAT and the release record are complete (D7).
+**Status: DRAFT. Section 1 filled from the owner's message of 2026-11-01. NOT GIVEN. NOT SIGNED.** Nothing here authorizes anything until the owner accepts or edits the text and signs section 8. Claude drafted it; the owner decides it. It replaces the first GO (`GO_SUPERSEDED_first_candidate_54894411.md`, void: Phase C stopped at its gate). Production is out of scope. The release stays NOT RELEASABLE until Phase C, UAT and the release record are complete (D7).
 
 ## 1. Blanks only the owner can fill
 | Item | Entry |
 |---|---|
-| Window start (date, time, time zone) | ______________________ |
-| Window end (hard stop for new activity; rollback to known-good only afterwards, per A12) | ______________________ |
-| GO reference (6-64 characters of A-Za-z0-9._-; the scripts require this exact value) | ______________________ |
+| Window start (date, time, time zone) | **2026-11-02 01:00 PST** (= 2026-11-02 09:00 UTC), as the owner wrote it |
+| Window end (hard stop for new activity; rollback to known-good only afterwards, per A12) | **2026-11-02 18:00 PST** (= 2026-11-03 02:00 UTC) |
+| GO reference (6-64 characters of A-Za-z0-9._-; the scripts require this exact value) | **`GO-0088-TEST-20261101`** |
 
 ## 2. Scope this GO covers (and nothing else)
 | Item | Value |
@@ -47,8 +47,9 @@ It does not make the release releasable or production-approved. Production (Phas
 |---|---|
 | Unit, API, web and database suites on the integrated tree | passed except 8 DB tests that also fail on the unmodified TEST line (6 month-end, 2 environment); month-end re-run after the month rolls over: see `INTEGRATION_RECORD.md` |
 | Security review of the merged result (staff + readiness, `list_accounts`, the `adopt` write) | **open**: `SECURITY_REVIEW.md` covered the first candidate only |
-| Owner's window, GO reference and signature | **open** (section 1, section 8) |
-| Script pins filled (`fill_pins.py`) and re-verified by Stella | **open** until section 1 is filled |
+| Owner's window and GO reference | **given 2026-11-01** (section 1) |
+| Owner's signature on this GO (naming the `adopt` ledger write) | **open** (section 8) |
+| Script pins filled (`fill_pins.py`) | **done** (`PINS.md`); Stella's re-verification of the hashes: **open** |
 | UAT accounts (Managers of both organizations, a Caregiver, the synthetic Owner in `scs-pilot-synthetic`) | decided (D22-D25); confirmed by V7 at `probe` |
 
 ## 8. Owner's GO (unsigned)

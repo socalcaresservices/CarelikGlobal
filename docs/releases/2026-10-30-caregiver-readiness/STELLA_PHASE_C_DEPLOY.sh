@@ -3,7 +3,7 @@
 # Replaces the 2026-10-19 scripts (deploy-guard.sh, diff_gate.py, assembly_check.py, baseline-capture.sh), whose pins are specific to e80b770.
 # Authority: GO_DRAFT.md + DECISION_RECORD.md A11/A12. Deploys ONLY Ogevia-prod-ServiceVerificationApi and the TEST web site; never an Ogevia-prd-* stack,
 # never NetworkEgress/WebHosting/EvidenceStorage/Observability, never the database (that is STELLA_PHASE_C_DB.sh).
-#   REPO=<checkout at the pinned SHA, deps installed> OGEVIA_DEPLOY_APPROVAL=__GO_REF__ bash STELLA_PHASE_C_DEPLOY.sh <mode>
+#   REPO=<checkout at the pinned SHA, deps installed> OGEVIA_DEPLOY_APPROVAL=GO-0088-TEST-20261101 bash STELLA_PHASE_C_DEPLOY.sh <mode>
 #   selftest     local only: python gate against the synthesized templates (no AWS)
 #   synth        build the CloudFormation assembly in /tmp (no AWS change) and check it
 #   capture      READ-ONLY baseline and rollback material (live API template, Lambda config and code ref, web bucket copy)
@@ -18,14 +18,14 @@ umask 077
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER="" CDK_DISABLE_CLI_TELEMETRY=true
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="${1:-}"
-SHA=__SHA__
+SHA=464dea64cb939c49fbca624b652f34b2863db2f2
 ACCOUNT=300094796789; API=Ogevia-prod-ServiceVerificationApi; WEBSTACK=Ogevia-prod-WebHosting
-APPROVAL_REF=__GO_REF__
+APPROVAL_REF=GO-0088-TEST-20261101
 ASSEMBLY="${ASSEMBLY:-/tmp/ogevia-cdk-0088.out}"; B="${OGEVIA_BEFORE:-$HOME/ogevia-before-0088}"
-EXPECT_HANDLER_KEY=__HANDLER_KEY__.zip
+EXPECT_HANDLER_KEY=9e5a510ef7771fe0f70bb0db1a6b22bf2dbe313ab8f019c0c34ccd42686824b7.zip
 EXPECT_IDENTITY_KEY=7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip
 EXPECT_ROUTES=250
-WIN_START_TXT="__WIN_START_UTC__"; WIN_END_TXT="__WIN_END_UTC__"   # UTC, "YYYY-MM-DD HH:MM:SS"; filled from the owner's GO
+WIN_START_TXT="2026-11-02 09:00:00"; WIN_END_TXT="2026-11-03 02:00:00"   # UTC, "YYYY-MM-DD HH:MM:SS"; filled from the owner's GO
 WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-120}" aws "$@"; }
 stop() { echo "STOP: $*"; exit 2; }

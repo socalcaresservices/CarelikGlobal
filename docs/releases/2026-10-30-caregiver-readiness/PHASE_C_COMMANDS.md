@@ -1,6 +1,6 @@
 # Phase C commands: caregiver readiness (0088) integrated onto the TEST line — DRAFT, NOT RUN
 
-**Status: DRAFT until the owner gives the window and the GO (`GO_DRAFT.md`) and the author fills the pins (`fill_pins.py`) and publishes the final hashes in `PINS.md`. Do not run anything in section 1 before then.** Candidate commit: **`464dea64cb939c49fbca624b652f34b2863db2f2`** (the only approved deployment commit). It replaces the first candidate's commands; the first Phase C stopped at its gate and nothing was deployed.
+**Status: pins filled (`PINS.md`), window and GO reference given by the owner (2026-11-02 01:00-18:00 PST, `GO-0088-TEST-20261101`), but the GO is NOT SIGNED yet. Do not run anything in section 1 until the owner has signed the GO and said so.** Candidate commit: **`464dea64cb939c49fbca624b652f34b2863db2f2`** (the only approved deployment commit). It replaces the first candidate's commands; the first Phase C stopped at its gate and nothing was deployed.
 
 **Two checkouts. Never mix them.**
 | | Path | What it is | Used for |
@@ -30,7 +30,7 @@ pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store 2>&1 | tail -5
 
 # 4) settings, selftests, assembly
 export D=/tmp/ogevia-phasec/docs-checkout5/docs/releases/2026-10-30-caregiver-readiness R=/tmp/ogevia-phasec/app-464dea6
-export GO_REF=<the GO reference from the owner's GO>
+export GO_REF=GO-0088-TEST-20261101
 cd "$D" && REPO=$R bash STELLA_PHASE_C_DB.sh selftest
 OGEVIA_DEPLOY_APPROVAL=$GO_REF REPO=$R bash STELLA_PHASE_C_DEPLOY.sh selftest
 OGEVIA_DEPLOY_APPROVAL=$GO_REF REPO=$R bash STELLA_PHASE_C_DEPLOY.sh synth     # PASS all checks: five Ogevia-prod-* stacks, Handler asset (PINS.md), IdentityHandler 7c5f8eb6..., 250 routes

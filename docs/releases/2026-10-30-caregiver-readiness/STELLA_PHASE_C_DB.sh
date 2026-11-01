@@ -20,18 +20,18 @@ SQL="$HERE/STELLA_READONLY_VERIFICATION.sql"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="$HOME/phaseC_${MODE}_${TS}.txt"
 
-SHA=__SHA__
-MIG_SHA=__MIG_SHA__             # 0088_caregiver_readiness_approve_for_work.sql
-DOWN_SHA=__DOWN_SHA__           # 0088 down
+SHA=464dea64cb939c49fbca624b652f34b2863db2f2
+MIG_SHA=dc20f327794a6f9b6e4f79d201550f1d0a9970e2e4b800c27b598213c82cf34f             # 0088_caregiver_readiness_approve_for_work.sql
+DOWN_SHA=693039a5ce9dcc9682cbb13a469041d63dc5e39b46b739c70412b2469876badd           # 0088 down
 SET85_SHA=de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef   # migrations 0001-0085 (unchanged)
-SET87_SHA=__SET87_SHA__         # migrations 0001-0087 (the staff migrations promoted from pending/)
-SET88_SHA=__SET88_SHA__         # all 88 migration files
-ROLLSET_SHA=__ROLLSET_SHA__     # the one-file rollback set 0088
+SET87_SHA=873d258368c47e16a4c3d861c7d53a7245ca9ddeea788c04d7509768c069d237         # migrations 0001-0087 (the staff migrations promoted from pending/)
+SET88_SHA=049c52cb3cbc0c90efad7003967d8bfe8297cd771d2d471d5b42506a889e372c         # all 88 migration files
+ROLLSET_SHA=652df67f55c98a044485c6fa7200c62a3d586ab049fa4407e134d692920e3d5b     # the one-file rollback set 0088
 STAFF86_SHA=8eb7b4a353300ba78156bd58a0df6cbc9857b677cec0e8ec51233fcda5a16a4f   # 0086_staff_management.sql: the bytes applied to TEST (pinned in the TEST-line operator procedure)
 STAFF87_SHA=f9d75d8c776005873b6019ca2d76353d182772144b9946cadd3291cdbad4cf88   # 0087_staff_invitation_acceptance.sql: same
 IID_EXPECT=i-0ce8db2d7e5839dd5; ADMIN_SG=sg-00e01e2ca80442c1f; APP_SG=sg-064ffce3bcbe8eb3b; RDS_SG=sg-00530a1f4f7648e65
 RDS_ID=ogevia-prod-postgres; DB=ogevia_sv_test; ACCOUNT=300094796789; TAG=ogevia-db-admin-temp; LOCAL_PORT=15432
-WIN_START_TXT="__WIN_START_UTC__"; WIN_END_TXT="__WIN_END_UTC__"   # UTC, "YYYY-MM-DD HH:MM:SS"; filled from the owner's GO
+WIN_START_TXT="2026-11-02 09:00:00"; WIN_END_TXT="2026-11-03 02:00:00"   # UTC, "YYYY-MM-DD HH:MM:SS"; filled from the owner's GO
 WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
 EXPECT_BEFORE="85/0085"; EXPECT_ADOPTED="87/0087"; EXPECT_AFTER="88/0088"; EXPECT_RA=5; EXPECT_CG=6
 ATTACHED=0; TUNNEL=""; CLEANED=0; RDS_SRC_BEFORE=""
