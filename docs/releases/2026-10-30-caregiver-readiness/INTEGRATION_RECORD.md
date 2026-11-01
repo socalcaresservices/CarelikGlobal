@@ -51,3 +51,6 @@ The owner indicated a window on **2026-11-01**. No start or end time, no time zo
 
 ## 10. Window and GO reference received (2026-11-01)
 Owner: "Window 01:00 to 18:00 PST on 11/02/2026, GO-0088-TEST-20261101". Recorded in `GO_DRAFT.md` section 1 and `PINS.md`; both scripts were filled with `fill_pins.py` (window 2026-11-02 09:00 to 2026-11-03 02:00 UTC); selftests pass on the candidate checkout; both scripts refuse outside the window. **Not recorded because not stated:** the owner's signature on the GO (section 8, which names the `adopt` ledger write) and the decision on the security review of the merge. Phase C may not start until both are given. 0088 stays NOT RELEASABLE.
+
+## 11. GO given; merge review waived (2026-11-01)
+Owner: "GO given, proceed without the merge review." Recorded as `DECISION_RECORD.md` A20 (D27), `GO_DRAFT.md` (given as relayed) and `SECURITY_REVIEW_INTEGRATION.md` (waived). Phase C for commit `464dea64…` may start at 2026-11-02 09:00 UTC (01:00 PST) under `GO-0088-TEST-20261101`, by Stella Okereke, after she re-verifies the hashes in `PINS.md` and rebuilds `/tmp`. Still pending, none blocking: the month-end test re-run (after 2026-11-01 07:00 UTC). 0088 stays NOT RELEASABLE.

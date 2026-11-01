@@ -1,6 +1,6 @@
 # Security review addendum: the integration of readiness (0088) onto the TEST line — FILED FOR THE REVIEWER, NOT REVIEWED
 
-**Status: NOT REVIEWED. Every verdict box is empty on purpose.** The first review (`SECURITY_REVIEW.md`, outcome APPROVED, no findings, relayed 2026-10-31) covered the first candidate (`54894411…`, migration then numbered 0086). That candidate is void. This addendum is the **delta** the reviewer must look at for the new candidate **`464dea64cb939c49fbca624b652f34b2863db2f2`**. Author statements are evidence to check, not conclusions. Reviewer needs no AWS access; everything runs on a scratch local PostgreSQL.
+**Status: WAIVED BY THE OWNER on 2026-11-01 ("proceed without the merge review", `DECISION_RECORD.md` A20). NOT REVIEWED. Every verdict box stays empty on purpose; nothing here was checked by a reviewer.** The first review (`SECURITY_REVIEW.md`, outcome APPROVED, no findings, relayed 2026-10-31) covered the first candidate (`54894411…`, migration then numbered 0086). That candidate is void. This addendum is the **delta** the reviewer must look at for the new candidate **`464dea64cb939c49fbca624b652f34b2863db2f2`**. Author statements are evidence to check, not conclusions. Reviewer needs no AWS access; everything runs on a scratch local PostgreSQL.
 
 | Field | Value |
 |---|---|

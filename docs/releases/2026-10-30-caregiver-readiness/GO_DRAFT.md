@@ -1,6 +1,6 @@
 # GO for Phase C: caregiver readiness (migration 0088) integrated onto the TEST line — TEST slice only
 
-**Status: DRAFT. Section 1 filled from the owner's message of 2026-11-01. NOT GIVEN. NOT SIGNED.** Nothing here authorizes anything until the owner accepts or edits the text and signs section 8. Claude drafted it; the owner decides it. It replaces the first GO (`GO_SUPERSEDED_first_candidate_54894411.md`, void: Phase C stopped at its gate). Production is out of scope. The release stays NOT RELEASABLE until Phase C, UAT and the release record are complete (D7).
+**Status: GIVEN AS RELAYED 2026-11-01 (owner: "GO given, proceed without the merge review"; `DECISION_RECORD.md` A20). Window 2026-11-02 01:00-18:00 PST, GO reference `GO-0088-TEST-20261101`. NOT RUN YET.** The signature cells in section 8 are not filled by hand: the owner's statement is the record, as with the first GO. The security review of the merge is WAIVED by the owner; it was not performed. Claude drafted it; the owner decides it. It replaces the first GO (`GO_SUPERSEDED_first_candidate_54894411.md`, void: Phase C stopped at its gate). Production is out of scope. The release stays NOT RELEASABLE until Phase C, UAT and the release record are complete (D7).
 
 ## 1. Blanks only the owner can fill
 | Item | Entry |
@@ -46,9 +46,9 @@ It does not make the release releasable or production-approved. Production (Phas
 | Precondition | State |
 |---|---|
 | Unit, API, web and database suites on the integrated tree | passed except 8 DB tests that also fail on the unmodified TEST line (6 month-end, 2 environment); month-end re-run after the month rolls over: see `INTEGRATION_RECORD.md` |
-| Security review of the merged result (staff + readiness, `list_accounts`, the `adopt` write) | **open**: `SECURITY_REVIEW.md` covered the first candidate only |
+| Security review of the merged result (staff + readiness, `list_accounts`, the `adopt` write) | **WAIVED by the owner 2026-11-01** (not performed; `SECURITY_REVIEW.md` covered the void first candidate only) |
 | Owner's window and GO reference | **given 2026-11-01** (section 1) |
-| Owner's signature on this GO (naming the `adopt` ledger write) | **open** (section 8) |
+| Owner's signature on this GO (naming the `adopt` ledger write) | **given 2026-11-01** (relayed text, name not restated; A20) |
 | Script pins filled (`fill_pins.py`) | **done** (`PINS.md`); Stella's re-verification of the hashes: **open** |
 | UAT accounts (Managers of both organizations, a Caregiver, the synthetic Owner in `scs-pilot-synthetic`) | decided (D22-D25); confirmed by V7 at `probe` |
 
@@ -57,10 +57,10 @@ It does not make the release releasable or production-approved. Production (Phas
 
 | Field | Entry |
 |---|---|
-| Owner (full name) | ______________________________ |
-| Signature | ______________________________ |
-| Date and time (time zone) | ______________________________ |
+| Owner (full name) | not restated in the message (see A20) |
+| Signature | "GO given", typed, relayed in the conversation; not a system or wet signature |
+| Date and time (time zone) | 2026-11-01 (time of the statement not given) |
 
 | Operator acknowledgement | Entry |
 |---|---|
-| Stella Okereke | ______________________________  date ______________ |
+| Stella Okereke | not yet acknowledged: she acknowledges when she receives the owner's message |
