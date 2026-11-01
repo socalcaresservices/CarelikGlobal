@@ -57,7 +57,7 @@ export function liveOf(stack: string): T {
     const R = t.Resources;
     for (const k of Object.keys(R)) if (R[k].Type === "AWS::ApiGatewayV2::Route" && NEW_KEYS.includes(R[k].Properties.RouteKey)) delete R[k];
     for (const k of Object.keys(R)) {
-      if (R[k].Type === "AWS::ApiGatewayV2::Api") R[k].Properties.CorsConfiguration.AllowOrigins = R[k].Properties.CorsConfiguration.AllowOrigins.slice(0, -2);
+      if (R[k].Type === "AWS::ApiGatewayV2::Api") R[k].Properties.CorsConfiguration.AllowOrigins = R[k].Properties.CorsConfiguration.AllowOrigins.slice(0, -1);
       if (R[k].Type === "AWS::Lambda::Function" && k.startsWith("Handler") && !k.startsWith("IdentityHandler")) R[k].Properties.Code.S3Key = PREVIOUS_HANDLER_KEY;
     }
   }

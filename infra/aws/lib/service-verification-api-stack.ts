@@ -663,7 +663,8 @@ export class ServiceVerificationApiStack extends Stack {
       description: "Ogevia Service Verification API",
       createDefaultStage: false,
       corsPreflight: {
-        allowOrigins: [...config.auth.allowedOrigins, ...(props.extraAllowedOrigins ?? [])],
+        // API Gateway rejects a duplicated origin (HTTP 400, found on the 2026-11-01 production deploy), so drop repeats and keep first-seen order.
+        allowOrigins: [...new Set([...config.auth.allowedOrigins, ...(props.extraAllowedOrigins ?? [])])],
         allowMethods: [
           apigw.CorsHttpMethod.GET,
           apigw.CorsHttpMethod.POST,

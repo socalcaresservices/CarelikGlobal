@@ -54,23 +54,23 @@ l8["Resources"][api]["Properties"]["CorsConfiguration"]["AllowOrigins"] = ["http
 rc, t = run(l8, "pre"); ck("a changed Api resource is refused", rc, False, t)
 print("PASS the output names the changed property" if "AllowOrigins" in t and "https://only-one.example" in t else "FAIL the output does not name the changed property"); bad += 0 if ("AllowOrigins" in t and "https://only-one.example" in t) else 1
 
-# ---- the narrow CORS allowance found by the production dry run of 2026-11-01: the live template lacks admin.ogevia.com and has app.ogevia.com once; the new build has [app, cloudfront, app, admin]
-CORS = ["--allow-cors-add", "https://app.ogevia.com,https://admin.ogevia.com"]
+# ---- the narrow CORS allowance found by the production dry run of 2026-11-01: the live template lacks admin.ogevia.com and has app.ogevia.com once; the new build (after the dedupe fix) has [app, cloudfront, admin]
+CORS = ["--allow-cors-add", "https://admin.ogevia.com"]
 def api_of(t): return next(k for k, v in t["Resources"].items() if v["Type"] == "AWS::ApiGatewayV2::Api")
 def real_live():
     lv = simulated_live(); o = lv["Resources"][api_of(lv)]["Properties"]["CorsConfiguration"]["AllowOrigins"]
-    assert o[0] == "https://app.ogevia.com" and isinstance(o[1], dict) and o[2:] == ["https://app.ogevia.com", "https://admin.ogevia.com"], o
+    assert o[0] == "https://app.ogevia.com" and isinstance(o[1], dict) and o[2:] == ["https://admin.ogevia.com"], o
     lv["Resources"][api_of(lv)]["Properties"]["CorsConfiguration"]["AllowOrigins"] = o[:2]; return lv
 rl = real_live()
-rc, t = run(rl, "pre"); ck("production's real difference (two origins) is refused WITHOUT the allowance", rc, False, t)
+rc, t = run(rl, "pre"); ck("production's real difference (admin missing) is refused WITHOUT the allowance", rc, False, t)
 print("     " + "; ".join(l.strip() for l in t.splitlines() if l.strip().startswith(("+", "-", "~")))[:200])
-rc, t = run(rl, "pre", extra=CORS); ck("the same difference is accepted WITH the allowance (exactly those two additions)", rc, True, t); print("     " + [l for l in t.splitlines() if l.startswith("Allowed CORS")][0][:160])
+rc, t = run(rl, "pre", extra=CORS); ck("the same difference is accepted WITH the allowance (exactly that one addition)", rc, True, t); print("     " + [l for l in t.splitlines() if l.startswith("Allowed CORS")][0][:160])
 n3 = copy.deepcopy(new); n3["Resources"][api_of(n3)]["Properties"]["CorsConfiguration"]["AllowOrigins"].append("https://evil.example")
 rc, t = run(rl, "pre", newt=n3, extra=CORS); ck("a third, unexpected origin is refused even with the allowance", rc, False, t)
 l_nocf = copy.deepcopy(rl); l_nocf["Resources"][api_of(l_nocf)]["Properties"]["CorsConfiguration"]["AllowOrigins"] = ["https://app.ogevia.com"]
-rc, t = run(l_nocf, "pre", extra=CORS); ck("a live origin missing (the build would ADD more than the two): refused", rc, False, t)
+rc, t = run(l_nocf, "pre", extra=CORS); ck("a live origin missing (the build would ADD more than the one): refused", rc, False, t)
 n4 = copy.deepcopy(new); n4["Resources"][api_of(n4)]["Properties"]["CorsConfiguration"]["AllowOrigins"] = [x for x in n4["Resources"][api_of(n4)]["Properties"]["CorsConfiguration"]["AllowOrigins"] if x != "https://admin.ogevia.com"]
-rc, t = run(rl, "pre", newt=n4, extra=CORS); ck("the build adding only one of the two origins: refused", rc, False, t)
+rc, t = run(rl, "pre", newt=n4, extra=CORS); ck("the build adding nothing (no CORS difference left): accepted, the allowance is optional", rc, True, t)
 l_m = copy.deepcopy(rl); l_m["Resources"][api_of(l_m)]["Properties"]["CorsConfiguration"]["AllowMethods"] = ["GET"]
 rc, t = run(l_m, "pre", extra=CORS); ck("CORS methods differ besides the origins: refused", rc, False, t)
 l_h = copy.deepcopy(rl); l_h["Resources"][api_of(l_h)]["Properties"]["CorsConfiguration"]["AllowHeaders"] = ["authorization"]
