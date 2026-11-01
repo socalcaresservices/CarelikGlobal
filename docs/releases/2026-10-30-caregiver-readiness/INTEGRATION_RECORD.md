@@ -1,6 +1,6 @@
 # Integration record: caregiver readiness onto the TEST line (2026-10-31)
 
-**Status: IN PROGRESS. The first release candidate (`54894411…`) is SUPERSEDED. No new candidate SHA, GO or window exists yet. 0088 (formerly "0086" readiness) is NOT RELEASABLE. Nothing here touches AWS.**
+**Status: CANDIDATE READY FOR OWNER DECISIONS. The first release candidate (`54894411…`) is SUPERSEDED. New candidate commit: `464dea64cb939c49fbca624b652f34b2863db2f2`. No window, GO or security review of the merge exists yet, so the release is NOT RELEASABLE and nothing may run in AWS. 0088 was numbered 0086 until this integration.**
 
 ## 1. Why
 Phase C stopped at its expected-only gate on 2026-10-31 (`TARGET_VERIFICATION_AND_OPEN_ITEMS.md` section 38): the live TEST stack runs a parallel code line, commit `fb491a5` (branch `claude/magical-lovelace-9y5ras`, deployed to demo.ogevia.com (TEST) on 2026-10-29), that adds staff management (14 routes, migrations "0086" and "0087" kept in `infra/aws/db/pending/` and applied outside the ledger). Deploying the first candidate would have removed those routes and screens and overwritten `ogevia_api.list_accounts`.
@@ -30,8 +30,18 @@ Against the live TEST stack (`fb491a5`): exactly the 8 new readiness routes plus
 - `reservation-lifecycle` (5 tests) and `pending-hours-guards` (1 test): month-end sensitive (a shift 24 hours ahead falls in the next month when the suite runs on the last day of the agency month, 2026-10-31 PT). Same 6 failures on `fb491a5` in this container today. To be re-run after the month rolls over.
 - `prd-deploy-scripts` (2 tests): password authentication to roles the local PostgreSQL does not have (container environment). Same failures on `fb491a5`.
 
-## 7. Still to do before a new release candidate
-Finish the unit, API and web suites on the merged tree; set the final pins in `STELLA_PHASE_C_DB.sh`, `STELLA_PHASE_C_DEPLOY.sh` and `diff_gate_0086.py`; rewrite RUNBOOK, run sheet, commands and GO for the new candidate; new security review of the merge (staff and readiness together, `list_accounts`, the `adopt` write); new SHA; owner's window and GO (naming `adopt`).
+## 7. Results on the integrated tree (candidate `464dea64cb939c49fbca624b652f34b2863db2f2`; local PostgreSQL 16, Node 22.22, nothing in AWS)
+| Check | Result |
+|---|---|
+| `infra/aws` unit suite | 0 failed, 635 passed (31 files) after retiring nine staff operator-package test files (kept in `retired-tests/`) |
+| `apps/sv-api` unit / database | 100 of 100 / 156 passed, 2 skipped |
+| `apps/web` | 1,266 of 1,266 (130 files) |
+| `infra/aws` database suite | 1,049 passed, 61 skipped, **8 failed, the same 8 as on the unmodified TEST line `fb491a5`**: `reservation-lifecycle` (5) and `pending-hours-guards` (1) are month-end sensitive (the suite ran on the last day of the agency month); `prd-deploy-scripts` (2) need database roles this container does not have |
+| New integration test `integration-staff-readiness.db.test.ts` | 6 of 6: the ledger holds 88 migrations; staff and readiness objects and permissions coexist; `list_accounts` keeps 0087's invitation-first `account_status` (even for a disabled account) and carries the 0088 readiness columns; access control unchanged |
+| Synthesized API stack | 250 routes (228 + 14 staff + 8 readiness); Handler asset `9e5a510e…`; IdentityHandler `7c5f8eb6…` (unchanged) |
+| Gate against the TEST line's own synthesized template (242 routes, Handler asset `2871b03d…`, which equals the live asset captured on 2026-10-31) | **`EXPECTED-ONLY: YES`**: 8 routes added, Handler asset changed, nothing else. The other four stacks are identical between the two lines |
+| Script trial (pins filled into a scratch copy, not committed) | both scripts' selftests pass, including the pin checks against the candidate checkout |
+**Not yet done:** the month-end tests re-run after the agency month rolls over (2026-11-01 07:00 UTC); a security review of the merge; the owner's window, GO reference and signature; the final pins in the committed scripts (`fill_pins.py` after the GO) and `PINS.md`; Stella's rebuild and verification; everything in Phase C and Phase D.
 
 ## 8. Operator confirmation (2026-10-31)
-Stella Okereke (Operator) reports she stopped at the gate: no deployment, migration, snapshot, API deployment or web publish; security groups at baseline; `~/ogevia-before-0086` retained (it holds the live fb491a5 state captured before the run and stays useful as the "before" capture). She asks to be told when a new approved release candidate, hashes, GO and window are ready. Claude has no channel to her: the owner relays. Nothing is to be run in AWS until all four exist.
+Stella Okereke (Operator) reports she stopped at the gate: no deployment, migration, snapshot, API deployment or web publish; security groups at baseline; `~/ogevia-before-0086` retained (it holds the live fb491a5 state captured before the run). She asks to be told when a new approved candidate, hashes, GO and window are ready. Claude has no channel to her: the owner relays. Nothing is to be run in AWS until all four exist.
