@@ -1,12 +1,12 @@
 # Pins for the integrated candidate (filled 2026-11-01 from the owner's window and GO reference; verify before use)
 
-**AMENDED 2026-11-01 (A21): GO reference `GO-0088-TEST-20261101-B`.** **Window: 2026-11-01 09:00 to 18:00 PST = 2026-11-01 17:00 UTC to 2026-11-02 02:00 UTC** (US daylight time ended at 09:00 UTC on 2026-11-01, so PST is UTC-8). This **supersedes** the first filling (`GO-0088-TEST-20261101`, 2026-11-02 01:00-18:00 PST, script hashes `e313673f…` / `29b674bb…`): do not use those. The GO is given (A20/A21); these pins make the scripts runnable only inside this window.
+**AMENDED 2026-11-01 (A22): GO reference `GO-0088-TEST-20261101-C`.** **Window: 2026-11-01 07:30 UTC to 2026-11-02 02:00 UTC = 2026-11-01 00:30 PDT to 2026-11-01 18:00 PST** (US daylight time ends at 09:00 UTC on 2026-11-01: the window opens in PDT and closes in PST; use UTC). This **supersedes** `GO-0088-TEST-20261101-B` (window 17:00 UTC to 02:00 UTC, script hashes `5d8ea7d5…` / `ae1e789a…`), the first filling (`GO-0088-TEST-20261101`, 2026-11-02 window, hashes `e313673f…` / `29b674bb…`) and the proposed 10:00 UTC start: do not use those. The GO is given (A20/A22); these pins make the scripts runnable only inside this window.
 
 | Item | Value |
 |---|---|
 | Application commit (only approved deployment commit) | `464dea64cb939c49fbca624b652f34b2863db2f2` |
-| `STELLA_PHASE_C_DB.sh` sha256 | `5d8ea7d5adbb7569fe0cfeeaf82e9fd443939dc5cab21e7eaf4276aaf370ab3c` |
-| `STELLA_PHASE_C_DEPLOY.sh` sha256 | `ae1e789a27e11ead8c9e56275b151ee0289294f76f3f13f1e2e3214ee43c4e19` |
+| `STELLA_PHASE_C_DB.sh` sha256 | `d2195de4463c6586407e0f41a4acb51494da72c9505b3be63e1ecb270284a7d2` |
+| `STELLA_PHASE_C_DEPLOY.sh` sha256 | `69ecbdd3c4648da1fbcbf16b2efd861c4b99bd514cc402f2fc2a502a6a072b0c` |
 | `diff_gate_0086.py` sha256 | `4e86f8d590f389faa72dd5d18250ef4246312f47b2d8b9b662a9d59484f27601` |
 | `STELLA_READONLY_VERIFICATION.sql` sha256 | `9e54d9d47b1639b1b1ad078e009b26e9392a6ab82ff8073336030f0e84868ca7` |
 | Migration `0088_caregiver_readiness_approve_for_work.sql` | `dc20f327794a6f9b6e4f79d201550f1d0a9970e2e4b800c27b598213c82cf34f` |

@@ -1,13 +1,13 @@
 # GO for Phase C: caregiver readiness (migration 0088) integrated onto the TEST line — TEST slice only
 
-**Status: GIVEN AS RELAYED 2026-11-01 (owner: "GO given, proceed without the merge review"; `DECISION_RECORD.md` A20). **AMENDED 2026-11-01 (A21): window 2026-11-01 09:00-18:00 PST (17:00 UTC to 02:00 UTC on 2026-11-02), GO reference `GO-0088-TEST-20261101-B`; all other terms unchanged.** NOT RUN YET.** The signature cells in section 8 are not filled by hand: the owner's statement is the record, as with the first GO. The security review of the merge is WAIVED by the owner; it was not performed. Claude drafted it; the owner decides it. It replaces the first GO (`GO_SUPERSEDED_first_candidate_54894411.md`, void: Phase C stopped at its gate). Production is out of scope. The release stays NOT RELEASABLE until Phase C, UAT and the release record are complete (D7).
+**Status: GIVEN AS RELAYED 2026-11-01 (owner: "GO given, proceed without the merge review"; `DECISION_RECORD.md` A20). **AMENDED 2026-11-01 (A22): window 2026-11-01 07:30 UTC to 2026-11-02 02:00 UTC (00:30 PDT to 18:00 PST), GO reference `GO-0088-TEST-20261101-C`; all other terms unchanged.** NOT RUN YET.** The signature cells in section 8 are not filled by hand: the owner's statement is the record, as with the first GO. The security review of the merge is WAIVED by the owner; it was not performed. Claude drafted it; the owner decides it. It replaces the first GO (`GO_SUPERSEDED_first_candidate_54894411.md`, void: Phase C stopped at its gate). Production is out of scope. The release stays NOT RELEASABLE until Phase C, UAT and the release record are complete (D7).
 
 ## 1. Blanks only the owner can fill
 | Item | Entry |
 |---|---|
-| Window start (date, time, time zone) | **2026-11-01 09:00 PST** (= 2026-11-01 17:00 UTC) |
-| Window end (hard stop for new activity; rollback to known-good only afterwards, per A12) | **2026-11-01 18:00 PST** (= 2026-11-02 02:00 UTC) |
-| GO reference (6-64 characters of A-Za-z0-9._-; the scripts require this exact value) | **`GO-0088-TEST-20261101-B`** (amended from `GO-0088-TEST-20261101`; the first window, 2026-11-02 01:00-18:00 PST, is superseded) |
+| Window start (date, time, time zone) | **2026-11-01 07:30 UTC** (= 2026-11-01 00:30 PDT) |
+| Window end (hard stop for new activity; rollback to known-good only afterwards, per A12) | **2026-11-02 02:00 UTC** (= 2026-11-01 18:00 PST) |
+| GO reference (6-64 characters of A-Za-z0-9._-; the scripts require this exact value) | **`GO-0088-TEST-20261101-C`** (supersedes `-B` and `GO-0088-TEST-20261101`; the earlier windows are void) |
 
 ## 2. Scope this GO covers (and nothing else)
 | Item | Value |

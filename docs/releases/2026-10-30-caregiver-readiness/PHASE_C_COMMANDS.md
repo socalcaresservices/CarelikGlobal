@@ -1,6 +1,6 @@
 # Phase C commands: caregiver readiness (0088) integrated onto the TEST line — DRAFT, NOT RUN
 
-**Status: pins filled (`PINS.md`), window and GO reference given by the owner (AMENDED 2026-11-01: 2026-11-01 09:00-18:00 PST = 17:00 UTC to 02:00 UTC on 2026-11-02, `GO-0088-TEST-20261101-B`), and the owner has given the GO (A20, amended by A21). Section 1 may run only inside the window.** Candidate commit: **`464dea64cb939c49fbca624b652f34b2863db2f2`** (the only approved deployment commit). It replaces the first candidate's commands; the first Phase C stopped at its gate and nothing was deployed.
+**Status: pins filled (`PINS.md`), window and GO reference given by the owner (AMENDED 2026-11-01 (A22): 2026-11-01 07:30 UTC to 2026-11-02 02:00 UTC = 00:30 PDT to 18:00 PST, `GO-0088-TEST-20261101-C`), and the owner has given the GO (A20, amended by A22). Section 1 may run only inside the window.** Candidate commit: **`464dea64cb939c49fbca624b652f34b2863db2f2`** (the only approved deployment commit). It replaces the first candidate's commands; the first Phase C stopped at its gate and nothing was deployed.
 
 **Two checkouts. Never mix them.**
 | | Path | What it is | Used for |
@@ -30,7 +30,7 @@ pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store 2>&1 | tail -5
 
 # 4) settings, selftests, assembly
 export D=/tmp/ogevia-phasec/docs-checkout5/docs/releases/2026-10-30-caregiver-readiness R=/tmp/ogevia-phasec/app-464dea6
-export GO_REF=GO-0088-TEST-20261101-B
+export GO_REF=GO-0088-TEST-20261101-C
 cd "$D" && REPO=$R bash STELLA_PHASE_C_DB.sh selftest
 OGEVIA_DEPLOY_APPROVAL=$GO_REF REPO=$R bash STELLA_PHASE_C_DEPLOY.sh selftest
 OGEVIA_DEPLOY_APPROVAL=$GO_REF REPO=$R bash STELLA_PHASE_C_DEPLOY.sh synth     # PASS all checks: five Ogevia-prod-* stacks, Handler asset (PINS.md), IdentityHandler 7c5f8eb6..., 250 routes

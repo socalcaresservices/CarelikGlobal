@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-11-01 by the owner's approval of a different window (07:30 UTC start, reference `-C`; `DECISION_RECORD.md` A22). This proposal (10:00 UTC) was NOT applied and its `.PROPOSED` scripts must not be used.**
+
 # PROPOSED amendment: an earlier start (prepared 2026-11-01 07:12 UTC) — NOT APPROVED, NOT APPLIED
 
 **Nothing in this folder authorizes anything.** The recorded GO is unchanged: window **2026-11-01 17:00 UTC to 2026-11-02 02:00 UTC (09:00-18:00 PST)**, reference **`GO-0088-TEST-20261101-B`**, active scripts with hashes `5d8ea7d5…` / `ae1e789a…` (`PINS.md`). The files here are inert: the scripts carry the suffix `.PROPOSED` and are not read by any procedure. Nothing has run in AWS.
