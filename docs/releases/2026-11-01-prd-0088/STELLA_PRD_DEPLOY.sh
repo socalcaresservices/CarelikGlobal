@@ -30,11 +30,11 @@ MARKER="$HOME/.prd0088/db-at-0088.ok"                                  # written
 EXPECT_ROUTES=250; BASE_ROUTES=228
 ALLOW_CORS_ADD="https://app.ogevia.com,https://admin.ogevia.com"      # the ONE non-release difference the dry run of 2026-11-01 found in production's API stack: the template lacks admin.ogevia.com (the live API already allows it) and the new build lists app.ogevia.com twice; the owner decides whether to accept it (PHASE_E_PACKAGE.md)                                      # 228 recorded in production on 2026-11-01; 22 added by the release
 # ---- pins: placeholders until the owner's GO (fill_pins_prd.py; the two asset keys come from the synthesized assembly) ----
-SHA=__SHA__                                                              # the one approved release commit
-APPROVAL_REF=__GO_REF__                                                  # the owner's approval reference
-WIN_START_TXT="__WIN_START_UTC__"; WIN_END_TXT="__WIN_END_UTC__"         # UTC, "YYYY-MM-DD HH:MM:SS"
-EXPECT_HANDLER_KEY=__HANDLER_KEY__.zip
-EXPECT_IDENTITY_KEY=__IDENTITY_KEY__.zip
+SHA=f11751071e5f3199bd5d254300372a7466007c06                                                              # the one approved release commit
+APPROVAL_REF=GO-PRD-0088-20261101                                                  # the owner's approval reference
+WIN_START_TXT="2026-11-01 16:45:00"; WIN_END_TXT="2026-11-01 20:45:00"         # UTC, "YYYY-MM-DD HH:MM:SS"
+EXPECT_HANDLER_KEY=9e5a510ef7771fe0f70bb0db1a6b22bf2dbe313ab8f019c0c34ccd42686824b7.zip
+EXPECT_IDENTITY_KEY=7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip
 WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-120}" aws "$@"; }
 stop() { echo "STOP: $*"; exit 2; }
