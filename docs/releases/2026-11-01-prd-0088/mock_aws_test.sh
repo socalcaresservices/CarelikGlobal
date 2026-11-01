@@ -53,5 +53,7 @@ run B1 "x" MOCK_ENV=test;            expect "a non-production Lambda (OGEVIA_ENV
 run B2 "x" MOCK_DB=ogevia_sv_test;   expect "the TEST database name stops the run" "must serve ogevia_prd with OGEVIA_ENV=prd" 0
 run C1 "x" MOCK_HOSTSG=sg-other;     expect "an admin host with a different security group stops the run" "expected exactly" 0
 run D1 "x" MOCK_TWOIPS=1;            expect "an admin host with two addresses stops the run" "exactly ONE network interface with exactly ONE private IPv4" 0
+run F1 "x" MOCK_STACK_STATUS=UPDATE_ROLLBACK_COMPLETE MOCK_ENV=test; expect "an API stack in UPDATE_ROLLBACK_COMPLETE passes the status rule (the environment guard still stops a non-production Lambda)" "must serve ogevia_prd with OGEVIA_ENV=prd" 0
+run F2 "x" MOCK_STACK_STATUS=UPDATE_FAILED;  expect "an API stack in UPDATE_FAILED is still refused" "not a settled status" 0
 run E1 "x" MOCK_RULE_PRESENT=1;      expect "a rule that already exists stops the run" "ALREADY exists" 0
 [[ $fail == 0 ]] && echo "MOCK TEST PASSED" || { echo "MOCK TEST FAILED"; exit 1; }
