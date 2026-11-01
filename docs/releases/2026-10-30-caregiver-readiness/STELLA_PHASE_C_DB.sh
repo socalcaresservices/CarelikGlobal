@@ -190,10 +190,10 @@ assert_after() {
 }
 # the TEST-line verification SQL for the staff migrations (read-only; 110 and 24 rows, every row ok)
 vrun() { local file="$1" want="$2" out n bad
-  out=$(PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=60000" psql -X -At -F '|' -d "$DB" -c "begin read only;" -c "set local role ogevia_readonly;" -f "$file" -c "rollback;" 2>&1 | grep -v -E '^(BEGIN|SET|ROLLBACK)$')
+  out=$(PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=60000" psql -X -At -F '|' -d "$DB" -c "begin read only;" -f "$file" -c "rollback;" 2>&1 | grep -v -E '^(BEGIN|SET|ROLLBACK)$')
   n=$(printf '%s\n' "$out" | grep -c '|'); bad=$(printf '%s\n' "$out" | grep -c '|f|')
   echo "$(basename "$file"): $n checks, $bad failing (expected $want checks, 0 failing)"
-  [[ "$n" == "$want" && "$bad" == 0 ]] || { printf '%s\n' "$out" | grep '|f|' | head -5; stop "$(basename "$file") did not report $want passing checks. Nothing was changed."; }
+  [[ "$n" == "$want" && "$bad" == 0 ]] || { printf '%s\n' "$out" | grep '|f|' | head -5; [[ "$n" == 0 ]] && { echo "no check rows returned; first lines of the psql output:"; printf '%s\n' "$out" | head -3; }; stop "$(basename "$file") did not report $want passing checks. Nothing was changed."; }
 }
 run_sql_record() { echo "--- STELLA_READONLY_VERIFICATION.sql output"; PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000" psql -X -v ON_ERROR_STOP=1 -d "$DB" -f "$SQL"; }
 dburl() { printf 'postgres://%s:%s@%s:%s/%s?sslmode=verify-full&sslrootcert=%s' "$(uri "$U")" "$(uri "$P")" "$RDS_HOST" "$LOCAL_PORT" "$DB" "$TLSDIR/rds-global-bundle.pem"; }   # full verification: the RDS name is in the URL; the preload maps that one name to the tunnel
