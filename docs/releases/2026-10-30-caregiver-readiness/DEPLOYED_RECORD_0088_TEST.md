@@ -32,7 +32,7 @@ S0, S2 (probe, after A23), S3 (capture, expected-only check), S5 (snapshot), S6a
 3. F7 Task 8 (`TASK8_ACTIVE_CAREGIVER_GAPS.sql`) before enforcement is switched on; needs a new database access approval.
 4. The temporary-password validity (days) from the pool setting.
 5. Owner decisions: is an API-only due-days setting acceptable (O14)? Should "Add staff" with the Caregiver type hand off to Add caregiver (undecided; untested)? Wording for the no-hire-date overdue line?
-6. Housekeeping the owner decides: the pre-release RDS snapshot (stays until you delete it; small storage cost); the UAT synthetic caregivers, shift and visit (left in TEST); the extra caregiver from A27; the Cognito identity for the test mailbox (deleting needs pool admin access).
+6. Housekeeping the owner decides: the pre-release RDS snapshot `ogevia-prod-postgres-pre-0088-20261101t0752z` (**owner decision 2026-11-01: delete later; it is retained for now, no date set; small storage cost until deleted; deleting it needs the owner's explicit instruction**); the UAT synthetic caregivers, shift and visit (left in TEST); the extra caregiver from A27; the Cognito identity for the test mailbox (deleting needs pool admin access).
 
 ## 6. Not done and not claimed
 Production deployment (out of scope; no production resource was touched). Enforcement switch (off; the product treats turning it on as hard to undo). Any claim of EVV, certification, audit-readiness or payer billing readiness. Any statement that the security review of the merge happened (it was waived, `SECURITY_REVIEW_INTEGRATION.md`).
