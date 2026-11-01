@@ -1,3 +1,22 @@
+# Production release pins, REVISION 3: WEBSITE-ONLY REPUBLISH (written 2026-11-01 21:35 UTC). Revisions 1 and 2 are superseded for the website; the database (88/0088) and API (250 routes) from revision 2 stay deployed.
+
+**Why:** the website published at 20:27 was built against the TEST sign-in pool and was rolled back at 21:19:58Z (see `DEPLOYED_RECORD_PRD.md`). Commit below fixes the build step and adds fail-closed checks before upload and after publish.
+**Owner GO (written, in conversation, 2026-11-01): "Approve web fix" and "Give GO for fb-fix commit".** Read by Claude as the GO for the single commit below (the commit that contains the web fix), on the condition that the full gates pass on it: G1 lint, G2 typecheck passed; G3 `pnpm test:all` must pass before any step starts (result recorded below when known). The owner did not state a window; **the reference and window are set by Claude**.
+| Pin | Value |
+|---|---|
+| Approval reference | `GO-PRD-0088-R3-20261101` |
+| Window (UTC) | 2026-11-01 21:45:00 to 2026-11-02 00:45:00 |
+| Application commit (ONE approved commit; REPO checkout) | `be7bccfac97bfed4614fd1522486a940ee413bb1` |
+| Handler / Identity code asset keys | unchanged (`9e5a510e...` / `7c5f8eb6...`): the commit changes no Lambda code |
+**sha256 of the release files:**
+```
+0361e73330e1b45f9fb807c2f743987ea11e24aab887863d9874bea715e686d0  STELLA_PRD_DB.sh
+d3290272069045950ac5daf4d302f1624de7b232df0dd5a68126a9fb8b1bac40  STELLA_PRD_DEPLOY.sh
+05db104472a7934eec695eb7b026d3179de9ab4a9581ff7001a1854b726f9830  STELLA_PRD_READONLY.sql
+e905e7b751e0998d5c240be58fd39710fbe411991321d014e47ddb97c80b7a26  diff_gate_prd0088.py
+```
+**Steps (website only; do NOT run `probe`, `snapshot`, `migrate`, `capture`, `check`, `deploy-api`):** local setup and selftests; refresh the database marker for the new commit (the database is unchanged since the 20:13 `final`); `web` (typed `PUBLISH-WEB-PRD`) which runs the new pre-upload bundle check and then `web-verify` with the new production-pool assertions; the owner's sign-in checks. `capture` is not rerun because the API and Lambda intentionally differ from the pre-release baseline now. Rollback: `rollback-web` restores the saved pre-release files (still in `~/prd0088-before`).
+
 # Production release pins, REVISION 2 (written 2026-11-01 19:26 UTC). Revision 1 (commit f117510, ref GO-PRD-0088-20261101) is SUPERSEDED: do not use its files or `a3a5125`.
 
 **What happened:** with revision 1, P1 to P4 passed (database migrated to 88/0088 at 18:57:18Z, verified). P5 (`deploy-api`) failed at 19:02Z: API Gateway refused the duplicated `https://app.ogevia.com` in `AllowOrigins` (HTTP 400). CloudFormation rolled back: stack `UPDATE_ROLLBACK_COMPLETE`, Lambda code equals the original (`E4Vv7ush...`), 228 routes (VERIFIED from the operator's output). Production API and website are unchanged; the database is at 88.
