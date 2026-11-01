@@ -38,10 +38,26 @@ fd4c8552658f12d97d3328045980b87a672619d3db627e8a775657eab0517bcd  live/Ogevia-pr
 ```
 (Names of the last seven were cut by the paste at 90 characters and are restored from the stack list.) The old as-found folder `~/ogevia-prd-before` was used as the comparison source and was only read.
 
-## 3. What this means for a production release of 0088 (INFERRED from route names and counts; the database was not read)
+## 3. What this means for a production release of 0088 (written before the database was read; **superseded by section 5, which verifies it**)
 Production is at the state before staff management and before 0088: the API has 228 routes, TEST after the 0088 release has 250 (228 + 14 staff + 8 readiness). A production release would therefore carry migrations 0086, 0087 and 0088 and 22 new routes. Whether production's database already holds the staff objects (which would need an `adopt` step, as on TEST) or not (a plain `migrate` of three files) is **UNKNOWN** until the production ledger and object checks are read.
 
 ## 4. Not covered and still UNKNOWN
 Production database ledger and objects (last read 2026-10-26: 85/0085, ledger count and latest version only); what the tables hold and whether it is real or synthetic data (the owner stated synthetic only on 2026-10-20; not verified); IAM roles and policies beyond the templates; DNS for `app.ogevia.com` and `admin.ogevia.com`; Cognito users; the unidentified second new snapshot.
 **Provenance caveat:** the operator's log holds two capture runs (RDS "restorable" 11:12 UTC and 12:57 UTC). Which package's copy of `p0-baseline-capture.sh` produced the files on disk was not confirmed (the intended one is `docs/releases/2026-10-26-redesign-prd-operator/scripts/p0-baseline-capture.sh`, sha256 `2304e5c8c9503cb855c374744f4a3821fad238c1eb1affaba19f1fb6a60f17aa`; the 2026-10-19 package carries a different copy). The comparison results above do not depend on it, but this record should not be used as a script-pinned baseline until that is confirmed.
 **Not to be used for 0088:** `docs/releases/2026-10-19-prd-readiness/release/scripts/p2-gate.sh`. It belongs to the 2026-10-19 release (commit `e80b770`), compares production with that release's templates, and would write into the as-found folder unless `OGEVIA_PRD_BEFORE` is set. A production gate for 0088 has to be built from the 0088 assembly.
+
+## 5. ADDENDUM: production database read, 2026-11-01 13:30:37Z (recorded 2026-11-01 13:33 UTC)
+**Authorization:** the owner approved one run of `ledger-recheck-prd.sh prd --host-ip` ("Approve the production database check: ledger-recheck-prd.sh prd --host-ip, one run."). Script `docs/releases/2026-10-26-redesign-prd-operator/scripts/ledger-recheck-prd.sh`, sha256 `133ab6af0aeb4a4e0e17cc007046a57d7712b3f8ee166727be5dc25a3afa8c2c` (verified before the run), run by the operator in CloudShell with `OGEVIA_EXPECT_LEDGER_COUNT=85 OGEVIA_EXPECT_LEDGER_LATEST=0085 OGEVIA_EXPECT_0086=absent`; the typed confirmation `OPEN-5432-WINDOW-PRD` was given after the proposed change was read.
+**Result (VERIFIED from the pasted output):**
+| Item | Result |
+|---|---|
+| Environment identified | `Ogevia-prd-ServiceVerificationApi` `UPDATE_COMPLETE`; the Lambda serves `DB_NAME=ogevia_prd`, `OGEVIA_ENV=prd`; account `300094796789` |
+| Connection | `connected: ogevia_prd | read_only=on` |
+| Migration ledger | **85 migrations applied, latest 0085; no row above 0085** |
+| Enforcement | activated for 0 of 0 agencies (the settings table has no rows; this says nothing about whether any organization exists) |
+| Staff management (0086, 0087) | **ABSENT**: `staff_types|staff_profiles|functions of 21` = `0|0|0`; 0087 functions = 0 |
+| Readiness (0088) | not present (follows from ledger 85 / 0085) |
+**AWS changes made by the run (all temporary, all reverted):** one inbound rule tcp 5432 from `10.20.132.179/32` (the admin host's own private IP) added to RDS security group `sg-00530a1f4f7648e65`, description `TEMP-ledger-check-20261101T133037Z`, then removed; the group's complete rule set was proven identical to the recorded original (sha256 `76e9c75367c204f02dfcc52ff9d9dcc068e448b33fd2b3b664622ba8b514f175`; original inbound: tcp 5432 from `sg-064ffce3bcbe8eb3b` only). The RDS master secret was read into shell memory (never printed); one SSM port-forward session and one read-only database session were opened. CloudTrail records these. Nothing else was changed. Operator-side output: `~/ogevia-ledger-window-prd-20261101T133037Z/` (`RESULT.txt`, `rds-sg-before.json`).
+**Consequence for a production release of 0088 (VERIFIED where stated, otherwise INFERRED):** production's database is at 85 / 0085 with no staff objects, so a production release means a plain `migrate` of 0086, 0087 and 0088 in order (no `adopt` step, which TEST needed only because its staff objects had been applied outside the ledger). The API gains 14 staff routes and 8 readiness routes (228 to 250, INFERRED from the TEST counts). The staff-management release prepared on 2026-10-26 was therefore never applied to production (VERIFIED for the database and the route list).
+**Still UNKNOWN:** what the production tables hold (row counts, real versus synthetic data; the owner stated synthetic only on 2026-10-20), how many caregivers the 0088 backfill would approve, IAM roles beyond the templates, DNS for `app.ogevia.com` and `admin.ogevia.com`, Cognito users, the second new snapshot, and whether each ledger row's checksum equals the repository file (the script lists rows above 0085 only).
+
