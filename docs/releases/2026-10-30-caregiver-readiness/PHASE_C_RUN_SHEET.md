@@ -13,7 +13,7 @@ The first Phase C stopped at its expected-only gate (open items section 38): TES
 | S2 | `probe`: ledger 85/0085, readiness absent, **staff objects present**, 5 of 6, enforcement 0; V7 shows the synthetic Owner | `BASELINE MATCHES`, restore verified | any difference | the output |
 | S3 | `capture`, then `check`: the real `cdk diff` and the expected-only gate | exactly 8 routes + Handler asset | anything else (IAM, networking, a removed route, another stack) | full diff text |
 | S5 | `snapshot` | `available`, encrypted | not available (do not write) | snapshot id |
-| S6a | `adopt`: the TEST line's `verify-0086.sql` (110) and `verify-0087.sql` (24) all ok, then two ledger rows | ledger 87/0087, readiness still absent | any check failing | counts, output |
+| S6a | `adopt`: the TEST line's `verify-0086.sql` (110) and `verify-0087.sql` (22; A25) all ok, then two ledger rows | ledger 87/0087, readiness still absent | any check failing | counts, output |
 | S6b | `migrate`: 0088 only | `applied 1, already applied 87`; verify PASS; 88/0088; 5 legacy approvals; staff present | any error or difference | output |
 | S8 | `deploy-api` | `POST-API OK`; environment unchanged; 401 on `/v1/me`, `/v1/compliance/settings` | IAM prompt; other stack | stack status, `CodeSha256` |
 | S9 | `web` | `WEB VERIFIED` | wrong site; production hostname | served hash |

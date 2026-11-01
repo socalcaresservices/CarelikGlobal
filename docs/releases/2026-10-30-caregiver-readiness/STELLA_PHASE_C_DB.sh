@@ -188,7 +188,7 @@ assert_after() {
   [[ "$LEDGER" == "$EXPECT_AFTER" && "$HAS_RD" != absent && "$STAFF" == true && "$RA" == "$EXPECT_RA/$EXPECT_CG" && "$ENF" == 0 && "$LEG" == "$EXPECT_RA" ]] || { echo "!!! POST-STATE DOES NOT MATCH ($EXPECT_AFTER, readiness present, staff present, $EXPECT_RA/$EXPECT_CG, enforcement 0, legacy $EXPECT_RA). STOP; do not deploy. Roll back only on a stop condition."; return 1; }
   echo "POST-STATE MATCHES"
 }
-# the TEST-line verification SQL for the staff migrations (read-only; 110 and 24 rows, every row ok)
+# the TEST-line verification SQL for the staff migrations (read-only; 110 and 22 rows, every row ok)
 vrun() { local file="$1" want="$2" out n bad
   out=$(PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=60000" psql -X -At -F '|' -d "$DB" -c "begin read only;" -f "$file" -c "rollback;" 2>&1 | grep -v -E '^(BEGIN|SET|ROLLBACK)$')
   n=$(printf '%s\n' "$out" | grep -c '|'); bad=$(printf '%s\n' "$out" | grep -c '|f|')
@@ -205,7 +205,7 @@ case "$MODE" in
   adopt)
     assert_before || exit 2
     vrun "$REPO/docs/releases/2026-10-26-redesign-operator/scripts/verify-0086.sql" 110
-    vrun "$REPO/docs/releases/2026-10-26-redesign-operator/scripts/verify-0087.sql" 24
+    vrun "$REPO/docs/releases/2026-10-26-redesign-operator/scripts/verify-0087.sql" 22
     confirm "ADOPT 0086 0087" "About to write TWO ledger rows (0086_staff_management.sql, 0087_staff_invitation_acceptance.sql) into ogevia_meta.schema_migrations on $DB, with the checksums of the repository files (which equal the bytes already applied to TEST). No object is created or changed. Snapshot $SNAPSHOT_ID is verified."
     psql -X -v ON_ERROR_STOP=1 -d "$DB" <<SQL || stop "adoption failed; the transaction was rolled back"
 begin;

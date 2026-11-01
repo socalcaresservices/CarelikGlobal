@@ -82,4 +82,4 @@ The first candidate (`54894411…`, migration "0086") is void. This section repl
 | 29 (new) | Production path | **OPEN** | production will receive staff 0086/0087 and readiness 0088 together as ordinary ledger migrations; not requested |
 
 | 20 (update 2026-11-01) | Security review of the merged result | **OPEN -> ACCEPTED RISK (waived by the owner, D27)** | no review performed. Unreviewed: the `CASE` order in `list_accounts` (0087's invitation-first order), and the `adopt` ledger write. Author evidence only: the 6-test integration check, a catalog query over all 276 definer functions (none non-conforming), the byte-identity of the staff migrations, the gate against the TEST line's template |
-| 26 (update) | `adopt` ledger write | **ACCEPTED (authorized by the GO)** | still unreviewed; its preconditions run in the script (the TEST line's own 110 + 24 checks, ledger 85/0085, snapshot, two typed confirmations) |
+| 26 (update) | `adopt` ledger write | **ACCEPTED (authorized by the GO)** | still unreviewed; its preconditions run in the script (the TEST line's own 110 + 22 checks (A25; the first draft said 24), ledger 85/0085, snapshot, two typed confirmations) |
