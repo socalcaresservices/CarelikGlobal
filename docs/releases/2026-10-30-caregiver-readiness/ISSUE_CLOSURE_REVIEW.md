@@ -63,3 +63,20 @@
 **REQUIRES PHASE D / UAT:** item 23 in full (O, S, C, A scripts and sign-off by four validators); manual X1-X3 for items 8 and 9; the "flagged only" CPR/TB behaviour; the three authorization balances by hand.
 
 **NOT IN SCOPE OF 0086:** production (Phase E, `ogevia_prd`, `Ogevia-prd-*`); enforcement activation; a due-days screen; a Request CPR/TB button; a new release-pin baseline; fixing the two stale harness scripts; SMS or a custom magic link; EVV/Sandata; Supabase/Netlify; the NetworkEgress, WebHosting, EvidenceStorage and Observability stacks; snapshot restore into a new instance.
+
+## D. Revision 3 (2026-11-01): status after the integration onto the TEST line
+The first candidate (`54894411…`, migration "0086") is void. This section replaces the statuses above wherever they differ; rows not listed here keep their status but now refer to migration **0088** and the new candidate **`464dea64cb939c49fbca624b652f34b2863db2f2`**.
+| # | Item | New status | Why |
+|---|---|---|---|
+| 25 | TEST runs a different code line | **MITIGATED** | integrated onto `fb491a5`; gate against the TEST line's own synthesized template: `EXPECTED-ONLY: YES` (8 routes + Handler asset); the other four stacks identical; 250 routes (`INTEGRATION_RECORD.md`) |
+| 11 | Migration scope | **MITIGATED** | now 0088 only, preceded by the ledger step `adopt` for the staff migrations 0086/0087 (a new data write) |
+| 16 | CDK diff gate | **MITIGATED** | re-validated against the TEST line's template; the real diff against the live stack still has to run in Phase C |
+| 17, 18 | API and web deployment paths | **MITIGATED** | scripts re-issued with placeholders and `fill_pins.py` (filled only after the owner's GO); selftests pass on a trial copy |
+| 20 | Security review outcome | **OPEN** | the APPROVED outcome covers the void first candidate; the merged result needs its own review (`SECURITY_REVIEW_INTEGRATION.md`) |
+| 22 | Phase C validation | **OPEN** | not run for the new candidate; the run sheet adds `adopt` and a staff regression check |
+| 23 | UAT | **OPEN** | not run; the UAT scripts predate the integration (staff regression added to the Phase C checks) |
+| 24 | Release record | **OPEN** | needs `DEPLOYED_RECORD_0088_TEST.md`, UAT sign-off and the D7 conditions |
+| 26 (new) | Ledger adoption (`adopt`) | **OPEN** | a data write no earlier GO covered; the new GO names it; the reviewer judges it |
+| 27 (new) | Month-end database tests (6) and container-role tests (2) | **OPEN** (pre-existing) | fail identically on the unmodified TEST line; the month-end six are to be re-run after the agency month rolls over (2026-11-01 07:00 UTC) |
+| 28 (new) | Retired staff operator-package tests (11 files) | **MITIGATED** | kept in `infra/aws/retired-tests/` with reasons and counts; the production staff package is superseded by this integrated release |
+| 29 (new) | Production path | **OPEN** | production will receive staff 0086/0087 and readiness 0088 together as ordinary ledger migrations; not requested |
