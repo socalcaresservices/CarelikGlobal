@@ -1,7 +1,7 @@
 # Production release pins, REVISION 3: WEBSITE-ONLY REPUBLISH (written 2026-11-01 21:35 UTC). Revisions 1 and 2 are superseded for the website; the database (88/0088) and API (250 routes) from revision 2 stay deployed.
 
 **Why:** the website published at 20:27 was built against the TEST sign-in pool and was rolled back at 21:19:58Z (see `DEPLOYED_RECORD_PRD.md`). Commit below fixes the build step and adds fail-closed checks before upload and after publish.
-**Owner GO (written, in conversation, 2026-11-01): "Approve web fix" and "Give GO for fb-fix commit".** Read by Claude as the GO for the single commit below (the commit that contains the web fix), on the condition that the full gates pass on it: G1 lint, G2 typecheck passed; G3 `pnpm test:all` must pass before any step starts (result recorded below when known). The owner did not state a window; **the reference and window are set by Claude**.
+**Owner GO (written, in conversation, 2026-11-01): "Approve web fix" and "Give GO for fb-fix commit".** Read by Claude as the GO for the single commit below (the commit that contains the web fix), on the condition that the full gates pass on it: G1 lint, G2 typecheck passed; G3 `pnpm test:all` must pass before any step starts. **G3 PASSED at 21:5x UTC on `be7bccf`: `PASS all suites ran, none skipped, all passed` (exit 0).** The first G3 attempt failed because the local scratch PostgreSQL had stopped (database tests failed or were skipped; environment, not code); the database was restarted and the whole gate rerun from the start. The owner did not state a window; **the reference and window are set by Claude**.
 | Pin | Value |
 |---|---|
 | Approval reference | `GO-PRD-0088-R3-20261101` |
