@@ -33,4 +33,14 @@ select o.slug,
        (select count(*) from ogevia.organization_memberships m where m.organization_id = o.id) as memberships
   from ogevia.organizations o where o.slug in ('ogevia-test-slice', 'scs-pilot-synthetic') order by o.slug;
 
+-- G6 separation: how many sign-in users hold a membership in BOTH organizations. Must be 0 (the check needs separate accounts).
+select count(*) as users_in_both_orgs from (
+  select m.user_id from ogevia.organization_memberships m join ogevia.organizations o on o.id = m.organization_id
+   where o.slug in ('ogevia-test-slice', 'scs-pilot-synthetic') group by m.user_id having count(distinct o.id) = 2) x;
+
+-- G7 which account is which: organization, role, status and the first 8 characters of the sign-in subject (match them with the TEST sign-in pool; no names or emails).
+select o.slug, m.role, m.status, left(u.cognito_sub, 8) as sub_prefix
+  from ogevia.organization_memberships m join ogevia.organizations o on o.id = m.organization_id join ogevia.app_users u on u.id = m.user_id
+ where o.slug in ('ogevia-test-slice', 'scs-pilot-synthetic') order by o.slug, m.role, sub_prefix;
+
 rollback;
