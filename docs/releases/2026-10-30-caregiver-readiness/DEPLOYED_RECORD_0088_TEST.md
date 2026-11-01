@@ -1,6 +1,7 @@
 # Release record: caregiver readiness, migration 0088, integrated onto the TEST line (TEST/pilot only)
 
-**Status: DEPLOYED TO TEST. UAT CLOSED WITH OUTSTANDING ITEMS (owner decision D36). 0088 is NOT RELEASABLE (D7). Nothing is deployed to production.**
+**Status (2026-11-01 10:07 UTC): DEPLOYED TO TEST AND ACCEPTED FOR TEST BY THE OWNER, WITH THE GAPS LISTED IN SECTION 5 (owner risk acceptance D38). NOT approved for production; nothing is deployed to production. This record supersedes the older "NOT DEPLOYED" statuses in README.md and CHECKLIST.md.**
+**Owner risk acceptance (D38, 2026-11-01):** "Path 1" = "Accept the outstanding validations for the TEST release." The D7 condition ("outstanding validations are completed") is therefore replaced, for the TEST/pilot slice only, by this explicit acceptance of the items in section 5. It does not make 0088 production-ready: a production release is a separate decision (`docs/TESTING_AND_RELEASE_PROCESS.md` Phase E and the owner's explicit GO), and Claude's recommendation is that the skipped checks, above all cross-agency isolation (X1-X3), be run or formally accepted again before any production release.
 **Recorded:** 2026-11-01 09:42 UTC. **GO reference:** `GO-0088-TEST-20261101-C` (window 2026-11-01 07:30 UTC to 2026-11-02 02:00 UTC). **Application commit:** `464dea64cb939c49fbca624b652f34b2863db2f2`. **Owner:** the founder. **Operator:** Stella Okereke. Evidence grading: VERIFIED = pasted terminal output or a screenshot; REPORTED = stated by the owner without output.
 
 ## 1. What is deployed (TEST slice only)
@@ -27,7 +28,7 @@ S0, S2 (probe, after A23), S3 (capture, expected-only check), S5 (snapshot), S6a
 **BLOCKED:** O5 and O7 sign-in halves, O16, O17, C8 (D25: one mailbox); S1, S2, S7 (no Scheduler login; D24: no new users); O14 (needs the Operator's administrator token); O6 "Completed only" half (no such control in the readiness checklist).
 **Defects found:** none Blocker, none Major. Minor/wording: (1) "overdue since the due date" is printed when no hire date is recorded (the code treats a missing hire date as no grace); flag-only while enforcement is off. (2) The UAT script text for O5, O6, O7, O16 still assumes more than one mailbox and a "Completed" control.
 
-## 5. What is outstanding (D7: 0088 NOT RELEASABLE until completed or formally accepted by the owner)
+## 5. What is outstanding (accepted by the owner for the TEST release, D38; not accepted for production)
 1. A1-A4 (authorization arithmetic on three clients; static evidence only: 0088 contains no authorization, reservation, billable or balance object), X1-X3 (cross-agency isolation, live), O14, O18, C7, C1 second half, S1, S2, S4, S6, S7. Plan and account needs: `UAT_OUTSTANDING_CHECKLIST.md`.
 2. F4 role gating live (403 for a caregiver, 404 across agencies) and the F8 regression and smoke sets: covered by automated tests only.
 3. F7 Task 8 (`TASK8_ACTIVE_CAREGIVER_GAPS.sql`) before enforcement is switched on; needs a new database access approval.

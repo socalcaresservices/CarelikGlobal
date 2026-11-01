@@ -1,3 +1,5 @@
+> **2026-11-01 STATUS NOTE (D38):** 0088 is DEPLOYED TO THE TEST SLICE and ACCEPTED FOR TEST by the owner with listed gaps; NOT approved for production. The authoritative current status is `DEPLOYED_RECORD_0088_TEST.md`; statuses below are historical.
+
 > **2026-10-31: THE RELEASE WAS INTEGRATED ONTO THE TEST LINE AND RENUMBERED.** The first Phase C stopped at its gate (TEST runs the staff-management line `fb491a5`). The readiness migration is now **0088**; the staff migrations 0086/0087 are in the ledger set; the candidate is commit `464dea64cb939c49fbca624b652f34b2863db2f2`. Earlier records in this folder (decision record, open items, UAT drafts, reviews) say "0086" for readiness and name the superseded commit `54894411…`: they are history. Start at `INTEGRATION_RECORD.md`, then `GO_DRAFT.md`, `PHASE_C_COMMANDS.md`, `PHASE_C_RUN_SHEET.md`, `RUNBOOK.md`. 0088 is NOT RELEASABLE.
 
 # Caregiver readiness simplification (owner brief 2026-10-30)

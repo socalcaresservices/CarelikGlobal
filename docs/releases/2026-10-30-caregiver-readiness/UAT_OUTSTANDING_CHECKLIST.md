@@ -52,3 +52,6 @@ Stop rules unchanged (`PHASE_D_UAT_SCRIPTS.md` section 0): stop at the first Blo
 ## F. Status after group A (2026-11-01 10:03 UTC)
 Group A was started at the owner's instruction. Results: **O11 and O12 passed (REPORTED)**. **NOT RUN, by owner decision (D37):** A1-A4, S4, S6, O18, C7, C1 second half (the owner replied "skip" to each, then "skip all"). Groups B and C and the decisions in D are unchanged and still open; no account was created, no email sent, no AWS change. The checklist stays as the plan if the owner reopens any item.
 
+## G. Owner risk acceptance (2026-11-01 10:07 UTC)
+The owner chose to accept the outstanding validations for the TEST release (D38, `DECISION_RECORD.md` A30). Items here remain open for any production release.
+
