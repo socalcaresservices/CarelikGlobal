@@ -1,6 +1,6 @@
 # Production release record: migrations 0086, 0087, 0088 (2026-11-01)
 
-**Status: PARTIALLY DEPLOYED. Database: deployed. API: deployed. Website: published, then ROLLED BACK (defect). Not accepted. Not "released".**
+**Status (updated 21:55 UTC): Database deployed. API deployed. Website: first publish ROLLED BACK (defect); REPUBLISHED at 21:53:03Z from commit `be7bccf` with the fix and VERIFIED by script. NOT ACCEPTED: the owner's sign-in checks are still pending.**
 Evidence is the Operator's pasted output (REPORTED by the Operator, read by Claude) unless marked otherwise. Nothing here proves production health beyond what is stated. Application commit `fb8b7aa4eb73c0cfe4dd6f718930ea54e318cfd7`; scripts commits `130e1a1` (release scripts) and `5f2c685`; owner GO: "GO ... f117510" (revision 1) and "Approve the dedupe fix, full gates, new GO" (revision 2, ref `GO-PRD-0088-R2-20261101`, window 19:30 to 22:30 UTC, window chosen by Claude). See `PRD_PINS.md`.
 
 ## Current production state (2026-11-01 21:20 UTC)
@@ -23,6 +23,10 @@ Evidence is the Operator's pasted output (REPORTED by the Operator, read by Clau
 - 20:22 `deploy-api` (revision 2): success. 20:27 `web`: published and "WEB VERIFIED".
 - 20:28 `smoke`: 2 checks passed; the runtime-database check wanted the admin host to gain a second security group (test-slice precondition); **not done, not authorized; smoke is PARTIAL**.
 - ~20:50 owner's sign-in check at `app.ogevia.com` landed on the TEST pool's sign-in domain (`us-west-2849ayz5j7...`). Investigation (read-only) found the website published at 20:27 contains only the TEST pool and client; the pre-release website contains the production pool `us-west-2_FHJoX71ca` and domain `ogevia-prd-300094796789...`. Owner approved a web rollback; done 21:19:58Z.
+
+## Website republish (revision 3, ref `GO-PRD-0088-R3-20261101`, commit `be7bccfac97bfed4614fd1522486a940ee413bb1`)
+G1, G2 and G3 (`pnpm test:all`: web 1,266, infra 642, database 1,124, API 158; none skipped) passed on this commit after one environment failure (the local scratch PostgreSQL had stopped; the gate was rerun in full). The Operator ran `web` at 21:5x UTC; `WEB VERIFIED` at **21:53:03Z** (VERIFIED from output): served `index.html` equals the build (`b0d54dab...`); the bundle carries the code SHA, production mode and API host `zk527zk4ua`; **the production sign-in pool `us-west-2_FHJoX71ca`, the production domain and the production app client; no reference to the TEST pool**; `config.json` unchanged. The pre-upload bundle check passed (its PASS line was not in the pasted tail).
+**Still NOT VERIFIED:** the owner's real sign-in and the five page checks (pending); the smoke runtime-database check (not authorized).
 
 ## Defect found: production website built against the TEST sign-in pool
 **Cause (VERIFIED in the code, `infra/aws/scripts/deploy-production.sh` `do_web` and `print-prd-config.ts`):** the `web` mode takes `userPoolId` from `existing.cognitoUserPoolId` (inherited from the TEST configuration for `prd`) and the app client from the WebHosting stack's `TestSliceAppClient`; it does not read the dedicated production pool of `Ogevia-prd-Auth`. The 2026-11-01 deploy script's `web-verify` checked the API host, the production mode, the commit and the bytes, **not the sign-in pool**: a gap in what Claude built. **Effect (INFERRED, not tested):** production sign-in would have gone through the TEST pool; the production API accepts only production-pool tokens, so this was a broken sign-in, not a data exposure.
