@@ -18,7 +18,7 @@ a="$*"
 SGJSON='{"i":[{"IpProtocol":"tcp","FromPort":5432,"ToPort":5432,"UserIdGroupPairs":[{"GroupId":"sg-064ffce3bcbe8eb3b","UserId":"1"}],"IpRanges":[],"Ipv6Ranges":[],"PrefixListIds":[]}],"e":[{"IpProtocol":"-1","UserIdGroupPairs":[],"IpRanges":[{"CidrIp":"0.0.0.0/0"}],"Ipv6Ranges":[],"PrefixListIds":[]}]}'
 case "$a" in
   *"sts get-caller-identity"*) echo '{"Account":"300094796789","Arn":"arn:aws:sts::300094796789:assumed-role/mock"}' ;;
-  *"cloudformation describe-stacks"*) echo "UPDATE_COMPLETE" ;;
+  *"cloudformation describe-stacks"*) echo "${MOCK_STACK_STATUS:-UPDATE_COMPLETE}" ;;
   *"cloudformation list-stack-resources"*) echo '{"StackResourceSummaries":[{"ResourceType":"AWS::Lambda::Function","LogicalResourceId":"Handler886CB40B","PhysicalResourceId":"mock-handler"}]}' ;;
   *"lambda get-function-configuration"*) echo "{\"Environment\":{\"Variables\":{\"DB_NAME\":\"${MOCK_DB:-ogevia_prd}\",\"OGEVIA_ENV\":\"${MOCK_ENV:-prd}\"}}}" ;;
   *"rds describe-db-instances"*) echo '{"DBInstanceStatus":"available","PubliclyAccessible":false,"Endpoint":{"Address":"mock.rds.amazonaws.com"},"MasterUserSecret":{"SecretArn":"arn:aws:secretsmanager:us-west-2:300094796789:secret:mock"},"VpcSecurityGroups":[{"VpcSecurityGroupId":"sg-00530a1f4f7648e65"}]}' ;;

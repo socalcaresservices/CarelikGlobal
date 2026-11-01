@@ -80,7 +80,7 @@ fi
 
 say ""; say "== 1. Environment (read-only): PRODUCTION; expected database $DB; approval reference $GO_REF"
 STATUS=$(aws cloudformation describe-stacks --stack-name "$API_STACK" --query 'Stacks[0].StackStatus' --output text 2>/dev/null) || stop "stack $API_STACK not found"
-[[ "$STATUS" == CREATE_COMPLETE || "$STATUS" == UPDATE_COMPLETE ]] || stop "stack $API_STACK is '$STATUS', not a settled status"
+[[ "$STATUS" == CREATE_COMPLETE || "$STATUS" == UPDATE_COMPLETE || "$STATUS" == UPDATE_ROLLBACK_COMPLETE ]] || stop "stack $API_STACK is '$STATUS', not a settled status"   # UPDATE_ROLLBACK_COMPLETE: the first API deploy of 2026-11-01 was rolled back; the guard below still requires the Lambda to serve ogevia_prd with OGEVIA_ENV=prd
 FN=$(aws cloudformation list-stack-resources --stack-name "$API_STACK" --output json 2>/dev/null | jq -r '[.StackResourceSummaries[] | select(.ResourceType=="AWS::Lambda::Function" and (.LogicalResourceId|startswith("Handler")))][0].PhysicalResourceId // empty')
 [[ -n "$FN" ]] || stop "API handler Lambda not found in $API_STACK"
 CFG=$(aws lambda get-function-configuration --function-name "$FN" --output json 2>/dev/null) || stop "cannot read Lambda $FN"
