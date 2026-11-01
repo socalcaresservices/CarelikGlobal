@@ -6,7 +6,7 @@
 |---|---|
 | Application commit (only approved deployment commit) | `464dea64cb939c49fbca624b652f34b2863db2f2` |
 | `STELLA_PHASE_C_DB.sh` sha256 (**A25**, 2026-11-01) | `f819a402a0920b1dab14d5234442f650b445c4c516c2cb17159aead3e94ce4de` (supersedes `2772c8b702f7d642e005c51233ca53f07fe0c84dfacaa8bd11f2b38c403b1d4d` (A24), `d8a5461c3778d802245edcdd063b70f5eabd9534efc8a9c28bb12d4a8eefb05d` (A23) and `d2195de4463c6586407e0f41a4acb51494da72c9505b3be63e1ecb270284a7d2`; see `INTEGRATION_RECORD.md` sections 17-19) |
-| `STELLA_PHASE_C_DEPLOY.sh` sha256 | `69ecbdd3c4648da1fbcbf16b2efd861c4b99bd514cc402f2fc2a502a6a072b0c` |
+| `STELLA_PHASE_C_DEPLOY.sh` sha256 (**A26**, 2026-11-01) | `8540c3d35f742644609a7879ed8570b9b087297d909074d9ba4ba5832281d54f` (supersedes `69ecbdd3c4648da1fbcbf16b2efd861c4b99bd514cc402f2fc2a502a6a072b0c`; see `INTEGRATION_RECORD.md` section 20) |
 | `diff_gate_0086.py` sha256 | `4e86f8d590f389faa72dd5d18250ef4246312f47b2d8b9b662a9d59484f27601` |
 | `STELLA_READONLY_VERIFICATION.sql` sha256 | `9e54d9d47b1639b1b1ad078e009b26e9392a6ab82ff8073336030f0e84868ca7` |
 | Migration `0088_caregiver_readiness_approve_for_work.sql` | `dc20f327794a6f9b6e4f79d201550f1d0a9970e2e4b800c27b598213c82cf34f` |

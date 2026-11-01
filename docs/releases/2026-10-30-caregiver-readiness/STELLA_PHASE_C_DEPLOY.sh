@@ -159,8 +159,8 @@ case "$MODE" in
   web-verify)
     SITE=$(cat "$B/web-url.txt"); DIST="$REPO/apps/web/dist-aws"; [[ -f "$DIST/index.html" ]] || stop "no local build at $DIST (run the web mode first)"
     bad=0; ok() { echo "PASS $*"; }; nope() { echo "FAIL $*"; bad=1; }
-    LOCAL=$(sha256sum "$DIST/index.html" | cut -d' ' -f1); IDX=$(curl -fsS --max-time 60 "$SITE/index.html") || stop "cannot fetch $SITE/index.html"
-    SERVED=$(printf '%s' "$IDX" | sha256sum | cut -d' ' -f1); echo "index.html sha256: served $SERVED  local $LOCAL"
+    LOCAL=$(sha256sum "$DIST/index.html" | cut -d' ' -f1); IDXF=$(mktemp) && curl -fsS --max-time 60 -o "$IDXF" "$SITE/index.html" || { rm -f "$IDXF"; stop "cannot fetch $SITE/index.html"; }
+    IDX=$(cat "$IDXF"); SERVED=$(sha256sum "$IDXF" | cut -d' ' -f1); rm -f "$IDXF"; echo "index.html sha256: served $SERVED  local $LOCAL"
     [[ "$SERVED" == "$LOCAL" ]] && ok "served index.html is the one just built" || nope "served index.html differs (CloudFront lag: wait a minute and rerun once)"
     ASSET=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' <<<"$IDX" | head -1); [[ -n "$ASSET" ]] && ok "main script $ASSET" || stop "index.html references no assets/index-*.js"
     JS=$(curl -fsS --max-time 60 "$SITE/$ASSET") || stop "cannot fetch $SITE/$ASSET"
