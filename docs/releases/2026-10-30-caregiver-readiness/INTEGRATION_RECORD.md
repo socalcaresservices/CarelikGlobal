@@ -135,3 +135,20 @@ UAT data preparation P1-P3 and the O/C/S steps listed in `DEPLOYED_RECORD_0088_T
 Scheduled reminder (set by Claude earlier in this work; the owner's earlier instruction to complete the promised month-end rerun). Local PostgreSQL 16 (`pg_ctlcluster 16 main start`), `cd infra/aws; npx vitest run --config vitest.db.config.ts db/test/reservation-lifecycle.db.test.ts db/test/pending-hours-guards.db.test.ts` on branch `claude/practical-tesla-r07odb` at `763b7ab` (the application commit `464dea64...` plus documents). The local clock was 04:00 PST on 2026-11-01, inside the new agency month, so the -180 minute shift in `reservation-lifecycle` falls in the current month. **Result (VERIFIED, pasted output): 2 test files passed, 34 of 34 tests passed (16 + 18), duration 11.7 s.**
 **Scope of this rerun:** only these two files. The full database suite and the two environment-dependent failures noted earlier were not re-run here; gate G3 for any production release still needs the full suite on the release commit (`TESTING_AND_RELEASE_PROCESS.md` section 1.1).
 
+## 24. Gates G1 to G3 run for the production path (2026-11-01 13:35-13:50 UTC; local; no AWS; recorded 2026-11-01 13:50 UTC)
+Run on branch `claude/practical-tesla-r07odb` at `2fa3cd8` (application code identical to the release commit `464dea64...`: every change since is under `docs/`), Node v22.22.0, pnpm 9.15.4, local PostgreSQL 16, clean worktree, frozen lockfile. Commands: `pnpm lint`, `pnpm typecheck --force`, `pnpm build --force`, `OGEVIA_TEST_DATABASE_URL=... pnpm test:all` (unit tests of all workspaces, then the `infra/aws` and `sv-api` database suites; it fails on any skip).
+| Gate | Result (VERIFIED from the logs) |
+|---|---|
+| G1 `pnpm lint` | PASS, exit 0 (6 of 6 tasks) |
+| G2 `pnpm typecheck` | PASS, exit 0 (7 of 7 tasks, nothing cached) |
+| build | PASS, exit 0 (6 of 6 tasks) |
+| G3 part 1, unit and static (all workspaces) | **FAIL: 1 failed, 1265 passed (web)**; shared 118, auth 150, sv-api 100, ui 73 all passed |
+| G3 part 2, `infra/aws test:db` | **FAIL: 3 files failed, 98 passed (101); 4 tests failed, 1120 passed (1124)** |
+| G3 part 2, `sv-api test:db` | PASS: 23 files, 158 tests, all passed |
+**G3 is NOT passed** (`test:all` exit 1: "A gate is only passed when every suite ran, none was skipped, and all passed"; the process allows no waiver).
+**The five failing tests** (all five reproduce identically on the unmodified TEST line `fb491a5`, run the same day in a clean worktree: 4 DB tests and the web test; so none is caused by 0086-0088):
+1. `db/test/prd-deploy-scripts.db.test.ts`: "the production login acts as ogevia_app and nothing more" and "the TEST slice's application login cannot connect to ogevia_prd": a pg-protocol error; INFERRED to be the local harness (the test expects password authentication that the local server's access rules do not enforce); these are the "2 environment" failures noted earlier.
+2. `db/test/recurring-rejections.db.test.ts` ("extending a series reports what did not fit...", expected 4 to be 3) and `db/test/scheduling-patterns.db.test.ts` ("report mode warns but does not block...", expected `2027-04-02` but received `2027-04-05`): both compute dates from today's date (`monthStart(n)` from `today`), run on the first day of a month: INFERRED date-dependent.
+3. `apps/web/src/pages/calendar-authorised-hours.test.tsx` ("updates when the client changes and when the month changes"): cannot find an expected list-item text; the cause is NOT established (the test file has no obvious date call).
+**Next (owner decision needed):** to pass G3 the five tests must be made reliable (test-only changes with a failing-first demonstration, then verified on any calendar day) or explained and accepted in writing; nothing in the application code is implicated. The month-boundary rerun of two files recorded in section 23 passed 34 of 34 on 2026-11-01 12:00 UTC.
+
