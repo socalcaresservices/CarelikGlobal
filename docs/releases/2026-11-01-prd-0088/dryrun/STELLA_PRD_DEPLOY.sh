@@ -27,7 +27,8 @@ BASELINE_STACKS="Ogevia-prd-Auth Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceSt
 ASSEMBLY="${ASSEMBLY:-/tmp/ogevia-cdk-prd-0088.out}"; B="${OGEVIA_PRD_BEFORE_0088:-$HOME/prd0088-before}"
 BASE="${OGEVIA_PRD_BASELINE:-$HOME/ogevia-prd-baseline-20261101}"      # the recorded production baseline (docs/aws/PRODUCTION_BASELINE_2026-11-01.md)
 MARKER="$HOME/.prd0088/db-at-0088.ok"                                  # written only by STELLA_PRD_DB.sh migrate after every check passed
-EXPECT_ROUTES=250; BASE_ROUTES=228                                      # 228 recorded in production on 2026-11-01; 22 added by the release
+EXPECT_ROUTES=250; BASE_ROUTES=228
+ALLOW_CORS_ADD="https://app.ogevia.com,https://admin.ogevia.com"      # the ONE non-release difference the dry run of 2026-11-01 found in production's API stack: the template lacks admin.ogevia.com (the live API already allows it) and the new build lists app.ogevia.com twice; the owner decides whether to accept it (PHASE_E_PACKAGE.md)                                      # 228 recorded in production on 2026-11-01; 22 added by the release
 # ---- pins: placeholders until the owner's GO (fill_pins_prd.py; the two asset keys come from the synthesized assembly) ----
 SHA=63374f7ace290ec680cf0c4a34251b9a2f439006                                                              # the one approved release commit
 APPROVAL_REF=PRD-DRYRUN-20261101                                                  # the owner's approval reference
@@ -168,7 +169,7 @@ gate() {
   echo "-- cdk diff (read-only; for the human reader)"
   ( cd "$REPO/infra/aws" && timeout --foreground -k 5 300 npx --no-install cdk diff --app "$ASSEMBLY" $API --no-notices 2>&1 | tail -60 )
   echo "-- EXPECTED-ONLY gate (machine check of the live template vs the assembly)"
-  python3 -I -B "$HERE/diff_gate_prd0088.py" --live "$B/gate-live.json" --new "$ASSEMBLY/$API.template.json" --expect "${1:-pre}" || stop "the difference is not exactly the release's allowed change. Do not deploy."
+  python3 -I -B "$HERE/diff_gate_prd0088.py" --live "$B/gate-live.json" --new "$ASSEMBLY/$API.template.json" --expect "${1:-pre}" $([[ "${1:-pre}" == pre ]] && echo --allow-cors-add "$ALLOW_CORS_ADD") || stop "the difference is not exactly the release's allowed change. Do not deploy."
 }
 
 case "$MODE" in

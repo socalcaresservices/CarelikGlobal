@@ -15,7 +15,8 @@ ALLOW-LIST for --expect pre:
     Rules, Transform, Description. AWS::CDK::Metadata is ignored; the value of the `ogevia:deployment-status` tag is ignored (it carries the approval reference).
 Any other difference: exit 1 and the Operator STOPS. Nothing here talks to AWS.
 """
-import argparse, json, sys
+import argparse, copy, json, sys
+from collections import Counter
 
 NEW_ROUTES = {
     "GET /v1/staff-types",
@@ -75,10 +76,11 @@ def diff_paths(l, n, path=""):
         if len(l) == len(n) and any(isinstance(x, (dict, list)) for x in l + n) and all(isinstance(a, type(b)) for a, b in zip(l, n)):
             for i, (a, b) in enumerate(zip(l, n)): out += diff_paths(a, b, "%s[%d]" % (path, i))
         else:
-            ls, ns = [json.dumps(x, sort_keys=True) for x in l], [json.dumps(x, sort_keys=True) for x in n]
-            out += ["+ %s[]: %s" % (path, _short(x)) for x in n if json.dumps(x, sort_keys=True) not in ls]
-            out += ["- %s[]: %s" % (path, _short(x)) for x in l if json.dumps(x, sort_keys=True) not in ns]
-            if not out and l != n: out.append("~ %s: same items, different order or count" % path)
+            cl, cn = Counter(json.dumps(x, sort_keys=True) for x in l), Counter(json.dumps(x, sort_keys=True) for x in n)
+            for item in sorted(set(cl) | set(cn)):
+                d = cn[item] - cl[item]
+                if d: out.append("%s %s[]: %s%s" % ("+" if d > 0 else "-", path, _short(json.loads(item)), " (x%d)" % abs(d) if abs(d) > 1 else ""))
+            if not out and l != n: out.append("~ %s: same items, different order" % path)
     elif l != n:
         out.append("~ %s: %s -> %s" % (path, _short(l), _short(n)))
     return out
@@ -99,6 +101,7 @@ def main():
     ap.add_argument("--live", required=True)
     ap.add_argument("--new", required=True)
     ap.add_argument("--expect", choices=["pre", "post"], default="pre")
+    ap.add_argument("--allow-cors-add", default="", help="comma-separated origins the API resource's CorsConfiguration.AllowOrigins may GAIN (each exactly once), nothing else; only with --expect pre")
     a = ap.parse_args()
     live, new = load(a.live), load(a.new)
     bad = []
@@ -124,6 +127,8 @@ def main():
     if a.expect == "post" and added:
         bad.append("expected NO difference after deployment, but %d resources would be added" % len(added))
     changed_handler = []
+    cors_add = [o for o in a.allow_cors_add.split(",") if o] if a.expect == "pre" else []
+    cors_allowed = []
     for k in sorted(set(lr) & set(nr)):
         l, n = norm(lr[k]), norm(nr[k])
         if l == n:
@@ -136,12 +141,20 @@ def main():
             if l2 == n2:
                 changed_handler.append(k)
                 continue
+        if cors_add and lr[k].get("Type") == "AWS::ApiGatewayV2::Api":
+            l2, n2 = copy.deepcopy(l), copy.deepcopy(n)
+            lo = (l2.get("Properties", {}).get("CorsConfiguration") or {}).pop("AllowOrigins", None)
+            no = (n2.get("Properties", {}).get("CorsConfiguration") or {}).pop("AllowOrigins", None)
+            key = lambda x: json.dumps(x, sort_keys=True)
+            if l2 == n2 and isinstance(lo, list) and isinstance(no, list) and Counter(map(key, no)) == Counter(map(key, lo)) + Counter(map(key, cors_add)):
+                cors_allowed.append((k, cors_add)); continue
         bad.append("CHANGED resource %s (%s)" % (k, lr[k].get("Type")))
         for line in diff_paths(l, n)[:12]: bad.append("      " + line)
     if a.expect == "post" and changed_handler:
         bad.append("expected NO difference after deployment, but the Handler code asset still differs")
     print("added: %d route(s) %s" % (len(added_keys), "(the %d expected)" % len(NEW_ROUTES) if added_keys == NEW_ROUTES else sorted(added_keys)))
     print("Handler code asset changed: %s" % (", ".join(changed_handler) or "no"))
+    for k, adds in cors_allowed: print("Allowed CORS addition on %s: AllowOrigins gains exactly %s (nothing else on the resource differs)" % (k, adds))
     if bad:
         print("EXPECTED-ONLY: NO")
         for b in bad:

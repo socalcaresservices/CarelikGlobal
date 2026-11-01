@@ -10,7 +10,7 @@ APIT="Ogevia-prd-ServiceVerificationApi"
 python3 - "$ASM" "$W" "$HERE" <<'PY'
 import copy, json, os, sys
 asm, w, here = sys.argv[1:4]
-src = open(os.path.join(here, "diff_gate_prd0088.py")).read(); exec(src.split("SECTIONS =")[0].split("import argparse, json, sys")[1], globals())
+import re; exec(re.search(r"NEW_ROUTES = \{.*?\n\}\n", open(os.path.join(here, "diff_gate_prd0088.py")).read(), re.S).group(0), globals())
 for f in os.listdir(asm):
     if f.endswith(".template.json") and f.startswith("Ogevia-prd-"):
         t = json.load(open(os.path.join(asm, f))); name = f[:-len(".template.json")]
@@ -18,6 +18,7 @@ for f in os.listdir(asm):
             res = t["Resources"]
             for k in [k for k, v in res.items() if v["Type"] == "AWS::ApiGatewayV2::Route" and v["Properties"]["RouteKey"] in NEW_ROUTES]: del res[k]
             hk = next(k for k, v in res.items() if v["Type"] == "AWS::Lambda::Function" and k.startswith("Handler")); res[hk]["Properties"]["Code"]["S3Key"] = "debd1d43" + "0" * 56 + ".zip"
+            ak = next(k for k, v in res.items() if v["Type"] == "AWS::ApiGatewayV2::Api"); cors = res[ak]["Properties"]["CorsConfiguration"]; cors["AllowOrigins"] = cors["AllowOrigins"][:2]   # production's live template: [app, CloudFront] only (dry run 2026-11-01)
             routes = sorted(v["Properties"]["RouteKey"] for v in res.values() if v["Type"] == "AWS::ApiGatewayV2::Route")
             json.dump(routes, open(os.path.join(w, "base", "routes-before.json"), "w")); json.dump(routes, open(os.path.join(w, "mock", "routes.json"), "w"))
         json.dump({"TemplateBody": t} if False else t, open(os.path.join(w, "base", "live", name + ".json"), "w")); json.dump(t, open(os.path.join(w, "mock", "live", name + ".json"), "w"))
