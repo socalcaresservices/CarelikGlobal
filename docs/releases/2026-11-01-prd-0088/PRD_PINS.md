@@ -17,7 +17,7 @@
 
 **sha256 of the release files (verify before running; they are in this folder at the branch tip):**
 ```
-57b4644cd4cc7a5c26f9a2ccbf4c718de3f624a6682ca9386f6b24d13326acf3  STELLA_PRD_DB.sh
+0beb61de2082fc9a08b613d9b883c36d2a6a7deeb2048c13f172788192b2f5d6  STELLA_PRD_DB.sh
 6ad233418b8cffb007a838faada13e42ea841af45702007a34a28401786308e3  STELLA_PRD_DEPLOY.sh
 05db104472a7934eec695eb7b026d3179de9ab4a9581ff7001a1854b726f9830  STELLA_PRD_READONLY.sql
 e905e7b751e0998d5c240be58fd39710fbe411991321d014e47ddb97c80b7a26  diff_gate_prd0088.py
@@ -25,3 +25,5 @@ e905e7b751e0998d5c240be58fd39710fbe411991321d014e47ddb97c80b7a26  diff_gate_prd0
 The gate and the SQL are byte-identical to the dry-run copies (VERIFIED by `cmp`). The scripts' commit is later than the application commit; it contains only the filled scripts and documents. Nothing is deployed until the Operator runs the steps of `PRD_RUNBOOK.md` part 3; each mutating step also needs its typed phrase. The sequence stops at the first failed check; rollback is the owner's decision (web, then API, then database).
 
 **Revision 2a (2026-11-01 20:00 UTC):** `capture` stopped at 19:54Z because the script accepted only `UPDATE_COMPLETE` for the API stack, which is `UPDATE_ROLLBACK_COMPLETE` after the rolled-back deploy (everything else matched the baseline). `STELLA_PRD_DEPLOY.sh` now also accepts `UPDATE_ROLLBACK_COMPLETE` for the API stack only, in `capture` and in the gate; the live template is still compared with the baseline, any other stack in that state is refused, and the post-deploy check still requires `UPDATE_COMPLETE`. Mock test: 2 new checks pass. The application commit, reference and window are unchanged. Superseded deploy-script hash: `97e91a74...`.
+
+**Revision 2b (2026-11-01 20:15 UTC):** `STELLA_PRD_DB.sh final` stopped at 20:04Z with "stack ... UPDATE_ROLLBACK_COMPLETE, not a settled status" (before any change; no window opened): the database script had the same status rule. It now also accepts `UPDATE_ROLLBACK_COMPLETE`; the environment guard (Lambda must serve ogevia_prd with OGEVIA_ENV=prd) is unchanged, and `UPDATE_FAILED` is still refused (mock test: 2 new checks, all pass). Superseded database-script hash: `57b4644c...`.
