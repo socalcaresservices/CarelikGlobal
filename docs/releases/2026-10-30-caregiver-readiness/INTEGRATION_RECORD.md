@@ -131,3 +131,7 @@ Owner approved 2026-11-01 07:30 UTC to 2026-11-02 02:00 UTC (00:30 PDT to 18:00 
 ## 22. UAT run and closed (2026-11-01, 2026-11-01 09:42 UTC)
 UAT data preparation P1-P3 and the O/C/S steps listed in `DEPLOYED_RECORD_0088_TEST.md` section 4 were run on the TEST slice; the owner closed UAT with outstanding items (D36). The release record is `DEPLOYED_RECORD_0088_TEST.md`. 0088 remains NOT RELEASABLE (D7).
 
+## 23. Month-boundary rerun of two database tests (2026-11-01 12:00-12:01 UTC = 04:00-04:01 PST; local; no AWS)
+Scheduled reminder (set by Claude earlier in this work; the owner's earlier instruction to complete the promised month-end rerun). Local PostgreSQL 16 (`pg_ctlcluster 16 main start`), `cd infra/aws; npx vitest run --config vitest.db.config.ts db/test/reservation-lifecycle.db.test.ts db/test/pending-hours-guards.db.test.ts` on branch `claude/practical-tesla-r07odb` at `763b7ab` (the application commit `464dea64...` plus documents). The local clock was 04:00 PST on 2026-11-01, inside the new agency month, so the -180 minute shift in `reservation-lifecycle` falls in the current month. **Result (VERIFIED, pasted output): 2 test files passed, 34 of 34 tests passed (16 + 18), duration 11.7 s.**
+**Scope of this rerun:** only these two files. The full database suite and the two environment-dependent failures noted earlier were not re-run here; gate G3 for any production release still needs the full suite on the release commit (`TESTING_AND_RELEASE_PROCESS.md` section 1.1).
+
