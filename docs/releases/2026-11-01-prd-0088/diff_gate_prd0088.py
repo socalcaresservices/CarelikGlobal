@@ -58,6 +58,32 @@ def norm(x):
     return x
 
 
+def _short(x):
+    t = x if isinstance(x, str) else json.dumps(x, sort_keys=True)
+    return t if len(t) <= 110 else t[:107] + "..."
+
+
+def diff_paths(l, n, path=""):
+    """Human-readable paths where two JSON values differ (read-only; for the operator, it does not change the verdict)."""
+    out = []
+    if isinstance(l, dict) and isinstance(n, dict):
+        for k in sorted(set(l) | set(n)):
+            if k not in l: out.append("+ %s/%s: %s" % (path, k, _short(n[k])))
+            elif k not in n: out.append("- %s/%s: %s" % (path, k, _short(l[k])))
+            else: out += diff_paths(l[k], n[k], "%s/%s" % (path, k))
+    elif isinstance(l, list) and isinstance(n, list):
+        if len(l) == len(n) and any(isinstance(x, (dict, list)) for x in l + n) and all(isinstance(a, type(b)) for a, b in zip(l, n)):
+            for i, (a, b) in enumerate(zip(l, n)): out += diff_paths(a, b, "%s[%d]" % (path, i))
+        else:
+            ls, ns = [json.dumps(x, sort_keys=True) for x in l], [json.dumps(x, sort_keys=True) for x in n]
+            out += ["+ %s[]: %s" % (path, _short(x)) for x in n if json.dumps(x, sort_keys=True) not in ls]
+            out += ["- %s[]: %s" % (path, _short(x)) for x in l if json.dumps(x, sort_keys=True) not in ns]
+            if not out and l != n: out.append("~ %s: same items, different order or count" % path)
+    elif l != n:
+        out.append("~ %s: %s -> %s" % (path, _short(l), _short(n)))
+    return out
+
+
 def load(path):
     with open(path) as fh:
         t = json.load(fh)
@@ -111,6 +137,7 @@ def main():
                 changed_handler.append(k)
                 continue
         bad.append("CHANGED resource %s (%s)" % (k, lr[k].get("Type")))
+        for line in diff_paths(l, n)[:12]: bad.append("      " + line)
     if a.expect == "post" and changed_handler:
         bad.append("expected NO difference after deployment, but the Handler code asset still differs")
     print("added: %d route(s) %s" % (len(added_keys), "(the %d expected)" % len(NEW_ROUTES) if added_keys == NEW_ROUTES else sorted(added_keys)))
@@ -118,7 +145,7 @@ def main():
     if bad:
         print("EXPECTED-ONLY: NO")
         for b in bad:
-            print("  VIOLATION", b)
+            print(("  VIOLATION " + b) if not b.startswith("      ") else b)
         return 1
     print("EXPECTED-ONLY: YES")
     return 0

@@ -46,4 +46,10 @@ for v in l7["Resources"].values():
         for tg in tags:
             if isinstance(tg, dict) and tg.get("Key") == "ogevia:deployment-status": tg["Value"] = "approved-SOMETHING-ELSE"
 rc, t = run(l7, "pre"); ck("only the approval tag value differs besides the release change: accepted", rc, True, t)
+
+# the verdict output names WHAT changed on a changed resource (the dry run of 2026-11-01 hid it)
+l8 = copy.deepcopy(live); api = next(k for k, v in l8["Resources"].items() if v["Type"] == "AWS::ApiGatewayV2::Api")
+l8["Resources"][api]["Properties"]["CorsConfiguration"]["AllowOrigins"] = ["https://only-one.example"]
+rc, t = run(l8, "pre"); ck("a changed Api resource is refused", rc, False, t)
+print("PASS the output names the changed property" if "AllowOrigins" in t and "https://only-one.example" in t else "FAIL the output does not name the changed property"); bad += 0 if ("AllowOrigins" in t and "https://only-one.example" in t) else 1
 print("GATE TEST PASSED" if bad == 0 else "GATE TEST FAILED"); sys.exit(1 if bad else 0)
