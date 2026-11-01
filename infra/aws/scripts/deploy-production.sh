@@ -323,15 +323,24 @@ do_smoke() {
 do_web() {
   guard; STEP="web"
   local WEB CLIENT BUCKET DIST API
-  WEB=$(stack_output "$S_WEB" WebOrigin); CLIENT=$(stack_output "$S_WEB" TestAppClientId)
+  WEB=$(stack_output "$S_WEB" WebOrigin)
   BUCKET=$(stack_output "$S_WEB" SiteBucketName); DIST=$(stack_output "$S_WEB" DistributionId)
   API=$(stack_output "$S_API" ApiUrl)
-  local DOMAIN; DOMAIN=$(aws cognito-idp describe-user-pool --user-pool-id "$POOL" --query 'UserPool.Domain' --output text)
+  # The sign-in pool, client and domain of PRODUCTION come from the dedicated production Auth stack. They must never come from
+  # existing.cognitoUserPoolId / TestAppClientId (the TEST pool): the 2026-11-01 production website was built that way and had to be rolled back.
+  local TEST_POOL="$POOL" S_AUTH POOL_PRD DOMAIN_URL
+  S_AUTH="Ogevia-$(cfg .envName)-Auth"
+  POOL_PRD=$(stack_output "$S_AUTH" UserPoolId); CLIENT=$(stack_output "$S_AUTH" AppClientId); DOMAIN_URL=$(stack_output "$S_AUTH" ManagedLoginDomain)
+  [[ "$POOL_PRD" =~ ^${REGION}_[A-Za-z0-9]{9}$ && "$POOL_PRD" != "$TEST_POOL" ]] || die "the production Auth stack $S_AUTH gave no valid dedicated pool (got '$POOL_PRD'; the TEST pool is $TEST_POOL). Not building."
+  [[ -n "$CLIENT" && "$CLIENT" != "None" && "$DOMAIN_URL" =~ ^https://[a-z0-9-]+\.auth\.${REGION}\.amazoncognito\.com$ ]] || die "the production Auth stack $S_AUTH gave no valid client or domain. Not building."
+  POOL="$POOL_PRD"
   (cd "$REPO/apps/web" && \
     VITE_APP_ENV=production VITE_AUTH_PROVIDER=cognito VITE_COGNITO_REGION=$REGION VITE_COGNITO_USER_POOL_ID=$POOL \
-    VITE_COGNITO_CLIENT_ID="$CLIENT" VITE_COGNITO_DOMAIN="https://$DOMAIN.auth.$REGION.amazoncognito.com" \
+    VITE_COGNITO_CLIENT_ID="$CLIENT" VITE_COGNITO_DOMAIN="$DOMAIN_URL" \
     VITE_COGNITO_REDIRECT_URI="$WEB/auth/callback" VITE_COGNITO_LOGOUT_URI="$WEB/" VITE_COGNITO_REFRESH_PERSISTENCE=session \
     VITE_SV_API_BASE_URL="$API" npx vite build --outDir dist-aws-prd --emptyOutDir)
+  # Fail closed BEFORE anything is uploaded: the bundle must carry the production sign-in configuration and nothing of the TEST pool.
+  (cd "$HERE" && npx --no-install tsx scripts/assert-web-auth.ts "$REPO/apps/web/dist-aws-prd" "$POOL" "$DOMAIN_URL" "$CLIENT" "$TEST_POOL") || die "the built website does not carry the production sign-in configuration. Nothing was uploaded."
   aws s3 sync "$REPO/apps/web/dist-aws-prd/assets" "s3://$BUCKET/assets" --cache-control "public,max-age=31536000,immutable"
   aws s3 cp "$REPO/apps/web/dist-aws-prd/index.html" "s3://$BUCKET/index.html" --cache-control "no-cache"
   aws s3 sync "$REPO/apps/web/dist-aws-prd" "s3://$BUCKET" --exclude "assets/*" --exclude "index.html"

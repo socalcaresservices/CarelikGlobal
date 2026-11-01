@@ -35,15 +35,15 @@ AWS_TMO="${OGEVIA_AWS_TIMEOUT:-30}"; PSQL_TMO="${OGEVIA_PSQL_TIMEOUT:-45}"; CLEA
 export AWS_REGION=$REGION AWS_DEFAULT_REGION=$REGION AWS_PAGER=""
 if [[ "$MODE" =~ ^(migrate|rollback-db)$ ]]; then MAX_SECONDS="${OGEVIA_WINDOW_MAX_SECONDS:-900}"; else MAX_SECONDS="${OGEVIA_WINDOW_MAX_SECONDS:-300}"; fi
 # ---- pins: placeholders until the owner's GO (fill_pins_prd.py); the known values are the bytes already on TEST ----
-SHA=fb8b7aa4eb73c0cfe4dd6f718930ea54e318cfd7                                                                                # the one approved release commit
-GO_REF=GO-PRD-0088-R2-20261101                                                                          # the owner's approval reference
-WIN_START_TXT="2026-11-01 19:30:00"; WIN_END_TXT="2026-11-01 22:30:00"                           # UTC, "YYYY-MM-DD HH:MM:SS"
+SHA=__SHA__                                                                                # the one approved release commit
+GO_REF=__GO_REF__                                                                          # the owner's approval reference
+WIN_START_TXT="__WIN_START_UTC__"; WIN_END_TXT="__WIN_END_UTC__"                           # UTC, "YYYY-MM-DD HH:MM:SS"
 MIG86_SHA=8eb7b4a353300ba78156bd58a0df6cbc9857b677cec0e8ec51233fcda5a16a4f                 # 0086_staff_management.sql (the bytes applied to TEST)
 MIG87_SHA=f9d75d8c776005873b6019ca2d76353d182772144b9946cadd3291cdbad4cf88                 # 0087_staff_invitation_acceptance.sql (the bytes applied to TEST)
-MIG88_SHA=dc20f327794a6f9b6e4f79d201550f1d0a9970e2e4b800c27b598213c82cf34f                                                                    # 0088_caregiver_readiness_approve_for_work.sql
+MIG88_SHA=__MIG88_SHA__                                                                    # 0088_caregiver_readiness_approve_for_work.sql
 SET85_SHA=de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef                 # migrations 0001-0085 (what production already holds)
-SET88_SHA=049c52cb3cbc0c90efad7003967d8bfe8297cd771d2d471d5b42506a889e372c                                                                    # all 88 migration files
-ROLLSET3_SHA=4b53cb1908a5939bb3aac47ca0725b16d264690d2d83f78e4cca7cae4d035d05                                                              # the three down files 0086, 0087, 0088 (for rollback-db)
+SET88_SHA=__SET88_SHA__                                                                    # all 88 migration files
+ROLLSET3_SHA=__ROLLSET3_SHA__                                                              # the three down files 0086, 0087, 0088 (for rollback-db)
 WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
 need_window() { in_window || stop "outside the authorized window ($WIN_START_TXT to $WIN_END_TXT UTC). No new activity may begin."; }
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)

@@ -30,11 +30,11 @@ MARKER="$HOME/.prd0088/db-at-0088.ok"                                  # written
 EXPECT_ROUTES=250; BASE_ROUTES=228
 ALLOW_CORS_ADD="https://admin.ogevia.com"      # the ONE non-release difference the dry run of 2026-11-01 found in production's API stack: the template lacks admin.ogevia.com (the live API already allows it) and the build before the dedupe fix listed app.ogevia.com twice (API Gateway rejected it on 2026-11-01); the owner decides whether to accept it (PHASE_E_PACKAGE.md)                                      # 228 recorded in production on 2026-11-01; 22 added by the release
 # ---- pins: placeholders until the owner's GO (fill_pins_prd.py; the two asset keys come from the synthesized assembly) ----
-SHA=fb8b7aa4eb73c0cfe4dd6f718930ea54e318cfd7                                                              # the one approved release commit
-APPROVAL_REF=GO-PRD-0088-R2-20261101                                                  # the owner's approval reference
-WIN_START_TXT="2026-11-01 19:30:00"; WIN_END_TXT="2026-11-01 22:30:00"         # UTC, "YYYY-MM-DD HH:MM:SS"
-EXPECT_HANDLER_KEY=9e5a510ef7771fe0f70bb0db1a6b22bf2dbe313ab8f019c0c34ccd42686824b7.zip
-EXPECT_IDENTITY_KEY=7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip
+SHA=__SHA__                                                              # the one approved release commit
+APPROVAL_REF=__GO_REF__                                                  # the owner's approval reference
+WIN_START_TXT="__WIN_START_UTC__"; WIN_END_TXT="__WIN_END_UTC__"         # UTC, "YYYY-MM-DD HH:MM:SS"
+EXPECT_HANDLER_KEY=__HANDLER_KEY__.zip
+EXPECT_IDENTITY_KEY=__IDENTITY_KEY__.zip
 WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-120}" aws "$@"; }
 stop() { echo "STOP: $*"; exit 2; }
@@ -209,6 +209,13 @@ case "$MODE" in
     [[ "$(grep -o 'VITE_APP_VERSION:"[^"]*"' <<<"$JS" | head -1)" == "VITE_APP_VERSION:\"$SHA\"" ]] && ok "bundle carries the code SHA" || nope "bundle version is not $SHA"
     grep -q 'VITE_APP_ENV:"production"' <<<"$JS" && ok 'built for production (VITE_APP_ENV:"production")' || nope "bundle is not built for production"
     grep -q "${API_HOST%%.*}\.execute-api" <<<"$JS" && ok "the bundle references the production API host ${API_HOST%%.*}" || nope "the bundle does not reference the production API host"
+    # The production website must use the dedicated production sign-in pool (the 2026-11-01 website was built against the TEST pool and was rolled back).
+    PRD_POOL=$(out Ogevia-prd-Auth UserPoolId); PRD_DOM=$(out Ogevia-prd-Auth ManagedLoginDomain); PRD_CLIENT=$(out Ogevia-prd-Auth AppClientId)
+    [[ "$PRD_POOL" =~ ^us-west-2_[A-Za-z0-9]{9}$ && "$PRD_POOL" != us-west-2_849AYz5J7 && -n "$PRD_CLIENT" && "$PRD_CLIENT" != None && "$PRD_DOM" == https://*.auth.us-west-2.amazoncognito.com ]] || stop "the production Auth stack did not give a valid pool, client and domain"
+    grep -qF "VITE_COGNITO_USER_POOL_ID:\"$PRD_POOL\"" <<<"$JS" && ok "the bundle uses the production sign-in pool $PRD_POOL" || nope "the bundle does not use the production sign-in pool"
+    grep -qF "VITE_COGNITO_DOMAIN:\"$PRD_DOM\"" <<<"$JS" && ok "the bundle uses the production sign-in domain" || nope "the bundle does not use the production sign-in domain"
+    grep -qF "VITE_COGNITO_CLIENT_ID:\"$PRD_CLIENT\"" <<<"$JS" && ok "the bundle uses the production app client" || nope "the bundle does not use the production app client"
+    if grep -qiE 'us-west-2_849AYz5J7|us-west-2849ayz5j7' <<<"$JS"; then nope "the bundle references the TEST sign-in pool"; else ok "the bundle does not reference the TEST sign-in pool"; fi
     if [[ -f "$B/web-before/config.json" ]]; then [[ "$(curl -fsS "$SITE/config.json" | sha256sum | cut -d' ' -f1)" == "$(sha256sum "$B/web-before/config.json" | cut -d' ' -f1)" ]] && ok "config.json unchanged" || nope "config.json differs from the capture"; fi
     [[ $bad == 0 ]] && echo "WEB VERIFIED: $SITE serves $SHA" || stop "a web check failed (see rollback-web)" ;;
   smoke)
