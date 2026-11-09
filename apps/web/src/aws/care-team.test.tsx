@@ -34,14 +34,14 @@ function fakeApi(role: Role) {
       return { caregiverRecordId: CG, caregiverCode: "CG-1A2B3C4D", status: "active", approved: true, approvedAt: "2026-10-01T18:00:00Z", approvedByName: "Olivia Owner", approvalSource: "approval", met: 5, total: 5, waitingOn: [], canApprove: false,
         hireDate: "2026-09-01", graceDays: 30, cprTbDueDate: "2026-10-01", enforcementActive: false,
         items: [item("background", "Background check", "hard", "met", "Verified", { metOn: "2026-10-30", actorName: "ogeviamanager", nextAction: "view" }), item("training", "Required training", "hard", "met", "Done", { metOn: "2026-10-18", nextAction: "reopen", extra: { requirementId: "r1" } }),
-          item("signin", "App sign-in", "hard", "met", "Signed in"), item("cpr", "CPR certificate", "flexible", "met", "Verified"), item("tb", "TB clearance", "flexible", "met", "Verified")] };
+          item("signin", "App sign-in", "followup", "met", "Signed in"), item("cpr", "CPR certificate", "flexible", "met", "Verified"), item("tb", "TB clearance", "flexible", "met", "Verified")] };
     }
     const signinDetail = contact || invited ? (invited ? "Invited, has not signed in yet" : "Not invited yet") : "No email on file";
     const signinAction = contact || invited ? (invited ? "resend_link" : "send_link") : "add_contact";
     return { caregiverRecordId: NEW, caregiverCode: "CG-NEW00001", status: approved ? "approved" : "not_ready", approved, approvedAt: approved ? "2026-10-30T18:00:00Z" : null, approvedByName: approved ? "Mia Manager" : null, approvalSource: approved ? "approval" : null,
-      met: approved ? 5 : (canApproveNew ? 3 : 2), total: 5, waitingOn: approved || canApproveNew ? [] : ["App sign-in"], canApprove: !approved && canApproveNew, hireDate: "2026-10-01", graceDays: 30, cprTbDueDate: "2026-10-31", enforcementActive: false,
-      items: [item("background", "Background check", "hard", "met", "Verified", { metOn: "2026-10-30", actorName: "ogeviamanager", nextAction: "view" }), item("training", "Required training", "hard", "met", "Done", { metOn: "2026-10-18", nextAction: "reopen" }),
-        { ...item("signin", "App sign-in", "hard", "unmet", signinDetail, { nextAction: signinAction, extra: { lastSentAt: invited?.at ?? null, sendCount: invited?.count ?? null } }) },
+      met: approved ? 5 : (canApproveNew ? 2 : 1), total: 5, waitingOn: approved || canApproveNew ? [] : ["Required training"], canApprove: !approved && canApproveNew, hireDate: "2026-10-01", graceDays: 30, cprTbDueDate: "2026-10-31", enforcementActive: false,
+      items: [item("background", "Background check", "hard", "met", "Verified", { metOn: "2026-10-30", actorName: "ogeviamanager", nextAction: "view" }), item("training", "Required training", "hard", approved || canApproveNew ? "met" : "unmet", approved || canApproveNew ? "Done" : "Not recorded", approved || canApproveNew ? { metOn: "2026-10-18", nextAction: "reopen" } : { nextAction: "record" }),
+        { ...item("signin", "App sign-in", "followup", "unmet", signinDetail, { nextAction: signinAction, extra: { lastSentAt: invited?.at ?? null, sendCount: invited?.count ?? null } }) },
         { ...item("cpr", "CPR certificate", "flexible", "pending", "Not uploaded"), dueDate: extended ?? "2026-10-31", nextAction: "upload" }, { ...item("tb", "TB clearance", "flexible", "pending", "Not uploaded"), dueDate: "2026-10-31", nextAction: "upload" }] };
   };
   const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
@@ -171,7 +171,7 @@ describe("Care Team", () => {
   it("the caregiver page is one checklist: five requirements and a single Approve for work step that says what it is waiting on", async () => {
     renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
     const list = await screen.findByTestId("readiness-checklist");
-    await waitFor(() => expect(list).toHaveTextContent("2 of 5 done"));
+    await waitFor(() => expect(list).toHaveTextContent("1 of 5 done"));
     expect(list).toHaveTextContent("Not ready");
     expect(list).toHaveTextContent("Hired");
     expect(list).toHaveTextContent("CPR/TB due");
@@ -182,8 +182,8 @@ describe("Care Team", () => {
     // Approve is disabled and says why; no form ever opens that then errors
     const approve = within(list).getByRole("button", { name: "Approve" });
     expect(approve).toBeDisabled();
-    expect(within(list).getByText("Waiting on: App sign-in")).toBeInTheDocument();
-    expect(approve).toHaveAccessibleDescription("Waiting on: App sign-in");
+    expect(within(list).getByText("Waiting on: Required training")).toBeInTheDocument();
+    expect(approve).toHaveAccessibleDescription("Waiting on: Required training");
     // the sections the brief removed are gone
     for (const gone of ["Compliance", "Onboarding", "Not eligible under the rules", "Compliance clearance", "Change status"]) expect(screen.queryByText(gone)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Status" })).not.toBeInTheDocument();

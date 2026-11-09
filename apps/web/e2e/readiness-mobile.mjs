@@ -22,11 +22,11 @@ const check = (name, ok, detail = "") => { if (!ok) failures += 1; console.log(`
 const item = (requirement, label, kind, state, detail, more = {}) => ({ requirement, label, kind, state, detail, dueDate: null, metOn: null, actorName: null, blocksShifts: false, nextAction: "none", extra: {}, ...more });
 const readiness = {
   caregiverRecordId: CG, caregiverCode: "CG-86D99C21", status: "not_ready", approved: false, approvedAt: null, approvedByName: null, approvalSource: null, met: 2, total: 5,
-  waitingOn: ["App sign-in"], canApprove: false, hireDate: "2026-10-01", graceDays: 30, cprTbDueDate: "2026-10-31", enforcementActive: false,
+  waitingOn: ["Required training"], canApprove: false, hireDate: "2026-10-01", graceDays: 30, cprTbDueDate: "2026-10-31", enforcementActive: false,
   items: [
     item("background", "Background check", "hard", "met", "Verified", { metOn: "2026-10-30", actorName: "ogeviamanager", nextAction: "view" }),
-    item("training", "Required training", "hard", "met", "Done", { metOn: "2026-10-18", nextAction: "reopen", extra: { requirementId: "r1" } }),
-    item("signin", "App sign-in", "hard", "unmet", "No email on file", { nextAction: "add_contact" }),
+    item("training", "Required training", "hard", "unmet", "Not recorded", { nextAction: "record", extra: { requirementId: "r1" } }),
+    item("signin", "App sign-in", "followup", "unmet", "No email on file", { nextAction: "add_contact" }),
     item("cpr", "CPR certificate", "flexible", "pending", "Not uploaded", { dueDate: "2026-10-31", nextAction: "upload" }),
     item("tb", "TB clearance", "flexible", "overdue", "Not uploaded", { dueDate: "2026-10-20", nextAction: "upload", blocksShifts: true }),
   ],
@@ -86,7 +86,7 @@ for (const [width, role] of [[390, "organization_owner"], [320, "manager"]]) {
   const small = await list.locator("button, a").evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 44).map((e) => `${e.textContent?.trim()} (${Math.round(e.getBoundingClientRect().height)}px)`));
   check(`${width}px ${role}: every checklist control is at least 44px high`, small.length === 0, small.join("; "));
   const approve = list.getByRole("button", { name: "Approve" });
-  check(`${width}px ${role}: Approve is disabled and the reason is on screen`, (await approve.isDisabled()) && (await list.getByText("Waiting on: App sign-in").isVisible()));
+  check(`${width}px ${role}: Approve is disabled and the reason is on screen`, (await approve.isDisabled()) && (await list.getByText("Waiting on: Required training").isVisible()));
   const heading = page.getByRole("heading", { level: 1 });
   const hb = await heading.boundingBox();
   check(`${width}px ${role}: a very long name wraps inside the screen`, !!hb && hb.x >= 0 && hb.x + hb.width <= width + 1, JSON.stringify(hb));

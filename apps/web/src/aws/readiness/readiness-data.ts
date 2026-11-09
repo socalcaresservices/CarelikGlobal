@@ -7,7 +7,7 @@ import type { WorkStatus } from "../care-team-admin";
 export interface ReadinessItem {
   requirement: "background" | "training" | "signin" | "cpr" | "tb";
   label: string;
-  kind: "hard" | "flexible";
+  kind: "hard" | "flexible" | "followup";
   state: "met" | "unmet" | "pending" | "overdue" | "problem";
   detail: string | null;
   dueDate: string | null;
