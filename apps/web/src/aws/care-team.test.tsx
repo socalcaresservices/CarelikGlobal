@@ -114,7 +114,11 @@ describe("Care Team", () => {
     cleanup();
     renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
     const outcome = await screen.findByTestId("caregiver-outcome");
-    await waitFor(() => expect(outcome).toHaveTextContent("Not ready: 1 item to fix"));
+    // No sign-in yet is a follow-up, not a scheduling requirement: the caregiver is not reported as "Not ready" for that alone.
+    await waitFor(() => expect(within(outcome).getByTestId("caregiver-sign-in-note")).toBeInTheDocument());
+    expect(outcome).not.toHaveTextContent("Not ready");
+    expect(outcome).not.toHaveTextContent("Cannot sign in until invited");
+    expect(within(outcome).getByTestId("caregiver-sign-in-note")).toHaveTextContent("can still be scheduled");
     expect(within(outcome).getByRole("link", { name: "Send invitation" })).toHaveAttribute("href", "#sign-in");
   });
 

@@ -382,7 +382,9 @@ function CaregiverOutcome({ c, canManage }: { c: Caregiver; canManage: boolean }
   const items: Array<{ text: string; to: string; label: string }> = [];
   if (c.status === "inactive") items.push({ text: "Inactive: cannot be scheduled", to: "#status", label: "Change status" });
   else if (c.status !== "ready" && c.status !== "active") items.push({ text: `Status is ${CAREGIVER_STATUS_LABEL[c.status]}; it must be Approved or Active`, to: "#status", label: "Change status" });
-  if (c.status !== "inactive" && (!c.hasSignIn || pending)) items.push({ text: pending ? "Invited, but has not signed in" : "Cannot sign in until invited", to: "#sign-in", label: canManage ? (pending ? "Resend invitation" : "Send invitation") : "See sign-in" });
+  // First sign-in is NOT a scheduling requirement (the database gate checks status, onboarding items, documents, availability and conflicts only). It is shown as a
+  // separate follow-up so a caregiver who has not signed in yet is not reported as "Not ready".
+  const signInNote = c.status !== "inactive" && (!c.hasSignIn || pending) ? { text: pending ? "Invited, but has not signed in yet." : "Has no sign-in yet.", label: canManage ? (pending ? "Resend invitation" : "Send invitation") : "See sign-in" } : null;
   const hold = comp.data?.hold ?? null;
   if (hold) items.push({ text: `On compliance hold: ${hold.reasons.map((r) => r.message).join("; ")}`, to: "#compliance", label: "Fix" });
   else if (comp.data && !comp.data.eligible && comp.data.enforcementActive) items.push({ text: "Not eligible for new work", to: "#compliance", label: "Fix" });
@@ -405,6 +407,11 @@ function CaregiverOutcome({ c, canManage }: { c: Caregiver; canManage: boolean }
             </li>
           ))}
         </ul>
+      ) : null}
+      {signInNote ? (
+        <p data-testid="caregiver-sign-in-note" className="text-sm text-slate-700">
+          {signInNote.text} They can still be scheduled and assigned to clients now; they need to sign in before they can start a visit. <a className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline md:min-h-[32px]" href="#sign-in">{signInNote.label}</a>
+        </p>
       ) : null}
     </section>
   );
