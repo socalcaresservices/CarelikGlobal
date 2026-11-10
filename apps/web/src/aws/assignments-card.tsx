@@ -234,7 +234,7 @@ function AssignmentRow({ a, side, canManage, onDone }: { a: Assignment; side: "c
             <summary className="inline-flex min-h-[28px] cursor-pointer items-center whitespace-nowrap text-xs font-medium text-slate-800 underline [@media(pointer:coarse)]:min-h-[44px]">{canManage ? "Relationship and end" : "Relationship"}</summary>
             <RelationshipField a={a} canManage={canManage} />
             {canManage && !ending ? (
-              <button type="button" className="mt-2 inline-flex min-h-[32px] items-center text-sm font-medium text-slate-800 underline [@media(pointer:coarse)]:min-h-[44px]" onClick={() => setEnding(true)}>{a.state === "upcoming" ? "Cancel" : "End"}</button>
+              <button type="button" className="mt-2 inline-flex min-h-[44px] md:min-h-[32px] items-center text-sm font-medium text-slate-800 underline [@media(pointer:coarse)]:min-h-[44px]" onClick={() => setEnding(true)}>{a.state === "upcoming" ? "Cancel" : "End"}</button>
             ) : null}
             {ending ? <EndForm a={a} onDone={(t) => { setEnding(false); onDone?.(t); }} /> : null}
           </details>

@@ -236,7 +236,7 @@ export function ActionNeededPage() {
             return g.routine ? (
               <section key={g.queue} aria-label={QUEUE_LABEL[g.queue] ?? g.queue}>
                 <details data-testid={`routine-group-${g.queue}`}>
-                  <summary className="flex min-h-[32px] cursor-pointer items-center gap-1.5 [@media(pointer:coarse)]:min-h-[44px]">{head}<span className="text-xs text-og-link underline">Show</span></summary>
+                  <summary className="flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center gap-1.5 [@media(pointer:coarse)]:min-h-[44px]">{head}<span className="text-xs text-og-link underline">Show</span></summary>
                   <div className="pt-0.5">{list}</div>
                 </details>
               </section>

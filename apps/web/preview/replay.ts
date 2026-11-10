@@ -56,6 +56,7 @@ export function createPreviewFetch(data: PreviewData, persona: string, now: () =
     return JSON.parse(text);
   };
   const out = (r: Recorded) => json(r.status, stamp(r.body));
+  let merged = false;
   return async (input, init) => {
     const url = new URL(typeof input === "string" || input instanceof URL ? String(input) : input.url, "https://preview.invalid");
     const method = (init?.method ?? (typeof input === "object" && "method" in input ? input.method : "GET")).toUpperCase();
@@ -70,6 +71,27 @@ export function createPreviewFetch(data: PreviewData, persona: string, now: () =
       }
       return json(200, { visit: null });
     }
+    // Preview-only stand-ins for two actions whose result depends on what the person picks. The import check reads the chosen CSV in the browser (an .xlsx gets a sample result);
+    // a merge is accepted and the duplicates list is then empty. Nothing is stored anywhere.
+    if (method === "POST" && /^\/v1\/imports\/(people|clients)$/.test(path)) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { confirm?: boolean; contentBase64?: string; fileName?: string };
+      const kind = path.endsWith("clients") ? "clients" : "people";
+      let total = 3, dup = 1; const bad: Array<{ row: number; status: "invalid" | "duplicate"; message: string }> = [];
+      if (body.fileName?.toLowerCase().endsWith(".csv") && body.contentBase64) {
+        const lines = atob(body.contentBase64).split(/\r?\n/).filter((l) => l.trim() !== "");
+        total = Math.max(lines.length - 1, 0); dup = 0; const seen = new Set<string>();
+        lines.slice(1).forEach((l, i) => {
+          const [f = "", la = ""] = l.split(",");
+          if (!f.trim() || !la.trim()) bad.push({ row: i + 2, status: "invalid", message: "First name and last name are required" });
+          else if (seen.has(`${f}|${la}`.toLowerCase())) { dup++; bad.push({ row: i + 2, status: "duplicate", message: "Repeated in the file" }); } else seen.add(`${f}|${la}`.toLowerCase());
+        });
+      }
+      const invalid = bad.filter((b) => b.status === "invalid").length;
+      const fresh = Math.max(total - dup - invalid, 0);
+      return json(200, { import: { mode: body.confirm ? "applied" : "preview", kind, created: body.confirm ? fresh : 0, counts: { total, new: fresh, duplicate: dup, invalid }, rows: bad }, ignoredColumns: [] });
+    }
+    if (method === "POST" && /^\/v1\/staff\/[^/]+\/merge$/.test(path)) { merged = true; return json(200, { result: "merged" }); }
+    if (method === "GET" && path === "/v1/staff/duplicates" && merged) return json(200, { duplicates: [] });
     if (method === "POST" && path === "/v1/visits") { phase = "active"; startedAt = now(); endedAt = 0; }
     if (method === "POST" && /^\/v1\/visits\/[^/]+\/end$/.test(path)) { phase = "ended"; endedAt = now(); }
     if (method === "POST" && /^\/v1\/visits\/[^/]+\/confirm$/.test(path)) phase = "idle";

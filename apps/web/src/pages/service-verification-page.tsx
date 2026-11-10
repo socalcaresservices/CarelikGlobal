@@ -1166,7 +1166,7 @@ export function ServiceVerificationPage() {
                     Authorized time left to record this month
                   </p>
                   <details className="mt-1 text-xs text-emerald-900">
-                    <summary className="inline-flex min-h-[32px] cursor-pointer items-center underline">Details</summary>
+                    <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center underline">Details</summary>
                     <p>{CAREGIVER_BALANCE_NOTE}</p>
                   </details>
                 </div>

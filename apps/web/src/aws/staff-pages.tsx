@@ -77,7 +77,7 @@ function useStaffTypes(enabled: boolean) {
 type Panel = { kind: "add" } | { kind: "edit" | "invite" | "role" | "access" | "history" | "member"; row: StaffRow };
 
 const ALL = "all";
-const filterClass = "min-h-[36px] rounded-md border border-slate-300 bg-og-card px-2 text-sm";
+const filterClass = "min-h-[44px] md:min-h-[36px] rounded-md border border-slate-300 bg-og-card px-2 text-sm";
 
 export function StaffPage() {
   const api = useAwsApi();
@@ -153,7 +153,7 @@ export function StaffPage() {
               {STATUS_CHOICES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-          {filtered ? <Button type="button" variant="secondary" className="min-h-[36px]" onClick={clear}>Clear Filters</Button> : null}
+          {filtered ? <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px]" onClick={clear}>Clear Filters</Button> : null}
         </div>
       ) : null}
       {staff.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}
@@ -204,7 +204,7 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
   const changeableRole = !row.isSelf && row.systemRole !== null && (ASSIGNABLE_ROLES as readonly string[]).includes(row.systemRole);
   const hasAccount = row.accessStatus === "active" || row.accessStatus === "invitation_pending" || row.accessStatus === "disabled";
   const btn = (label: string, kind: PanelKind, shown = label) => (
-    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`${label}: ${row.displayName}`} onClick={() => onOpen(kind)}>{shown}</Button>
+    <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px] px-2 py-1 text-xs" aria-label={`${label}: ${row.displayName}`} onClick={() => onOpen(kind)}>{shown}</Button>
   );
   const status = statusOf(row);
   const more = [
@@ -231,10 +231,10 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
             {canManage && isProfile && row.accessStatus === "invitation_pending" ? btn("Resend invite", "invite", "Invite again") : null}
             {canAccounts && row.userId && !row.isSelf && hasAccount && !isCaregiver
               ? btn(row.accessStatus === "disabled" ? "Enable access" : "Disable access", "access", row.accessStatus === "disabled" ? "Enable" : "Disable") : null}
-            {isCaregiver ? <Link className="inline-flex min-h-[36px] items-center text-xs font-medium text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>Open caregiver</Link> : null}
+            {isCaregiver ? <Link className="inline-flex min-h-[44px] md:min-h-[36px] items-center text-xs font-medium text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>Open caregiver</Link> : null}
             {more.length > 0 ? (
               <details className="relative">
-                <summary className="inline-flex min-h-[36px] cursor-pointer list-none items-center rounded-md border border-slate-300 bg-og-card px-2 text-xs font-medium" aria-label={`More actions: ${row.displayName}`}>More</summary>
+                <summary className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer list-none items-center rounded-md border border-slate-300 bg-og-card px-2 text-xs font-medium" aria-label={`More actions: ${row.displayName}`}>More</summary>
                 <div className="absolute right-0 z-20 mt-1 flex min-w-[9rem] flex-col gap-1 rounded-lg border border-og-line bg-og-card p-1.5 shadow-md">{more}</div>
               </details>
             ) : null}
@@ -579,8 +579,8 @@ export function StaffTypesPage() {
                 </p>
                 {canManage ? (
                   <div className="flex gap-1">
-                    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`Rename ${t.name}`} onClick={() => { setEditing({ id: t.id, name: t.name }); setDone(null); }}>Rename</Button>
-                    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`${t.isActive ? "Deactivate" : "Activate"} ${t.name}`} disabled={toggle.isPending}
+                    <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px] px-2 py-1 text-xs" aria-label={`Rename ${t.name}`} onClick={() => { setEditing({ id: t.id, name: t.name }); setDone(null); }}>Rename</Button>
+                    <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px] px-2 py-1 text-xs" aria-label={`${t.isActive ? "Deactivate" : "Activate"} ${t.name}`} disabled={toggle.isPending}
                       onClick={() => { setDone(null); toggle.mutate({ id: t.id, active: !t.isActive }); }}>{t.isActive ? "Deactivate" : "Activate"}</Button>
                   </div>
                 ) : null}

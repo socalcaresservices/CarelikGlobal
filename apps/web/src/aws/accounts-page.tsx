@@ -82,7 +82,7 @@ export function AccountsPage() {
               {a.caregiverRecordId && (status === "invitation_pending" || status === "setup_required") ? (
                 <SendSignInLink caregiverRecordId={a.caregiverRecordId} hasContact={!!a.hasContact} canManage={hasPermission("caregivers.manage")} lastSentAt={null} />
               ) : null}
-              {status === "setup_required" && a.caregiverRecordId ? <Link className="mt-1 inline-block text-sm font-medium underline" to={`/care-team/${a.caregiverRecordId}`}>Open in Care Team</Link> : null}
+              {status === "setup_required" && a.caregiverRecordId ? <Link className="mt-1 inline-flex min-h-[44px] items-center text-sm font-medium underline md:min-h-0" to={`/care-team/${a.caregiverRecordId}`}>Open in Care Team</Link> : null}
               {a.userId && !a.isSelf && (status === "active" || status === "invitation_pending") && !open ? (
                 <Button type="button" variant="secondary" className="mt-1" onClick={() => { setActing({ userId: a.userId!, kind: "disable" }); setDone(null); change.reset(); }}>Disable account…</Button>
               ) : null}

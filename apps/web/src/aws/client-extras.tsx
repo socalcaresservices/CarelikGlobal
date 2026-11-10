@@ -460,7 +460,7 @@ export function ClientHistoryCard({ clientId }: { clientId: string }) {
   if (!allowed) return null;
   return (
     <Card className="px-3 py-0.5" data-testid="client-history">
-      <button type="button" className="min-h-[36px] text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History and audit trail"}</button>
+      <button type="button" className="min-h-[44px] md:min-h-[36px] text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? "Hide history" : "History and audit trail"}</button>
       {open ? (
         <div className="mt-2">
           {q.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}

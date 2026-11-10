@@ -234,10 +234,10 @@ export function BillingReviewPage() {
         <InfoTip label="About billing review">Approve each Ready for Review visit; approval is not submission or payment. Ready for Review means the visit passed the automatic checks. Approved for Billing is a separate human step. Nothing is sent to a payer from this screen.</InfoTip>
        </div>
         <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">From
-          <input type="date" value={from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="block min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
+          <input type="date" value={from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="block min-h-[44px] md:min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
         </label>
         <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">To
-          <input type="date" value={to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="block min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
+          <input type="date" value={to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="block min-h-[44px] md:min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
         </label>
       </div>
       {loaded.length > 0 ? (
@@ -253,7 +253,7 @@ export function BillingReviewPage() {
                 <select
                   value={filters[x.key]}
                   onChange={setFilter(x.key)}
-                  className={`mt-0.5 block min-h-[32px] w-full min-w-0 rounded-md border px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] ${filters[x.key] ? "border-sky-600 bg-sky-50" : "border-slate-200"}`}
+                  className={`mt-0.5 block min-h-[44px] md:min-h-[32px] w-full min-w-0 rounded-md border px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] ${filters[x.key] ? "border-sky-600 bg-sky-50" : "border-slate-200"}`}
                 >
                   <option value="">{x.all}</option>
                   {x.opts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}

@@ -250,7 +250,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   // Sidebar rows: 32px (44px for coarse pointers), 16px icons with an 8px gap, 13.5px text. The active page has a filled row and a bar on its left edge.
   const itemClass = (active: boolean) =>
     cn(
-      "flex min-h-[32px] items-center gap-2 rounded-md px-2.5 py-1 text-[13.5px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent",
+      "flex min-h-[44px] md:min-h-[32px] items-center gap-2 rounded-md px-2.5 py-1 text-[13.5px] leading-5 [@media(pointer:coarse)]:min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-accent",
       collapsed && "justify-center px-0",
       active ? "bg-og-active font-semibold text-og-accent shadow-[inset_3px_0_0_0_currentColor]" : "font-medium text-og-ink hover:bg-og-ink/5",
     );
@@ -394,7 +394,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                               if (isMobile) setDrawerOpen(false);
                             }}
                             data-nav-level="child"
-                            className={cn(itemClass(active), "min-h-[30px] py-0.5 text-[13px]", "[@media(pointer:coarse)]:min-h-[44px]", !active && "text-og-sub hover:text-og-ink")}
+                            className={cn(itemClass(active), "min-h-[44px] md:min-h-[30px] py-0.5 text-[13px]", "[@media(pointer:coarse)]:min-h-[44px]", !active && "text-og-sub hover:text-og-ink")}
                           >
                             <span className="min-w-0 flex-1 break-words">{l.label}</span>
                             {badge ? badgeEl(badge, false) : null}
@@ -438,7 +438,7 @@ export function AwsShell({ children }: PropsWithChildren) {
                 onFocus={(e) => showTip("Profile", e.currentTarget)}
                 onMouseLeave={() => setTip(null)}
                 onBlur={() => setTip(null)}
-                className={cn(itemClass(location.pathname === "/profile"), "min-h-[30px] py-0.5 text-[13px]")}
+                className={cn(itemClass(location.pathname === "/profile"), "min-h-[44px] md:min-h-[30px] py-0.5 text-[13px]")}
               >
                 <UserCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className={cn(collapsed && "sr-only")}>Profile</span>
@@ -452,7 +452,7 @@ export function AwsShell({ children }: PropsWithChildren) {
               onFocus={(e) => showTip("Appearance", e.currentTarget)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
-              className={cn(itemClass(location.pathname === "/settings/appearance"), "min-h-[30px] py-0.5 text-[13px]")}
+              className={cn(itemClass(location.pathname === "/settings/appearance"), "min-h-[44px] md:min-h-[30px] py-0.5 text-[13px]")}
             >
               <Palette className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className={cn(collapsed && "sr-only")}>Appearance</span>
@@ -464,7 +464,7 @@ export function AwsShell({ children }: PropsWithChildren) {
               onFocus={(e) => showTip("Sign out", e.currentTarget)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
-              className={cn(itemClass(false), "min-h-[30px] py-0.5 text-left text-[13px]")}
+              className={cn(itemClass(false), "min-h-[44px] md:min-h-[30px] py-0.5 text-left text-[13px]")}
             >
               <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className={cn(collapsed && "sr-only")}>Sign out</span>

@@ -33,7 +33,7 @@ function Tile({ s, unavailable = false }: { s: Stream; unavailable?: boolean }) 
         to={s.to}
         data-testid={`stream-${s.key}`}
         title={showDetail ? s.detail : undefined}
-        className={`flex h-full min-h-[36px] flex-wrap items-center gap-x-2 gap-y-0 rounded-og border bg-og-card px-2.5 py-1 hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link [@media(pointer:coarse)]:min-h-[44px] ${s.tone === "red" ? "border-red-700" : s.tone === "amber" ? "border-amber-600" : "border-og-line"}`}
+        className={`flex h-full min-h-[44px] md:min-h-[36px] flex-wrap items-center gap-x-2 gap-y-0 rounded-og border bg-og-card px-2.5 py-1 hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link [@media(pointer:coarse)]:min-h-[44px] ${s.tone === "red" ? "border-red-700" : s.tone === "amber" ? "border-amber-600" : "border-og-line"}`}
       >
         <span className="text-sm font-semibold text-og-ink">{s.label}</span>
         <span className="ml-auto whitespace-nowrap">
@@ -53,7 +53,7 @@ function HoursTile({ failed, loading, left }: { failed: boolean; loading: boolea
   if (loading || (!failed && left === null)) return null;
   return (
     <li>
-      <Link to="/reporting" data-testid="stream-hours" className="flex h-full min-h-[36px] flex-wrap items-center gap-x-2 gap-y-0 rounded-og border border-og-line bg-og-card px-2.5 py-1 hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[44px]">
+      <Link to="/reporting" data-testid="stream-hours" className="flex h-full min-h-[44px] md:min-h-[36px] flex-wrap items-center gap-x-2 gap-y-0 rounded-og border border-og-line bg-og-card px-2.5 py-1 hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[44px]">
         <span className="text-sm font-semibold text-og-ink">Hours left</span>
         <span className="ml-auto whitespace-nowrap">
           {failed ? <span className="text-sm font-semibold text-og-sub" data-testid="stream-hours-unavailable">Unavailable</span> : <span className="font-og-mono text-base font-semibold tabular-nums text-og-ink">{left}</span>}
@@ -117,7 +117,7 @@ export function AwsHomePage() {
         action={
           <label className="flex items-center gap-2 text-xs font-semibold text-og-sub">
             Month
-            <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="block min-h-[32px] rounded-md border border-og-line bg-og-card px-2 text-sm text-og-ink [@media(pointer:coarse)]:min-h-[44px]" />
+            <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="block min-h-[44px] md:min-h-[32px] rounded-md border border-og-line bg-og-card px-2 text-sm text-og-ink [@media(pointer:coarse)]:min-h-[44px]" />
           </label>
         }
       />

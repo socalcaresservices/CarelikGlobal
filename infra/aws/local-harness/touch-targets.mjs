@@ -2,12 +2,12 @@
 // Inline links inside a sentence are exempt (WCAG 2.5.8). node touch-targets.mjs <out.json> [persona]   (harness running at https://localhost)
 import { createRequire } from "node:module";
 import fs from "node:fs";
-const { chromium } = createRequire("/opt/node-tools/")("playwright-core");
+const { chromium } = createRequire(import.meta.url)("playwright");   // run with NODE_PATH=$(npm root -g)
 const out = process.argv[2];
 const persona = process.argv[3] || "Olivia Owner";
 const ROUTES = ["/", "/action-needed", "/clients", "/care-team", "/care-team/recruiting", "/staff", "/settings/staff-types", "/settings/roles", "/documents", "/schedule", "/schedule/shift-requests",
   "/service-verification/reports?view=overview", "/service-verification/reports?view=exceptions", "/reporting", "/billing-review", "/accounts", "/settings/branding", "/settings/services", "/continuity", "/profile"];
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--no-sandbox"] });
+const browser = await chromium.launch({ args: ["--no-sandbox"] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, ignoreHTTPSErrors: true });
 const page = await ctx.newPage();
 await page.goto("https://localhost/");

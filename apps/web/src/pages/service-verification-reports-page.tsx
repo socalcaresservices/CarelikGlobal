@@ -1408,7 +1408,7 @@ export function ServiceVerificationReportsPage() {
                 navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
                 closeExpanded();
               }}
-              className="min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
+              className="min-h-[44px] md:min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
             >
               <option value="visits">Visit records</option>
               <option value="exceptions">Visits to review</option>
@@ -1426,7 +1426,7 @@ export function ServiceVerificationReportsPage() {
                 <select
                   value={clientFilter}
                   onChange={(event) => setClientFilter(event.target.value)}
-                  className="mt-0.5 block max-w-56 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                  className="mt-0.5 block max-w-56 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                 >
                   <option value="">Choose a client…</option>
                   {clientOptions.map(([id, label]) => (
@@ -1443,7 +1443,7 @@ export function ServiceVerificationReportsPage() {
                   {...(reportView === "calendar" ? { "aria-label": "Calendar month" } : {})}
                   value={reportMonth}
                   onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-0.5 block min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                  className="mt-0.5 block min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                 />
               </label>
             ) : rangeView ? (
@@ -1454,23 +1454,23 @@ export function ServiceVerificationReportsPage() {
                     id="report-date-range"
                     value={datePreset}
                     onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
-                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                    className="mt-0.5 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                   >
                     {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label htmlFor="report-from" className="block text-xs font-medium text-slate-600">Start date</label>
-                  <input id="report-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDatePreset("custom"); setDateFrom(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
+                  <input id="report-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDatePreset("custom"); setDateFrom(event.target.value); }} className="mt-0.5 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
                 </div>
                 <div>
                   <label htmlFor="report-to" className="block text-xs font-medium text-slate-600">End date</label>
-                  <input id="report-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDatePreset("custom"); setDateTo(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
+                  <input id="report-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDatePreset("custom"); setDateTo(event.target.value); }} className="mt-0.5 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
                 </div>
               </>
             ) : null}
             {activeFilterCount > 0 || (rangeView && datePreset !== "all") ? (
-              <button type="button" onClick={clearAllFilters} className="min-h-[32px] text-sm font-medium text-og-link underline [@media(pointer:coarse)]:min-h-[44px]">
+              <button type="button" onClick={clearAllFilters} className="min-h-[44px] md:min-h-[32px] text-sm font-medium text-og-link underline [@media(pointer:coarse)]:min-h-[44px]">
                 Clear Filters
               </button>
             ) : null}
@@ -1631,7 +1631,7 @@ export function ServiceVerificationReportsPage() {
 
       {reportView === "overview" ? (
         <>
-          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="inline-flex min-h-[32px] items-center font-semibold underline [@media(pointer:coarse)]:min-h-[44px]" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
+          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="inline-flex min-h-[44px] md:min-h-[32px] items-center font-semibold underline [@media(pointer:coarse)]:min-h-[44px]" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
@@ -2775,7 +2775,7 @@ export function ServiceVerificationReportsPage() {
             Incomplete visits ({incompleteVisits.length})
           </h3>
           <details className="mt-1 text-xs text-slate-500">
-          <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
+          <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
           <InfoTip label="Help">
             Missing Time Out: still open past the shift end (or {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours
             with no shift). Not confirmed: signed out over an hour ago with no client confirmation or no-signer reason.
@@ -2881,7 +2881,7 @@ export function ServiceVerificationReportsPage() {
         <Card>
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
           <details className="mt-1 text-xs text-slate-500">
-            <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
+            <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
             <InfoTip label="Help">Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</InfoTip>
           </details>
           <ul className="mt-2 divide-y divide-slate-100">
