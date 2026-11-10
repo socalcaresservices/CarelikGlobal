@@ -1,7 +1,7 @@
 # Ogevia redesign spec (Phase 3)
 
 Prepared 2026-11-10. **Status: PROPOSED. Not implemented. Not deployed.** Awaiting owner approval before any Phase 4 work.
-Companion files: `docs/ux/ogevia-ux-audit.md` (evidence) and `docs/ux/mockup/index.html` (clickable mockup, layout and flow only, not schema).
+Companion files: `docs/ux/ogevia-ux-audit.md` (evidence) and `docs/ux/mockup/ogevia-redesign-mockup.html` (clickable mockup, layout and flow only, not schema).
 Base: the live line, `claude/compassionate-thompson-jk5ozb` @ `757a5e4` (see audit section 0). The exact deployed commit is still unconfirmed (packet D0).
 
 ## 0. How to run the mockup
