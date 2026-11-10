@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies are free-form JSON */
 // R7: when the agency has not finished the CPR/TB setup, the caregiver profile row says so and points an administrator to the setup (uploading cannot fix it);
 // everyone else is told to ask an administrator. SYNTHETIC data only.
 import { cleanup, screen, within } from "@testing-library/react";
