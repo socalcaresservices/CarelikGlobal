@@ -48,9 +48,14 @@ describe("the schedule groups what needs attention", () => {
     for (const name of ["Change caregiver", "Change time", "Cancel shift", "History"]) expect(within(coveredRow).getByRole("button", { name })).toBeInTheDocument();
   }, 30000);
 
-  it("Add shift is the one primary action; the other three stay reachable as buttons", async () => {
+  it("Add shift is the one primary action; repeating is a choice inside its panel; the series list and the limits stay reachable under More", async () => {
     renderAws("/schedule", PERMS);
-    for (const name of ["Add shift", "Repeat visits", "Manage repeating shifts", "Hours and limits"]) expect(await screen.findByRole("button", { name }, { timeout: 15000 })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add shift" }, { timeout: 15000 })).toBeInTheDocument();
+    for (const name of ["Manage repeating shifts", "Hours and limits"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Repeat visits" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add shift" }));
+    const panel = await screen.findByRole("dialog", { name: "Add shift" });
+    expect(within(panel).getByRole("button", { name: "Repeating" })).toBeInTheDocument();
   }, 30000);
 
   it("on a phone each shift is a compact row that opens, with the same actions inside", async () => {

@@ -127,7 +127,8 @@ describe("Scheduling page", () => {
   it("sends the chosen repeat rule with the preview and the saved series", async () => {
     const api = renderAt("/schedule");
     expect(await screen.findByRole("heading", { name: "Schedule" })).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Repeat visits" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add shift" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Repeating" }));
     await screen.findByRole("option", { name: /Synthetic Client Alpha/ });
     await screen.findByRole("option", { name: /Personal care/ });
     fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT } });
@@ -196,7 +197,8 @@ describe("Scheduling page", () => {
     partialPreview = true;
     try {
       const api = renderAt("/schedule");
-      fireEvent.click(await screen.findByRole("button", { name: "Repeat visits" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Add shift" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Repeating" }));
       await screen.findByRole("option", { name: /Synthetic Client Alpha/ });
       await screen.findByRole("option", { name: /Personal care/ });
       fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT } });

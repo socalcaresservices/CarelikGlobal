@@ -133,10 +133,8 @@ describe("Scheduling: the badge, the overview figure and the lists agree; past s
     shift("past2", -30, -28, "needs_coverage", "missed"),
   ];
 
-  it("the 'Need action now' figure equals the sidebar badge; 'Unfilled' lists the running and the later shifts (3), not the two ended ones", async () => {
+  it("the sidebar badge shows the server's count; 'Unfilled' lists the running and the later shifts (3), not the two ended ones", async () => {
     renderAt("/schedule", BILL, { ...COUNTS, scheduling: { count: 2, critical: 1 } }, SHIFTS);
-    const overview = await screen.findByTestId("scheduling-now");
-    expect(overview).toHaveTextContent("2");
     await waitFor(async () => expect((await badgeOn(/^Schedule$/))?.n).toBe(2));
     expect(await screen.findByRole("heading", { name: "Unfilled (3)" })).toBeInTheDocument();
     const section = screen.getByRole("heading", { name: "Unfilled (3)" }).closest("section")!;

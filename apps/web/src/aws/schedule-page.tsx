@@ -23,7 +23,8 @@ import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
 import { useClientAuthorizations } from "./client-admin";
 import { useAssignments } from "./assignments-data";
 import { applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, NO_FILTERS, stateOfShift, stepAnchor, viewRange, type CalendarView, type ShiftFilters } from "./schedule-model";
-import { FilterBar, MonthGrid, ReplacementSuggestions, SchedulingOverview, ViewTabs } from "./schedule-views";
+import { FilterBar, MonthGrid, ReplacementSuggestions, ViewTabs } from "./schedule-views";
+import { Drawer } from "./ui/drawer";
 import { InfoTip } from "./ui/info-tip";
 
 /**
@@ -407,10 +408,10 @@ export function SchedulePage() {
   const [onlyOpen, setOnlyOpen] = useState(params.get("coverage") === "1");
   const [filters, setFilters] = useState<ShiftFilters>({ ...NO_FILTERS, client: params.get("client") ?? "" });
   const [adding, setAdding] = useState(false);
+  const [addMode, setAddMode] = useState<"one" | "repeat">("one");
   const canAdd = hasPermission("shifts.manage");
   useEffect(() => { if (params.get("add") === "1" && canAdd) setAdding(true); }, [params, canAdd]);
   useEffect(() => { for (const id of ["pickups", "reconcile"]) if (params.get(id) === "1") document.getElementById(id)?.scrollIntoView?.({ block: "start" }); }, [params]);
-  const [repeating, setRepeating] = useState(false);
   const [showSeries, setShowSeries] = useState(false);
   const [showLimits, setShowLimits] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -442,46 +443,58 @@ export function SchedulePage() {
   const unit = view === "day" ? "day" : view === "week" ? "week" : "month";
   const link = "inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8";
   const pastCount = past.data?.length ?? 0;
+  const exceptionCount = uncovered.length + pastCount;
+  const exceptionsUnavailable = shifts.isError || past.isError;
   return (
     <div className="max-w-5xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Schedule</h1><InfoTip label="About Schedule" title="Schedule">View and manage caregiver assignments.</InfoTip></div>
-        {canManage ? (
-          <div className="flex flex-wrap items-center gap-x-3">
-            <Button type="button" className="min-h-11" onClick={() => { setAdding((x) => !x); setRepeating(false); setNotice(null); }} aria-expanded={adding}>{adding ? "Close" : "Add shift"}</Button>
-            <button type="button" className={link} onClick={() => { setRepeating((x) => !x); setAdding(false); setNotice(null); }} aria-expanded={repeating}>{repeating ? "Close" : "Repeat visits"}</button>
-            <button type="button" className={link} onClick={() => setShowSeries((x) => !x)} aria-expanded={showSeries}>Manage repeating shifts</button>
-            <button type="button" className={link} onClick={() => setShowLimits((x) => !x)} aria-expanded={showLimits}>Hours and limits</button>
-          </div>
-        ) : null}
+        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Schedule</h1><InfoTip label="About Schedule" title="Schedule">Pick a day, week or month. Items that need action are in one list above the calendar. Add shift opens a side panel; repeating shifts and hours and limits are under More.</InfoTip></div>
+        {canManage ? <Button type="button" className="min-h-11" onClick={() => { setAdding(true); setAddMode("one"); setNotice(null); }} aria-haspopup="dialog">Add shift</Button> : null}
       </div>
-      <SchedulingOverview />
-      {adding ? <Card className="p-3"><AddShiftForm initialClientId={params.get("client") ?? ""} onDone={(t) => { setAdding(false); setNotice(t); }} /></Card> : null}
-      {repeating ? <Card className="p-3"><h2 className="text-base font-semibold text-slate-950">Repeat visits</h2><RecurringSeriesForm today={today} onDone={(t, rej) => { setRepeating(false); showNotice(t, rej); }} /></Card> : null}
-      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={showNotice} /></Card> : null}
-      {showLimits ? <Card className="p-3"><h2 className="mb-2 text-base font-semibold text-slate-950">Hours and limits</h2><HourLimitsPanel from={rangeFrom} to={to} canManage={canManage} /></Card> : null}
+      <Drawer open={adding && canManage} title={addMode === "one" ? "Add shift" : "Repeat visits"} onClose={() => setAdding(false)}>
+        <div role="group" aria-label="How often" className="mb-3 inline-flex overflow-hidden rounded-lg border border-og-line">
+          {([["one", "One shift"], ["repeat", "Repeating"]] as const).map(([k, label]) => (
+            <button key={k} type="button" aria-pressed={addMode === k} onClick={() => setAddMode(k)} className={`min-h-11 px-4 text-sm font-medium ${addMode === k ? "bg-og-accent text-white" : "bg-og-card text-og-ink"}`}>{label}</button>
+          ))}
+        </div>
+        {addMode === "one"
+          ? <AddShiftForm initialClientId={params.get("client") ?? ""} onDone={(t) => { setAdding(false); setNotice(t); }} />
+          : <RecurringSeriesForm today={today} onDone={(t, rej) => { setAdding(false); showNotice(t, rej); }} />}
+      </Drawer>
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       <RejectedDates items={rejectedDates} />
-      {canManage ? <div id="pickups"><PickupRequestsPanel onDone={showNotice} /></div> : null}
-      <section aria-labelledby="upcoming-heading" className="space-y-1">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <h2 id="upcoming-heading" className="text-sm font-semibold text-slate-950">Unfilled ({uncovered.length})</h2>
-          {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
-          {shifts.data && uncovered.length === 0 ? <p className="text-sm text-slate-600">All shifts this {unit} are covered.</p> : null}
+      <details open={exceptionCount > 0 || exceptionsUnavailable} className="rounded-lg border border-amber-300 bg-amber-50/60" data-testid="exceptions-panel">
+        <summary className="flex min-h-12 cursor-pointer items-center gap-2 px-3 text-sm font-semibold text-og-ink">
+          <span aria-hidden="true">{exceptionsUnavailable ? "!" : exceptionCount > 0 ? "▲" : "✓"}</span>
+          {exceptionsUnavailable ? "Some items could not be loaded. They are not zero." : exceptionCount > 0 ? `${exceptionCount} need action` : "Nothing needs action"}
+          {!exceptionsUnavailable && exceptionCount > 0 ? <span className="font-normal text-og-sub">{uncovered.length} unfilled · {pastCount} past {pastCount === 1 ? "shift" : "shifts"} to review</span> : null}
+        </summary>
+        <div className="space-y-3 border-t border-amber-300 bg-og-card px-3 py-2">
+          {canManage ? <div id="pickups"><PickupRequestsPanel onDone={showNotice} /></div> : null}
+          <section aria-labelledby="upcoming-heading" className="space-y-1">
+            <div className="flex flex-wrap items-baseline gap-x-3">
+              <h2 id="upcoming-heading" className="text-sm font-semibold text-slate-950">Unfilled ({uncovered.length})</h2>
+              {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
+              {shifts.data && uncovered.length === 0 ? <p className="text-sm text-slate-600">All shifts this {unit} are covered.</p> : null}
+            </div>
+            {shifts.isError ? <p role="alert" className="text-sm text-red-700">Shifts could not be loaded. {(shifts.error as Error).message}</p> : null}
+            {uncovered.length > 0 ? <ShiftList label="Unfilled shifts" shifts={uncovered} canManage={canManage} onDone={setNotice} focusShift={focusShift} autoAssign={params.get("coverage") === "1"} withDate /> : null}
+          </section>
+          {canManage ? (
+            <section id="reconcile" aria-labelledby="past-heading" className="space-y-1">
+              <div className="flex flex-wrap items-baseline gap-x-3">
+                <h2 id="past-heading" className="text-sm font-semibold text-slate-950">Past: need review {past.data ? `(${pastCount})` : ""}</h2>
+                {past.isError ? <p role="status" className="text-sm text-red-700">Past shifts could not be loaded. Refresh the page.</p> : null}
+                {past.data && pastCount === 0 ? <p className="text-sm text-slate-600">No past shifts to review.</p> : null}
+              </div>
+              <ReconcileShiftsPanel onDone={showNotice} />
+            </section>
+          ) : null}
+          <p><Link to="/action-needed" className={link}>See everything that needs action</Link></p>
         </div>
-        {shifts.isError ? <p role="alert" className="text-sm text-red-700">Shifts could not be loaded. {(shifts.error as Error).message}</p> : null}
-        {uncovered.length > 0 ? <ShiftList label="Unfilled shifts" shifts={uncovered} canManage={canManage} onDone={setNotice} focusShift={focusShift} autoAssign={params.get("coverage") === "1"} withDate /> : null}
-      </section>
-      {canManage ? (
-        <section id="reconcile" aria-labelledby="past-heading" className="space-y-1">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <h2 id="past-heading" className="text-sm font-semibold text-slate-950">Past: need review {past.data ? `(${pastCount})` : ""}</h2>
-            {past.isError ? <p role="status" className="text-sm text-red-700">Past shifts could not be loaded. Refresh the page.</p> : null}
-            {past.data && pastCount === 0 ? <p className="text-sm text-slate-600">No past shifts to review.</p> : null}
-          </div>
-          <ReconcileShiftsPanel onDone={showNotice} />
-        </section>
-      ) : null}
+      </details>
+      {showSeries && canManage ? <Card className="space-y-2 p-3"><h2 className="text-base font-semibold text-slate-950">Manage repeating shifts</h2><SeriesList today={today} onDone={showNotice} /></Card> : null}
+      {showLimits ? <Card className="p-3"><h2 className="mb-2 text-base font-semibold text-slate-950">Hours and limits</h2><HourLimitsPanel from={rangeFrom} to={to} canManage={canManage} /></Card> : null}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <ViewTabs view={view} onChange={(v) => { setView(v); if (v === "week") setFrom((f) => (view === "month" ? (f.slice(0, 7) === today.slice(0, 7) ? today : `${f.slice(0, 7)}-01`) : f)); }} />
         <Button type="button" variant="secondary" className="min-h-11 md:min-h-8 md:py-0" onClick={() => setFrom(stepAnchor(view, from, -1))}>← Previous {unit}</Button>
@@ -491,6 +504,15 @@ export function SchedulePage() {
         <Button type="button" variant="secondary" className="min-h-11 md:min-h-8 md:py-0" onClick={() => setFrom(stepAnchor(view, from, 1))}>Next {unit} →</Button>
         <label className="flex min-h-11 items-center gap-1.5 text-sm text-slate-800 md:min-h-8"><input type="checkbox" className="h-4 w-4" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Unfilled only</label>
         <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} />
+        {canManage ? (
+          <details className="relative">
+            <summary className="inline-flex min-h-11 cursor-pointer items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8">More</summary>
+            <div className="absolute z-20 mt-1 flex w-56 flex-col rounded-lg border border-og-line bg-og-card p-1 shadow-lg">
+              <button type="button" className={`${link} justify-start`} onClick={() => setShowSeries((x) => !x)} aria-expanded={showSeries}>Manage repeating shifts</button>
+              <button type="button" className={`${link} justify-start`} onClick={() => setShowLimits((x) => !x)} aria-expanded={showLimits}>Hours and limits</button>
+            </div>
+          </details>
+        ) : null}
       </div>
       {view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || stateOfShift(s) === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}
       {view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{onlyOpen ? `No other shift is unfilled this ${unit}.` : Object.values(filters).some(Boolean) ? "No other shifts match these filters." : uncovered.length > 0 ? `No other shifts this ${unit}.` : `No shifts this ${unit}.`}</p> : null}

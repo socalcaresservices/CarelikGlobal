@@ -52,11 +52,9 @@ describe("views, overview and states", () => {
         issues: [{ issueKey: "a", kind: "shift", reason: "uncovered_open", queue: "needs_attention_now", category: "coverage", severity: "critical", deadline: null, since: null, shiftId: "s2", visitId: null, entityId: "s2", caregiverRecordId: null, clientId: "c1", serviceId: "sv1", clientCode: "CL-1", caregiverCode: null, serviceCode: "PCS", status: "open", firstSeenAt: null, reopenCount: 0, action: "assign_caregiver", recommendedAction: "x" },
           { issueKey: "b", kind: "visit", reason: "missing_clock_out", queue: "needs_attention_now", category: "visits", severity: "urgent", deadline: null, since: null, shiftId: null, visitId: "v1", entityId: "v1", caregiverRecordId: null, clientId: "c1", serviceId: "sv1", clientCode: "CL-1", caregiverCode: null, serviceCode: "PCS", status: "open", firstSeenAt: null, reopenCount: 0, action: "review_visit", recommendedAction: "y" }] }),
     });
-    const overview = await screen.findByTestId("scheduling-overview", {}, { timeout: 15000 });
-    await waitFor(() => expect(overview).toHaveTextContent(/Today\s*2\s*visits/));
-    await waitFor(() => expect(overview).toHaveTextContent("Urgent exceptions 2"));
-    expect(overview).toHaveTextContent("Today, no caregiver 1");
-    expect(within(overview).getByRole("link", { name: "See all" })).toHaveAttribute("href", "/action-needed");
+    const exceptions = await screen.findByTestId("exceptions-panel", {}, { timeout: 15000 });
+    expect(exceptions).toHaveTextContent(/need action|Nothing needs action/);
+    expect(within(exceptions).getByRole("link", { name: "See everything that needs action" })).toHaveAttribute("href", "/action-needed");
     expect(screen.getByRole("button", { name: "Week", pressed: true })).toBeInTheDocument();
     expect(screen.getByLabelText("Week starting")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Month" }));

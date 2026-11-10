@@ -48,6 +48,21 @@ function Tile({ s, unavailable = false }: { s: Stream; unavailable?: boolean }) 
   );
 }
 
+/** The fifth figure of the row: hours still available this month. Unavailable (never 0) when the hours could not be loaded. */
+function HoursTile({ failed, loading, left }: { failed: boolean; loading: boolean; left: string | null }) {
+  if (loading || (!failed && left === null)) return null;
+  return (
+    <li>
+      <Link to="/reporting" data-testid="stream-hours" className="flex h-full min-h-[36px] flex-wrap items-center gap-x-2 gap-y-0 rounded-og border border-og-line bg-og-card px-2.5 py-1 hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:min-h-[44px]">
+        <span className="text-sm font-semibold text-og-ink">Hours left</span>
+        <span className="ml-auto whitespace-nowrap">
+          {failed ? <span className="text-sm font-semibold text-og-sub" data-testid="stream-hours-unavailable">Unavailable</span> : <span className="font-og-mono text-base font-semibold tabular-nums text-og-ink">{left}</span>}
+        </span>
+      </Link>
+    </li>
+  );
+}
+
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "red" }) {
   return (
     <div className="flex items-baseline gap-1.5">
@@ -113,13 +128,21 @@ export function AwsHomePage() {
 
       <section aria-label="What needs attention">
         {overview.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
-        {tiles.length > 0 ? <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-4">{tiles.map((s) => <Tile key={s.key} s={s} unavailable={issues.isError && s.key === "now"} />)}</ul> : null}
+        {tiles.length > 0 || utilisation.isError || rows.length > 0 ? (
+          <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-5" data-testid="kpi-row">
+            {tiles.map((s) => <Tile key={s.key} s={s} unavailable={issues.isError && s.key === "now"} />)}
+            <HoursTile failed={utilisation.isError} loading={utilisation.isLoading} left={rows.length > 0 ? hoursLabel(leftTotal) : null} />
+          </ul>
+        ) : null}
       </section>
 
       <TopIssues />
 
       <TodaysVisits />
 
+      <details data-testid="hours-billing-detail" className="rounded-og border border-og-line bg-og-card px-3">
+        <summary className="flex min-h-[44px] cursor-pointer items-center text-sm font-semibold text-og-ink">Hours, billing and outage readiness</summary>
+        <div className="space-y-3 pb-3">
       <section aria-labelledby="util-heading" className="space-y-1">
         <div className="flex items-center justify-between gap-3">
           <h2 id="util-heading" className="text-sm font-semibold text-og-ink">Hours this month</h2>
@@ -245,6 +268,8 @@ export function AwsHomePage() {
       ) : null}
 
       <ContinuityStatusCard />
+        </div>
+      </details>
     </div>
   );
 }

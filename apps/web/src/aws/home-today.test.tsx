@@ -172,7 +172,7 @@ describe("Refresh and data status", () => {
 describe("where the actions land", () => {
   it("?add=1 opens the Add shift form for someone who manages shifts", async () => {
     renderAt("/schedule?add=1", FULL);
-    expect(await screen.findByRole("button", { name: "Close" })).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByRole("dialog", { name: "Add shift" })).toBeInTheDocument();
   });
   it("?coverage=1 shows only shifts that need coverage", async () => {
     renderAt("/schedule?coverage=1", FULL, { shifts: () => json(200, { shifts: [shift("ok", 60, 120), shift("open", 90, 150, { coverageState: "needs_coverage", caregiverRecordId: null, caregiverName: null, caregiverCode: null })] }) });
@@ -182,7 +182,8 @@ describe("where the actions land", () => {
   });
   it("without the parameters the schedule opens as before", async () => {
     renderAt("/schedule", FULL);
-    expect(await screen.findByRole("button", { name: "Add shift" })).toHaveAttribute("aria-expanded", "false");
+    expect(await screen.findByRole("button", { name: "Add shift" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByLabelText("Unfilled only")).not.toBeChecked();
   });
   it("?find=1 puts the cursor in the client search", async () => {
