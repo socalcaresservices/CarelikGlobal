@@ -127,6 +127,10 @@ const T = 30_000;
 const COLD = 15_000;
 
 async function startAndEnd(api: ReturnType<typeof fakeApi>, reason?: string) {
+  // An unscheduled client is behind one labelled link (R8); a client scheduled today is already listed.
+  await screen.findByRole("button", { name: /Client C-104|Start an unscheduled visit/ }, { timeout: COLD });
+  const unscheduled = screen.queryByRole("button", { name: /Start an unscheduled visit/ });
+  if (unscheduled) fireEvent.click(unscheduled);
   fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }, { timeout: COLD }));
   await screen.findByRole("group", { name: "Visit details" });
   if (reason !== undefined) fireEvent.change(await screen.findByLabelText(/Why is this visit not on your schedule/), { target: { value: reason } });

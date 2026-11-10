@@ -288,6 +288,8 @@ export function ServiceVerificationPage() {
   // Wave 1 (AWS only): reason for a visit with no scheduled shift, verbal confirmer's name, attestation tick.
   const [unscheduledReason, setUnscheduledReason] = useState("");
   const [serverWantsReason, setServerWantsReason] = useState(false);
+  // R8: the list of clients not scheduled today stays closed behind one labelled link; unscheduled visits are provisional.
+  const [showUnscheduled, setShowUnscheduled] = useState(false);
   const [verbalName, setVerbalName] = useState("");
   const [attested, setAttested] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -328,6 +330,12 @@ export function ServiceVerificationPage() {
         (client) => !client.next_scheduled_starts_at,
       ),
     [clientsQuery.data],
+  );
+
+  // Only clients with an active service can be started at all; a client with none is never offered.
+  const unscheduledChoices = useMemo(
+    () => notScheduledToday.filter((client) => client.active_service_count > 0),
+    [notScheduledToday],
   );
 
   const selectedClient = useMemo(
@@ -497,6 +505,12 @@ export function ServiceVerificationPage() {
     }
   }, [selectedShiftId, shiftsQuery.data]);
 
+  // With exactly one visit scheduled today there is nothing to choose: it is selected, so the Start button is ready.
+  useEffect(() => {
+    if (phase !== "select" || selectedClientId || scheduledToday.length !== 1) return;
+    setSelectedClientId(scheduledToday[0]!.client_id);
+  }, [phase, selectedClientId, scheduledToday]);
+
   function invalidateVisitData() {
     void queryClient.invalidateQueries({
       queryKey: ["active-service-visit-v3", activeOrganizationId],
@@ -519,6 +533,8 @@ export function ServiceVerificationPage() {
     wave1 && !selectedShiftId && (!selectedClient?.next_scheduled_starts_at || serverWantsReason);
 
   function chooseClient(clientId: string) {
+    // Tapping the card that is already selected (for example the one chosen for you when only one visit is scheduled) must not reset the service, shift or reason.
+    if (clientId === selectedClientId) return;
     setServerWantsReason(false);
     setUnscheduledReason("");
     scheduledServiceAppliedFor.current = null;
@@ -744,8 +760,8 @@ export function ServiceVerificationPage() {
                   Today's visits
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">
-                  {formatVisitDate(new Date(nowTick).toISOString())} · Only
-                  clients assigned to you are shown.
+                  {formatVisitDate(new Date(nowTick).toISOString())} · Only your
+                  visits for today are shown.
                 </p>
               </div>
 
@@ -782,13 +798,30 @@ export function ServiceVerificationPage() {
                     selectedClientId={selectedClientId}
                     onChoose={chooseClient}
                   />
-                  {notScheduledToday.length > 0 ? (
-                    <ClientChoiceList
-                      heading="Other assigned clients"
-                      clients={notScheduledToday}
-                      selectedClientId={selectedClientId}
-                      onChoose={chooseClient}
-                    />
+                  {unscheduledChoices.length > 0 ? (
+                    <div>
+                      <button
+                        type="button"
+                        aria-expanded={showUnscheduled}
+                        onClick={() => setShowUnscheduled((open) => !open)}
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-indigo-700 underline underline-offset-2"
+                      >
+                        Not your scheduled visit? Start an unscheduled visit
+                      </button>
+                      {showUnscheduled ? (
+                        <div className="mt-2 space-y-2" data-testid="unscheduled-path">
+                          <p className="rounded-2xl bg-amber-50 p-3 text-xs text-amber-900">
+                            <span className="font-semibold">Provisional.</span> A visit that is not on your schedule needs a reason and goes to your manager for review before it can count.
+                          </p>
+                          <ClientChoiceList
+                            heading="Unscheduled visit"
+                            clients={unscheduledChoices}
+                            selectedClientId={selectedClientId}
+                            onChoose={chooseClient}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               ) : null}
@@ -878,8 +911,9 @@ export function ServiceVerificationPage() {
                   ) : null}
 
                   {selectedService ? (
-                    <>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <details className="mt-3" data-testid="caregiver-hours-details">
+                    <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-indigo-700 underline underline-offset-2">Hours for this service</summary>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
                         <p className="text-base font-bold">
                           {formatDuration(
@@ -921,7 +955,7 @@ export function ServiceVerificationPage() {
                           })
                         : CAREGIVER_BALANCE_NOTE}
                     </p>
-                    </>
+                    </details>
                   ) : null}
                 </div>
               ) : null}

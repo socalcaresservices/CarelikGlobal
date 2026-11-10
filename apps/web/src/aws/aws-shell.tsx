@@ -155,6 +155,8 @@ export function AwsShell({ children }: PropsWithChildren) {
   const canBill = hasPermission("billing.visits.read");
   const canSettings = hasPermission("organization.update");
   const staff = !isCaregiver;
+  // R20: a caregiver on a phone gets four large tabs at the bottom (My Schedule, Verify Visit, Availability, My documents) instead of a menu of the same four.
+  const caregiverBar = isCaregiver && isMobile;
   const canServices = hasPermission("authorizations.read");
   const canContinuity = hasPermission("continuity.export");
   const agencyTo = canSettings ? "/settings/branding" : canServices ? SERVICES_PATH : "/continuity";
@@ -326,7 +328,7 @@ export function AwsShell({ children }: PropsWithChildren) {
 
         <div className="relative flex min-h-0 flex-1 flex-col">
         <nav id="aws-main-nav" aria-label="Main" className="flex flex-1 flex-col overflow-y-auto px-3 pb-6">
-          {groups.map(({ group, links: items }) => {
+          {(caregiverBar ? [] : groups).map(({ group, links: items }) => {
             const GroupIcon = GROUP_ICON[group];
             const isCurrentGroup = current?.group === group;
             const open = !collapsed && (openGroups[group] ?? group === "My Work");
@@ -487,13 +489,13 @@ export function AwsShell({ children }: PropsWithChildren) {
             <button
               ref={menuButtonRef}
               type="button"
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:hidden"
+              className="inline-flex min-h-[44px] md:min-h-[40px] items-center gap-2 rounded-lg border border-og-line px-3 text-sm font-medium text-og-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link md:hidden"
               aria-expanded={drawerShown}
               aria-controls="aws-sidebar"
               onClick={() => setDrawerOpen(true)}
             >
               <Menu className="h-4 w-4" aria-hidden="true" />
-              Menu <span className="text-og-sub">· {current?.label ?? "Choose a section"}</span>
+              {caregiverBar ? "Account" : <>Menu <span className="text-og-sub">· {current?.label ?? "Choose a section"}</span></>}
             </button>
             {showBadge ? (
               // Red only for care blocked or at risk now, amber for approaching risk; every state has a word and a symbol.
@@ -527,10 +529,27 @@ export function AwsShell({ children }: PropsWithChildren) {
             ) : null}
           </div>
         </header>
-        <main className="mx-auto max-w-[1240px] px-3 py-3 md:px-6 print:max-w-none print:p-0">
+        <main className={cn("mx-auto max-w-[1240px] px-3 py-3 md:px-6 print:max-w-none print:p-0", caregiverBar && "pb-24")}>
           <PendingInvitations />
           {children}
         </main>
+        {caregiverBar ? (
+          <nav aria-label="Caregiver" data-testid="caregiver-tabs" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-og-line bg-og-card pb-[env(safe-area-inset-bottom)] print:hidden">
+            {links.filter((l) => l.group === "My Work" && l.show).map((l) => {
+              const on = current !== null && linkKey(l) === linkKey(current);
+              return (
+                <Link
+                  key={linkKey(l)}
+                  to={`${l.to}${l.search ?? ""}`}
+                  aria-current={on ? "page" : undefined}
+                  className={cn("flex min-h-[64px] items-center justify-center px-1 text-center text-xs font-medium leading-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-accent", on ? "font-bold text-og-accent shadow-[inset_0_3px_0_0_currentColor]" : "text-og-sub")}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
       </div>
     </div>
     </PageHelpProvider>

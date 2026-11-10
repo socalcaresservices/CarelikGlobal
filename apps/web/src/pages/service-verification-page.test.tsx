@@ -183,6 +183,55 @@ describe("ServiceVerificationPage v3", () => {
     });
   });
 
+  it("R8: with exactly one visit scheduled today it is selected for you, Start is ready, and no other client is listed", async () => {
+    mockRpcImplementation({
+      list_assigned_visit_clients: {
+        data: [
+          assignedClients[0],
+          { ...assignedClients[1], client_id: SECOND_CLIENT_ID, next_scheduled_starts_at: null, next_scheduled_ends_at: null, active_service_count: 2 },
+        ].slice(0, 1),
+        error: null,
+      },
+    });
+    renderPage();
+    const details = await screen.findByRole("group", { name: "Visit details" });
+    expect(details).toHaveTextContent("Client");
+    await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
+    expect(screen.queryByText("Other assigned clients")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Start an unscheduled visit/ })).not.toBeInTheDocument();
+    // The authorization numbers are an office concern: behind a closed disclosure, never open by default.
+    const hours = await screen.findByTestId("caregiver-hours-details");
+    expect(hours).not.toHaveAttribute("open");
+  });
+
+  it("R8: tapping the visit that was selected for you changes nothing (Start stays ready)", async () => {
+    mockRpcImplementation({ list_assigned_visit_clients: { data: [assignedClients[0]], error: null } });
+    renderPage();
+    await screen.findByRole("group", { name: "Visit details" });
+    await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /Client C-104/ }));
+    expect(screen.getByRole("group", { name: "Visit details" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled();
+  });
+
+  it("R8: a client with no active service is never offered, not even on the unscheduled path", async () => {
+    mockRpcImplementation({
+      list_assigned_visit_clients: {
+        data: [
+          assignedClients[0],
+          { ...assignedClients[1], client_id: SECOND_CLIENT_ID, next_scheduled_starts_at: null, next_scheduled_ends_at: null, active_service_count: 0 },
+          { ...assignedClients[1], client_id: "77777777-7777-4777-8777-777777777779", next_scheduled_starts_at: null, next_scheduled_ends_at: null, active_service_count: 0 },
+        ],
+        error: null,
+      },
+    });
+    renderPage();
+    await screen.findByRole("list", { name: "Scheduled today" });
+    expect(screen.queryByRole("button", { name: /Start an unscheduled visit/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/0 active services/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Other assigned clients")).not.toBeInTheDocument();
+  });
+
   it("separates assigned clients with no visit today and warns before an unscheduled start", async () => {
     mockRpcImplementation({
       list_assigned_visit_clients: {
@@ -201,8 +250,12 @@ describe("ServiceVerificationPage v3", () => {
     expect(
       await screen.findByText("You have no visits scheduled for today."),
     ).toBeInTheDocument();
-    const other = screen.getByRole("list", { name: "Other assigned clients" });
-    expect(other).toHaveTextContent("Not scheduled today");
+    // R8: the clients not scheduled today are NOT listed; they sit behind one labelled, provisional path.
+    expect(screen.queryByRole("list", { name: "Other assigned clients" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Client C-104/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Start an unscheduled visit/ }));
+    expect(screen.getByTestId("unscheduled-path")).toHaveTextContent("Provisional");
+    expect(screen.getByRole("list", { name: "Unscheduled visit" })).toHaveTextContent("Not scheduled today");
 
     fireEvent.click(screen.getByRole("button", { name: /Client C-104/ }));
     const details = await screen.findByRole("group", { name: "Visit details" });
