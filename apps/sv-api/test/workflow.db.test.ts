@@ -752,7 +752,8 @@ describe("client and authorization administration (0022) through the API", () =>
     expect(asManager.status).toBe(200);
     expect(asManager.body.client.authorizations).toHaveLength(2);
     expect(asManager.body.client.authorizations.map((a: any) => a.hourlyRateCents)).toEqual([null, null]);
-    expect(JSON.stringify(asManager.body)).not.toMatch(/3000|4000/);
+    // The rate values must not appear as rate fields. (A plain substring search for "3000" or "4000" over the whole JSON also matches random IDs and timestamps by chance, which made this test fail about one run in ten.)
+    expect(JSON.stringify(asManager.body)).not.toMatch(/"(hourlyRateCents|hourlyRate|rate)[A-Za-z]*":\s*(3000|4000)\b/);
 
     // History is untouched: version 1 is byte-for-byte what it was, now superseded.
     const after = await history();

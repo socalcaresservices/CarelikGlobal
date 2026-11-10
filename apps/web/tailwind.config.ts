@@ -17,6 +17,7 @@ const token = (name: string) => `rgb(var(--og-${name}) / <alpha-value>)`;
 export default {
   content: [
     "./index.html",
+    "./preview/**/*.{ts,tsx,html}",
     "./src/**/*.{ts,tsx}",
     "../../packages/ui/src/**/*.{ts,tsx}"
   ],
