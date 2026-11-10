@@ -38,6 +38,16 @@ async function record(browser, name, viewport, routes, flow) {
     const href = await page.locator(`a[href^="${base}/"]`).first().getAttribute("href").catch(() => null);
     if (href) { await page.goto(BASE + href); await page.waitForTimeout(1700); }
   }
+  if (name === "Olivia Owner") {
+    // A caregiver approved by override (Casey), her profile, and the Add shift panel (loads what the form needs).
+    await page.goto(BASE + "/care-team"); await page.waitForTimeout(1500);
+    const casey = await page.locator('a[href^="/care-team/"]', { hasText: "Casey" }).first().getAttribute("href").catch(() => null);
+    if (casey) { await page.goto(BASE + casey); await page.waitForTimeout(2200); }
+    await page.goto(BASE + "/schedule"); await page.waitForTimeout(2200);
+    await page.getByRole("button", { name: "Add shift" }).click().catch(() => {}); await page.waitForTimeout(1500);
+    await page.getByRole("button", { name: "Repeating" }).click().catch(() => {}); await page.waitForTimeout(1200);
+    await page.keyboard.press("Escape"); await page.waitForTimeout(500);
+  }
   if (flow) await flow(page, rec);
   await ctx.close();
   return rec;
