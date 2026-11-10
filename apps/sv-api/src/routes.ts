@@ -1921,6 +1921,28 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0089 (pending, behind the signInOverride release switch): an administrator approves a caregiver for work before their first app sign-in, with a reason.
+  // The background check is never waived (the function refuses); the badge list tells the schedule and the Care Team who carries "Approved by override: not signed in".
+  "POST /v1/caregivers/{caregiverRecordId}/signin-override": {
+    mutating: true,
+    status: 201,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      return {
+        readiness: await tx(async (db) => (await first(db, "select ogevia_api.approve_signin_override($1,$2,$3) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), reason])).r),
+      };
+    },
+  },
+
+  "GET /v1/signin-overrides": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      overrides: await tx((db) => rows(db, "select * from ogevia_api.list_signin_overrides($1)", [orgParam(event)])),
+    }),
+  },
+
   "POST /v1/caregivers/{caregiverRecordId}/cpr-tb/extend": {
     mutating: true,
     handle: async ({ event, tx }) => {

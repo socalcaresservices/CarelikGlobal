@@ -97,9 +97,11 @@ export interface OgeviaEnvironmentConfig {
   readonly logRetention: RetentionDays;
   /**
    * Release switches: a feature whose API routes are added to this environment's API Gateway only when the owner has approved its release there.
+   * signInOverride (pending migration 0089, infra/aws/db/pending): the administrator override for a caregiver who has not signed in yet. OFF everywhere until the owner approves its release in
+   * that environment (demo first); with it off the two routes are not in the API at all.
    * staffManagement (pending migration 0086, infra/aws/db/pending): on for the pilot/test slice and, since the owner's approval of 2026-10-26, on for production (PRD below). An environment that has not applied 0086 must keep it false.
    */
-  readonly features: { readonly staffManagement: boolean };
+  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean };
   readonly auth: {
     /**
      * Existing Cognito app client the API's JWT authorizer accepts (audience).
@@ -181,7 +183,7 @@ const PROD: OgeviaEnvironmentConfig = {
     region: OGEVIA_REGION,
     terminationProtection: true,
     logRetention: RetentionDays.ONE_YEAR,
-    features: { staffManagement: true },
+    features: { staffManagement: true, signInOverride: false },
     auth: {
       appClientId: "1i27abbina08fvg1i9u8vprgo9",
       // VERIFIED in repo: README.md APP_URL and organization-provider.tsx.
@@ -279,7 +281,7 @@ const PROD: OgeviaEnvironmentConfig = {
 const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
   envName: "prd",
-  features: { staffManagement: true },   // production: the owner approved the staff-management release on 2026-10-25 (Pacific) together with migration 0086 (db/pending, applied outside the ledger like TEST); see docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md
+  features: { staffManagement: true, signInOverride: false },   // production: the owner approved the staff-management release on 2026-10-25 (Pacific) together with migration 0086 (db/pending, applied outside the ledger like TEST); see docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md
   customDomains: { hostnames: ["app.ogevia.com", "admin.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
   // Separate sign-in from the pilot: a dedicated user pool and client (lib/auth-stack.ts). `existing.cognitoUserPoolId` and
   // `auth.appClientId` are inherited from PROD only so they can be NAMED as forbidden for production; its API never accepts them.

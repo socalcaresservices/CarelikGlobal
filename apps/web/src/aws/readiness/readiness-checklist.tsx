@@ -7,7 +7,7 @@ import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "../care-team-admin";
-import { useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
+import { OVERRIDE_BADGE_TEXT, useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm";
@@ -39,10 +39,10 @@ function line(i: ReadinessItem): string {
   return i.detail ?? "Not done";
 }
 
-type Panel = null | "verify" | "training" | "contact" | "extend";
+type Panel = null | "verify" | "training" | "contact" | "extend" | "override";
 
-function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, children }: {
-  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; children?: ReactNode;
+function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, canOverride = false, backgroundClear = false, children }: {
+  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; canOverride?: boolean; backgroundClear?: boolean; children?: ReactNode;
 }) {
   const api = useAwsApi();
   const refresh = useRefreshReadiness();
@@ -83,6 +83,10 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ch
     if (a === "add_contact") actions.push(<button key="c" type="button" className={btn} aria-expanded={panel === "contact"} onClick={() => toggle("contact")}>Add email</button>);
     else actions.push(<button key="s" type="button" className={btn} disabled={state.busy} onClick={() => void sendLink()}>{state.busy ? "Sending…" : a === "resend_link" ? "Resend sign-in link" : "Send sign-in link"}</button>);
   }
+  // An administrator can approve before the first sign-in (0089). The background check is never waived: without it there is no button, only the reason why.
+  if (item.requirement === "signin" && item.state !== "met" && canOverride && backgroundClear) {
+    actions.push(<button key="o" type="button" className={btn} aria-expanded={panel === "override"} onClick={() => toggle("override")}>Approve by override</button>);
+  }
   if ((item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
     actions.push(<Link key="u" to="/documents" className={btn}>Upload</Link>);
     if (canCompliance) actions.push(<button key="x" type="button" className={btn} aria-expanded={panel === "extend"} onClick={() => toggle("extend")}>Extend</button>);
@@ -97,6 +101,8 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ch
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-950">{item.label}<span className="sr-only"> — {ICON[item.state].sr}</span></p>
             <p className="text-sm text-slate-700">{line(item)}</p>
+            {item.requirement === "signin" && item.extra.override ? <p className="mt-0.5"><span className="inline-block rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" data-testid="override-badge">{OVERRIDE_BADGE_TEXT}</span></p> : null}
+            {item.requirement === "signin" && item.state !== "met" && canOverride && !backgroundClear ? <p className="text-xs text-slate-600" data-testid="override-needs-background">An administrator can approve before the first sign-in once the background check is clear. There is no override for the background check.</p> : null}
             {item.requirement === "signin" && item.extra.lastSentAt ? <p className="text-xs text-slate-600">Last sent {formatDateTime(item.extra.lastSentAt)}</p> : null}
             {item.state === "overdue" && item.blocksShifts ? <p className="text-xs font-semibold text-red-800">Blocks new shift assignments</p> : null}
             {item.state === "overdue" && !item.blocksShifts ? <p className="text-xs text-slate-600">Flagged only; the agency has not switched enforcement on</p> : null}
@@ -144,6 +150,19 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ch
             <input id={`ct-email-${caregiverRecordId}`} type="email" inputMode="email" autoComplete="off" value={f.email} maxLength={254} onChange={(e) => set("email")(e.target.value)} className={inputClass} /></div>
           <Button type="submit" disabled={state.busy}>{state.busy ? "Sending…" : "Save and send sign-in link"}</Button>
           <p className="text-xs text-slate-600 sm:col-span-2">The caregiver gets an email with a temporary password and sets their own at first sign-in. The message contains no client or health information.</p>
+        </form>
+      ) : null}
+      {panel === "override" ? (
+        <form className="mt-2 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2" aria-label="Approve by override" onSubmit={(e) => {
+          e.preventDefault();
+          if (f.reason.trim().length < 5) return setState({ busy: false, error: "Write why you are approving this caregiver before their first sign-in (at least 5 characters).", done: null });
+          void run(() => api.post(`${base}/signin-override`, { organizationId: activeOrganizationId, reason: f.reason.trim() }), "Approved by override. It is recorded with your name, the time and your reason, and the badge stays until the first sign-in.", "Not recorded.");
+        }}>
+          <p className="text-sm text-amber-950">This caregiver has not signed in yet. You can approve them for work anyway. They cannot verify a visit until they sign in, and the schedule warns about their shifts.</p>
+          <p className="text-sm text-amber-950">Required training and the other requirements still apply. The background check cannot be overridden.</p>
+          <div><label htmlFor={`ov-reason-${caregiverRecordId}`} className="block text-xs font-medium text-slate-800">Reason (required)</label>
+            <textarea id={`ov-reason-${caregiverRecordId}`} value={f.reason} maxLength={500} rows={3} onChange={(e) => set("reason")(e.target.value)} className={inputClass} /></div>
+          <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Record override"}</Button>
         </form>
       ) : null}
       {panel === "extend" ? (
@@ -208,7 +227,8 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
         </span>
       </div>
       <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card" aria-label="Requirements">
-        {r.items.map((i) => <Row key={i.requirement} item={i} caregiverRecordId={caregiverRecordId} canManage={canManage} canCompliance={canCompliance} hasContact={hasContact} />)}
+        {r.items.map((i) => <Row key={i.requirement} item={i} caregiverRecordId={caregiverRecordId} canManage={canManage} canCompliance={canCompliance} hasContact={hasContact}
+          canOverride={hasPermission("caregivers.signin_override")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
         <li className="px-3 py-2" data-requirement="approve">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-2">

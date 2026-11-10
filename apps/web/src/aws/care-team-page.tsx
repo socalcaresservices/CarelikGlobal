@@ -17,7 +17,8 @@ import { CaregiverReadiness } from "./readiness/caregiver-readiness";
 import { ReadinessCard } from "./readiness/readiness-card";
 import { AvailabilityReview } from "./readiness/availability-review";
 import { ReadinessChecklist } from "./readiness/readiness-checklist";
-import { useCaregiverReadiness } from "./readiness/readiness-data";
+import { useCaregiverReadiness, useSigninOverrides } from "./readiness/readiness-data";
+import { OverrideBadge } from "./readiness/override-badge";
 import { SendSignInLink } from "./readiness/send-signin-link";
 import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
@@ -93,6 +94,8 @@ export function CareTeamPage() {
   const { hasPermission } = useOrganization();
   const canManage = hasPermission("caregivers.manage");
   const caregivers = useCaregivers();
+  const overrides = useSigninOverrides();
+  const overridden = new Set((overrides.data ?? []).map((o) => o.caregiverRecordId));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<WorkStatus | "current" | "all">("current");
   const [adding, setAdding] = useState(false);
@@ -149,6 +152,7 @@ export function CareTeamPage() {
                       <span className={`text-xs font-normal ${c.hasSignIn ? "text-slate-700" : "text-amber-900"}`}>
                         {signInLabel(c)} · {c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
                       </span>
+                      {!c.hasSignIn && overridden.has(c.caregiverRecordId) ? <OverrideBadge /> : null}
                     </Link>
                   </th>
                   <td className="px-3 py-1 align-middle">
@@ -353,6 +357,7 @@ export function CaregiverDetailPage() {
   const { caregiverRecordId } = useParams<{ caregiverRecordId: string }>();
   const { hasPermission } = useOrganization();
   const caregivers = useCaregivers();
+  const overrides = useSigninOverrides();
   if (!hasPermission("caregivers.manage") && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the Care Team.</p>;
   if (caregivers.isLoading) return <p className="text-sm text-slate-500">Loading…</p>;
   if (caregivers.isError) return <p role="alert" className="text-sm text-red-700">{(caregivers.error as Error).message}</p>;
@@ -365,6 +370,7 @@ export function CaregiverDetailPage() {
         <Link to="/care-team" className="inline-flex min-h-[44px] items-center text-sm text-slate-700 underline md:min-h-0">← Care Team</Link>
         <h1 className="text-xl font-bold tracking-tight text-slate-950">{caregiverName(c)}</h1>
         <span className="text-xs text-slate-500">{c.caregiverCode}</span>
+        {!c.hasSignIn && (overrides.data ?? []).some((o) => o.caregiverRecordId === c.caregiverRecordId) ? <OverrideBadge /> : null}
       </div>
       <ReadinessChecklist caregiverRecordId={c.caregiverRecordId} canManage={canManage} hasContact={!!c.hasContact} />
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />

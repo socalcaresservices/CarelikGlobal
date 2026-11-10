@@ -5,6 +5,7 @@ Written and tested, but **not part of any release**. They are not in `migrations
 | Pending | What | Rollback class | Tests |
 |---|---|---|---|
 | `migrations/0086_staff_management.sql` | Staff types, staff profiles, supported-role assignment, staff invitations (`staff.read`, `staff.manage`) | BACKUP REQUIRED (`rollback/0086_staff_management.down.sql` drops two tables with their rows) | `db/test/staff-management.db.test.ts`, `apps/sv-api/test/staff.db.test.ts`, `apps/sv-api/test/tenant-isolation-sweep.db.test.ts` (use `createTestDbWithPending()`) |
+| `migrations/0089_caregiver_signin_override.sql` | Administrator override: approve a caregiver for work before their first app sign-in (reason required, approver, time, audit event, append-only record, badge list). The background check is never waived. New permission `caregivers.signin_override` (owner, administrator). Routes behind the `signInOverride` release switch (OFF everywhere). Owner decision 2026-11-10 (R10). | BACKUP REQUIRED (`rollback/0089_caregiver_signin_override.down.sql` restores the 0088 function and drops the override table with its rows) | `db/test/signin-override-0089.db.test.ts` (12), `apps/sv-api/test/signin-override.db.test.ts` (7), `test/signin-override-switch.test.ts` |
 
 ## To release one (an owner-approved release step, not part of development)
 1. `git mv` the file into `db/migrations/` and its down script into `db/rollback/` (numbering stays contiguous).

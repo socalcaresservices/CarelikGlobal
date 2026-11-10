@@ -18,6 +18,8 @@ import { Hint } from "./hint";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import type { RejectedDate } from "./recurring-format";
 import { AssignmentChecks } from "./readiness/assignment-checks";
+import { OverrideBadge } from "./readiness/override-badge";
+import { useSigninOverrides } from "./readiness/readiness-data";
 import { ShiftAuthorizationContext } from "./shift-authorization-context";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
 import { useClientAuthorizations } from "./client-admin";
@@ -290,6 +292,8 @@ const COLS = 6;
 /** One shift: desktop = a row of a compact table, phone = a compact row that opens. One primary action inline; the rest are in "More actions". */
 function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false, withDate = true }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean; withDate?: boolean }) {
   const [action, setAction] = useState<Action>(null);
+  const overrides = useSigninOverrides(canManage);
+  const viaOverride = !s.hasSignIn && !!s.caregiverRecordId && (overrides.data ?? []).some((o) => o.caregiverRecordId === s.caregiverRecordId);
   const [expanded, setExpanded] = useState(stateOfShift(s) === "needs_coverage" || highlight);
   const narrow = useIsNarrow();
   const rowRef = useRef<HTMLElement>(null);
@@ -314,7 +318,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
   const clientText = nameWithCode(s.clientName, s.clientCode, s.duplicateName);
   const shiftLabel = `${clientText}, ${when(s.startsAt)}`;
   const who = s.caregiverRecordId
-    ? <>{calledOut ? "Called out: " : ""}<Link className="underline" to={`/care-team/${s.caregiverRecordId}`}>{nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName)}</Link>{!s.hasSignIn ? " — no sign-in yet" : ""}</>
+    ? <>{calledOut ? "Called out: " : ""}<Link className="underline" to={`/care-team/${s.caregiverRecordId}`}>{nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName)}</Link>{!s.hasSignIn ? " — no sign-in yet" : ""}{viaOverride ? <> <OverrideBadge /></> : null}{!s.hasSignIn && stateOfShift(s) !== "completed" ? <span className="block text-xs text-amber-900" data-testid="cannot-verify">Cannot verify a visit in Ogevia until they sign in.</span> : null}</>
     : <span className="text-slate-600" aria-label="No caregiver">—</span>;
   const rowActions = (
     <div className="flex items-center justify-end gap-1">
@@ -439,11 +443,21 @@ export function SchedulePage() {
     }
     return out;
   }, [filtered, onlyOpen, uncovered]);
+  // Caregivers on upcoming shifts who have not signed in: they cannot verify a visit in Ogevia until they do. One row per caregiver, one action.
+  const notSignedIn = useMemo(() => {
+    const by = new Map<string, { id: string; name: string; shifts: number }>();
+    for (const x of filtered) {
+      if (!x.caregiverRecordId || x.hasSignIn || Date.parse(x.endsAt) <= Date.now() || ["cancelled", "completed"].includes(stateOfShift(x))) continue;
+      const cur = by.get(x.caregiverRecordId);
+      by.set(x.caregiverRecordId, { id: x.caregiverRecordId, name: nameWithCode(x.caregiverName, x.caregiverCode, x.caregiverDuplicateName), shifts: (cur?.shifts ?? 0) + 1 });
+    }
+    return [...by.values()];
+  }, [filtered]);
   if (!canManage && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the schedule.</p>;
   const unit = view === "day" ? "day" : view === "week" ? "week" : "month";
   const link = "inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8";
   const pastCount = past.data?.length ?? 0;
-  const exceptionCount = uncovered.length + pastCount;
+  const exceptionCount = uncovered.length + pastCount + notSignedIn.length;
   const exceptionsUnavailable = shifts.isError || past.isError;
   return (
     <div className="max-w-5xl space-y-3">
@@ -467,7 +481,7 @@ export function SchedulePage() {
         <summary className="flex min-h-12 cursor-pointer items-center gap-2 px-3 text-sm font-semibold text-og-ink">
           <span aria-hidden="true">{exceptionsUnavailable ? "!" : exceptionCount > 0 ? "▲" : "✓"}</span>
           {exceptionsUnavailable ? "Some items could not be loaded. They are not zero." : exceptionCount > 0 ? `${exceptionCount} need action` : "Nothing needs action"}
-          {!exceptionsUnavailable && exceptionCount > 0 ? <span className="font-normal text-og-sub">{uncovered.length} unfilled · {pastCount} past {pastCount === 1 ? "shift" : "shifts"} to review</span> : null}
+          {!exceptionsUnavailable && exceptionCount > 0 ? <span className="font-normal text-og-sub">{uncovered.length} unfilled · {pastCount} past {pastCount === 1 ? "shift" : "shifts"} to review{notSignedIn.length > 0 ? ` · ${notSignedIn.length} not signed in` : ""}</span> : null}
         </summary>
         <div className="space-y-3 border-t border-amber-300 bg-og-card px-3 py-2">
           {canManage ? <div id="pickups"><PickupRequestsPanel onDone={showNotice} /></div> : null}
@@ -488,6 +502,19 @@ export function SchedulePage() {
                 {past.data && pastCount === 0 ? <p className="text-sm text-slate-600">No past shifts to review.</p> : null}
               </div>
               <ReconcileShiftsPanel onDone={showNotice} />
+            </section>
+          ) : null}
+          {canManage && notSignedIn.length > 0 ? (
+            <section aria-labelledby="nosignin-heading" className="space-y-1" data-testid="not-signed-in">
+              <h2 id="nosignin-heading" className="text-sm font-semibold text-slate-950">Not signed in ({notSignedIn.length})</h2>
+              <ul className="divide-y divide-slate-200 rounded-md border border-slate-200">
+                {notSignedIn.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-1 text-sm">
+                    <span className="min-w-0 flex-1"><span className="font-semibold">{c.name}</span><span className="block text-xs text-slate-600">{c.shifts} upcoming {c.shifts === 1 ? "shift" : "shifts"} · cannot verify a visit until they sign in</span></span>
+                    <Link to={`/care-team/${c.id}`} className={link}>Send sign-in link</Link>
+                  </li>
+                ))}
+              </ul>
             </section>
           ) : null}
           <p><Link to="/action-needed" className={link}>See everything that needs action</Link></p>
