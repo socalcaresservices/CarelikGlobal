@@ -1959,6 +1959,27 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0093 (pending, behind the staffDuplicates release switch): R6. The report is read-only; the merge marks a duplicate staff profile inactive and linked (never deletes),
+  // refuses unless the two records really match, and refuses a record that has a sign-in or invitation.
+  "GET /v1/staff/duplicates": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      duplicates: await tx((db) => rows(db, "select * from ogevia_api.list_possible_duplicate_staff($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/staff/{profileId}/merge": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      return {
+        result: await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles($1,$2,$3,$4) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason])).r),
+      };
+    },
+  },
+
   "GET /v1/signin-overrides": {
     mutating: false,
     handle: async ({ event, tx }) => ({

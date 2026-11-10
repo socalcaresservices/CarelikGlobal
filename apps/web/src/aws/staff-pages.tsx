@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { ImportButton } from "./import-drawer";
+import { PossibleDuplicates } from "./staff-duplicates";
 import { PageHeader } from "./ui/page-header";
 
 // People > Staff, Settings > Staff Types, Settings > Roles & Permissions (migration 0086).
@@ -126,6 +127,7 @@ export function StaffPage() {
       />
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
       {canManage && all.length > 0 ? <BulkInvite rows={all} onDone={finish} /> : null}
+      {canManage ? <PossibleDuplicates /> : null}
       {panel?.kind === "add" ? <ProfileForm title="Add staff" types={activeTypes} onDone={finish} onCancel={() => setPanel(null)} /> : null}
       {all.length > 0 ? (
         <div role="search" aria-label="Find staff" className="flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2">
