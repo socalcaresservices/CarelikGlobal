@@ -4,6 +4,7 @@ import { Button, Card } from "@carelik/ui";
 import { Link } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { ImportButton } from "./import-drawer";
 import { PageHeader } from "./ui/page-header";
 
 // People > Staff, Settings > Staff Types, Settings > Roles & Permissions (migration 0086).
@@ -121,7 +122,7 @@ export function StaffPage() {
       <PageHeader
         title="Staff"
         lead="Everyone who works for the agency. A staff type is only a label; a person's role decides what they can do."
-        action={canManage ? <Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add staff</Button> : undefined}
+        action={canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="people" onDone={finish} /><Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add staff</Button></div> : undefined}
       />
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
       {canManage && all.length > 0 ? <BulkInvite rows={all} onDone={finish} /> : null}

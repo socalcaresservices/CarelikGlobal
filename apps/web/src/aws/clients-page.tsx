@@ -1,3 +1,4 @@
+import { ImportButton } from "./import-drawer";
 import { useQueryClient } from "@tanstack/react-query";
 import { InfoTip } from "./ui/info-tip";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -155,7 +156,7 @@ export function ClientsPage() {
     <div className="max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Clients</h1><InfoTip label="About Clients" title="Clients">Manage client profiles and care information.</InfoTip></div>
-        {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button> : null}
+        {canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="clients" /><Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button></div> : null}
       </div>
       {adding ? <AddClientForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
       {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.</p> : null}
