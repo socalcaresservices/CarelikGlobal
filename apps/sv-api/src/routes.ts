@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError, storageUnavailable } from "./errors";
+import { MAX_IMPORT_BYTES, parseImportFile, type ImportKind } from "./import-file";
 import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
 import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
@@ -1933,6 +1934,28 @@ export const ROUTES: Record<string, Route> = {
         readiness: await tx(async (db) => (await first(db, "select ogevia_api.approve_signin_override($1,$2,$3) as r", [
           uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), reason])).r),
       };
+    },
+  },
+
+  // 0092 (pending, behind the bulkImport release switch): R11 bulk import of people or clients from a CSV/XLSX file. The file is parsed here, the rows are
+  // validated and created by ogevia_api.import_rows in ONE transaction (preview first, then confirm). The organization comes from the signed-in session via
+  // the database guards; the file never names a tenant. The file content and the row values are never logged.
+  "POST /v1/imports/{kind}": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const kind = p(event).kind;
+      if (kind !== "people" && kind !== "clients") throw new ApiError(404, "not_found", "Unknown import type.");
+      const body = parseBody(event.body, event.isBase64Encoded, Math.ceil(MAX_IMPORT_BYTES * 1.4));
+      const org = uuid(body.organizationId, "organizationId");
+      const fileName = text(body.fileName, "fileName", 200, { required: true })!;
+      const content = typeof body.contentBase64 === "string" ? body.contentBase64 : "";
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(content)) throw new ApiError(400, "bad_request", "The file content is missing or not valid.");
+      const bytes = Buffer.from(content, "base64");
+      const confirm = body.confirm === undefined ? false : booleanValue(body.confirm, "confirm");
+      const parsed = await parseImportFile(kind as ImportKind, fileName, bytes);
+      const sha = createHash("sha256").update(bytes).digest("hex");
+      const result = await tx(async (db) => (await first(db, "select ogevia_api.import_rows($1,$2,$3::jsonb,$4,$5,$6) as r", [org, kind, JSON.stringify(parsed.rows), sha, fileName, confirm])).r);
+      return { import: result, ignoredColumns: parsed.ignoredColumns };
     },
   },
 

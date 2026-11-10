@@ -82,7 +82,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -229,6 +229,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/approve" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/signin-override", feature: "signInOverride" },
   { method: apigw.HttpMethod.GET, path: "/v1/signin-overrides", feature: "signInOverride" },
+  { method: apigw.HttpMethod.POST, path: "/v1/imports/{kind}", feature: "bulkImport" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/cpr-tb/extend" },
   { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/cpr-tb/extensions" },
   { method: apigw.HttpMethod.GET, path: "/v1/compliance/settings" },
