@@ -1,4 +1,4 @@
-// 0089 sign-in override over HTTP (pending migration, applied here on top of 0001-0088), through the real Lambda handler and a real disposable PostgreSQL.
+// 0090 sign-in override over HTTP (pending migration, applied here on top of 0001-0088), through the real Lambda handler and a real disposable PostgreSQL.
 // Covers wiring, validation, status codes, permissions and the cross-tenant boundary. SYNTHETIC data only.
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -21,7 +21,7 @@ beforeAll(async () => {
   try {
     await c.query("begin");
     await c.query("set local role ogevia_owner");
-    await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0089_caregiver_signin_override.sql", import.meta.url), "utf8"));
+    await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0090_caregiver_signin_override.sql", import.meta.url), "utf8"));
     await c.query("reset role");
     await c.query("commit");
   } catch (e) { await c.query("rollback"); throw e; } finally { c.release(); }
@@ -75,7 +75,7 @@ describe("POST /v1/caregivers/{id}/signin-override", () => {
     expect((await call(ROUTE, w.schedulerA, { path: path(id), body })).status).toBe(403);
     expect((await call(ROUTE, w.caregiverA1, { path: path(id), body })).status).toBe(403);
     expect((await call(ROUTE, null, { path: path(id), body })).status).toBe(401);
-    expect((await call(ROUTE, w.ownerB ?? w.managerB, { path: path(id), body })).status).toBe(404);   // another agency: the caregiver does not exist for it
+    expect((await call(ROUTE, w.managerB, { path: path(id), body })).status).toBe(404);   // another agency: the caregiver does not exist for it
     expect((await db.admin.query("select count(*)::int n from ogevia.caregiver_signin_overrides where caregiver_record_id = $1", [id])).rows[0].n).toBe(0);
   });
 

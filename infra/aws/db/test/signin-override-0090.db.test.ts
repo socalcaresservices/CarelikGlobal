@@ -1,4 +1,4 @@
-// 0089 (PENDING, infra/aws/db/pending): the administrator override for a caregiver who has not signed in yet (owner decision 2026-11-10).
+// 0090 (PENDING, infra/aws/db/pending): the administrator override for a caregiver who has not signed in yet (owner decision 2026-11-10).
 // Applies the pending migration on top of the released set (0001-0088) as the runner would (as ogevia_owner), then proves through the real functions:
 //   * an administrator can record the override; a reason is required; approver, time and an audit event are written; approving for work then succeeds;
 //   * the BACKGROUND CHECK is still a hard block (no override is recorded without a clear check), and so is every other hard requirement;
@@ -11,8 +11,8 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, createTestDb, expectPgError, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
-const UP = new URL("../pending/migrations/0089_caregiver_signin_override.sql", import.meta.url);
-const DOWN = new URL("../pending/rollback/0089_caregiver_signin_override.down.sql", import.meta.url);
+const UP = new URL("../pending/migrations/0090_caregiver_signin_override.sql", import.meta.url);
+const DOWN = new URL("../pending/rollback/0090_caregiver_signin_override.down.sql", import.meta.url);
 
 let db: TestDb;
 let w: World;
@@ -48,7 +48,7 @@ beforeAll(async () => {
 });
 afterAll(async () => db?.drop());
 
-describe("0089: administrator override for a caregiver who has not signed in", () => {
+describe("0090: administrator override for a caregiver who has not signed in", () => {
   it("without the override, sign-in still blocks approval (the 0088 rule)", async () => {
     const rec = await ready("Blocked");
     await expectPgError(approve(rec), "OGC09", /Waiting on: App sign-in$/);

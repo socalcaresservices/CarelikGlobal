@@ -1,4 +1,4 @@
--- 0089 (PENDING: infra/aws/db/pending, not in the released set) | CLASS: ADDITIVE (one table, one permission, three functions; no existing row is changed)
+-- 0090 (PENDING: infra/aws/db/pending, not in the released set) | CLASS: ADDITIVE (one table, one permission, three functions; no existing row is changed)
 -- Admin override for a caregiver who has not signed in to the app yet (owner decision 2026-11-10; replaces the withdrawn "sign-in is a follow-up" idea).
 --   * An ADMINISTRATOR (organization_owner, organization_admin; permission caregivers.signin_override, never a manager) can approve a caregiver for work before the first
 --     sign-in. A REASON is required (at least 5 characters after trimming). The approver, the time and an audit event are written in the same transaction.
@@ -7,7 +7,7 @@
 --   * The sign-in readiness row is "met" (detail "Approved by override: not signed in") only while there is no real sign-in; after the first sign-in the ordinary row takes over.
 --   * The override record is append-only and one per caregiver. ogevia_api.list_signin_overrides tells the schedule and the Care Team which caregivers carry the badge.
 --   * A caregiver who has not signed in cannot verify a visit: they have no account. Nothing here changes that.
--- Not applied to any database. Rollback: pending/rollback/0089_caregiver_signin_override.down.sql (restores the 0088 function; drops the table and its rows: BACKUP REQUIRED).
+-- Not applied to any database. Rollback: pending/rollback/0090_caregiver_signin_override.down.sql (restores the 0088 function; drops the table and its rows: BACKUP REQUIRED).
 
 insert into ogevia.permissions (key, description) values
   ('caregivers.signin_override', 'Approve a caregiver for work before their first app sign-in, with a reason (never for the background check)');

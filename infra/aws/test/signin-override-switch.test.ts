@@ -1,4 +1,4 @@
-// The sign-in override routes (pending migration 0089) are added to an environment's API only when its `features.signInOverride` switch is on.
+// The sign-in override routes (pending migration 0090) are added to an environment's API only when its `features.signInOverride` switch is on.
 // It is OFF in the test slice and in production until the owner approves the release in that environment, so no deployed API changes by merging this code.
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";

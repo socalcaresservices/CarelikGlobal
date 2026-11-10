@@ -49,7 +49,7 @@ export function useCaregiverReadiness(caregiverRecordId: string, enabled = true)
 }
 
 
-/** A caregiver approved by an administrator before the first sign-in (0089). The approver and reason arrive only for someone who manages the Care Team. */
+/** A caregiver approved by an administrator before the first sign-in (0090). The approver and reason arrive only for someone who manages the Care Team. */
 export interface SigninOverride { caregiverRecordId: string; approvedAt: string; approvedByName: string | null; reason: string | null }
 
 /**

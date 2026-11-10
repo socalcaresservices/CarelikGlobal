@@ -1,4 +1,4 @@
--- ROLLBACK 0089 | CLASS: BACKUP REQUIRED (drops caregiver_signin_overrides with its rows; the audit events stay).
+-- ROLLBACK 0090 | CLASS: BACKUP REQUIRED (drops caregiver_signin_overrides with its rows; the audit events stay).
 -- Restores the 0088 definition of ogevia.caregiver_readiness (a caregiver approved only through an override then reads "Invited, has not signed in yet" again and can no
 -- longer be approved or newly scheduled until they sign in). Status and approvals already recorded are untouched. Run only after a verified backup.
 
