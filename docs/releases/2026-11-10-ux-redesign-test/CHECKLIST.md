@@ -11,24 +11,24 @@ Evidence rules: link or paste real command output and screenshots. Never include
 ## 0. Release identity
 | Field | Value |
 |---|---|
-| Release ID | `YYYY-MM-DD-short-name` |
-| Commit SHA to deploy (full 40 characters) | |
-| Branch / pull request | |
-| Prepared by (name, date) | |
-| Change classification (tick all) | ☐ feature ☐ bug fix ☐ migration ☐ API ☐ dashboard ☐ report ☐ scheduling ☐ authorization ☐ visits/verification ☐ availability/matching ☐ user admin ☐ notifications ☐ infrastructure ☐ web only |
-| Feature Test Plan | link to `FEATURE_TEST_PLAN.md` |
-| Catalog areas required (from process section 6.3) | |
+| Release ID | `2026-11-10-ux-redesign-test` |
+| Commit SHA to deploy (full 40 characters) | **NOT SET: the owner states it in writing at Phase C (C0).** Last verified candidate: `16d9f21` for A2 to A7; head when this was filled: `32efa0bedc7b7e08e60e44af255d24ae62b4808a` (adds 0094 and docs; only its own tests and the tenant sweep were re-run) |
+| Branch / pull request | `claude/ogevia-ux-audit-redesign-w36cov`; draft PR #108 to `main` (never merged) |
+| Prepared by (name, date) | Claude Code (AI assistant) for the owner, 2026-11-10. Not a human sign-off. |
+| Change classification (tick all) | ☒ feature ☐ bug fix ☒ migration ☒ API ☒ dashboard ☒ report ☒ scheduling ☐ authorization ☒ visits/verification ☒ availability/matching ☒ user admin ☐ notifications ☒ infrastructure (route switches, Lambda bundle) ☐ web only |
+| Feature Test Plan | **NOT WRITTEN.** The requirements and acceptance criteria are in `docs/ux/REQUIREMENTS-TRACKER.md` (R1 to R31); a Feature Test Plan with catalog IDs is still to be made from it |
+| Catalog areas required (from process section 6.3) | NOT YET MAPPED (follows the Feature Test Plan). Touched: navigation, dashboard, schedule and shifts, caregiver visit screens, Care Team, Staff, Clients, documents readiness, import, tenant isolation |
 
 ## 1. Change contents
 | Item | Value |
 |---|---|
-| Migrations in this release (number and name; **include every earlier migration not yet live**, per the contiguity rule) | |
-| Rollback script for each migration (path, class) | |
-| API routes added / changed / removed | |
-| Screens added / changed | |
-| Infrastructure changes (`cdk diff` summary: expected resources only) | |
-| What deliberately does NOT change | |
-| Data changed or created by the release (expected: none unless stated) | |
+| Migrations in this release (number and name; **include every earlier migration not yet live**, per the contiguity rule) | Pending, applied to TEST outside the ledger: `0090_caregiver_signin_override`, `0091_caregiver_client_labels`, `0092_bulk_import`, `0093_staff_duplicates`, `0094_standard_document_types`. Earlier migrations not yet live: **UNKNOWN until the Phase C pre-flight reads the ledger** (the last recorded TEST ledger is 88/0088 as of 2026-11-01) |
+| Rollback script for each migration (path, class) | `infra/aws/db/pending/rollback/`: 0090 BACKUP REQUIRED, 0091 SAFE, 0092 BACKUP REQUIRED, 0093 BACKUP REQUIRED, 0094 SAFE. Each rollback is exercised in its database test |
+| API routes added / changed / removed | Added, each behind a release switch: `POST /v1/caregivers/{caregiverRecordId}/signin-override`, `GET /v1/signin-overrides` (`signInOverride`); `POST /v1/imports/{kind}` (`bulkImport`); `GET /v1/staff/duplicates`, `POST /v1/staff/{profileId}/merge` (`staffDuplicates`). Changed: none. Removed: none. `exceljs` added to sv-api (larger Lambda bundle) |
+| Screens added / changed | See tracker rows R1 to R27: navigation, help panel, dashboard, schedule (drawer, exceptions), caregiver tabs and Verify Visit, Care Team, Staff (import, duplicates), Clients (import), readiness setup, Accounts and Reporting wording, phone touch targets |
+| Infrastructure changes (`cdk diff` summary: expected resources only) | **`cdk diff` NOT RUN** (no AWS access from this session). Expected only: 5 new API routes on `Ogevia-prod-*` once `TEST-switches-on.patch` is applied, plus the Lambda code. Anything else: stop |
+| What deliberately does NOT change | Production (`Ogevia-prd-*`, `ogevia_prd`); released ledger 0001 to 0088; billing, authorization, schedule and visit rules; hosting; no migration moved into `db/migrations` |
+| Data changed or created by the release (expected: none unless stated) | 0094 adds up to two document types (CPR, TB; names only) per agency with an owner, with audit events. Nothing else; imports and merges create data only when a person confirms them |
 
 ---
 
@@ -37,27 +37,27 @@ Run on a clean checkout of the commit above. Paste the summary line of each. `OG
 
 | # | Gate | Command | Result | Evidence |
 |---|---|---|---|---|
-| A1 | Install | `pnpm install --frozen-lockfile` | ☐ ok | |
-| A2 | **Lint (G1)** | `pnpm lint` | ☐ exit 0 | |
-| A3 | **Typecheck (G2)** | `pnpm typecheck` | ☐ exit 0 | |
-| A4 | **Unit and static tests (G3a)** | `pnpm test` | ☐ exit 0. Counts: | |
-| A5 | Build | `pnpm build` | ☐ exit 0 | |
-| A6 | **Database tests (G3b)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/infra-aws test:db` | ☐ all passed, **0 skipped**. Counts: | |
-| A7 | **API tests (G3c)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/sv-api test:db` | ☐ all passed, **0 skipped**. Counts: | |
-| A8 | CI run on the pull request | link | ☐ green (informational; does not replace A1 to A7) | |
-| A9 | Test counts did not drop versus the baseline (process section 3.1) | | ☐ yes ☐ no, explained: | |
+| A1 | Install | `pnpm install --frozen-lockfile` | ☐ NOT RUN on a clean checkout. Lockfile with `exceljs` is committed; installs worked in this working copy | |
+| A2 | **Lint (G1)** | `pnpm lint` | ☒ exit 0 | 6 of 6 tasks successful, at `16d9f21` (after removing one unused directive) |
+| A3 | **Typecheck (G2)** | `pnpm typecheck` | ☒ exit 0 | 7 of 7 tasks, at `16d9f21` |
+| A4 | **Unit and static tests (G3a)** | `pnpm test` | ☒ exit 0. Counts: web 1,308 (141 files), infra 684 (36), sv-api 108 (6), auth 150 (9), shared 118 (14), ui 73 (20) | `pnpm test` summary at `16d9f21` |
+| A5 | Build | `pnpm build` | ☒ exit 0 | 6 of 6 tasks, at `16d9f21` |
+| A6 | **Database tests (G3b)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/infra-aws test:db` | ☒ all passed. Counts: 1,155 (106 files). Skips not separately counted (the `test:all` wrapper was not used). 0094's 2 tests added after, passed alone | local PostgreSQL 16, at `16d9f21` |
+| A7 | **API tests (G3c)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/sv-api test:db` | ☒ all passed. Counts: 173 (26 files), including the cross-tenant sweep with all pending migrations applied (re-run after 0094: 9/9) | same |
+| A8 | CI run on the pull request | link | ☐ **NOT CONFIRMED for the head.** Runs 417 (`d48fcc3`) and 418 (`37fe719`) green; 419 (`dc76485`) failed in the tenant sweep, fixed in `16d9f21`; no result read for `16d9f21` or later | GitHub Actions, branch above |
+| A9 | Test counts did not drop versus the baseline (process section 3.1) | | ☐ **no, explained:** the web suite went from 1,303 to 1,308 net; 18 old tests that asserted the removed header chip, the "Needs attention now" tile and the tab strip were rewritten to the new design, not skipped. No numeric baseline file was compared | |
 
 Change-specific:
-- ☐ Bug fix: the reproducing test **failed before** the fix (failure text recorded) and **passes after**: ____________
-- ☐ Every changed rule has a test that fails without the change, and a control test: ____________
-- ☐ Failure-first cases covered (invalid input, stale data, concurrency, retry, wrong role, other tenant, network failure, old data): ____________
-- ☐ Migration: new file only; applied files unedited; `.down.sql` present and classified; rollback test run; `01_schema_version.sql` and ledger-tail tests updated
-- ☐ Migration touches `SECURITY DEFINER`, grants or tenant access: `docs/security-review-checklist.md` completed
-- ☐ API: permission, other-tenant, unauthenticated, bad-input and (if it creates records) idempotency tests exist; `slice-contract.test.ts` passes
-- ☐ UI: loading, empty, error, success states; 390 px and 1280 px checked; no horizontal page scroll; contrast tests pass
-- ☐ No instructional paragraph where a label or tooltip works
+- N/A (feature work; the one bug found, a flaky assertion in `workflow.db.test.ts`, was fixed with a field-specific check): the reproducing test **failed before** the fix (failure text recorded) and **passes after**: ____________
+- ☒ Every changed rule has a test (0090 to 0094 each have database, API and web tests); "fails without the change" was **not demonstrated for each**: ____________ partial
+- ☒ Covered: invalid and malformed files, duplicate rows, re-upload of the same file, partial-failure rollback, 1,000-row and 2,001-row files, wrong role, other tenant, unauthenticated, network refusal messages. **Not covered:** concurrent imports of different files racing on the same names (serialized by an advisory lock, not stress-tested)
+- ☒ Migration: new files only; applied files unedited; `.down.sql` present and classified; rollback tests run. `01_schema_version.sql` and ledger-tail tests: **N/A by design** (pending files are outside the ledger until a later integration)
+- ☐ Migration touches `SECURITY DEFINER`, grants or tenant access: **`docs/security-review-checklist.md` NOT COMPLETED.** 0090 to 0093 add SECURITY DEFINER functions; a human review is required before Phase C
+- ☒ API: permission, other-tenant, unauthenticated, bad-input and (if it creates records) idempotency tests exist; `slice-contract.test.ts` passes
+- ☒ UI: states tested on every changed screen; 390 px: 0 of 20 office screens overflow and 0 controls under 44 px (emulated, `touch-targets.mjs`); 1280 px not re-measured in this pass; contrast tests pass inside the web suite
+- ☐ Not audited line by line: new Import, Duplicates and CPR/TB setup contain short inline sentences by design
 
-**Phase A signed:** name ____________ date ____________
+**Phase A signed:** name ____________ date ____________   (NOT SIGNED: needs a human; open items above are A1, A8, the security review and the Feature Test Plan)
 
 ## B. Local harness (Phase B), gate G4
 | # | Step | Result | Evidence |
