@@ -24,7 +24,7 @@ interface Opts { scheduled?: boolean; startNeedsReason?: boolean; pickup?: "ok" 
 function fakeApi(role: Role, opts: Opts = {}) {
   const calls: Call[] = [];
   let visit: Record<string, unknown> | null = null;
-  let openShifts: Array<Record<string, unknown>> = [{ shiftId: SHIFT, startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", minutes: 120, clientCode: "C-104", serviceName: "Respite Care", coverageState: "needs_coverage" }];
+  let openShifts: Array<Record<string, unknown>> = [{ shiftId: SHIFT, startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", minutes: 120, clientCode: "C-104", city: "Springfield", serviceName: "Respite Care", coverageState: "needs_coverage" }];
   let rules = [{ version: 0, minutes: 15, source: "system_default", effectiveFrom: null, changedByName: null, changedAt: null, reason: null, inEffect: true }] as Array<Record<string, unknown>>;
   const permissions = role === "organization_owner" ? ["organization.update", "visits.read", "visits.manage", "billing.visits.read"] : role === "manager" ? ["visits.read", "visits.manage", "billing.visits.read"] : ["availability.manage_own"];
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -234,7 +234,7 @@ describe("open shifts (G09)", () => {
     const api = renderAws("/my-shifts", "caregiver", { pickup: "ok" });
     expect(await screen.findByText(/Open shifts you can ask for/, undefined, { timeout: COLD })).toBeInTheDocument();
     const region = screen.getByRole("heading", { name: /Open shifts you can ask for/ }).closest("section")!;
-    expect(within(region).getByText(/Client C-104 · Respite Care · 2 hr/)).toBeInTheDocument();
+    expect(within(region).getByText(/Client C-104 · Springfield · Respite Care · 2 hr/)).toBeInTheDocument();
     expect(within(region).getByText(/Asking does not give you the shift/)).toBeInTheDocument();
     expect(within(region).queryByText(/disappear/)).toBeNull();
     fireEvent.click(within(region).getByRole("button", { name: "Request this shift" }));

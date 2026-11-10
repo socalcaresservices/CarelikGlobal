@@ -136,7 +136,7 @@ function ClientChoiceList({
                 >
                   <span className="min-w-0">
                     <span className="block font-semibold text-slate-950">
-                      Client {client.client_code}
+                      {client.display_label ? `${client.display_label} · ` : "Client "}{client.client_code}
                     </span>
                     <span className="block text-sm text-slate-600">
                       {client.next_scheduled_starts_at
@@ -835,7 +835,7 @@ export function ServiceVerificationPage() {
                   <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                     <dt className="text-slate-500">Client</dt>
                     <dd className="font-semibold">
-                      {selectedClient.client_code}
+                      {selectedClient.display_label ? `${selectedClient.display_label} · ` : ""}{selectedClient.client_code}
                     </dd>
                     <dt className="text-slate-500">Service</dt>
                     <dd className="min-w-0 break-words font-semibold">

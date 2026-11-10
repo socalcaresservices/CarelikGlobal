@@ -553,7 +553,7 @@ export function SchedulePage() {
   );
 }
 
-interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
+interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; city?: string | null; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
 
 /** Wave 1 (G09), changed by 0063: open shifts the caregiver is assigned to. Asking sends a request; the office confirms one caregiver. */
 function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
@@ -617,7 +617,7 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <div className="min-w-0">
                 <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
-                <p className="text-sm text-slate-800">Client {s.clientCode}{s.serviceName ? ` · ${s.serviceName}` : ""} · {formatDuration(s.minutes)}</p>
+                <p className="text-sm text-slate-800">Client {s.clientCode}{s.city ? ` · ${s.city}` : ""}{s.serviceName ? ` · ${s.serviceName}` : ""} · {formatDuration(s.minutes)}</p>
               </div>
               {s.myRequestStatus === "requested" ? (
                 <div className="flex flex-wrap items-center gap-2">

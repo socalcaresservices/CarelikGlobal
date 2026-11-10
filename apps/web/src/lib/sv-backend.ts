@@ -19,6 +19,8 @@ export interface AssignedClient {
   active_service_count: number;
   /** Service of that same shift (AWS 0017). Absent on backends without it. */
   next_scheduled_service_id?: string | null;
+  /** First name + last initial for a client this caregiver is assigned to or scheduled with (AWS 0091; computed on the server). Absent before 0091. */
+  display_label?: string | null;
 }
 
 export interface AuthorizedService {
