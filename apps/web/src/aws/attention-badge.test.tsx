@@ -64,56 +64,19 @@ const overview = (o: Record<string, unknown> = {}) => ({ overview: {
   visitReview: { visitsNeedingAttention: 0, awaitingConfirmation: 0, needsReview: 0, lateResponses: 0, readyForApproval: 0, reviewIssues: 0, awaitingResponse: 0 },
   ...o } });
 
-describe("Needs attention now badge", () => {
-  it("on Home the header badge is not repeated: the first row of Home shows the same count once", async () => {
+describe("one headline number (R19)", () => {
+  it("there is no separate \"Needs attention now\" chip in the header and no tile for it on Home; the headline is the issues list count", async () => {
     renderAt("/", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
-    expect(await screen.findByTestId("stream-now")).toHaveTextContent("1");
+    expect(await screen.findByTestId("kpi-row")).toBeInTheDocument();
     expect(screen.queryByTestId("attention-badge")).toBeNull();
+    expect(screen.queryByTestId("stream-now")).toBeNull();
+    expect(await screen.findByTestId("headline-count")).toBeInTheDocument();
   });
 
-  it("an uncovered shift that has started: Critical (red), with a symbol and the word, counting items", async () => {
-    renderAt("/profile", "manager", () => json(200, overview({ urgent: { items: [item({ startsAt: "2026-10-18T11:00:00Z", inProgress: true })], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
-    const badge = await screen.findByRole("link", { name: "Needs attention now: 1 item" });
-    expect(badge).toHaveTextContent("●");
-    expect(badge).toHaveTextContent("Needs attention now");
-    expect(badge.className).toMatch(/red/);
-    expect(badge).toHaveAttribute("href", "/attention");
-  });
-
-  it("an uncovered shift that has not started yet (inside the 48 h window): Urgent (amber), not red", async () => {
-    renderAt("/profile", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
-    const badge = await screen.findByTestId("attention-badge");
-    await waitFor(() => expect(badge).toHaveTextContent("▲"));
-    expect(badge.className).toMatch(/amber/);
-    expect(badge.className).not.toMatch(/red/);
-  });
-
-  it("only amber items: amber, not red", async () => {
-    renderAt("/profile", "manager", () => json(200, overview({ urgent: { items: [item({ severity: "amber", reasons: ["missing_clock_out"] })], itemCount: 1, issueCount: 1, shifts: 0, visits: 1 } })));
-    const badge = await screen.findByTestId("attention-badge");
-    await waitFor(() => expect(badge).toHaveTextContent("▲"));
-    expect(badge.className).toMatch(/amber/);
-    expect(badge.className).not.toMatch(/red/);
-  });
-
-  it("confirmed zero: calm text with a check, no alarm colour", async () => {
-    renderAt("/profile", "manager", () => json(200, overview()));
-    const badge = await screen.findByRole("link", { name: "No urgent items" });
-    expect(badge).toHaveTextContent("✓");
-    expect(badge.className).not.toMatch(/red|amber|emerald/);
-  });
-
-  it("while loading: neutral Checking…", async () => {
-    renderAt("/profile", "manager", () => new Promise<Response>(() => {}));
-    const badge = await screen.findByRole("link", { name: "Checking what needs attention now" });
-    expect(badge).toHaveTextContent("Checking…");
-  });
-
-  it("failed check: Unavailable, never a zero", async () => {
-    renderAt("/profile", "manager", () => json(500, { error: { code: "internal", message: "Synthetic failure" } }));
-    const badge = await screen.findByRole("link", { name: "Unavailable: what needs attention now could not be checked" });
-    expect(badge).toHaveTextContent("Unavailable");
-    await waitFor(() => expect(screen.queryByText("No urgent items")).toBeNull());
+  it("the header chip is gone on every other page too (the bell is the one global number)", async () => {
+    renderAt("/schedule", "manager", () => json(200, overview({ urgent: { items: [item()], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } })));
+    await screen.findByRole("heading", { name: /Schedule/ });
+    expect(screen.queryByTestId("attention-badge")).toBeNull();
   });
 });
 
@@ -129,7 +92,7 @@ describe("navigation highlight", () => {
   });
 });
 
-describe("Home tiles: four purposes, each its own destination", () => {
+describe("Home tiles: three purposes, each its own destination", () => {
   const busy = overview({
     urgent: { items: [item(), item({ id: "v1", kind: "visit", severity: "amber", reasons: ["missing_clock_out"] })], itemCount: 2, issueCount: 3, shifts: 1, visits: 1 },
     upcoming: { count: 5, nextStartsAt: "2026-10-20T20:00:00Z", shifts: [] },
@@ -137,13 +100,10 @@ describe("Home tiles: four purposes, each its own destination", () => {
     visitReview: { visitsNeedingAttention: 6, awaitingConfirmation: 2, needsReview: 3, lateResponses: 0, readyForApproval: 1, reviewIssues: 7, awaitingResponse: 0 },
   });
 
-  it("shows four tiles with their own counts and destinations", async () => {
+  it("shows three tiles with their own counts and destinations", async () => {
     renderAt("/", "manager", () => json(200, busy));
-    const now = await screen.findByTestId("stream-now");
-    expect(now).toHaveTextContent("Needs attention now");
-    expect(now).toHaveTextContent("2");
-    expect(now).toHaveTextContent("3 issues in all");
-    expect(now).toHaveAttribute("href", "/attention");
+    await screen.findByTestId("kpi-row");
+    expect(screen.queryByTestId("stream-now")).toBeNull();   // R19: the duplicate "Needs attention now" tile was removed
     expect(screen.getByTestId("stream-staffing")).toHaveAttribute("href", "/staffing");
     expect(screen.getByTestId("stream-staffing")).toHaveTextContent("5");
     expect(screen.getByTestId("stream-documents")).toHaveAttribute("href", "/documents");
@@ -152,22 +112,9 @@ describe("Home tiles: four purposes, each its own destination", () => {
     expect(screen.getByTestId("stream-visits")).toHaveTextContent("6");
   });
 
-  it("the tile carries a word, not colour alone: Urgent when nothing has started, Critical once an uncovered shift has", async () => {
-    renderAt("/", "manager", () => json(200, busy));
-    const urgent = await screen.findByTestId("stream-now");
-    expect(urgent).toHaveTextContent("Urgent");
-    expect(urgent).not.toHaveTextContent("Critical");
-  });
-
-  it("an uncovered shift that has started makes the tile Critical", async () => {
-    const started = overview({ urgent: { items: [item({ startsAt: "2026-10-18T11:00:00Z", inProgress: true })], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 } });
-    renderAt("/", "manager", () => json(200, started));
-    expect(await screen.findByTestId("stream-now")).toHaveTextContent("Critical");
-  });
-
   it("a section the viewer may not see has no tile (never a false zero)", async () => {
     renderAt("/", "manager", () => json(200, overview({ upcoming: null, documents: null })));
-    await screen.findByTestId("stream-now");
+    await screen.findByTestId("kpi-row");
     expect(screen.queryByTestId("stream-staffing")).toBeNull();
     expect(screen.queryByTestId("stream-documents")).toBeNull();
   });

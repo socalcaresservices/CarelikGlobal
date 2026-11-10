@@ -22,7 +22,6 @@ import { useAuth } from "@carelik/auth";
 import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_ROUTE } from "./action-needed";
-import { urgentBadge, useAttentionOverview } from "./attention";
 import { NotificationsBell } from "./notifications-bell";
 import { PageHelpButton, PageHelpProvider } from "./ui/page-help";
 import { PendingInvitations } from "./pending-invitations";
@@ -94,7 +93,6 @@ export function AwsShell({ children }: PropsWithChildren) {
   const branding = useBranding();
   const logo = useLogo();
   const attention = useAttentionCounts(); // per-area work-waiting badges in the navigation (server counts; the web never recomputes them)
-  const overview = useAttentionOverview(); // the header badge: what needs attention now
   const location = useLocation();
   const [collapsedPref, toggleCollapsed] = useSidebarCollapsed();
   const isMobile = useIsMobile();
@@ -219,10 +217,8 @@ export function AwsShell({ children }: PropsWithChildren) {
   }
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
-  // The same classification and query result as the Home tiles (attention.ts): unique shifts and visits needing attention now.
-  const badge = urgentBadge(overview.isLoading, overview.isError, overview.data);
-  // Home's own first row shows this same count (and its loading / unavailable state), so the header badge appears everywhere else.
-  const showBadge = canSeeAttention && badge.kind !== "hidden" && location.pathname !== "/";
+  // R19 (owner, 2026-11-10): ONE headline number, issues needing action (Critical + Urgent). It is the bell here and the "Needs action first" list on the dashboard.
+  // The separate "Needs attention now" (items) chip is gone from the header; the server still defines both counts (COUNT_DEFINITIONS.md).
 
   function trapFocus(e: KeyboardEvent<HTMLElement>) {
     if (!drawerShown) return;
@@ -497,23 +493,6 @@ export function AwsShell({ children }: PropsWithChildren) {
               <Menu className="h-4 w-4" aria-hidden="true" />
               {caregiverBar ? "Account" : <>Menu <span className="text-og-sub">· {current?.label ?? "Choose a section"}</span></>}
             </button>
-            {showBadge ? (
-              // Red only for care blocked or at risk now, amber for approaching risk; every state has a word and a symbol.
-              <Link
-                to="/attention"
-                className={cn(
-                  "inline-flex min-h-[44px] items-center gap-2 rounded-lg border px-3 text-sm font-semibold md:min-h-[40px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link",
-                  badge.tone === "red" && "border-red-700 bg-red-50 text-red-800 hover:bg-red-100",
-                  badge.tone === "amber" && "border-amber-600 bg-amber-50 text-amber-900 hover:bg-amber-100",
-                  badge.tone === "neutral" && (badge.kind === "clear" ? "border-transparent font-normal text-og-sub hover:bg-og-page" : "border-og-line text-og-ink hover:bg-og-page"),
-                )}
-                aria-label={badge.aria}
-                data-testid="attention-badge"
-              >
-                <span aria-hidden="true">{badge.icon}</span> {badge.label}
-                {badge.count !== null ? <span className="font-og-mono tabular-nums">{badge.count}</span> : null}
-              </Link>
-            ) : null}
             {canSeeAttention ? <NotificationsBell /> : null}
             <PageHelpButton />
             {/* A user who belongs to more than one organization switches here (unchanged behaviour). */}

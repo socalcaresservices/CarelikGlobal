@@ -111,7 +111,7 @@ describe("Today's visits", () => {
   });
   it("is absent for someone who cannot see the schedule", async () => {
     renderAt("/", ["visits.read", "documents.read", "readiness.read"]);
-    await screen.findByTestId("stream-now");
+    await screen.findByRole("heading", { name: "Dashboard" });
     expect(screen.queryByRole("heading", { name: "Today's visits" })).toBeNull();
   });
 });
@@ -135,7 +135,7 @@ describe("Quick actions", () => {
   });
   it("none at all for a role with none of the permissions", async () => {
     renderAt("/", ["visits.read", "documents.read", "readiness.read"]);
-    await screen.findByTestId("stream-now");
+    await screen.findByRole("heading", { name: "Dashboard" });
     expect(screen.queryByRole("navigation", { name: "Quick actions" })).toBeNull();
   });
 });

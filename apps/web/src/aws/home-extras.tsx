@@ -138,7 +138,7 @@ export function TopIssues() {
   return (
     <section aria-labelledby="top-issues-heading" className="space-y-1" data-testid="top-issues">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="top-issues-heading" className="text-sm font-semibold text-og-ink">Needs action first</h2>
+        <h2 id="top-issues-heading" className="text-sm font-semibold text-og-ink">Needs action first <span className="font-og-mono tabular-nums" data-testid="headline-count">· {total}</span></h2>
         <Link className={linkClass} to="/action-needed">View all{total > shown.length ? ` (${total})` : ""}</Link>
       </div>
       {urgent.length > 0 ? (

@@ -46,13 +46,12 @@ describe("Needs action first", () => {
     expect(screen.queryByText("Nothing is critical or urgent right now.")).not.toBeInTheDocument();
   }, 30000);
 
-  it("when the list fails, the Needs attention tile reads Unavailable and never shows 0 items beside the failure message", async () => {
+  it("when the list fails, the failure message shows and the headline count is not shown as 0", async () => {
     const calm = { overview: { asOf: new Date().toISOString(), urgentWindowHours: 48, urgent: { items: [], itemCount: 0, issueCount: 0, shifts: 0, visits: 0 }, upcoming: null, documents: null, visitReview: null } };
     renderAws("/", PERMS, { "GET /v1/attention/overview": () => json(200, calm), "GET /v1/action-issues": () => json(500, { error: { code: "internal_error", message: "Something went wrong. Please try again." } }) });
     expect(await screen.findByTestId("top-issues-error", {}, { timeout: 15000 })).toBeInTheDocument();
-    const tile = await screen.findByTestId("stream-now");
-    expect(within(tile).getByTestId("stream-now-unavailable")).toHaveTextContent("Unavailable");
-    expect(tile).not.toHaveTextContent(/\b0\s*items?\b/);
+    expect(screen.queryByTestId("headline-count")).toBeNull();
+    expect(screen.queryByTestId("stream-now")).toBeNull();
   }, 30000);
 });
 

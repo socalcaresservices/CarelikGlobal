@@ -130,7 +130,7 @@ export function AwsHomePage() {
         {overview.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
         {tiles.length > 0 || utilisation.isError || rows.length > 0 ? (
           <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-5" data-testid="kpi-row">
-            {tiles.map((s) => <Tile key={s.key} s={s} unavailable={issues.isError && s.key === "now"} />)}
+            {tiles.filter((s) => s.key !== "now").map((s) => <Tile key={s.key} s={s} />)}
             <HoursTile failed={utilisation.isError} loading={utilisation.isLoading} left={rows.length > 0 ? hoursLabel(leftTotal) : null} />
           </ul>
         ) : null}

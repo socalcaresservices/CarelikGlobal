@@ -226,12 +226,9 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    // Home shows the count once, as its first tile (the header badge is not repeated on Home); the tile opens the Needs attention now page.
-    const attention = await screen.findByTestId("stream-now");
-    expect(attention.getAttribute("href")).toBe("/attention");
-    // The uncovered shift starts 8 hours after asOf, so it is Urgent (amber); it would be Critical (red) once started.
-    expect(attention.className).toMatch(/amber/);
-    expect(attention).toHaveTextContent("1");
+    // R19: one headline number (issues needing action); no separate "Needs attention now" tile or header chip.
+    expect(await screen.findByTestId("headline-count")).toBeInTheDocument();
+    expect(screen.queryByTestId("stream-now")).toBeNull();
     expect(screen.queryByTestId("attention-badge")).toBeNull();
     expect(screen.getByTestId("stream-visits")).toHaveTextContent("3");
     // 1590 of 6000 minutes worked = 26.5 h of 100 h; the table sits behind the details control.
