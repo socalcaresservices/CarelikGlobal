@@ -81,6 +81,8 @@ begin
       v_type := lower(btrim(coalesce(r ->> 'type', 'caregiver')));
       if v_type = '' then v_type := 'caregiver'; end if;
       if v_type = 'caregiver' then
+        -- Caregiver rows need the caregiver permission from the PREVIEW on: a preview must not tell someone who cannot manage caregivers whether a caregiver name exists.
+        if not v_any_caregiver then perform ogevia.caregiver_admin_guard(p_organization_id); end if;
         v_any_caregiver := true;
         if exists (select 1 from ogevia.caregiver_records c where c.organization_id = p_organization_id and c.deleted_at is null and lower(c.first_name) = lower(v_first) and lower(c.last_name) = lower(v_last))
            or ('cg|' || lower(v_first) || '|' || lower(v_last)) = any (v_seen) then

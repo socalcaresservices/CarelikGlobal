@@ -11,6 +11,26 @@ const xlsx = async (table: unknown[][]) => {
   return Buffer.from(await wb.xlsx.writeBuffer());
 };
 
+/** A zip whose central directory DECLARES a huge uncompressed size: enough to test the pre-check without building a real bomb. */
+const zipDeclaring = (sizes: number[]) => {
+  const parts: Buffer[] = []; let cdLen = 0;
+  for (const size of sizes) { const h = Buffer.alloc(46); h.writeUInt32LE(0x02014b50, 0); h.writeUInt32LE(size, 24); parts.push(h); cdLen += 46; }
+  const e = Buffer.alloc(22); e.writeUInt32LE(0x06054b50, 0); e.writeUInt16LE(sizes.length, 8); e.writeUInt16LE(sizes.length, 10); e.writeUInt32LE(cdLen, 12); e.writeUInt32LE(0, 16);
+  return Buffer.concat([...parts, e]);
+};
+
+describe("workbook size guard (zip bomb)", () => {
+  it("refuses a workbook that declares more than 25 MB uncompressed, before decompressing anything", async () => {
+    await expect(parseImportFile("people", "bomb.xlsx", zipDeclaring([200_000_000]))).rejects.toMatchObject({ status: 422, message: expect.stringContaining("too large once opened") });
+    await expect(parseImportFile("people", "bomb.xlsx", zipDeclaring([20_000_000, 20_000_000]))).rejects.toMatchObject({ status: 422 });
+  });
+  it("refuses a zip with an unreasonable number of parts, and accepts a normal generated workbook", async () => {
+    await expect(parseImportFile("people", "many.xlsx", zipDeclaring(Array.from({ length: 301 }, () => 10)))).rejects.toMatchObject({ status: 422 });
+    const ok = await parseImportFile("people", "ok.xlsx", await xlsx([["first_name", "last_name"], ["Eve", "Excel"]]));
+    expect(ok.rows).toHaveLength(1);
+  });
+});
+
 describe("CSV", () => {
   it("handles quotes, doubled quotes, commas and newlines inside a field, CRLF and a byte-order mark", () => {
     expect(parseCsv('﻿a,b\r\n"x, y","he said ""hi"""\r\n"line1\nline2",z\r\n')).toEqual([["a", "b"], ["x, y", 'he said "hi"'], ["line1\nline2", "z"]]);

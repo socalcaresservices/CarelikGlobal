@@ -46,7 +46,30 @@ export function parseCsv(input: string): string[][] {
   return out;
 }
 
+/** A workbook is a zip. A small file can expand to gigabytes (a "zip bomb") and kill the Lambda, so the sizes the zip itself declares are checked BEFORE anything is decompressed. */
+export const MAX_XLSX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
+const MAX_XLSX_ENTRIES = 300;
+export function assertWorkbookNotTooLarge(bytes: Buffer): void {
+  const refuse = () => { throw new ApiError(422, "invalid_file", "That workbook is too large once opened. Remove unused sheets and formatting, or save it as .csv."); };
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65535); i--) if (bytes.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new ApiError(422, "invalid_file", "That file could not be read as an Excel workbook. Save it as .xlsx or .csv and try again.");
+  const entries = bytes.readUInt16LE(eocd + 10);
+  let at = bytes.readUInt32LE(eocd + 16);
+  if (entries > MAX_XLSX_ENTRIES || entries === 0xffff || at === 0xffffffff) refuse();   // zip64 or an unreasonable number of parts
+  let total = 0;
+  for (let n = 0; n < entries; n++) {
+    if (at + 46 > bytes.length || bytes.readUInt32LE(at) !== 0x02014b50) refuse();
+    const size = bytes.readUInt32LE(at + 24);
+    if (size === 0xffffffff) refuse();
+    total += size;
+    if (total > MAX_XLSX_UNCOMPRESSED_BYTES) refuse();
+    at += 46 + bytes.readUInt16LE(at + 28) + bytes.readUInt16LE(at + 30) + bytes.readUInt16LE(at + 32);
+  }
+}
+
 async function xlsxRows(bytes: Buffer): Promise<string[][]> {
+  assertWorkbookNotTooLarge(bytes);
   const { default: ExcelJS } = await import("exceljs");
   const wb = new ExcelJS.Workbook();
   try {
