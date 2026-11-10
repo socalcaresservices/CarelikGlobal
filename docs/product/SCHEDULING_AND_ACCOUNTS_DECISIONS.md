@@ -53,3 +53,17 @@ Recorded 2026-10-11 from the owner's written answers in the Claude session. Stat
 4. Caregiver contact email and phone table, with the Admin edit screen.
 5. Staff invitations (manager and other roles) with role-limit checks.
 6. Scheduling work from the audit: minimum shift, commit-time enforcement, client overlap check, recurrence patterns, series summary.
+
+## 2026-11-10: Admin override for a caregiver who has not signed in (owner decision)
+
+Recorded from the owner's instruction "ogevia update 1111". Status: **approved rule; not implemented; not deployed.** Build is gated on the owner's approval of `docs/ux/ogevia-redesign-spec.md`.
+
+**Supersedes** the October rule that a caregiver must sign in before approval (migration 0088, "App sign-in" as a hard requirement). Also **conflicts with** the unreleased pending migration 0089 (`infra/aws/db/pending/`, 2026-11-09), which removes sign-in as a requirement for everyone without a reason, approver record or badge. 0089 is applied nowhere. Recommended resolution (owner to confirm): withdraw 0089 and implement the override below. Until the owner confirms, 0089 stays unreleased.
+
+Rule, as specified by the owner:
+1. An administrator can schedule and assign a caregiver to a client, and approve the caregiver for work, even if the caregiver has not signed in to the app.
+2. The override requires a **reason** and records the **approver**, the **timestamp** and an **audit entry**.
+3. **Background check remains a hard block; no override exists for it.**
+4. CPR/TB continue to follow the existing 30-day grace period plus recorded per-caregiver extensions.
+5. The profile and schedule show the badge **"Approved by override — not signed in"** until first sign-in.
+6. A caregiver who has not signed in cannot verify a visit in Ogevia; the schedule shows a warning on their shifts.

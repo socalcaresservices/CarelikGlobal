@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ogevia redesign mockup (synthetic, not the product)</title>
+<style>
+:root{--bg:#f6f8f8;--card:#fff;--ink:#15232b;--sub:#56656d;--line:#dbe3e6;--accent:#0b5c52;--accent-ink:#fff;--warn:#8a4b00;--warnbg:#fff4e0;--bad:#9b1c1c;--badbg:#fdeaea;--ok:#1b6b3a;--okbg:#e7f5ec;--info:#e8f0f4;--r:10px}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);overflow-x:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+h1{font-size:20px;margin:0}h2{font-size:16px;margin:0 0 8px}h3{font-size:14px;margin:0}
+.sub{color:var(--sub);font-size:13px}
+.banner{background:#ffd54a;color:#4a3200;text-align:center;font-weight:700;font-size:12px;padding:6px 8px;letter-spacing:.03em}
+.app{display:flex;min-height:calc(100vh - 28px)}
+/* sidebar */
+.side{width:240px;background:#eef3f4;border-right:1px solid var(--line);padding:12px;flex:none;display:flex;flex-direction:column;gap:4px;transition:width .15s}
+.side.collapsed{width:64px}
+.side.collapsed .lbl,.side.collapsed .sec-sub,.side.collapsed .brand-name,.side.collapsed .who{display:none}
+.brand{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:700}
+.logo{width:32px;height:32px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.nav-btn{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 10px;border:0;background:none;border-radius:8px;text-align:left}
+.nav-btn:hover{background:#e2eaec}.nav-btn[aria-current=page]{background:#d3e6e3;font-weight:600}
+.ico{width:20px;text-align:center;flex:none}
+.sec-sub{margin:0 0 4px 30px;display:flex;flex-direction:column}
+.sec-sub .nav-btn{min-height:44px;font-size:14px;color:var(--sub)}
+.sec-sub .nav-btn[aria-current=page]{color:var(--ink)}
+.badge{margin-left:auto;font-size:11px;font-weight:700;border-radius:99px;padding:1px 7px;background:var(--warnbg);color:var(--warn);border:1px solid #e3b768}
+.grow{flex:1}
+.who{border-top:1px solid var(--line);padding-top:10px;font-size:13px}
+.who b{display:block}
+/* main */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.top h1{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-btn{min-width:44px;min-height:44px;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.menu-btn{display:none}
+.page{padding:16px;max-width:1100px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.btn{min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.link{border:0;background:none;color:var(--accent);text-decoration:underline;padding:0 8px}
+.btn.big{min-height:64px;font-size:20px;width:100%;border-radius:12px}
+.btn.danger{color:var(--bad);border-color:#e3b0b0}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;min-height:60px}
+.kpi .n{font-size:22px;font-weight:700;line-height:1.1}
+.kpi .l{font-size:12px;color:var(--sub)}
+.kpi.warn .n{color:var(--warn)}.kpi.bad .n{color:var(--bad)}
+.kpi.unavail .n{color:var(--sub);font-size:15px;font-weight:600;padding-top:4px}
+/* queue */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{min-height:44px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);font-size:13px}
+.chip[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.q-item{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.q-item:first-child{border-top:0}
+.q-main{flex:1;min-width:0}
+.q-main b{display:block;overflow-wrap:anywhere}
+.tag{font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.tag.bad{background:var(--badbg);color:var(--bad)}.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.ok{background:var(--okbg);color:var(--ok)}.tag.info{background:var(--info);color:#274456}
+.empty,.err,.loading{padding:14px;border-radius:8px;font-size:14px}
+.empty{background:var(--info)}.err{background:var(--badbg);color:var(--bad)}.loading{background:var(--info);color:var(--sub)}
+.ok-note{background:var(--okbg);color:var(--ok);padding:10px 12px;border-radius:8px}
+/* calendar */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{min-height:44px;padding:0 14px;border:0;background:var(--card)}
+.seg button[aria-pressed=true]{background:var(--accent);color:#fff}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{background:var(--card);border:1px solid var(--line);border-radius:8px;min-height:150px;padding:6px;min-width:0}
+.day h3{font-size:12px;color:var(--sub);margin-bottom:6px}
+.day.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.shift{display:block;width:100%;text-align:left;border:1px solid var(--line);border-left:4px solid var(--ok);background:#fbfdfc;border-radius:6px;padding:6px;margin-bottom:6px;font-size:12px;min-height:44px}
+.shift.open{border-left-color:var(--bad);background:#fff8f8}.shift.warn{border-left-color:#d08a1c}.shift.past{border-left-color:#6a7a82}
+.shift b{display:block;overflow-wrap:anywhere}
+.exc{border:1px solid #e3b768;background:var(--warnbg);border-radius:var(--r)}
+.exc summary{min-height:48px;padding:0 14px;display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;list-style:none}
+.exc summary::-webkit-details-marker{display:none}
+.exc .body{padding:0 14px 8px;background:var(--card);border-top:1px solid #e3b768;border-radius:0 0 var(--r) var(--r)}
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,20,25,.4);z-index:20;display:none}
+.scrim.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:100vw;background:var(--card);z-index:21;display:none;flex-direction:column;box-shadow:-8px 0 24px rgba(0,0,0,.18)}
+.drawer.on{display:flex}
+.drawer header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.drawer header h2{flex:1;margin:0}
+.drawer .content{padding:16px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:12px}
+.drawer footer{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+label.f .hint{font-weight:400;color:var(--sub);font-size:12px}
+input,select,textarea{min-height:44px;padding:6px 10px;border:1px solid #b9c6cb;border-radius:8px;background:#fff;width:100%}
+textarea{min-height:80px}
+.checks{display:flex;gap:6px;flex-wrap:wrap}
+.checks label{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+.checks input{width:auto;min-height:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.scroll-x{overflow-x:auto}
+.rb-ok{color:var(--ok)}.rb-bad{color:var(--bad)}
+.help{position:relative}
+.help-panel{position:absolute;right:0;top:52px;width:300px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.14);font-size:13px;z-index:8;display:none}
+.help-panel.on{display:block}
+/* caregiver */
+.page.cg-main{padding-bottom:96px}
+.tabbar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);z-index:6}
+.tabbar button{min-height:64px;border:0;background:none;font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.tabbar button[aria-current=page]{color:var(--accent);font-weight:700;box-shadow:inset 0 3px 0 var(--accent)}
+.steps{display:flex;gap:6px;align-items:center;justify-content:center;font-size:12px;color:var(--sub)}
+.steps b{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#dbe8e6}
+.steps .on b{background:var(--accent);color:#fff}
+.timer{font-size:44px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+.methods{display:grid;gap:8px}
+.methods label{display:flex;gap:10px;align-items:center;min-height:52px;padding:0 12px;border:1px solid var(--line);border-radius:10px}
+.methods input{width:auto;min-height:0}
+.sigpad{height:110px;border:2px dashed #9fb2b8;border-radius:10px;display:grid;place-items:center;color:var(--sub);background:#fff}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats div{background:#f2f6f7;border-radius:8px;padding:8px}.stats b{display:block;font-size:16px}
+.mock-note{position:fixed;left:8px;bottom:8px;z-index:30;background:#15232b;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;opacity:.85}
+.devbar{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;background:#15232b;color:#cfe;font-size:12px;align-items:center}
+.devbar button{min-height:32px;padding:0 10px;border-radius:6px;border:1px solid #456;background:#223;color:#cfe;font-size:12px}
+.devbar button[aria-pressed=true]{background:#cfe;color:#123}
+.steps-import{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}
+.steps-import span{padding:4px 10px;border-radius:99px;background:#e6ecee;color:var(--sub)}
+.steps-import span.on{background:var(--accent);color:#fff}
+.sumgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:900px){
+ .side{position:fixed;z-index:25;top:28px;bottom:0;left:0;transform:translateX(-100%);transition:transform .15s;width:270px}
+ .side.open{transform:none}.side.collapsed{width:270px}
+ .side.collapsed .lbl,.side.collapsed .sec-sub,.side.collapsed .brand-name,.side.collapsed .who{display:revert}
+ .side.collapsed .sec-sub{display:flex}
+ .menu-btn{display:inline-flex}
+ .kpis{grid-template-columns:repeat(2,1fr)}
+ .sumgrid{grid-template-columns:repeat(2,1fr)}
+ .cal{grid-template-columns:1fr}
+ .day{min-height:0}
+ .page{padding:12px}
+ .page.cg-main{padding-bottom:96px}
+ .hide-sm{display:none}
+}
+</style>
+</head>
+<body>
+<div class="banner" role="note">MOCKUP · SYNTHETIC DATA · layout and flow only, not the product, not schema</div>
+<div class="devbar" id="devbar" aria-label="Mockup controls (not part of the product)">
+ <span>View as:</span>
+ <button data-role="admin" aria-pressed="true">Office admin</button>
+ <button data-role="cg" aria-pressed="false">Caregiver (phone)</button>
+ <span style="margin-left:12px">Dashboard load:</span>
+ <button data-fail="0" aria-pressed="true">OK</button>
+ <button data-fail="1" aria-pressed="false">Simulate failure</button>
+ <button data-fail="2" aria-pressed="false">Simulate empty</button>
+</div>
+<div class="app" id="app"></div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title"></aside>
+
+<script>
+/* ---------- synthetic data ---------- */
+const S = {
+ role:'admin', view:'dashboard', collapsed:false, menuOpen:false, fail:0, helpOpen:false,
+ calView:'week', toast:'',
+ clients:[{id:'c1',name:'Demo Vega',code:'CL-3711',auth:'Respite 80% used'},{id:'c2',name:'Demo Okafor',code:'CL-7417',auth:'Personal care 40%'},{id:'c3',name:'Demo Tanaka',code:'CL-9804',auth:'Ends in 10 days'},{id:'c4',name:'Demo Lindqvist',code:'CL-A40D',auth:'Respite 20%'}],
+ cgs:[
+  {id:'g1',name:'Alex Caregiver',signed:true,approved:true,override:false,bg:'clear',cpr:'ok',tb:'ok'},
+  {id:'g2',name:'Casey Caregiver',signed:false,approved:true,override:true,bg:'clear',cpr:'ok',tb:'grace',overrideBy:'Olivia Owner',overrideAt:'Nov 9, 4:12 PM',overrideWhy:'Starts Monday; app invite sent'},
+  {id:'g3',name:'Drew Caregiver',signed:false,approved:false,override:false,bg:'clear',cpr:'ok',tb:'ok'},
+  {id:'g4',name:'Taylor Onboarding',signed:false,approved:false,override:false,bg:'pending',cpr:'ok',tb:'ok'},
+ ],
+ shifts:[
+  {id:'s1',day:0,t:'9:00 AM–1:00 PM',client:'c1',svc:'Respite',cg:'g1',st:'covered'},
+  {id:'s2',day:0,t:'2:00 PM–5:00 PM',client:'c2',svc:'Personal care',cg:null,st:'open'},
+  {id:'s3',day:1,t:'9:00 AM–12:00 PM',client:'c3',svc:'Respite',cg:'g2',st:'covered'},
+  {id:'s4',day:1,t:'10:00 AM–2:00 PM',client:'c4',svc:'Respite',cg:null,st:'open'},
+  {id:'s5',day:2,t:'9:00 AM–1:00 PM',client:'c1',svc:'Respite',cg:'g1',st:'covered'},
+  {id:'s6',day:-1,t:'1:00 PM–4:00 PM',client:'c2',svc:'Personal care',cg:'g1',st:'past'},
+  {id:'s7',day:-2,t:'9:00 AM–12:00 PM',client:'c3',svc:'Respite',cg:'g2',st:'past'},
+ ],
+ queue:[
+  {id:'q1',type:'past',title:'Demo Okafor · Personal care',why:'Shift ended yesterday with no visit record',act:'Review',ref:'s6'},
+  {id:'q2',type:'past',title:'Demo Tanaka · Respite',why:'Shift ended 2 days ago with no visit record',act:'Review',ref:'s7'},
+  {id:'q3',type:'unfilled',title:'Demo Okafor · Today 2:00 PM',why:'No caregiver',act:'Assign',ref:'s2'},
+  {id:'q4',type:'unfilled',title:'Demo Lindqvist · Tomorrow 10:00 AM',why:'No caregiver',act:'Assign',ref:'s4'},
+  {id:'q5',type:'docs',title:'Alex Caregiver · TB',why:'Expires in 12 days',act:'Open documents',ref:'g1'},
+  {id:'q6',type:'auth',title:'Demo Tanaka · Respite',why:'Authorization ends in 10 days',act:'Review authorization',ref:'c3'},
+ ],
+ qFilter:'all',
+ cg:{screen:'start', start:null, reason:'', unsched:false, method:'', attest:false},
+ imp:{kind:'staff', step:1, file:false, confirmed:false},
+};
+const $ = (s,r=document)=>r.querySelector(s);
+const cgName = id=>(S.cgs.find(g=>g.id===id)||{}).name||'No caregiver';
+const clName = id=>(S.clients.find(c=>c.id===id)||{}).name||'';
+const days=['Tue 11/10','Wed 11/11','Thu 11/12','Fri 11/13','Sat 11/14','Sun 11/15','Mon 11/16'];
+const dayName = d=> d<0 ? (d===-1?'Yesterday':'2 days ago') : days[d];
+const toast = m=>{S.toast=m;render();setTimeout(()=>{if(S.toast===m){S.toast='';render()}},3500)};
+
+/* ---------- navigation model: ONE system ---------- */
+const NAV=[
+ {k:'dashboard',l:'Dashboard',i:'▦'},
+ {k:'schedule',l:'Schedule',i:'▤',badge:()=>S.shifts.filter(s=>s.st==='open').length},
+ {k:'clients',l:'Clients',i:'☺',sub:[['clients','Clients'],['auth','Authorization changes']]},
+ {k:'staff',l:'Care Team',i:'✚',sub:[['caregivers','Caregivers'],['staff','Staff'],['types','Staff types'],['recruit','Recruiting'],['import','Import people']]},
+ {k:'reports',l:'Reports',i:'▥',sub:[['visits','Visit records'],['reports','Reports'],['billing','Billing']]},
+ {k:'settings',l:'Settings',i:'⚙',sub:[['roles','Roles & permissions'],['agency','Agency settings'],['compliance','Business compliance']]},
+];
+const CGNAV=[['schedule','My Schedule','▤'],['verify','Verify Visit','✔'],['avail','Availability','◷'],['docs','Documents','▣']];
+const TITLES={dashboard:'Dashboard',schedule:'Schedule',clients:'Clients',auth:'Authorization changes',caregivers:'Caregivers',staff:'Staff',types:'Staff types',recruit:'Recruiting',import:'Import people',visits:'Visit records',reports:'Reports',billing:'Billing',roles:'Roles & permissions',agency:'Agency settings',compliance:'Business compliance',assign:'Assign a client'};
+const HELP={dashboard:'This page shows what needs a decision. Each row has one action. Figures that cannot be loaded show “Unavailable”, never 0.',schedule:'Pick a day, week or month. Select a shift for details. Add shift opens a side panel. Items that need action are in one list above the calendar.',caregivers:'Assign a client to a caregiver and schedule them in one step. Background check is always required.',import:'Upload a CSV or Excel file. Nothing is saved until you confirm the preview.'};
+
+/* ---------- render ---------- */
+function render(){
+ const app=$('#app');
+ app.innerHTML = S.role==='admin' ? adminShell() : cgShell();
+ wire();
+}
+function sideHTML(){
+ return `<nav class="side ${S.collapsed?'collapsed':''} ${S.menuOpen?'open':''}" aria-label="Main">
+  <div class="brand"><div class="logo">O</div><span class="brand-name">Ogevia</span></div>
+  ${NAV.map(n=>{
+    const open = n.sub && n.sub.some(s=>s[0]===S.view) ;
+    const cur = n.k===S.view || open;
+    return `<button class="nav-btn" data-nav="${n.sub?n.sub[0][0]:n.k}" ${cur&&!n.sub?'aria-current="page"':''} title="${n.l}"><span class="ico">${n.i}</span><span class="lbl">${n.l}</span>${n.badge&&n.badge()?`<span class="badge lbl" aria-label="${n.badge()} open">${n.badge()}</span>`:''}</button>
+    ${n.sub&&(open)?`<div class="sec-sub">${n.sub.map(s=>`<button class="nav-btn" data-nav="${s[0]}" ${S.view===s[0]?'aria-current="page"':''}>${s[1]}</button>`).join('')}</div>`:''}`;
+  }).join('')}
+  <div class="grow"></div>
+  <button class="nav-btn" id="collapse" title="${S.collapsed?'Expand':'Collapse'} menu"><span class="ico">${S.collapsed?'»':'«'}</span><span class="lbl">Collapse menu</span></button>
+  <div class="who"><b>OWNER VIEW · Olivia Owner</b><span class="sub">Local Demo Agency (synthetic)</span></div>
+ </nav>`;
+}
+function topHTML(title,withHelp=true){
+ const unavailable = S.fail===1;
+ return `<div class="top">
+  <button class="icon-btn menu-btn" id="menu" aria-label="Open menu">☰</button>
+  <h1>${title}</h1>
+  <button class="icon-btn" data-nav="dashboard" aria-label="Notifications: ${unavailable?'unavailable':'3 unread'}">🔔 <b>${unavailable?'Unavailable':'3'}</b></button>
+  ${withHelp&&HELP[S.view]?`<div class="help"><button class="icon-btn" id="help" aria-expanded="${S.helpOpen}" aria-label="Help for this page">?</button><div class="help-panel ${S.helpOpen?'on':''}" role="region" aria-label="Help">${HELP[S.view]}</div></div>`:''}
+ </div>`;
+}
+function adminShell(){
+ const v=S.view;
+ let body='';
+ if(v==='dashboard')body=dashboard();
+ else if(v==='schedule')body=schedule();
+ else if(v==='caregivers')body=caregivers();
+ else if(v==='import')body=importFlow();
+ else body=`<div class="card"><h2>${TITLES[v]||v}</h2><p class="sub">Not part of this mockup. The real screen is reused unchanged in the build, inside the new navigation.</p></div>`;
+ return sideHTML()+`<div class="main">${topHTML(TITLES[v]||v)}<main class="page">${body}</main></div>`;
+}
+
+/* B. dashboard */
+function dashboard(){
+ const f=S.fail;
+ const open=S.shifts.filter(s=>s.st==='open').length, past=S.queue.filter(q=>q.type==='past').length;
+ const k=(l,n,tone,to)=> f===1 ? `<div class="kpi unavail" role="status"><div class="n">Unavailable</div><div class="l">${l}</div></div>` : `<button class="kpi ${tone}" data-nav="${to}" style="text-align:left;cursor:pointer"><div class="n">${n}</div><div class="l">${l}</div></button>`;
+ let items=S.queue.filter(q=>S.qFilter==='all'||q.type===S.qFilter);
+ const list = f===1 ? `<div class="err" role="alert"><b>The work list could not be loaded.</b> The figures above are unavailable too. This is not zero. <button class="btn link" id="retry">Try again</button></div>`
+  : f===2||items.length===0 ? `<div class="empty">Nothing needs action right now. Next check: when a shift ends or a document is due.</div>`
+  : items.map(q=>`<div class="q-item"><span class="tag ${q.type==='past'||q.type==='unfilled'?'bad':'warn'}">${{past:'Past shift',unfilled:'Unfilled',docs:'Document',auth:'Authorization'}[q.type]}</span><div class="q-main"><b>${q.title}</b><span class="sub">${q.why}</span></div><button class="btn ${q===items[0]?'primary':''}" data-act="${q.id}">${q.act}</button></div>`).join('');
+ return `<div class="kpis" aria-label="Key figures">
+  ${k('Needs action',f===2?0:S.queue.length,'warn','dashboard')}
+  ${k('Past shifts to review',f===2?0:past,'bad','schedule')}
+  ${k('Unfilled shifts',f===2?0:open,'bad','schedule')}
+  ${k('Documents expiring',f===2?0:1,'warn','caregivers')}
+  ${k('Hours left this month',f===2?'—':'61.3 h','','reports')}
+ </div>
+ <section class="card" aria-labelledby="wq"><div class="row spread"><h2 id="wq">Work queue</h2><div class="chips" role="group" aria-label="Filter">
+  ${[['all','All'],['past','Past shifts'],['unfilled','Unfilled'],['docs','Documents'],['auth','Authorization']].map(c=>`<button class="chip" data-chip="${c[0]}" aria-pressed="${S.qFilter===c[0]}">${c[1]}</button>`).join('')}</div></div>
+  <div style="margin-top:6px">${list}</div></section>
+  <p class="sub">Collapsed by default, one click away: Billing and hours detail (Reports), Outage readiness (Settings).</p>`;
+}
+
+/* C. schedule */
+function schedule(){
+ const open=S.shifts.filter(s=>s.st==='open'), past=S.shifts.filter(s=>s.st==='past');
+ const warnSign=S.shifts.filter(s=>s.cg && !S.cgs.find(g=>g.id===s.cg).signed && s.st!=='past');
+ const excCount=open.length+past.length+warnSign.length;
+ const exc=`<details class="exc" ${excCount?'open':''}><summary>⚠ ${excCount} need action <span class="sub">(one list: unfilled, past shifts, caregivers not signed in)</span></summary><div class="body">
+  ${open.map(s=>`<div class="q-item"><span class="tag bad">Unfilled</span><div class="q-main"><b>${clName(s.client)} · ${dayName(s.day)} ${s.t}</b><span class="sub">${s.svc}${s.callout?' · called out: '+s.callout:''}</span></div><button class="btn primary" data-assign="${s.id}">Assign</button></div>`).join('')}
+  ${past.map(s=>`<div class="q-item"><span class="tag warn">Past shift</span><div class="q-main"><b>${clName(s.client)} · ${dayName(s.day)} ${s.t}</b><span class="sub">${cgName(s.cg)} · no visit record</span></div><button class="btn" data-review="${s.id}">Review</button></div>`).join('')}
+  ${warnSign.map(s=>`<div class="q-item"><span class="tag info">Not signed in</span><div class="q-main"><b>${cgName(s.cg)} · ${clName(s.client)} · ${dayName(s.day)}</b><span class="sub">Cannot verify this visit in Ogevia until first sign-in</span></div><button class="btn" data-invite="${s.cg}">Send sign-in link</button></div>`).join('')}
+  ${excCount===0?'<div class="ok-note">Nothing needs action.</div>':''}</div></details>`;
+ const cols=(S.calView==='day'?[0]:S.calView==='month'?[-2,-1,0,1,2,3,4]:[-2,-1,0,1,2,3,4]).map(d=>{
+  const list=S.shifts.filter(s=>s.day===d);
+  return `<div class="day ${d===0?'today':''}"><h3>${dayName(d)}${d===0?' · Today':''}</h3>${list.map(s=>{
+   const g=S.cgs.find(x=>x.id===s.cg); const ns=g&&!g.signed&&s.st!=='past';
+   return `<button class="shift ${s.st==='open'?'open':ns?'warn':s.st==='past'?'past':''}" data-shift="${s.id}"><b>${s.t}</b>${clName(s.client)}<br><span class="sub">${s.cg?cgName(s.cg):'<b style="color:var(--bad)">Unfilled</b>'}${ns?' · ⚠ not signed in':''}</span></button>`}).join('')||'<span class="sub">No shifts</span>'}</div>`}).join('');
+ return `<div class="row spread"><div class="row"><div class="seg" role="group" aria-label="Calendar view">${['day','week','month'].map(v=>`<button data-cv="${v}" aria-pressed="${S.calView===v}">${v[0].toUpperCase()+v.slice(1)}</button>`).join('')}</div><button class="btn" aria-label="Previous">←</button><button class="btn" aria-label="Next">→</button><span class="sub">Week of 11/10/2026</span></div>
+  <button class="btn primary" id="addshift">Add shift</button></div>
+  ${exc}
+  <div class="cal" role="grid" aria-label="Calendar">${cols}</div>
+  <p class="sub">Repeating shifts, hours and limits, and care requests move into the Add shift panel and the shift panel. No separate tabs.</p>`;
+}
+
+/* D. caregivers + assign + override */
+function caregivers(){
+ return `<div class="card scroll-x"><table><thead><tr><th>Name</th><th>Status</th><th>Next shift</th><th>Missing</th><th></th></tr></thead><tbody>
+ ${S.cgs.map(g=>{
+  const next=S.shifts.find(s=>s.cg===g.id&&s.day>=0);
+  const miss=[g.bg!=='clear'?'Background check':'',!g.signed&&!g.override?'App sign-in':'',g.tb==='grace'?'TB (grace period)':''].filter(Boolean).join(', ')||'—';
+  const st=g.approved?(g.override&&!g.signed?'<span class="tag warn">Approved by override — not signed in</span>':'<span class="tag ok">Approved</span>'):'<span class="tag info">Onboarding</span>';
+  return `<tr><td><b>${g.name}</b></td><td>${st}</td><td>${next?dayName(next.day)+' '+next.t:'—'}</td><td>${miss}</td><td><button class="btn" data-profile="${g.id}">Open</button> <button class="btn primary" data-assigncg="${g.id}">Assign client</button></td></tr>`}).join('')}
+ </tbody></table></div>`;
+}
+
+/* F. bulk import */
+function importFlow(){
+ const I=S.imp, st=I.kind==='staff';
+ const steps=['Template','Upload','Preview','Confirm'];
+ const bar=`<div class="steps-import">${steps.map((s,i)=>`<span class="${I.step===i+1?'on':''}">${i+1}. ${s}</span>`).join('')}</div>`;
+ const tabs=`<div class="seg" role="group" aria-label="What to import"><button data-ik="staff" aria-pressed="${st}">Staff</button><button data-ik="clients" aria-pressed="${!st}">Clients</button></div>`;
+ let b='';
+ if(I.step===1)b=`<div class="card"><h2>1. Get the template</h2><p class="sub">Required columns are marked *. Optional columns can be left empty. ${st?'Emails and phones are used to find people already on your team.':'Client codes are created by Ogevia. UCI, Medicaid and member IDs are restricted fields.'}</p>
+  <div class="scroll-x"><table><thead><tr>${(st?['Full name *','Staff type *','Email','Phone','Start date']:['First name *','Last name *','Service *','Authorized hours / month','Authorization start','Authorization end','Agency key']).map(h=>`<th>${h}</th>`).join('')}</tr></thead></table></div>
+  <div class="row" style="margin-top:10px"><button class="btn">Download CSV template</button><button class="btn">Download Excel template</button><button class="btn primary" data-istep="2">I have my file</button></div></div>`;
+ if(I.step===2)b=`<div class="card"><h2>2. Upload</h2><p class="sub">CSV or XLSX, up to 1,000 rows. The file is read on the server. Your organization comes from your sign-in, never from the file.</p>
+  <div class="sigpad">${I.file?'people-sample.xlsx · 12 rows':'Choose a file'}</div>
+  <div class="row" style="margin-top:10px">${I.file?'':'<button class="btn" id="pick">Choose sample file</button>'}<button class="btn primary" data-istep="3" ${I.file?'':'disabled'}>Check file</button></div></div>`;
+ if(I.step===3)b=`<div class="card"><h2>3. Preview and dry run</h2><p class="sub">Nothing has been saved. This is what would happen.</p>
+  <div class="sumgrid"><div class="kpi"><div class="n">6</div><div class="l">New</div></div><div class="kpi"><div class="n">3</div><div class="l">Update existing</div></div><div class="kpi warn"><div class="n">2</div><div class="l">Possible duplicate (review)</div></div><div class="kpi bad"><div class="n">1</div><div class="l">Error</div></div></div>
+  <div class="scroll-x" style="margin-top:10px"><table><thead><tr><th>Row</th><th>Name</th><th>Result</th><th>Reason</th></tr></thead><tbody>
+  <tr><td>2</td><td>Renee Alika</td><td><span class="tag warn">Possible duplicate</span></td><td>Same phone as an existing person. Choose: same person, or different person (reason).</td></tr>
+  <tr><td>3</td><td>Jordan Lee</td><td><span class="tag ok">New</span></td><td>—</td></tr>
+  <tr><td>4</td><td>Sam Patel</td><td><span class="tag ok">Update</span></td><td>Matched on email; phone will change</td></tr>
+  <tr><td>9</td><td>(blank)</td><td><span class="tag bad">Error</span></td><td>Name is required. This row is skipped.</td></tr></tbody></table></div>
+  <div class="row" style="margin-top:10px"><button class="btn" data-istep="2">Back</button><button class="btn primary" data-istep="4">Continue</button></div></div>`;
+ if(I.step===4)b=I.confirmed?`<div class="ok-note"><b>Import saved.</b> 6 added, 3 updated, 2 held for review, 1 skipped. An audit entry was written (who, when, file fingerprint, counts). Re-uploading this same file changes nothing.<br>${st?'<b>No sign-in invitations were sent.</b> Send them later from Care Team, as a separate step.':'No billing records were created.'}</div><button class="btn" data-istep="1">Import another file</button>`:`<div class="card"><h2>4. Confirm</h2><p>Save 6 new and 3 updated records. 2 possible duplicates stay in the review list and are not saved. 1 row with an error is skipped.</p><p class="sub">${st?'Invitations are not sent by this import.':'Billing is never created by an import.'}</p><div class="row"><button class="btn" data-istep="3">Back</button><button class="btn primary" id="doimport">Confirm import</button></div></div>`;
+ return `<div class="row spread">${tabs}</div>${bar}${b}`;
+}
+
+/* ---------- drawers ---------- */
+function openDrawer(title,html,foot){
+ $('#drawer').innerHTML=`<header><h2 id="dr-title">${title}</h2><button class="icon-btn" id="dr-close" aria-label="Close">✕</button></header><div class="content">${html}</div><footer>${foot||''}</footer>`;
+ $('#drawer').classList.add('on');$('#scrim').classList.add('on');
+ $('#dr-close').onclick=closeDrawer;
+}
+function closeDrawer(){$('#drawer').classList.remove('on');$('#scrim').classList.remove('on')}
+function cgOptions(sel){return S.cgs.map(g=>`<option value="${g.id}" ${g.id===sel?'selected':''} ${(!g.approved)?'disabled':''}>${g.name}${!g.approved?' (not approved)':!g.signed?' (not signed in)':''}</option>`).join('')}
+function addShiftDrawer(pre){
+ openDrawer(pre?'Assign caregiver':'Add shift',`
+  <label class="f">Client<select id="f-client">${S.clients.map(c=>`<option value="${c.id}" ${pre&&pre.client===c.id?'selected':''}>${c.name} · ${c.auth}</option>`).join('')}</select></label>
+  <label class="f">Service<select id="f-svc"><option>Respite</option><option>Personal care</option></select></label>
+  <div class="row"><label class="f" style="flex:1">Date<input type="date" id="f-date" value="2026-11-12"></label><label class="f" style="flex:1">Start<input type="time" value="09:00"></label><label class="f" style="flex:1">End<input type="time" value="12:00"></label></div>
+  <label class="f">Caregiver<select id="f-cg"><option value="">Leave unfilled</option>${cgOptions(pre&&pre.cg)}</select><span class="hint">Only approved caregivers. Checks run when you save: authorization hours, availability, overlap.</span></label>
+  <div id="f-warn"></div>
+  <fieldset style="border:1px solid var(--line);border-radius:8px"><legend class="sub">Repeat</legend>
+   <label class="f"><select id="f-rep"><option value="none">Does not repeat</option><option value="weekly">Weekly on selected days</option></select></label>
+   <div class="checks" id="f-days" style="margin-top:8px;display:none">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<label><input type="checkbox" ${d==='Thu'?'checked':''}>${d}</label>`).join('')}</div>
+   <label class="f" id="f-until" style="display:none;margin-top:8px">Until<input type="date" value="2026-12-31"></label></fieldset>`,
+  `<button class="btn" id="dr-cancel">Cancel</button><button class="btn primary" id="dr-save">${pre?'Assign':'Save shift'}</button>`);
+ $('#dr-cancel').onclick=closeDrawer;
+ $('#f-rep').onchange=e=>{const on=e.target.value==='weekly';$('#f-days').style.display=on?'flex':'none';$('#f-until').style.display=on?'flex':'none'};
+ $('#f-cg').onchange=checkWarn;checkWarn();
+ function checkWarn(){const g=S.cgs.find(x=>x.id===$('#f-cg').value);$('#f-warn').innerHTML=g&&!g.signed?`<div class="empty" style="background:var(--warnbg);color:var(--warn)">⚠ ${g.name} has not signed in yet. They cannot verify visits in Ogevia until they do. The shift will show this warning.</div>`:''}
+ $('#dr-save').onclick=()=>{
+  const cg=$('#f-cg').value||null,cl=$('#f-client').value;
+  if(pre){const s=S.shifts.find(x=>x.id===pre.id);s.cg=cg;s.st=cg?'covered':'open';delete s.callout;S.queue=S.queue.filter(q=>q.ref!==pre.id)}
+  else S.shifts.push({id:'s'+(S.shifts.length+1),day:2,t:'9:00 AM–12:00 PM',client:cl,svc:$('#f-svc').value,cg,st:cg?'covered':'open'});
+  closeDrawer();toast(pre?'Shift assigned':($('#f-rep').value==='weekly'?'Repeating shift saved (4 weeks shown)':'Shift added'));
+ };
+}
+function shiftDrawer(id){
+ const s=S.shifts.find(x=>x.id===id);const g=S.cgs.find(x=>x.id===s.cg);
+ const foot= s.st==='covered'?`<button class="btn danger" id="callout">Record call-out</button>`:s.st==='open'?`<button class="btn primary" id="assignbtn">Assign caregiver</button>`:'';
+ openDrawer('Shift details',`<div><b>${clName(s.client)}</b><div class="sub">${s.svc} · ${dayName(s.day)} ${s.t}</div></div>
+  <div>Caregiver: <b>${s.cg?cgName(s.cg):'Unfilled'}</b> ${g&&!g.signed?'<span class="tag warn">Not signed in</span>':''} ${g&&g.override?'<span class="tag warn">Approved by override</span>':''}</div>
+  ${g&&!g.signed?'<div class="empty" style="background:var(--warnbg);color:var(--warn)">This caregiver cannot verify the visit in Ogevia until they sign in for the first time.</div>':''}
+  <details><summary class="sub" style="min-height:44px;display:flex;align-items:center">Authorization and hours (collapsed by default)</summary><p class="sub">Respite · 80% used · 3.0 h reserved by this shift</p></details>`,foot);
+ const c=$('#callout'); if(c)c.onclick=()=>calloutDrawer(id);
+ const a=$('#assignbtn'); if(a)a.onclick=()=>addShiftDrawer(s);
+}
+function calloutDrawer(id){
+ const s=S.shifts.find(x=>x.id===id);
+ openDrawer('Record call-out',`<p>${clName(s.client)} · ${dayName(s.day)} ${s.t}<br><span class="sub">Called out: ${cgName(s.cg)}</span></p>
+  <label class="f">Reason<textarea id="co-why" placeholder="Required"></textarea></label>
+  <label class="f">Replacement<select id="co-rep"><option value="">Decide later (shift becomes unfilled)</option>${S.cgs.filter(g=>g.approved&&g.id!==s.cg).map(g=>`<option value="${g.id}">${g.name}${g.signed?'':' (not signed in)'}</option>`).join('')}</select><span class="hint">The authorization hours stay reserved once, not twice.</span></label>`,
+  `<button class="btn" id="dr-cancel">Back</button><button class="btn primary" id="co-save">Save call-out</button>`);
+ $('#dr-cancel').onclick=()=>shiftDrawer(id);
+ $('#co-save').onclick=()=>{if(!$('#co-why').value.trim()){$('#co-why').style.borderColor='var(--bad)';$('#co-why').placeholder='A reason is required';return}
+  const rep=$('#co-rep').value;const prev=cgName(s.cg);
+  if(rep){s.cg=rep;s.st='covered'}else{s.callout=prev;s.cg=null;s.st='open'}
+  closeDrawer();toast(rep?'Replacement assigned':'Call-out recorded. The shift is now in the action list.')};
+}
+function assignDrawer(gid){
+ const g=S.cgs.find(x=>x.id===gid);
+ const bgBlock=g.bg!=='clear', needsOverride=!g.signed&&!g.approved;
+ openDrawer('Assign a client to '+g.name,`
+  <div class="card" style="padding:10px"><h3>Readiness</h3><ul style="margin:6px 0 0;padding-left:18px">
+   <li class="${g.bg==='clear'?'rb-ok':'rb-bad'}">Background check: ${g.bg==='clear'?'clear':'pending'} <span class="sub">(required, no override)</span></li>
+   <li class="rb-ok">CPR: current</li>
+   <li class="${g.tb==='grace'?'':'rb-ok'}">TB: ${g.tb==='grace'?'in 30-day grace period (extension recorded)':'current'}</li>
+   <li class="${g.signed?'rb-ok':'rb-bad'}">App sign-in: ${g.signed?'done':'not yet'}</li></ul></div>
+  ${bgBlock?`<div class="err">Cannot assign. The background check is not clear. There is no override for this.</div>`:''}
+  ${!bgBlock&&needsOverride?`<div class="card" style="padding:10px;border-color:#e3b768"><h3>Approve by override</h3><p class="sub">${g.name} has not signed in. An administrator can approve them for work anyway. A reason is required. This is recorded with your name and the time, and a badge shows until their first sign-in.</p><label class="f">Reason (required)<textarea id="ov-why"></textarea></label></div>`:''}
+  ${!bgBlock&&g.override?`<div class="ok-note">Approved by override — not signed in<br><span class="sub">${g.overrideBy}, ${g.overrideAt}: “${g.overrideWhy}”</span></div>`:''}
+  <label class="f">Client<select id="a-client">${S.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></label>
+  <label class="f">Service<select><option>Respite</option><option>Personal care</option></select></label>
+  <label class="f">Schedule<select id="a-pat"><option>Weekly: Tue and Thu, 9:00 AM–12:00 PM</option><option>One shift only</option><option>Assign only, schedule later</option></select></label>
+  ${!g.signed?`<div class="empty" style="background:var(--warnbg);color:var(--warn)">⚠ Not signed in: shifts will show a warning and ${g.name} cannot verify visits until first sign-in.</div>`:''}`,
+  `<button class="btn" id="dr-cancel">Cancel</button><button class="btn primary" id="a-save" ${bgBlock?'disabled':''}>${needsOverride?'Approve by override and assign':'Assign and schedule'}</button>`);
+ $('#dr-cancel').onclick=closeDrawer;
+ $('#a-save').onclick=()=>{
+  if(needsOverride){const w=$('#ov-why');if(!w.value.trim()){w.style.borderColor='var(--bad)';w.placeholder='A reason is required to approve by override';return}
+   Object.assign(g,{approved:true,override:true,overrideBy:'Olivia Owner',overrideAt:'Nov 10, now',overrideWhy:w.value.trim()})}
+  S.shifts.push({id:'s'+(S.shifts.length+1),day:3,t:'9:00 AM–12:00 PM',client:$('#a-client').value,svc:'Respite',cg:g.id,st:'covered'});
+  closeDrawer();toast('Assigned and scheduled'+(needsOverride?' · override recorded in the audit log':''));render();
+ };
+}
+
+/* E. caregiver phone flow */
+function cgShell(){
+ const c=S.cg, v=S.view in {schedule:1,verify:1,avail:1,docs:1}?S.view:'verify';
+ const tab=`<nav class="tabbar" aria-label="Caregiver">${CGNAV.map(n=>`<button data-cgnav="${n[0]}" ${v===n[0]?'aria-current="page"':''}><span aria-hidden="true">${n[2]}</span>${n[1]}</button>`).join('')}</nav>`;
+ let b='';
+ if(v==='schedule')b=`<div class="card"><h2>My Schedule</h2>${S.shifts.filter(s=>s.cg==='g1'&&s.day>=0).map(s=>`<div class="q-item"><div class="q-main"><b>${dayName(s.day)} · ${s.t}</b><span class="sub">${clName(s.client)} · ${s.svc}</span></div></div>`).join('')}</div>`;
+ else if(v==='avail')b=`<div class="card"><h2>Availability</h2><p class="sub">Unchanged from the current screen.</p></div>`;
+ else if(v==='docs')b=`<div class="card"><h2>Documents</h2><p class="sub">Unchanged from the current screen. TB expires in 12 days.</p></div>`;
+ else b=verify();
+ return `<div class="main" style="max-width:520px;margin:0 auto;width:100%"><div class="top"><h1>${{start:'Verify Visit',active:'Visit in progress',confirm:'End and confirm',done:'Submitted'}[c.screen]}</h1><button class="icon-btn" data-nav="dashboard" style="font-size:12px">Back to office view</button></div><main class="page cg-main">${v==='verify'?`<div class="steps"><span class="${c.screen==='start'?'on':''}"><b>1</b> Start</span> › <span class="${c.screen==='active'?'on':''}"><b>2</b> Visit</span> › <span class="${c.screen==='confirm'||c.screen==='done'?'on':''}"><b>3</b> Confirm</span></div>`:''}${b}</main>${tab}</div>`;
+}
+function verify(){
+ const c=S.cg;
+ if(c.screen==='start'){
+  const today=S.shifts.filter(s=>s.cg==='g1'&&s.day===0);
+  if(c.unsched)return `<div class="card"><h2>Unscheduled visit <span class="tag warn">Provisional</span></h2><p class="sub">This visit is not on your schedule. It goes to the office for review before it can count.</p><label class="f">Client<select><option>CL-3711 · Demo Vega</option><option>CL-7417 · Demo Okafor</option></select></label><label class="f">Reason (required)<textarea id="u-why"></textarea></label></div><button class="btn big primary" id="ustart">Start provisional visit</button><button class="btn" id="uback">Back to today's visit</button>`;
+  if(!today.length)return `<div class="empty">You have no visits scheduled for today.</div><button class="btn link" id="unsched">Start an unscheduled visit (needs a reason)</button>`;
+  const s=today[0];
+  return `<div class="card"><h2>Today</h2><div style="font-size:18px"><b>${clName(s.client)}</b></div><div class="sub">${s.svc} · ${s.t}</div></div>
+  <button class="btn big primary" id="start">Start visit</button>
+  <p class="sub" style="text-align:center">The time is recorded by the server when you tap Start.</p>
+  <button class="btn link" id="unsched">Not your scheduled visit? Start an unscheduled visit</button>`;
+ }
+ if(c.screen==='active')return `<div class="card"><div class="sub" style="text-align:center">Started 9:02 AM (server time)</div><div class="timer" id="timer">0:00:12</div><div style="text-align:center"><b>${c.unsched?'Unscheduled · provisional':'Demo Vega'}</b><div class="sub">Respite · scheduled 9:00 AM–1:00 PM</div></div></div><div class="empty">Authorization: on track</div><button class="btn big danger" id="end">End visit</button>`;
+ if(c.screen==='confirm')return `<div class="card"><div class="stats"><div><span class="sub">Scheduled</span><b>4.0 h</b></div><div><span class="sub">Worked</span><b>3.9 h</b></div><div><span class="sub">Difference</span><b>−0.1 h</b></div></div></div>
+  <div class="card"><h2>Who is confirming?</h2><div class="methods">${['Client signs','Representative signs','Verbal confirmation','Unable to confirm'].map(m=>`<label><input type="radio" name="m" value="${m}" ${c.method===m?'checked':''}>${m}</label>`).join('')}</div>
+  ${c.method.includes('signs')?'<div class="sigpad" style="margin-top:10px">Sign here</div>':''}</div>
+  <label class="methods"><label><input type="checkbox" id="att" ${c.attest?'checked':''}> I confirm these times are correct. (Your sign-in, the time and the form version are recorded.)</label></label>
+  <button class="btn big primary" id="submit" ${c.method&&c.attest?'':'disabled'}>Submit visit</button>`;
+ return `<div class="ok-note"><b>Submitted and locked.</b><br>It is now with the office. You cannot change it.</div><div class="card"><div class="stats"><div><span class="sub">Worked</span><b>3.9 h</b></div><div><span class="sub">Confirmed by</span><b>${c.method}</b></div><div><span class="sub">Status</span><b>In review</b></div></div></div><button class="btn big" id="again">Back to today</button>`;
+}
+
+/* ---------- wiring ---------- */
+function wire(){
+ const a=$('#app');
+ a.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.nav; if(k==='dashboard'&&S.role==='cg'){S.role='admin';S.view='dashboard';syncDev()}else S.view=k; S.menuOpen=false;S.helpOpen=false;render();window.scrollTo(0,0)});
+ a.querySelectorAll('[data-cgnav]').forEach(b=>b.onclick=()=>{S.view=b.dataset.cgnav;render()});
+ const m=$('#menu');if(m)m.onclick=()=>{S.menuOpen=!S.menuOpen;render()};
+ const co=$('#collapse');if(co)co.onclick=()=>{S.collapsed=!S.collapsed;render()};
+ const h=$('#help');if(h)h.onclick=()=>{S.helpOpen=!S.helpOpen;render()};
+ a.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{S.qFilter=b.dataset.chip;render()});
+ const r=$('#retry');if(r)r.onclick=()=>{S.fail=0;syncDev();render()};
+ a.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const q=S.queue.find(x=>x.id===b.dataset.act);
+  if(q.type==='unfilled')shiftDrawer(q.ref);else if(q.type==='past'){S.view='schedule';render()}else{S.view=q.type==='docs'?'caregivers':'dashboard';render()}});
+ a.querySelectorAll('[data-cv]').forEach(b=>b.onclick=()=>{S.calView=b.dataset.cv;render()});
+ const ad=$('#addshift');if(ad)ad.onclick=()=>addShiftDrawer();
+ a.querySelectorAll('[data-shift]').forEach(b=>b.onclick=()=>shiftDrawer(b.dataset.shift));
+ a.querySelectorAll('[data-assign]').forEach(b=>b.onclick=()=>addShiftDrawer(S.shifts.find(s=>s.id===b.dataset.assign)));
+ a.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>{S.queue=S.queue.filter(q=>q.ref!==b.dataset.review);const s=S.shifts.find(x=>x.id===b.dataset.review);s.st='reviewed';toast('Opened in Visit records (not part of this mockup)')});
+ a.querySelectorAll('[data-invite]').forEach(b=>b.onclick=()=>{const g=S.cgs.find(x=>x.id===b.dataset.invite);toast('Sign-in link sent to '+g.name+' (mockup)')});
+ a.querySelectorAll('[data-assigncg]').forEach(b=>b.onclick=()=>assignDrawer(b.dataset.assigncg));
+ a.querySelectorAll('[data-profile]').forEach(b=>b.onclick=()=>assignDrawer(b.dataset.profile));
+ /* import */
+ a.querySelectorAll('[data-ik]').forEach(b=>b.onclick=()=>{S.imp={kind:b.dataset.ik,step:1,file:false,confirmed:false};render()});
+ a.querySelectorAll('[data-istep]').forEach(b=>b.onclick=()=>{S.imp.step=+b.dataset.istep;if(S.imp.step===1){S.imp.file=false;S.imp.confirmed=false}render()});
+ const pk=$('#pick');if(pk)pk.onclick=()=>{S.imp.file=true;render()};
+ const di=$('#doimport');if(di)di.onclick=()=>{S.imp.confirmed=true;render()};
+ /* caregiver */
+ const C=S.cg;
+ const st=$('#start');if(st)st.onclick=()=>{C.screen='active';C.unsched=false;render()};
+ const us=$('#unsched');if(us)us.onclick=()=>{C.unsched=true;render()};
+ const ub=$('#uback');if(ub)ub.onclick=()=>{C.unsched=false;render()};
+ const ust=$('#ustart');if(ust)ust.onclick=()=>{const w=$('#u-why');if(!w.value.trim()){w.style.borderColor='var(--bad)';w.placeholder='A reason is required';return}C.screen='active';render()};
+ const en=$('#end');if(en)en.onclick=()=>{C.screen='confirm';C.method='';C.attest=false;render()};
+ a.querySelectorAll('input[name=m]').forEach(i=>i.onchange=()=>{C.method=i.value;render()});
+ const at=$('#att');if(at)at.onchange=()=>{C.attest=at.checked;render()};
+ const sb=$('#submit');if(sb)sb.onclick=()=>{C.screen='done';render()};
+ const ag=$('#again');if(ag)ag.onclick=()=>{C.screen='start';C.unsched=false;render()};
+ const tm=$('#timer');if(tm){let t=12;clearInterval(window._t);window._t=setInterval(()=>{if(!$('#timer')){clearInterval(window._t);return}t++;$('#timer').textContent='0:'+String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0')},1000)}
+ /* toast */
+ let t=$('#toast');if(t)t.remove();
+ if(S.toast){const d=document.createElement('div');d.id='toast';d.setAttribute('role','status');d.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:84px;background:#15232b;color:#fff;padding:10px 16px;border-radius:10px;z-index:40;max-width:90vw';d.textContent=S.toast;document.body.appendChild(d)}
+}
+$('#scrim').onclick=closeDrawer;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDrawer();if(S.helpOpen){S.helpOpen=false;render()}}});
+function syncDev(){document.querySelectorAll('#devbar [data-role]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.role===S.role));document.querySelectorAll('#devbar [data-fail]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.fail===S.fail))}
+document.querySelectorAll('#devbar [data-role]').forEach(b=>b.onclick=()=>{S.role=b.dataset.role;S.view=S.role==='cg'?'verify':'dashboard';closeDrawer();syncDev();render()});
+document.querySelectorAll('#devbar [data-fail]').forEach(b=>b.onclick=()=>{S.fail=+b.dataset.fail;syncDev();render()});
+render();
+</script>
+</body>
+</html>
