@@ -124,6 +124,7 @@ export function StaffPage() {
         action={canManage ? <Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add staff</Button> : undefined}
       />
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
+      {canManage && all.length > 0 ? <BulkInvite rows={all} onDone={finish} /> : null}
       {panel?.kind === "add" ? <ProfileForm title="Add staff" types={activeTypes} onDone={finish} onCancel={() => setPanel(null)} /> : null}
       {all.length > 0 ? (
         <div role="search" aria-label="Find staff" className="flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2">
@@ -351,6 +352,88 @@ function InviteForm({ row, onDone, onCancel }: { row: StaffRow; onDone: (t: stri
       {send.isError ? <p role="alert" className="text-sm text-red-700">{message(send.error, "The invitation could not be sent.")}</p> : null}
       <FormActions pending={send.isPending} label={resend ? "Resend invitation" : "Send invitation"} onCancel={onCancel} disabled={!resend && !email.trim()} />
     </form>
+  );
+}
+
+/**
+ * R25: sign-in links are never sent by an import or by adding staff. This is the one explicit bulk action: the administrator picks the people, picks one role, and confirms.
+ * It calls the same one-person invitation route for each person in turn, so every server rule still applies per person (a pending invitation is never overwritten, a role
+ * limit is checked, the audit trail records each invitation). A failure for one person never stops or hides the others; people already sent are not sent again.
+ */
+const BULK_INVITE_MAX = 50;
+function BulkInvite({ rows, onDone }: { rows: StaffRow[]; onDone: (text: string) => Promise<void> }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const waiting = rows.filter((r) => r.profileId !== null && r.accessStatus === "none" && r.status === "active");
+  const eligible = waiting.filter((r) => !!r.contactEmail);
+  const noEmail = waiting.length - eligible.length;
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [role, setRole] = useState<string>("staff");
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<{ key: string; name: string; error: string | null }[]>([]);
+  if (eligible.length === 0 && results.length === 0) return null;
+  const chosen = eligible.filter((r) => picked.has(r.staffKey));
+  const toggle = (key: string) => setPicked((cur) => { const next = new Set(cur); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  const send = async () => {
+    setRunning(true);
+    setResults([]);
+    const out: { key: string; name: string; error: string | null }[] = [];
+    for (const r of chosen.slice(0, BULK_INVITE_MAX)) {
+      try {
+        await api.post(`/v1/staff/${r.profileId}/invitation`, { organizationId: activeOrganizationId, email: r.contactEmail, role });
+        out.push({ key: r.staffKey, name: r.displayName, error: null });
+      } catch (cause) {
+        out.push({ key: r.staffKey, name: r.displayName, error: message(cause, "Not sent.") });
+      }
+      setResults([...out]);
+    }
+    setPicked(new Set());
+    setRunning(false);
+    const sent = out.filter((x) => !x.error).length;
+    await onDone(`Sign-in links: ${sent} sent${out.length - sent ? `, ${out.length - sent} not sent (see the list)` : ""}.`);
+  };
+  return (
+    <section aria-label="Send sign-in links" className="rounded-md border border-slate-200 bg-og-card p-2">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="inline-flex min-h-[44px] items-center font-semibold text-og-accent underline md:min-h-[32px]">
+        Send sign-in links{eligible.length ? ` (${eligible.length} can be invited)` : ""}
+      </button>
+      {open ? (
+        <div className="mt-1 space-y-2">
+          <p className="text-sm text-slate-700">Adding or importing staff never sends an invitation. Choose the people who should receive a sign-in link now.{noEmail ? ` ${noEmail} ${noEmail === 1 ? "person has" : "people have"} no email on file and cannot be invited from here.` : ""}</p>
+          {eligible.length > 0 ? (
+            <fieldset className="space-y-1" disabled={running}>
+              <legend className="sr-only">People to invite</legend>
+              <button type="button" className="min-h-[44px] text-sm font-medium underline md:min-h-[32px]" onClick={() => setPicked(picked.size === Math.min(eligible.length, BULK_INVITE_MAX) ? new Set() : new Set(eligible.slice(0, BULK_INVITE_MAX).map((r) => r.staffKey)))}>
+                {picked.size > 0 ? "Clear selection" : `Select ${Math.min(eligible.length, BULK_INVITE_MAX)}`}
+              </button>
+              <ul className="divide-y divide-slate-200 rounded-md border border-slate-200">
+                {eligible.map((r) => (
+                  <li key={r.staffKey}>
+                    <label className="flex min-h-[44px] items-center gap-2 px-2 text-sm">
+                      <input type="checkbox" className="h-5 w-5" checked={picked.has(r.staffKey)} onChange={() => toggle(r.staffKey)} disabled={!picked.has(r.staffKey) && picked.size >= BULK_INVITE_MAX} />
+                      <span className="font-medium">{r.displayName}</span>
+                      <span className="truncate text-slate-600">{r.contactEmail}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <label className="block text-sm font-medium text-slate-800">Role for everyone selected
+                <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_NAME[r]}</option>)}</select>
+              </label>
+              <Button type="button" loading={running} disabled={chosen.length === 0} onClick={() => void send()}>
+                {chosen.length === 0 ? "Send sign-in links" : `Send ${chosen.length} sign-in ${chosen.length === 1 ? "link" : "links"}`}
+              </Button>
+            </fieldset>
+          ) : null}
+          {results.length > 0 ? (
+            <ul aria-label="Results" role="status" className="space-y-0.5 text-sm">
+              {results.map((x) => <li key={x.key} className={x.error ? "text-red-700" : "text-emerald-800"}>{x.name}: {x.error ?? "sent"}</li>)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

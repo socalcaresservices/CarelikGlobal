@@ -67,3 +67,17 @@ Rule, as specified by the owner:
 4. CPR/TB continue to follow the existing 30-day grace period plus recorded per-caregiver extensions.
 5. The profile and schedule show the badge **"Approved by override — not signed in"** until first sign-in.
 6. A caregiver who has not signed in cannot verify a visit in Ogevia; the schedule shows a warning on their shifts.
+
+## 2026-11-10: Caregiver-facing client label (owner decision, R23)
+
+Status: **approved rule; not implemented; not deployed.** Held with the visual caregiver rows until the owner approves the redesign mockup.
+
+- On visits **assigned to that caregiver**: show **first name + last initial + client code** (for example "Maria G., CL-3711AABD17").
+- On **open shifts not yet assigned** to the caregiver: show **client code + city only**. No name.
+- Today a caregiver sees only the client code (the caregiver role does not hold `clients.names.read`).
+
+Implementation notes recorded with the decision (not changes to it): this widens what the caregiver API returns, so it must be enforced **server-side** (the response for an assigned visit may carry the name; the open-shift response must never carry a name or street address), tenant-scoped, with a negative test that an unassigned caregiver cannot obtain a name. The city on open shifts is a new field for that audience; the owner may want a privacy review before it ships.
+
+## 2026-11-10: Where the UX work is proposed (owner decision, R15)
+
+The UX branch `claude/ogevia-ux-audit-redesign-w36cov` is opened as a **draft** pull request to **`main`**; it is not merged. PR #106's head commit is an ancestor of the branch, so #106 is closed as superseded by the new PR (comment links the new PR). PR #107's code is also already in this branch's history (`fb491a5`).

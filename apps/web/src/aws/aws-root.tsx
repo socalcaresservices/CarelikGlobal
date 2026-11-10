@@ -52,6 +52,12 @@ function MovedTo({ to }: { to: string }) {
   return <Navigate to={`${to}${search}${hash}`} replace />;
 }
 
+/** The Availability screen is a caregiver's own (permission availability.manage_own). Anyone else is sent Home instead of seeing a "Forbidden" page from a request that is bound to fail. */
+function OwnAvailabilityOnly({ children }: PropsWithChildren) {
+  const { hasPermission } = useOrganization();
+  return hasPermission("availability.manage_own") ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 function AwsBackendProvider({ api, children }: PropsWithChildren<{ api: AwsApiClient }>) {
   const { organizations } = useOrganization();
   const backend = useMemo(
@@ -96,7 +102,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/staff" element={<StaffPage />} />
                     <Route path="/settings/staff-types" element={<StaffTypesPage />} />
                     <Route path="/settings/roles" element={<RolesPermissionsPage />} />
-                    <Route path="/availability" element={<CaregiverAvailabilityPage api={api} />} />
+                    <Route path="/availability" element={<OwnAvailabilityOnly><CaregiverAvailabilityPage api={api} /></OwnAvailabilityOnly>} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/clients" element={<ClientsPage />} />
