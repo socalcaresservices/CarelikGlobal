@@ -66,7 +66,7 @@ describe("Caregiver holds page (the Action needed destination)", () => {
     expect(within(article).getByText(/recurring/)).toBeInTheDocument();
     expect(within(article).getAllByRole("link", { name: "Open the schedule" })).toHaveLength(2);
     expect(within(article).getByRole("heading", { name: "Standing assignments (1)" })).toBeInTheDocument();
-    expect(within(article).getByText(/Nothing here was cancelled, moved or ended/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/Nothing here was cancelled, moved or ended/)).toBeInTheDocument();
   }, TEST_TIMEOUT_MS);
 
   it("lists scheduled shifts whose CPR/TB is expired or expires during the shift even when nobody is on hold, and marks a shift already under way", async () => {
@@ -81,7 +81,7 @@ describe("Caregiver holds page (the Action needed destination)", () => {
     expect(within(section).getByText(/CPR expires during this shift/)).toBeInTheDocument();
     expect(within(section).getByText(/CPR is expired for this shift/)).toBeInTheDocument();
     expect(within(section).getByText(/In progress \(visit open\)/)).toBeInTheDocument();
-    expect(within(section).getByText(/a visit in progress is never ended by the system/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/a visit in progress is never ended by the system/)).toBeInTheDocument();
   }, TEST_TIMEOUT_MS);
 
   it("shifts at risk are grouped by caregiver and reason: one row with a count, the shifts open under it, every link is kept", async () => {

@@ -115,7 +115,7 @@ describe("Action needed", () => {
     fireEvent.click(screen.getByRole("button", { name: "History" }));
     const hist = await screen.findByTestId("issue-history");
     await waitFor(() => expect(hist).toHaveTextContent("severity changed (critical)"));
-    expect(hist).toHaveTextContent("when the change was first seen");
+    expect(screen.getByTestId("page-help-panel")).toHaveTextContent("when the change was first seen");
     expect(calls.some((c) => c.path === "/v1/action-issues/history" && c.query.get("issueKey") === "visit:confirmation_overdue:v1")).toBe(true);
   }, 30000);
 

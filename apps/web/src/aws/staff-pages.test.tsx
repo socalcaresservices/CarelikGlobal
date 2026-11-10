@@ -247,8 +247,9 @@ describe("Staff", () => {
     expect(within(nav).getByRole("link", { name: "Agency Settings" }).getAttribute("href")).toBe("/settings/branding");
     cleanup();
     renderAt("/settings/roles", "organization_owner");
-    const strip = await screen.findByRole("navigation", { name: "Section tabs" });
-    expect(within(strip).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
+    const settingsNav = await screen.findByRole("navigation", { name: "Main" });
+    expect(screen.queryByRole("navigation", { name: "Section tabs" })).toBeNull();
+    expect(within(settingsNav).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
   });
 
   it("search and the Staff Type, Role and Status filters narrow the list; the numbers follow the filter; Clear Filters brings everyone back", async () => {
@@ -308,7 +309,7 @@ describe("Staff Types", () => {
 
   it("states that a type grants nothing, and is refused to someone without staff.read", async () => {
     renderAt("/settings/staff-types", "organization_owner");
-    expect(await screen.findByRole("button", { name: "About Staff Types" })).toHaveAccessibleDescription(/never gives access/);
+    await waitFor(() => expect(screen.getByTestId("page-help-panel")).toHaveTextContent(/never gives access/));
     cleanup();
     renderAt("/settings/staff-types", "manager");
     expect(await screen.findByText("Only an administrator can manage staff.")).toBeInTheDocument();

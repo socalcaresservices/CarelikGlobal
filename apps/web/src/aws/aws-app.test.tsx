@@ -397,7 +397,7 @@ describe("AWS build: manager review and billing-review data", () => {
   it("NEEDS ATTENTION opens the exceptions view; the Visits menu item returns to the visit list", async () => {
     renderAws("/service-verification/reports?view=exceptions", "manager");
     expect(await screen.findByRole("heading", { name: "Visits to review" })).toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Section tabs" })).getByRole("link", { name: "Visits" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Visits" }));
     expect(await screen.findByRole("heading", { name: "Visit records" })).toBeInTheDocument();
   });
 

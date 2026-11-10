@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { usePageHelp } from "./page-help-context";
 import { Link } from "react-router-dom";
 import { cn } from "@carelik/ui";
 
@@ -18,12 +20,28 @@ export function InfoTip({ children, label = "More information", title, more, cla
   const [dismissed, setDismissed] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  // Inside the app shell the tip joins the page's one help panel (opened by the "?" in the header) instead of floating beside a field.
+  const page = usePageHelp();
+  const register = page?.register;
+  useEffect(() => (register ? register(id) : undefined), [register, id]);
   useEffect(() => {
     if (!open) return;
     const away = (e: Event) => { if (root.current && !root.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
+  if (page) {
+    return page.slot
+      ? createPortal(
+          <section aria-label={label} className="space-y-0.5 border-b border-og-line pb-2 last:border-0 last:pb-0">
+            {title ? <p className="text-[13px] font-semibold">{title}</p> : null}
+            <p className="text-xs leading-snug">{children}</p>
+            {more ? <Link to={more.to} className="inline-block text-xs font-medium text-og-link underline">{more.label ?? "More detail"}</Link> : null}
+          </section>,
+          page.slot,
+        )
+      : null;
+  }
   return (
     <span
       ref={root}

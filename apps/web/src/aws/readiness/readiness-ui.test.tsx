@@ -459,7 +459,7 @@ describe("Assignment checks on the schedule", () => {
     const form = await screen.findByRole("group", { name: "Override availability" });
     expect(within(form).getByText(/One-time override of the availability check/)).toBeInTheDocument();
     expect(within(form).getByText(/this one shift/)).toBeInTheDocument();
-    expect(within(form).getByText(/does not change the caregiver's recorded availability/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/does not change the caregiver's recorded availability/)).toBeInTheDocument();
     const go = within(form).getByRole("button", { name: "Override availability" });
     expect(go).toBeDisabled();
     fireEvent.change(within(form).getByLabelText("Reason for the override"), { target: { value: "Caregiver agreed by phone" } });
@@ -513,7 +513,7 @@ describe("review follow-ups: report-only wording and My experience", () => {
   it("caregiver profile: My experience reports tags as a note until the agency confirms; no location data is read", async () => {
     const { calls } = renderAt("/profile", { role: "caregiver" });
     const card = await screen.findByRole("region", { name: "My experience" });
-    expect(within(card).getByText(/An administrator confirms it; until then it is only a note\./)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/An administrator confirms it; until then it is only a note\./)).toBeInTheDocument();
     fireEvent.click(await within(card).findByRole("checkbox", { name: /ABA experience/ }));
     fireEvent.click(within(card).getByRole("button", { name: "Save my experience" }));
     await waitFor(() => expect(posts(calls, "/v1/experience/me")).toHaveLength(1));

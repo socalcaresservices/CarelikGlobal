@@ -80,7 +80,7 @@ describe("shifts that ended with no visit record", () => {
     const { calls } = renderAt("/schedule", ["shifts.manage", "visits.read", "clients.names.read"]);
     const panel = await screen.findByTestId("shifts-to-reconcile", {}, { timeout: 15000 });
     expect(screen.getByRole("heading", { name: "Past: need review (1)" })).toBeInTheDocument();
-    expect(within(panel).getByText(/Nothing is released automatically/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/Nothing is released automatically/)).toBeInTheDocument();
     expect(within(panel).getByText(/1 hr 30 min reserved/)).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Save" })).toBeDisabled(); // nothing chosen yet
     fireEvent.click(within(panel).getByRole("radio", { name: "No service was delivered" }));

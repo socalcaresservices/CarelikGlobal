@@ -129,10 +129,12 @@ describe("sidebar: expanded", () => {
     // Nothing is open on the Dashboard until a group is opened.
     expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["Dashboard"]);
     openAll(nav);
-    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual(["Dashboard", "Clients", "Authorization changes", "Caregivers", "Schedule", "Reports", "Billing", "Agency Settings"]);
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual(["Dashboard", "Clients", "Authorization changes", "Caregivers", "Recruiting", "Documents", "Schedule", "Calendar", "Requests", "Reports", "Billing", "Visits", "Visits to review", "Outage records", "Agency Settings", "Continuity"]);
     expect(hrefs(nav)).toEqual({
       "Dashboard": "/", "Clients": "/clients", "Authorization changes": "/authorization-impacts", "Caregivers": "/care-team", "Schedule": "/schedule",
       "Reports": "/service-verification/reports?view=overview", "Billing": "/billing-review", "Agency Settings": "/settings/services",
+      "Recruiting": "/care-team/recruiting", "Documents": "/documents", "Calendar": "/service-verification/reports?view=calendar", "Requests": "/schedule/shift-requests",
+      "Visits": "/service-verification/reports", "Visits to review": "/service-verification/reports?view=exceptions", "Outage records": "/outage-visits", "Continuity": "/continuity",
     });
   });
 
@@ -159,7 +161,7 @@ describe("sidebar: expanded", () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     openAll(nav);
-    expect(Object.keys(hrefs(nav)).sort()).toEqual(["My Schedule", "Verify Visit"]);
+    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My Schedule", "My documents", "Verify Visit"]);
     expect(within(nav).getAllByTestId("nav-section").map((e) => e.querySelector("button")?.textContent)).toEqual(["My Work"]);
     expect(screen.getByRole("link", { name: "Appearance" }).getAttribute("href")).toBe("/settings/appearance");
   });

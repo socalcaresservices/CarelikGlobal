@@ -24,11 +24,12 @@ import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_ROUTE } from "./action-needed";
 import { urgentBadge, useAttentionOverview } from "./attention";
 import { NotificationsBell } from "./notifications-bell";
+import { PageHelpButton, PageHelpProvider } from "./ui/page-help";
 import { PendingInvitations } from "./pending-invitations";
 import { AppearanceApplier } from "./appearance/use-appearance";
 import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
-import { activeTab, AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isSidebarCurrent, isVisitListView, landingOf, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, tabsOf, visibleGroups, type NavGroup, type NavLinkDef } from "./nav-model";
+import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isSidebarCurrent, isVisitListView, landingOf, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, tabsOf, visibleGroups, type NavGroup, type NavLinkDef } from "./nav-model";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
@@ -166,32 +167,31 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/care-team", label: "Caregivers", group: "Staff", show: hasPermission("caregivers.manage") || canManageVisits },
     { to: "/staff", label: "Staff", group: "Staff", show: staff && hasPermission("staff.read") },
     { to: "/settings/staff-types", label: "Staff Types", group: "Staff", show: staff && hasPermission("staff.read") },
-    { to: "/care-team/recruiting", label: "Recruiting", group: "Staff", tabOnly: true, under: "Caregivers", show: hasPermission("caregivers.manage") },
-    { to: "/documents", label: "Documents", group: "Staff", tabOnly: true, under: "Caregivers", show: staff && hasPermission("documents.read") },
+    { to: "/care-team/recruiting", label: "Recruiting", group: "Staff", show: hasPermission("caregivers.manage") },
+    { to: "/documents", label: "Documents", group: "Staff", show: staff && hasPermission("documents.read") },
     { to: "/schedule", label: "Schedule", group: "Scheduling", show: hasPermission("shifts.manage") || (staff && canManageVisits) },
-    { to: REPORTS_PATH, search: "?view=calendar", label: "Calendar", group: "Scheduling", tabOnly: true, under: "Schedule", show: canReadVisits, matchView: isCalendarView },
-    { to: SHIFT_REQUESTS_PATH, label: "Requests", group: "Scheduling", tabOnly: true, under: "Schedule", show: hasPermission("care_requests.read") },
+    { to: REPORTS_PATH, search: "?view=calendar", label: "Calendar", group: "Scheduling", show: canReadVisits, matchView: isCalendarView },
+    { to: SHIFT_REQUESTS_PATH, label: "Requests", group: "Scheduling", show: hasPermission("care_requests.read") },
     { to: REPORTS_PATH, search: "?view=overview", label: "Reports", group: "Operations", show: canReadVisits, matchView: isReportView },
     // Billing opens Ready for Approval (a person approves; nothing is billed automatically). Visits to review is exception review; the two are never merged.
     { to: "/billing-review", label: "Billing", group: "Operations", show: canBill },
-    { to: REPORTS_PATH, label: "Visits", group: "Operations", tabOnly: true, under: "Reports", show: canReadVisits, matchView: isVisitListView },
-    { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "Operations", tabOnly: true, under: "Reports", show: canBill ? canReadVisits : staff && canManageVisits, matchView: isExceptionsView },
-    { to: "/service-verification", label: "Verify visit", group: "Operations", tabOnly: true, under: "Reports", show: staff && canManageVisits },
-    { to: "/outage-visits", label: "Outage records", group: "Operations", tabOnly: true, under: "Reports", show: staff && canManageVisits },
+    { to: REPORTS_PATH, label: "Visits", group: "Operations", show: canReadVisits, matchView: isVisitListView },
+    { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "Operations", show: canBill ? canReadVisits : staff && canManageVisits, matchView: isExceptionsView },
+    { to: "/outage-visits", label: "Outage records", group: "Operations", show: staff && canManageVisits },
     { to: "/settings/roles", label: "Roles & Permissions", group: "Settings", show: staff && hasPermission("staff.read") },
     // Agency Settings opens the first agency page the person may use (branding, then services, then continuity); the others are its tabs.
     { to: agencyTo, label: "Agency Settings", group: "Settings", show: staff && (canSettings || canServices || canContinuity) },
-    { to: "/accounts", label: "Accounts", group: "Settings", tabOnly: true, under: "Roles & Permissions", show: staff && hasPermission("accounts.manage") },
-    { to: "/settings/branding", label: "Branding", group: "Settings", tabOnly: true, under: "Agency Settings", show: staff && canSettings && agencyTo !== "/settings/branding" },
-    { to: SERVICES_PATH, label: "Services", group: "Settings", tabOnly: true, under: "Agency Settings", show: staff && canServices && agencyTo !== SERVICES_PATH },
-    { to: "/continuity", label: "Continuity", group: "Settings", tabOnly: true, under: "Agency Settings", show: staff && canContinuity && agencyTo !== "/continuity" },
+    { to: "/accounts", label: "Accounts", group: "Settings", show: staff && hasPermission("accounts.manage") },
+    { to: "/settings/branding", label: "Branding", group: "Settings", show: staff && canSettings && agencyTo !== "/settings/branding" },
+    { to: SERVICES_PATH, label: "Services", group: "Settings", show: staff && canServices && agencyTo !== SERVICES_PATH },
+    { to: "/continuity", label: "Continuity", group: "Settings", show: staff && canContinuity && agencyTo !== "/continuity" },
     // Appearance is everyone's; it is also in the menu footer next to Profile.
     { to: "/settings/appearance", label: "Appearance", group: "Settings", tabOnly: true, under: "Agency Settings", show: true },
     // The caregiver's own day. There is no separate tasks page: verifying a visit is the caregiver's task.
     { to: "/my-shifts", label: "My Schedule", group: "My Work", show: isCaregiver },
     { to: "/service-verification", label: "Verify Visit", group: "My Work", show: isCaregiver },
-    { to: "/availability", label: "Availability", group: "My Work", tabOnly: true, under: "My Schedule", show: isCaregiver },
-    { to: "/documents", label: "My documents", group: "My Work", tabOnly: true, under: "My Schedule", show: isCaregiver && hasPermission("documents.manage_own") },
+    { to: "/availability", label: "Availability", group: "My Work", show: isCaregiver },
+    { to: "/documents", label: "My documents", group: "My Work", show: isCaregiver && hasPermission("documents.manage_own") },
   ];
   const groups = visibleGroups(links);
   // Each badge is ONE server count (COUNT_DEFINITIONS.md). Billing shows what is ready for approval and Visits to review shows exception review: the two are never merged.
@@ -215,8 +215,6 @@ export function AwsShell({ children }: PropsWithChildren) {
     setSeenGroup(current.group);
     setOpenGroups((m) => ({ ...m, [current.group]: true }));
   }
-  const stripTabs = current ? tabsOf(links, current.group) : [];
-  const stripActive = activeTab(links, current);
   const agencyName = branding.data?.displayName ?? activeOrganization?.displayName ?? "Organization";
   const accent = branding.data?.accentColor ?? DEFAULT_ACCENT;
   // The same classification and query result as the Home tiles (attention.ts): unique shifts and visits needing attention now.
@@ -260,6 +258,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     );
 
   return (
+    <PageHelpProvider resetKey={`${location.pathname}${location.search}`}>
     <div
       className="og-app min-h-screen bg-og-page font-og text-og-ink print:min-h-0 print:bg-white"
       style={{ "--agency-accent": accent } as CSSProperties}
@@ -514,6 +513,7 @@ export function AwsShell({ children }: PropsWithChildren) {
               </Link>
             ) : null}
             {canSeeAttention ? <NotificationsBell /> : null}
+            <PageHelpButton />
             {/* A user who belongs to more than one organization switches here (unchanged behaviour). */}
             {organizations.length > 1 ? (
               <select
@@ -528,33 +528,12 @@ export function AwsShell({ children }: PropsWithChildren) {
           </div>
         </header>
         <main className="mx-auto max-w-[1240px] px-3 py-3 md:px-6 print:max-w-none print:p-0">
-          {stripTabs.length > 1 ? (
-            // The current section's tabs, above the page (print hides them). Smaller links under a tab keep the tab highlighted.
-            <nav aria-label="Section tabs" data-testid="section-tabs" className="-mx-3 mb-3 flex overflow-x-auto border-b border-og-line px-3 md:mx-0 md:px-0 print:hidden">
-              {stripTabs.map((l) => {
-                const on = stripActive !== null && linkKey(l) === linkKey(stripActive);
-                const badge = badgeOf(l);
-                return (
-                  <Link
-                    key={linkKey(l)}
-                    to={`${l.to}${l.search ?? ""}`}
-                    aria-current={on ? "page" : undefined}
-                    className={cn("-mb-px inline-flex min-h-[44px] shrink-0 items-center gap-2 border-b-2 px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-og-accent md:min-h-[40px]", on ? "border-og-ink font-semibold text-og-ink" : "border-transparent text-og-sub hover:text-og-ink")}
-                  >
-                    {l.label}
-                    {badge ? (
-                      <span data-testid="tab-badge" aria-label={`${badge.n} waiting`} className={cn("rounded-full px-1.5 text-[11px] font-bold leading-[18px] ring-1", badge.blocking ? "bg-red-100 text-red-800 ring-red-700" : "bg-amber-100 text-amber-900 ring-amber-600")}>{badge.n}</span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </nav>
-          ) : null}
           <PendingInvitations />
           {children}
         </main>
       </div>
     </div>
+    </PageHelpProvider>
   );
 }
 

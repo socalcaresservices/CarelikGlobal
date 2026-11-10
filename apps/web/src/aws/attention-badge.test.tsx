@@ -125,7 +125,7 @@ describe("navigation highlight", () => {
 
   it("a nested route highlights its own section only, not its parent", async () => {
     renderAt("/service-verification/reports", "manager", () => json(200, overview()));
-    await waitFor(async () => expect(await currentItems()).toEqual(["Reports"]));
+    await waitFor(async () => expect(await currentItems()).toEqual(["Visits"])); // the visit list is its own sidebar item now
   });
 });
 

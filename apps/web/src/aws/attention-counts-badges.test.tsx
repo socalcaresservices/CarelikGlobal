@@ -79,23 +79,14 @@ async function badgeOn(label: RegExp) {
   const b = within(link).queryByTestId("nav-badge");
   return b ? { n: Number(b.textContent), red: b.className.includes("bg-red-100") } : null;
 }
-/** The badge on a tab above the page (a related page that is not a sidebar item), or null. */
-async function tabBadgeOn(label: RegExp) {
-  const strip = await screen.findByRole("navigation", { name: "Section tabs" });
-  const link = within(strip).getAllByRole("link").find((a) => label.test((a.textContent ?? "").replace(/\d+$/, "")));
-  if (!link) throw new Error(`no tab ${label}`);
-  const b = within(link).queryByTestId("tab-badge");
-  return b ? { n: Number(b.textContent), red: b.className.includes("bg-red-100") } : null;
-}
-
 describe("sidebar badges are the server's counts", () => {
-  it("someone who may bill: Caregivers 2, Schedule 3 (red: the server says 1 is Critical), Billing shows Ready for Approval 4, the Visits to review tab shows exception review 5; none is a sum", async () => {
+  it("someone who may bill: Caregivers 2, Schedule 3 (red: the server says 1 is Critical), Billing shows Ready for Approval 4, the Visits to review item shows exception review 5; none is a sum", async () => {
     renderAt("/billing-review", BILL, COUNTS);
     await waitFor(async () => expect(await badgeOn(/^Schedule$/)).toEqual({ n: 3, red: true }));
     expect(await badgeOn(/^Caregivers$/)).toEqual({ n: 2, red: false }); // amber: nothing Critical, even though documents are shown as overdue elsewhere
     expect(await badgeOn(/^Billing$/)).toEqual({ n: 4, red: false }); // billing approval only; not 4 + 5
-    expect(await tabBadgeOn(/^Billing$/)).toEqual({ n: 4, red: false });
-    expect(await tabBadgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }); // exception review only
+    expect(await badgeOn(/^Billing$/)).toEqual({ n: 4, red: false });
+    expect(await badgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }); // exception review only
   });
 
   it("a closed group with work waiting in two places shows a dot, never a sum of unlike counts", async () => {
@@ -109,10 +100,10 @@ describe("sidebar badges are the server's counts", () => {
 
   it("someone who may not bill: Visits to review is exception review (5), there is no Billing, and Ready for Approval appears nowhere", async () => {
     renderAt("/service-verification/reports?view=exceptions", NO_BILL, { ...COUNTS, approvals: { exceptions: { count: 5, critical: 0 }, readyForApproval: null } });
-    await waitFor(async () => expect(await tabBadgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }));
+    await waitFor(async () => expect(await badgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }));
     const nav = screen.getByRole("navigation", { name: "Main" });
     expect(within(nav).queryByRole("link", { name: /Billing/ })).toBeNull();
-    expect(within(screen.getByRole("navigation", { name: "Section tabs" })).queryByRole("link", { name: /^Billing/ })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Section tabs" })).toBeNull();
   });
 
   it("a count the person may not see is null: no badge, never a zero; a zero count shows no badge either", async () => {
@@ -121,7 +112,7 @@ describe("sidebar badges are the server's counts", () => {
     await waitFor(async () => expect(await badgeOn(/^Caregivers$/)).toBeNull());
     expect(await badgeOn(/^Schedule$/)).toBeNull();
     expect(await badgeOn(/^Billing$/)).toBeNull();
-    expect(await tabBadgeOn(/^Visits to review$/)).toBeNull();
+    expect(await badgeOn(/^Visits to review$/)).toBeNull();
   });
 
   it("an older server with no counts shows no badge at all (the web does not derive one from other fields)", async () => {
