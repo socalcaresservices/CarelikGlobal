@@ -190,7 +190,7 @@ export function BillingReviewPage() {
     const code = r.clientCode ?? null;
     return (
       <div>
-        <p className="max-w-[14rem] truncate font-semibold text-slate-950" title={r.clientName ?? undefined}>{r.clientName ? nameWithCode(r.clientName, code, r.clientNameDuplicate) : code ?? "Client"}</p>
+        <p className="max-w-[14rem] break-words font-semibold text-slate-950" title={r.clientName ?? undefined}>{r.clientName ? nameWithCode(r.clientName, code, r.clientNameDuplicate) : code ?? "Client"}</p>
       </div>
     );
   }
@@ -315,7 +315,7 @@ export function BillingReviewPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.visitId} className="border-t border-slate-100 align-middle">
-                  <td className="px-2 py-0.5"><div className="flex flex-wrap items-center gap-x-2"><span className="max-w-[11rem] truncate">{clientCell(r)}</span><span className="whitespace-nowrap">{statusPill(r, true)}</span></div></td>
+                  <td className="px-2 py-0.5"><div className="flex flex-wrap items-center gap-x-2"><span className="max-w-[11rem] break-words">{clientCell(r)}</span><span className="whitespace-nowrap">{statusPill(r, true)}</span></div></td>
                   <td className="max-w-[11rem] px-2 py-0.5" title={`${r.caregiverName ?? "—"} · ${serviceText(r)}`}>{r.caregiverName ?? "—"} <span className="text-slate-600">· {serviceText(r)}</span></td>
                   <td className="px-2 py-0.5" title={`${formatUsDate(r.serviceDate)} ${timesText(r)}`}>{formatUsDate(r.serviceDate)} <span className="text-slate-600">{timesText(r)}</span></td>
                   <td className="px-2 py-0.5" title={`${formatDuration(r.workedMinutes)}${r.billableMinutes !== r.workedMinutes ? ` · billable ${formatDuration(r.billableMinutes)}` : ""}`}>{formatDuration(r.workedMinutes)}{r.billableMinutes !== r.workedMinutes ? <span className="text-slate-600"> · billable {formatDuration(r.billableMinutes)}</span> : null}</td>

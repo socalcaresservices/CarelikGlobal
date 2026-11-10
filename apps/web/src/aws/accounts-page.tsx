@@ -57,7 +57,7 @@ export function AccountsPage() {
     <div className="mx-auto max-w-3xl space-y-2">
       <div>
         <h1 className="text-xl font-semibold text-slate-950">Accounts</h1>
-        <HelpLine details="You can enable a person again. Passwords are never shown here.">See who can sign in. Disabling stops sign-in; records, shifts and visit history are kept.</HelpLine>
+        <HelpLine details="You can enable a person again. Passwords are never shown here.">See who can sign in. Disabling stops sign-in; records, shifts and visit history are kept. People, their types and their roles are in Staff; this page is only about sign-in.</HelpLine>
       </div>
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
       {accounts.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}

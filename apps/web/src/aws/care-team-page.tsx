@@ -167,7 +167,7 @@ export function CareTeamPage() {
         </div>
       ) : null}
       {/* Status first, then the list, then the control rows: readiness and availability requests are collapsed one-line summaries below the list. */}
-      <ReadinessCard />
+      <div id="readiness-setup"><ReadinessCard /></div>
       <AvailabilityReview />
     </div>
   );

@@ -327,6 +327,26 @@ describe("Service checks and readiness on the Care Team page", () => {
   });
 });
 
+describe("R7: standard CPR and TB setup", () => {
+  it("creates two document types named CPR and TB by name only, preselects them, invents no validity period, and saves nothing until the administrator confirms", async () => {
+    const { calls } = renderAt("/care-team", { role: "organization_owner" });
+    fireEvent.click(await screen.findByRole("button", { name: /Set up/ }, { timeout: COLD_RENDER_MS }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use standard CPR and TB" }));
+    expect(await screen.findByTestId("standard-note")).toHaveTextContent("Nothing is set until you save");
+    const created = posts(calls, "/v1/document-types");
+    expect(created.map((c) => c.body?.name).sort()).toEqual(["CPR", "TB"]);
+    expect(created.every((c) => c.body?.requiresExpiry === false)).toBe(true);
+    const form = screen.getByRole("form", { name: "Required documents" });
+    const selects = within(form).getAllByLabelText("Document type") as HTMLSelectElement[];
+    await waitFor(() => expect(selects.map((x) => x.value)).toEqual(["dt-cpr", "dt-tb"]));
+    // The validity rule is still blank (no invented period) and nothing has been saved.
+    expect((within(form).getAllByLabelText("Valid until") as HTMLSelectElement[]).map((x) => x.value)).toEqual(["", ""]);
+    expect(posts(calls, "/v1/document-requirements/type")).toHaveLength(0);
+    expect(posts(calls, "/v1/document-requirements/policy")).toHaveLength(0);
+    expect(within(form).getByRole("button", { name: "Save" })).toBeDisabled();   // a reason is still required
+  }, TEST_TIMEOUT_MS);
+});
+
 describe("Readiness table: issue, affected count, status, next action", () => {
   const rowOf = (issue: RegExp) => within(screen.getByRole("table", { name: /Readiness by issue/ })).getByRole("row", { name: issue });
 

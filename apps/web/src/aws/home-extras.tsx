@@ -157,7 +157,7 @@ export function TopIssues() {
             return (
               <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-0.5 text-sm md:grid md:min-h-[32px] md:grid-cols-[5.5rem_minmax(0,1fr)_8rem_11rem]" data-testid="top-issue">
                 <span><StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip></span>
-                <span className="min-w-0 flex-1 basis-[10rem] truncate text-og-ink">
+                <span className="min-w-0 flex-1 basis-[10rem] break-words text-og-ink">
                   <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{issueClient(i) ? ` · ${issueClient(i)}` : ""}</span>
                   <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}</span>
                 </span>

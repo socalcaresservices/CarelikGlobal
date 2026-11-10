@@ -73,7 +73,7 @@ export function ReportingPage() {
   }
   return (
     <div className="max-w-4xl space-y-3">
-      <PageHeader title="Reporting & billing" lead="Billing, hours, performance, exports and audit."
+      <PageHeader title="Reporting & billing" lead={<>Billing, hours, performance, exports and audit. Visit lists, the calendar and the review queues are under <Link className="underline" to="/service-verification/reports?view=overview">Reports</Link>.</>}
         action={<label className="flex items-center gap-2 text-xs font-semibold text-og-sub">Month<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="block min-h-[32px] rounded-md border border-og-line bg-og-card px-3 text-sm text-og-ink" /></label>} />
 
       <Section id="billing-readiness" title="Billing readiness" lead="Visits by billing state this month.">

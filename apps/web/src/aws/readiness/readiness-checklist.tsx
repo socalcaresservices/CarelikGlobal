@@ -41,8 +41,8 @@ function line(i: ReadinessItem): string {
 
 type Panel = null | "verify" | "training" | "contact" | "extend" | "override";
 
-function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, canOverride = false, backgroundClear = false, children }: {
-  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; canOverride?: boolean; backgroundClear?: boolean; children?: ReactNode;
+function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, canOverride = false, canSetup = false, backgroundClear = false, children }: {
+  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; canOverride?: boolean; canSetup?: boolean; backgroundClear?: boolean; children?: ReactNode;
 }) {
   const api = useAwsApi();
   const refresh = useRefreshReadiness();
@@ -87,7 +87,13 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
   if (item.requirement === "signin" && item.state !== "met" && canOverride && backgroundClear) {
     actions.push(<button key="o" type="button" className={btn} aria-expanded={panel === "override"} onClick={() => toggle("override")}>Approve by override</button>);
   }
-  if ((item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
+  const setupGap = (item.requirement === "cpr" || item.requirement === "tb") && /not set up/i.test(item.detail ?? "");
+  if (setupGap) {
+    // R7: the agency has not finished the CPR/TB setup, so uploading cannot fix it. An administrator goes to the setup; everyone else is told who can.
+    actions.push(canSetup
+      ? <Link key="setup" to="/care-team#readiness-setup" className={btn}>Set up CPR and TB</Link>
+      : <span key="setup" className="text-sm text-slate-600">Ask an administrator</span>);
+  } else if ((item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
     actions.push(<Link key="u" to="/documents" className={btn}>Upload</Link>);
     if (canCompliance) actions.push(<button key="x" type="button" className={btn} aria-expanded={panel === "extend"} onClick={() => toggle("extend")}>Extend</button>);
   }
@@ -228,7 +234,7 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
       </div>
       <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card" aria-label="Requirements">
         {r.items.map((i) => <Row key={i.requirement} item={i} caregiverRecordId={caregiverRecordId} canManage={canManage} canCompliance={canCompliance} hasContact={hasContact}
-          canOverride={hasPermission("caregivers.signin_override")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
+          canOverride={hasPermission("caregivers.signin_override")} canSetup={hasPermission("readiness.manage") || hasPermission("documents.requirements.manage")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
         <li className="px-3 py-2" data-requirement="approve">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-2">
