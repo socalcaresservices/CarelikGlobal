@@ -11,6 +11,15 @@ const DUPES = [dup({ staffKey: `profile:${P1}`, profileId: P1 }), dup({ staffKey
 const base = (extra: Record<string, unknown> = {}) => ({ "GET /v1/staff": () => json(200, { staff: [] }), "GET /v1/staff-types": () => json(200, { staffTypes: [] }), ...extra });
 
 describe("possible duplicate staff", () => {
+  it("the same two people matching on name AND phone appear in two groups, but only one merge form opens", async () => {
+    const both = [...DUPES.slice(0, 2), ...DUPES.slice(0, 2).map((d) => ({ ...d, groupId: "g2", matchBasis: "phone" }))];
+    renderAws("/staff", PERMS, base({ "GET /v1/staff/duplicates": () => json(200, { duplicates: both }) }), "organization_owner");
+    const box = await screen.findByTestId("possible-duplicates", undefined, { timeout: 15000 });
+    expect(box).toHaveTextContent("Possible duplicates (2)");
+    fireEvent.click(within(box).getAllByRole("button", { name: /merge the others/ })[0]!);
+    expect(within(box).getAllByLabelText("Reason for the merge")).toHaveLength(1);
+  }, 30000);
+
   it("lists the group with its reason for matching; a caregiver is shown but cannot be merged here; nothing is posted by loading", async () => {
     const { calls } = renderAws("/staff", PERMS, base({ "GET /v1/staff/duplicates": () => json(200, { duplicates: DUPES }) }), "organization_owner");
     const box = await screen.findByTestId("possible-duplicates", undefined, { timeout: 15000 });

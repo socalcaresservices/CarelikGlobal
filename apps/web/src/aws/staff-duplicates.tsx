@@ -18,7 +18,8 @@ export function PossibleDuplicates() {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
-  const [keep, setKeep] = useState<string | null>(null);
+  // The form opens in ONE group: the same two people can match on name and on phone, so they can appear in two groups. Keyed by group and record.
+  const [keep, setKeep] = useState<{ group: string; key: string } | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,15 +73,15 @@ export function PossibleDuplicates() {
                       {!m.canMerge ? <span className="text-og-sub"> · {m.source === "caregiver" ? "resolve in Care Team" : "has a sign-in or invitation; resolve by hand"}</span> : null}
                     </span>
                     {m.canMerge && mergeable.length > 1 ? (
-                      <button type="button" className="inline-flex min-h-[44px] items-center font-semibold text-og-accent underline md:min-h-[32px]" onClick={() => { setKeep(m.staffKey); setError(null); setDone(null); }}>
+                      <button type="button" className="inline-flex min-h-[44px] items-center font-semibold text-og-accent underline md:min-h-[32px]" onClick={() => { setKeep({ group: id, key: m.staffKey }); setError(null); setDone(null); }}>
                         Keep {m.displayName}, merge the others
                       </button>
                     ) : null}
                   </li>
                 ))}
               </ul>
-              {keep && members.some((m) => m.staffKey === keep) ? (
-                <form className="space-y-2 border-t border-slate-200 pt-2" onSubmit={(e) => { e.preventDefault(); void merge(members, keep); }}>
+              {keep && keep.group === id && members.some((m) => m.staffKey === keep.key) ? (
+                <form className="space-y-2 border-t border-slate-200 pt-2" onSubmit={(e) => { e.preventDefault(); void merge(members, keep.key); }}>
                   <label className="block font-semibold text-og-ink">Reason for the merge
                     <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} className="mt-1 block min-h-[44px] w-full rounded-md border border-slate-300 px-2" />
                   </label>
