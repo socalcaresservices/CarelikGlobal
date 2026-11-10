@@ -62,24 +62,26 @@ Change-specific:
 ## B. Local harness (Phase B), gate G4
 | # | Step | Result | Evidence |
 |---|---|---|---|
-| B1 | `harness:setup` run on this commit (fresh database, all migrations applied; migration count: ___) | ☐ | |
-| B2 | `harness:build` and `harness:serve` run on this commit | ☐ | |
-| B3 | Seed data covers the change (if not, `setup.ts` was extended in this change) | ☐ | |
-| B4 | Every catalog ID in the Feature Test Plan performed as the named persona (list IDs and PASS/FAIL below) | ☐ | |
-| B5 | Screenshots saved under `docs/releases/<release-id>/evidence/` (desktop 1280 for administrator, 390 for caregiver) | ☐ | |
-| B6 | Bug fix or rule change: **before and after** screenshots of the same record | ☐ / N/A | |
-| B7 | Browser console and network: no unexpected errors or 4xx/5xx | ☐ | |
-| B8 | Negative checks: forbidden action refused for the wrong role; Caregiver sees no Administrator data | ☐ | |
-| B9 | Regression set R spot-checked | ☐ | |
-| B10 | List what the harness **cannot** prove and that this change touches (Cognito, authorizer, IAM, S3/KMS, CloudFront, RDS TLS, email): ____________ | ☐ carried to C6 | |
+| B1 | `harness:setup` run on this commit (fresh database, all migrations applied; migration count: ___) | ☒ | Ledger 0001 to 0088 applied by `harness:setup`; then 0090 to 0093 applied by hand with psql. **0094 not applied to the harness** (its database test covers it); count 88 + 4 outside the ledger |
+| B2 | `harness:build` and `harness:serve` run on this commit | ☒ | built after the touch-target change; served at https://localhost (commit `16d9f21` plus the CSS change, since committed) |
+| B3 | Seed data covers the change (if not, `setup.ts` was extended in this change) | ☒ | `harness:seed-today -- --startable` (visit today), two synthetic duplicate staff, client cities. `setup.ts` not extended; the duplicates and cities were inserted by a one-off SQL block |
+| B4 | Every catalog ID in the Feature Test Plan performed as the named persona (list IDs and PASS/FAIL below) | ☐ **NOT DONE** (no Feature Test Plan yet). Done instead: recording of 70 owner and 18 caregiver screens, the touch-target walk of 20 screens as Olivia Owner, the offline preview check | |
+| B5 | Screenshots saved under `docs/releases/<release-id>/evidence/` (desktop 1280 for administrator, 390 for caregiver) | ☐ **NOT SAVED to this folder.** Earlier galleries: `docs/ux/pr2/`, `docs/ux/pr3/`; the final Staff and Dashboard 390 px captures were viewed but not committed | |
+| B6 | Bug fix or rule change: **before and after** screenshots of the same record | ☐ partial | before/after for navigation and help in `docs/ux/pr2/`, `pr3/`; none for R19, R23, R11, R6, R7 |
+| B7 | Browser console and network: no unexpected errors or 4xx/5xx | ☐ partial | the offline preview: 0 page errors, 0 network requests. Live harness console/network not inspected |
+| B8 | Negative checks: forbidden action refused for the wrong role; Caregiver sees no Administrator data | ☒ | automated: tenant isolation sweep (9/9, all pending migrations applied), per-route 401/403/404 tests for override, import, duplicates; unassigned caregiver gets no client name (0091 test) |
+| B9 | Regression set R spot-checked | ☐ **NOT DONE** | |
+| B10 | List what the harness **cannot** prove and that this change touches (Cognito, authorizer, IAM, S3/KMS, CloudFront, RDS TLS, email): ____________ | ☒ carried to C6 | Touches: Lambda bundle size and cold start (`exceljs`), the real JWT authorizer on 5 new routes, API Gateway payload limit for a 2 MB import (base64 about 2.8 MB), shared RDS instance behaviour. Does not touch S3/KMS, CloudFront config, email, IAM |
 
 Catalog results (copy rows as needed):
 | Catalog ID | Persona | PASS / FAIL | Notes |
 |---|---|---|---|
 
-**Phase B signed:** name ____________ date ____________
+**Phase B signed:** name ____________ date ____________   (NOT SIGNED: B4, B5, B6, B7 and B9 are open)
 
 ## C. Pilot/test environment (Phase C), gate G5
+
+> **NOT STARTED. Every line below stays blank on purpose.** It needs the owner's written statement (SHA, TEST only, who runs it, window) and the read-only checks U1 to U4. Nothing in Phase C, D, E or F has been done or claimed.
 Owner has stated in writing: commit SHA ______, target **pilot/test only**, who runs it ______, window ______. ☐ recorded (link).
 
 | # | Step | Result | Evidence |
