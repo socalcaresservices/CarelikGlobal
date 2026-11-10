@@ -57,6 +57,7 @@ function renderApp(path: string, { role, rows = [ROW], appearance, missingRate =
     switch (`${init?.method ?? "GET"} ${url.pathname}`) {
       case "GET /v1/me": return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role, permissions: PERMS[role] }], profile: { displayName: "Synthetic Person" } });
       case "GET /v1/branding": return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
+      case "GET /v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] });
       case "GET /v1/attention/overview": return json(200, { overview: { asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
         urgent: { items: [], itemCount: 0, issueCount: 0, shifts: 0, visits: 0 }, upcoming: { count: 0, nextStartsAt: null, shifts: [] },
         documents: { overdue: 2, dueSoon: 1, awaitingReview: 1, rejected: 0, caregiversOnHold: 1, caregiversWithPendingRequirements: 0 },

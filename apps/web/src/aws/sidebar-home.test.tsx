@@ -45,6 +45,7 @@ function renderAt(path: string, role: Role) {
         return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "/v1/attention":
         return json(200, { summary: role === "caregiver" ? null : SUMMARY });
+      case "/v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] });
       case "/v1/attention/overview":
         return json(200, { overview: OVERVIEW });
       case "/v1/reports/utilisation":

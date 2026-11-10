@@ -32,6 +32,7 @@ function renderAt(path: string, permissions: string[], extra: Record<string, (bo
       case "GET /v1/me": return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role: "manager", permissions }], profile: { displayName: "Morgan Manager" } });
       case "GET /v1/branding": return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "GET /v1/attention": return json(200, { summary: null });
+      case "GET /v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] });
       case "GET /v1/attention/overview": return json(200, { overview: { asOf: new Date().toISOString(), urgentWindowHours: 48, urgent: null, upcoming: { count: 0, nextStartsAt: null, shifts: [] }, documents: null, visitReview: null,
         reconciliation: { count: 1, minutes: 90, oldestEndedAt: later(-5) }, amendmentImpacts: { count: 2, oldestAt: later(-30) } } });
       case "GET /v1/shifts": return json(200, { shifts: [] });

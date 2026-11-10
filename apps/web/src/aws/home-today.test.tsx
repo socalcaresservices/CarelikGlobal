@@ -33,6 +33,7 @@ function renderAt(path: string, perms: string[], h: Handlers = {}) {
     if (url.pathname === "/v1/me") return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role: "manager", permissions: perms }], profile: { displayName: "Morgan Manager" } });
     if (url.pathname === "/v1/branding") return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
     if (url.pathname === "/v1/attention/overview") return (h.overview ?? (() => json(200, emptyOverview())))();
+    if (url.pathname === "/v1/action-issues") return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] }); // healthy list: these tests are about the tiles
     if (url.pathname === "/v1/shifts") return (h.shifts ?? (() => json(200, { shifts: [] })))();
     if (url.pathname === "/v1/reports/utilisation") return json(200, { services: [] });
     if (url.pathname === "/v1/clients") return json(200, { clients: [] });
@@ -72,7 +73,7 @@ describe("Today's visits", () => {
     expect(rows[0]).toHaveTextContent("In progress");
     expect(rows[1]).toHaveTextContent("Client later");
     expect(rows[1]).toHaveTextContent("Scheduled");
-    expect(screen.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/schedule");
+    expect(screen.getAllByRole("link", { name: "View all" }).map((l) => l.getAttribute("href"))).toContain("/schedule"); // the issue list has its own View all
   });
 
   it("an uncovered visit is Critical once it has started and Urgent before, each with its word", async () => {

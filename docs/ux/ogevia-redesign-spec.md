@@ -140,7 +140,17 @@ Flow (mockup: Care Team > Import people): **Template → Upload → Preview and 
 
 Each PR: reuse canonical code, run the repository's real `pnpm lint`, `pnpm typecheck`, `pnpm test` (and the DB and API suites for SQL work), phone-width check, then **demo.ogevia.com only**, following `docs/TESTING_AND_RELEASE_PROCESS.md` with the owner's go for each demo deployment. Migrations are applied to demo (`ogevia_sv_test`) only through the approved operator procedure; I cannot run AWS commands from here, so each demo deployment is prepared as an operator package and not claimed as deployed until the owner reports the result.
 
-## 10. Decisions that need the owner
+## 10. Owner answers (2026-11-10) and what remains
+
+| Decision | Answer | Effect |
+|---|---|---|
+| 1 Override vs 0089 | **Agreed.** Implement the override; withdraw unreleased 0089. | PR 6. 0089 is not released. Administrators only (recommended default stands unless the owner objects). |
+| 2 Deployed commit | OK to build on the `757a5e4` line. | Items 4 and 9 stay marked unconfirmed until the real commit is known. |
+| 3 XLSX library | **Agreed**: CSV and XLSX; library `exceljs` (version and advisories re-checked at install). | PR 7. |
+| 4 Standard CPR/TB values | **Not sure.** The October brief says "do not invent legal expiry periods; unset rules = incomplete". So the button will **not** pre-fill any validity period. | "Use standard CPR and TB" creates the two document types named **CPR** and **TB** only, then asks the administrator to enter each validity rule (required; no default). The rule stays "incomplete" until entered. |
+| 5 Production error line | **Not sure.** | PR 1 ships the web half only; the SQL half stays open (audit section 3). |
+
+### Original questions (kept for the record)
 
 1. **Override vs migration 0089.** Implement today's override (reason, approver, audit, badge) and withdraw the unreleased 0089? **Recommend yes.** Also confirm that only administrators (not managers) may approve by override (recommend administrators only, as for the No Match override).
 2. **Deployed commit (packet D0).** Which commit runs on demo.ogevia.com and app.ogevia.com? The audit and the build are based on `757a5e4`; if demo/production differ, items 4 (dashboard blocks) and 9 (Business Compliance) cannot be confirmed. Recommend: send the commit SHA shown in the TEST release record, or the deployed `index.html` asset hash.

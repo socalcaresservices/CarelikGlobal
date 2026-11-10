@@ -9,7 +9,7 @@ import { hoursLabel, useUtilisation, type UtilisationRow } from "./aws-workspace
 import { financeView } from "./finance-view";
 import { Chart } from "./ui/chart";
 import { CollapseButton, QuickActions, RefreshStatus, TodaysVisits, TopIssues } from "./home-extras";
-import { useCollapsed } from "./home-data";
+import { useCollapsed, useHomeIssues } from "./home-data";
 import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { Disclosure } from "./ui/disclosure";
 import { CompactAlert } from "./ui/compact-alert";
@@ -23,7 +23,7 @@ const sum = (rows: UtilisationRow[], key: keyof UtilisationRow) => rows.reduce((
 /** Zero-state sentences ("Nothing overdue...") are not worth a line on a compact tile: the zero and the unit already say it. */
 const QUIET = /^(Nothing|Every)\b/;
 
-function Tile({ s }: { s: Stream }) {
+function Tile({ s, unavailable = false }: { s: Stream; unavailable?: boolean }) {
   const t = TONE[s.tone];
   const hot = s.tone !== "neutral";
   const showDetail = !(s.count === 0 && QUIET.test(s.detail));
@@ -37,10 +37,11 @@ function Tile({ s }: { s: Stream }) {
       >
         <span className="text-sm font-semibold text-og-ink">{s.label}</span>
         <span className="ml-auto whitespace-nowrap">
-          <span className="font-og-mono text-base font-semibold tabular-nums text-og-ink">{s.count}</span>
-          <span className="ml-1 text-xs text-og-sub">{s.unit}</span>
+          {unavailable ? <span className="text-sm font-semibold text-og-sub" data-testid={`stream-${s.key}-unavailable`}>Unavailable</span> : <>
+            <span className="font-og-mono text-base font-semibold tabular-nums text-og-ink">{s.count}</span>
+            <span className="ml-1 text-xs text-og-sub">{s.unit}</span></>}
         </span>
-        {hot ? <StatusChip tone={s.tone}>{s.word ?? t.word}</StatusChip> : null}
+        {hot && !unavailable ? <StatusChip tone={s.tone}>{s.word ?? t.word}</StatusChip> : null}
         {showDetail ? <span className="sr-only">{s.detail}</span> : null}
       </Link>
     </li>
@@ -65,6 +66,8 @@ export function AwsHomePage() {
   const { tz } = useAgencyClock();
   const [month, setMonth] = useState(() => agencyMonth(tz)); // the AGENCY's month, not the browser's (F7)
   const overview = useAttentionOverview();
+  // The attention tile and the work list are two requests. When the list fails the tile cannot be trusted to agree with it, so it reads Unavailable, never 0.
+  const issues = useHomeIssues();
   const [hoursFolded, toggleHours] = useCollapsed("hours", true);
   const [financeFolded, toggleFinance] = useCollapsed("finance", true);
   const utilisation = useUtilisation(`${month}-01`);
@@ -105,12 +108,12 @@ export function AwsHomePage() {
       />
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-0">
         <QuickActions />
-        <RefreshStatus overview={overview.data} loading={overview.isLoading} failed={overview.isError} refreshing={overview.isFetching || utilisation.isFetching} onRefresh={refresh} />
+        <RefreshStatus overview={overview.data} loading={overview.isLoading} failed={overview.isError || issues.isError} refreshing={overview.isFetching || utilisation.isFetching} onRefresh={refresh} />
       </div>
 
       <section aria-label="What needs attention">
         {overview.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
-        {tiles.length > 0 ? <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-4">{tiles.map((s) => <Tile key={s.key} s={s} />)}</ul> : null}
+        {tiles.length > 0 ? <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-4">{tiles.map((s) => <Tile key={s.key} s={s} unavailable={issues.isError && s.key === "now"} />)}</ul> : null}
       </section>
 
       <TopIssues />

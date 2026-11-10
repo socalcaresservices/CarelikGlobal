@@ -208,7 +208,7 @@ export type UrgentBadge =
  */
 export function urgentBadge(loading: boolean, failed: boolean, o: AttentionOverview | null | undefined): UrgentBadge {
   if (loading) return { kind: "checking", label: "Checking…", icon: "…", count: null, aria: "Checking what needs attention now", tone: "neutral" };
-  if (failed || !o) return { kind: "unknown", label: "Unable to check", icon: "?", count: null, aria: "Unable to check what needs attention now", tone: "neutral" };
+  if (failed || !o) return { kind: "unknown", label: "Unavailable", icon: "!", count: null, aria: "Unavailable: what needs attention now could not be checked", tone: "neutral" };
   if (!o.urgent) return { kind: "hidden" };
   const n = o.urgent.itemCount;
   if (n === 0) return { kind: "clear", label: "No urgent items", icon: "✓", count: null, aria: "No urgent items", tone: "neutral" };

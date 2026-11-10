@@ -24,6 +24,7 @@ function renderAt(path: string, role: Role, attention: () => Promise<Response> |
       return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "org-a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role, permissions: PERMS[role] }], profile: { displayName: "Synthetic Person" } });
     }
     if (url.pathname === "/v1/branding") return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
+    if (url.pathname === "/v1/action-issues") return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] }); // healthy list: these tests are about the tiles
     if (url.pathname === "/v1/attention/overview") return attention();
     return json(404, { error: { code: "not_found", message: "No such endpoint." } });
   });
@@ -108,10 +109,10 @@ describe("Needs attention now badge", () => {
     expect(badge).toHaveTextContent("Checking…");
   });
 
-  it("failed check: Unable to check, never a zero", async () => {
+  it("failed check: Unavailable, never a zero", async () => {
     renderAt("/profile", "manager", () => json(500, { error: { code: "internal", message: "Synthetic failure" } }));
-    const badge = await screen.findByRole("link", { name: "Unable to check what needs attention now" });
-    expect(badge).toHaveTextContent("Unable to check");
+    const badge = await screen.findByRole("link", { name: "Unavailable: what needs attention now could not be checked" });
+    expect(badge).toHaveTextContent("Unavailable");
     await waitFor(() => expect(screen.queryByText("No urgent items")).toBeNull());
   });
 });
