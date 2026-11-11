@@ -778,6 +778,11 @@ export class ServiceVerificationApiStack extends Stack {
       if (route.feature === "liveTestRepairs" && logicalId) {
         for (const r of created) (r.node.defaultChild as apigw.CfnRoute).overrideLogicalId(logicalId);
       }
+      if (route.feature === "liveTestRepairs") {
+        // The accepted live-derived routes contain Type/Properties only. CDK's
+        // CLI path metadata must not turn them into unrelated live changes.
+        for (const r of created) (r.node.defaultChild as apigw.CfnRoute).addDeletionOverride("Metadata");
+      }
       if (route.public) {
         for (const r of created) Validations.of(r).acknowledge({ id: "AwsSolutions-APIG4", reason: PUBLIC_ROUTE_ACKNOWLEDGEMENT });
       }

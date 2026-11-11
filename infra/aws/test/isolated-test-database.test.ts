@@ -13,7 +13,7 @@ import { newApp } from "./helpers.js";
 const MASTER = "arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-11111111-2222-3333-4444-555555555555-AbCdEf";
 const isolated = () => resolveTestDatabase(ENVIRONMENTS.prod, "isolated", MASTER);
 const templates = (config: typeof ENVIRONMENTS.prod, context: Record<string, unknown> = {}) => {
-  const app = newApp();
+  const app = newApp({ pathMetadata: true });
   for (const [key, value] of Object.entries(context)) app.node.setContext(key, value);
   return Object.fromEntries(buildOgeviaApp(app, config).map(({ stack }) => [stack.stackName, Template.fromStack(stack).toJSON()])) as Record<string, any>;
 };
@@ -121,7 +121,10 @@ describe("isolated TEST database candidate", () => {
       BusinessDocumentsGet0095: "GET /v1/business-documents", BusinessDocumentsPost0095: "POST /v1/business-documents",
       QrCheckinPost0102: "POST /v1/checkin", ClientQrCardPost0102: "POST /v1/clients/{clientId}/qr-card",
     };
-    for (const [id, key] of Object.entries(retained)) expect(t.Resources[id].Properties).toMatchObject({ RouteKey: key, AuthorizationType: "JWT" });
+    for (const [id, key] of Object.entries(retained)) {
+      expect(t.Resources[id].Properties).toMatchObject({ RouteKey: key, AuthorizationType: "JWT" });
+      expect(t.Resources[id].Metadata).toBeUndefined();
+    }
     expect(() => templates(baseline, { liveQrParameterSpec: { ...spec, Default: "a".repeat(64) } })).toThrow(/without an embedded key/);
     expect(() => resolveLiveTestBaseline(ENVIRONMENTS.prd, "0102")).toThrow(/TEST-only/);
   }, 120000);
