@@ -25,6 +25,7 @@
 | IdentityHandler code asset | `7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip` (identical to the 0088 release: unchanged) |
 | API routes in the assembly | 255 (the previous deployed TEST commit `464dea64` synthesizes 250; the gate allows exactly these 5 added: `POST /v1/caregivers/{caregiverRecordId}/signin-override`, `GET /v1/signin-overrides`, `POST /v1/imports/{kind}`, `GET /v1/staff/duplicates`, `POST /v1/staff/{profileId}/merge`) |
 | Previous TEST Handler asset (rollback reference, from the 0088 record) | `9e5a510ef7771fe0f70bb0db1a6b22bf2dbe313ab8f019c0c34ccd42686824b7.zip` (to be confirmed by the live capture; the live Lambda may differ) |
+| Web publish method (owner decision 2026-11-11: the 0088 release method) | `infra/aws/scripts/deploy-test-slice.sh web`, called by `OPERATOR_TEST_DEPLOY.sh web` with `VITE_APP_VERSION=<commit>`; file sha256 `bbbdf1b78877b161bfe4c9764c72e785db7d8c886f163f604417531c9b71a6c4`, **byte-identical to the 0088 release** (no change between `464dea64` and `7f9483d`). `test-web-release.sh` is NOT used. |
 | Toolchain | Node 22.x, pnpm 9.15.4, CDK CLI 2.1143.0 (the checkout's own), aws CLI v2, jq, psql, session-manager-plugin, python3, curl |
 
 ## What was verified, and what was not
