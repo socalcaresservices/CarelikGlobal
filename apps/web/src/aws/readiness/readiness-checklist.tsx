@@ -16,7 +16,7 @@ const btn = "inline-flex min-h-[44px] items-center justify-center rounded-lg bor
 function useRefreshReadiness() {
   const qc = useQueryClient();
   return async () => {
-    for (const k of ["caregiver-readiness", "aws-caregivers", "aws-accounts", "caregiver-compliance", "compliance-holds", "document-readiness"]) await qc.invalidateQueries({ queryKey: [k] });
+    for (const k of ["caregiver-readiness", "aws-caregivers", "aws-staff", "aws-accounts", "caregiver-compliance", "compliance-holds", "document-readiness"]) await qc.invalidateQueries({ queryKey: [k] });
   };
 }
 
@@ -64,8 +64,8 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return setState({ busy: false, error: "Enter the caregiver's own email address.", done: null });
     await run(async () => {
       await api.post(`${base}/contact`, { organizationId: activeOrganizationId, email: f.email.trim() }, { idempotencyKey: key.current });
-      await api.post(`${base}/signin-link`, { organizationId: activeOrganizationId });
-    }, "Email saved and sign-in link sent.", "The sign-in link was not sent.");
+      if (!hasContact) await api.post(`${base}/signin-link`, { organizationId: activeOrganizationId });
+    }, hasContact ? "Contact email saved." : "Email saved and sign-in link sent.", hasContact ? "The contact email could not be saved." : "The sign-in link was not sent.");
   };
   const toggle = (p: Exclude<Panel, null>) => { setState((s) => ({ ...s, error: null, done: null })); setPanel(panel === p ? null : p); };
 
@@ -97,7 +97,6 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
     actions.push(<Link key="u" to="/documents" className={btn}>Upload</Link>);
     if (canCompliance) actions.push(<button key="x" type="button" className={btn} aria-expanded={panel === "extend"} onClick={() => toggle("extend")}>Extend</button>);
   }
-  void hasContact;
 
   return (
     <li className="px-3 py-2" data-requirement={item.requirement}>
@@ -110,6 +109,7 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
             {item.requirement === "signin" && item.extra.override ? <p className="mt-0.5"><span className="inline-block rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" data-testid="override-badge">{OVERRIDE_BADGE_TEXT}</span></p> : null}
             {item.requirement === "signin" && item.state !== "met" && canOverride && !backgroundClear ? <p className="text-xs text-slate-600" data-testid="override-needs-background">An administrator can approve before the first sign-in once the background check is clear. There is no override for the background check.</p> : null}
             {item.requirement === "signin" && item.extra.lastSentAt ? <p className="text-xs text-slate-600">Last sent {formatDateTime(item.extra.lastSentAt)}</p> : null}
+            {item.requirement === "signin" && item.state !== "met" ? <p className="text-xs text-slate-600">Confirm the caregiver's email, send the invitation, then ask them to sign in once. Resend if it expired; check spam before sending again.</p> : null}
             {item.state === "overdue" && item.blocksShifts ? <p className="text-xs font-semibold text-red-800">Blocks new shift assignments</p> : null}
             {item.state === "overdue" && !item.blocksShifts ? <p className="text-xs text-slate-600">Flagged only; the agency has not switched enforcement on</p> : null}
           </div>
@@ -154,8 +154,8 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
         <form className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end" onSubmit={(e) => { e.preventDefault(); void addAndSend(); }}>
           <div><label htmlFor={`ct-email-${caregiverRecordId}`} className="block text-xs font-medium text-slate-700">Caregiver's own email</label>
             <input id={`ct-email-${caregiverRecordId}`} type="email" inputMode="email" autoComplete="off" value={f.email} maxLength={254} onChange={(e) => set("email")(e.target.value)} className={inputClass} /></div>
-          <Button type="submit" disabled={state.busy}>{state.busy ? "Sending…" : "Save and send sign-in link"}</Button>
-          <p className="text-xs text-slate-600 sm:col-span-2">The caregiver gets an email with a temporary password and sets their own at first sign-in. The message contains no client or health information.</p>
+          <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : hasContact ? "Save contact email" : "Save and send sign-in link"}</Button>
+          <p className="text-xs text-slate-600 sm:col-span-2">{hasContact ? "This changes the contact address. The existing sign-in stays the same." : "The caregiver gets an email with a temporary password and sets their own at first sign-in."}</p>
         </form>
       ) : null}
       {panel === "override" ? (

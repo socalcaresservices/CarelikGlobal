@@ -11,8 +11,8 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, createTestDb, expectPgError, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
-const UP = new URL("../pending/migrations/0090_caregiver_signin_override.sql", import.meta.url);
-const DOWN = new URL("../pending/rollback/0090_caregiver_signin_override.down.sql", import.meta.url);
+const UP = new URL("../pending/migrations/0103_caregiver_signin_override.sql", import.meta.url);
+const DOWN = new URL("../pending/rollback/0103_caregiver_signin_override.down.sql", import.meta.url);
 
 let db: TestDb;
 let w: World;

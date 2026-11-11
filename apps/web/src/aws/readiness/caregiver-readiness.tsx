@@ -7,7 +7,7 @@ import { useAvailability } from "./queries";
 import { AvailabilityReview } from "./availability-review";
 import { CaregiverDocuments } from "./documents-readiness";
 import { CaregiverServices } from "./service-approvals";
-import { CaregiverExperience, MatchingLocation } from "./matching-inputs";
+import { CaregiverExperience } from "./matching-inputs";
 import { MyExperience } from "./my-experience";
 import { SummarySection } from "../ui/summary-section";
 import { InfoTip } from "../ui/info-tip";
@@ -40,9 +40,7 @@ export function CaregiverReadiness({ caregiverRecordId }: { caregiverRecordId: s
         </SummarySection>
       ) : null}
       <AvailabilityReview caregiverRecordId={caregiverRecordId} />
-      {hasPermission("caregiver_services.read") ? <CaregiverServices caregiverRecordId={caregiverRecordId} /> : null}
       {hasPermission("matching.read") ? <CaregiverExperience caregiverRecordId={caregiverRecordId} /> : null}
-      {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={caregiverRecordId} /> : null}
     </>
   );
 }

@@ -33,7 +33,7 @@ async function main() {
 
   const c = new pg.Client({ connectionString: databaseUrl() });
   await c.connect();
-  const applied = await migrate(c);
+  const applied = await migrate(c, () => {}, { includePendingUx: true });
   console.log(`migrations applied: ${applied.applied.length}`);
 
   const q = async (sql: string, params: unknown[] = []): Promise<Row[]> => (await c.query(sql, params)).rows as Row[];

@@ -33,6 +33,7 @@ export function AccountsPage() {
   const qc = useQueryClient();
   const { activeOrganizationId, hasPermission } = useOrganization();
   const [acting, setActing] = useState<{ userId: string; kind: "disable" | "enable" } | null>(null);
+  const [statusFilter, setStatusFilter] = useState("all");
   const [reason, setReason] = useState("");
   const [done, setDone] = useState<string | null>(null);
   const allowed = hasPermission("accounts.manage");
@@ -52,6 +53,7 @@ export function AccountsPage() {
     },
   });
 
+  const visibleAccounts = (accounts.data?.accounts ?? []).filter((account) => statusFilter === "all" || (statusFilter === "not_active" ? account.accountStatus !== "active" : account.accountStatus === statusFilter));
   if (!allowed) return <Card><p className="text-sm text-slate-700">Only an administrator can manage sign-in accounts.</p></Card>;
   return (
     <div className="mx-auto max-w-3xl space-y-2">
@@ -62,23 +64,33 @@ export function AccountsPage() {
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
       {accounts.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}
       {accounts.isError ? <p role="alert" className="text-sm text-red-700">{message(accounts.error, "The accounts could not be loaded.")}</p> : null}
-      <ul className="space-y-1" aria-label="Sign-in accounts">
-        {(accounts.data?.accounts ?? []).map((a) => {
+      <label className="block text-sm">Sign-in status
+        <select className="ml-2 rounded border p-1" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="not_active">Not active</option>
+          {Object.entries(ACCOUNT_STATUS_LABEL).filter(([key]) => key !== "active").map(([key, label]) =>
+            <option key={key} value={key}>{label}</option>)}
+        </select>
+      </label>
+      {accounts.data && visibleAccounts.length === 0 ? <p className="text-sm text-og-sub">
+        {statusFilter === "all" ? "No sign-in accounts yet." : <>No accounts match this filter. <button type="button" className="underline" onClick={() => setStatusFilter("all")}>Clear filter</button></>}
+      </p> : null}
+      <ul className="divide-y rounded-lg border border-slate-200" aria-label="Sign-in accounts">
+        {visibleAccounts.map((a) => {
           const status = isAccountStatus(a.accountStatus) ? a.accountStatus : null;
           const key = a.userId ?? a.caregiverRecordId ?? a.displayName ?? "";
           const open = acting && a.userId && acting.userId === a.userId ? acting : null;
           return (
-            <li key={key} className="rounded-lg border border-slate-200 bg-og-card px-3 py-1.5">
+            <li key={key} className="bg-og-card px-3 py-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="min-w-0 break-words font-semibold text-slate-950">
-                  {a.displayName ?? "Name not set"}{a.caregiverCode ? ` (${a.caregiverCode})` : ""}{a.isSelf ? " — you" : ""}
+                  {a.caregiverRecordId ? <Link className="underline" to={`/care-team/${a.caregiverRecordId}`}>{a.displayName ?? "Name not set"}</Link> : a.userId && hasPermission("staff.read") ? <Link className="underline" to={`/staff?person=${encodeURIComponent(a.userId)}`}>{a.displayName ?? "Name not set"}</Link> : a.displayName ?? "Name not set"}{a.isSelf ? " — you" : ""}
                 </p>
-                {a.workStatus
-                  ? <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${WORK_STATUS_BADGE[a.workStatus]}`}>{WORK_STATUS_LABEL[a.workStatus]}</span>
-                  : <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status ? ACCOUNT_STATUS_BADGE[status] : "bg-slate-100 text-slate-800"}`}>{status ? ACCOUNT_STATUS_LABEL[status] : a.accountStatus}</span>}
+<span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status ? ACCOUNT_STATUS_BADGE[status] : "bg-slate-100 text-slate-800"}`}>Sign-in: {status ? ACCOUNT_STATUS_LABEL[status] : a.accountStatus}</span>
               </div>
               <p className="text-xs text-slate-700">{roleLabel(a.role)}{status && ACCOUNT_STATUS_HELP[status] ? ` · ${ACCOUNT_STATUS_HELP[status]}` : ""}{a.workStatus === "not_ready" && a.readinessTotal ? ` · ${a.readinessMet ?? 0} of ${a.readinessTotal} done` : ""}</p>
-              {a.workStatus ? <p className="text-xs text-slate-600">Sign-in account: <span>{status ? ACCOUNT_STATUS_LABEL[status] : a.accountStatus}</span></p> : null}
+              {a.workStatus ? <p className="text-xs text-slate-600">Work readiness: <span className={WORK_STATUS_BADGE[a.workStatus]}>{WORK_STATUS_LABEL[a.workStatus]}</span></p> : null}
               {a.caregiverRecordId && (status === "invitation_pending" || status === "setup_required") ? (
                 <SendSignInLink caregiverRecordId={a.caregiverRecordId} hasContact={!!a.hasContact} canManage={hasPermission("caregivers.manage")} lastSentAt={null} />
               ) : null}

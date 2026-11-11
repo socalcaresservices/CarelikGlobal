@@ -1,3 +1,4 @@
+import { ClientQrCard } from "./client-qr";
 import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -451,7 +452,7 @@ export function ClientDetailPage() {
       <DetailsCard c={c} canManage={canManage} />
       {hasPermission("matching.read") ? <ClientExperience clientId={c.clientId} /> : null}
       {hasPermission("matching.manage") ? <MatchingLocation clientId={c.clientId} /> : null}
-      {canManage ? <StatusCard c={c} /> : null}
+      {canManage ? <><StatusCard c={c} /><ClientQrCard key={c.clientId} clientId={c.clientId} /></> : null}
       <div id="history"><ClientHistoryCard clientId={c.clientId} /></div>
     </div>
   );

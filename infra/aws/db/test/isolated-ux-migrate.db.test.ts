@@ -9,12 +9,12 @@ it("uses the existing runner to apply UX files once with original checksums; a r
   const c = await db.admin.connect();
   try {
     const options = { includePendingUx: true };
-    expect((await migrate(c, () => {}, options)).applied).toHaveLength(5);
+    expect((await migrate(c, () => {}, options)).applied).toHaveLength(19);
     const rows = (await c.query("select version, name, checksum from ogevia_meta.schema_migrations order by version")).rows;
     expect(rows).toEqual(loadMigrations(options).map(({ version, name, checksum }) => ({ version, name, checksum })));
     expect((await migrate(c, () => {}, options)).applied).toEqual([]);
     await expect(migrate(c)).rejects.toThrow(/not in the repository/);
-    await c.query("update ogevia_meta.schema_migrations set checksum = 'changed' where version = '0094'");
+    await c.query("update ogevia_meta.schema_migrations set checksum = 'changed' where version = '0107'");
     await expect(migrate(c, () => {}, options)).rejects.toThrow(/Drift/);
   } finally { c.release(); }
 });

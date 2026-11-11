@@ -1,3 +1,5 @@
+> Current reconciliation supersedes the legacy shared-release asset/SHA/ledger narrative below. Use OPERATOR_TEST_DEPLOY.sh isolated-compare with the final green commit, then the current separation proposal. It retains all 256 live TEST routes and adds exactly three (259), preserves the existing NoEcho QR parameter and key, verifies the accepted 0102 API source hash, and captures the actual live rollback ZIP. Fresh isolated TEST uses accepted 0001–0102 plus UX 0103–0107 (107 ledger rows); no production migration set changes. Old f4316c5 assets and commands remain historical, not authorization to deploy. These tool-file checksum rows match the current reviewed bytes.
+
 # Pins for the UX redesign TEST release (generated 2026-11-11; verify every value before use)
 
 **Status: PREPARED, NOT AUTHORIZED, NOT RUN.** Nothing here moves until the owner gives the written Phase C statement (commit, TEST only, operator, window) and the owner's written authorization for the temporary security-group attach and admin credential in memory used by `OPERATOR_TEST_DB.sh` (the 0088 approval does not carry over). The window and the GO reference are NOT in these files: the operator exports them from the owner's statement.
@@ -6,21 +8,21 @@
 |---|---|
 | **Application commit (the proposed application commit; NOT approved for deployment)** | `f4316c5f1a9a844dc7749152243271cee003e94c` (branch `claude/ogevia-ux-audit-redesign-w36cov`; CI run 436: success; final continuation head still needs its own green run). The continuation after it changes tests/release tooling/docs, not app behavior. |
 | Target | TEST only: stacks `Ogevia-prod-*`, database `ogevia_sv_test`. Never `Ogevia-prd-*` or `ogevia_prd` |
-| `OPERATOR_TEST_DB.sh` sha256 | `83b756d8b4fdb0425afefa72033ad0bd7a9abe0a878f79ebd904b1f164f994a2` |
-| `OPERATOR_TEST_DEPLOY.sh` sha256 | `76167deb03cbe46e69d406eab55bd2a3a3db7817efd612cba2210a33f2a109de` |
-| `diff_gate_ux.py` sha256 | `e66aff283370a447a22f143a20c3b1aeb6fcdf093bcaea2b82b46ce57a836fd7` |
+| `OPERATOR_TEST_DB.sh` sha256 | `09fbb2f97102494b8b000a5edfc877ad648248e859e8805209e5285c2524685d` |
+| `OPERATOR_TEST_DEPLOY.sh` sha256 | `d5d1c988e51156391a1f6ec4c463d421c96e76e0a8b53363258be3a3ca8068c9` |
+| `diff_gate_ux.py` sha256 | `2a9af4da78b8ac7e4a9e1e52384746a1f6de4bb5a2632242a6fa80533eeea368` |
 | `VERIFY_0090_0094.sql` sha256 | `0f78a265376152a4f14aea523bce10d86398966dcd6d268a298c81c0365cd1ab` |
-| Migration `0090_caregiver_signin_override.sql` | `963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54` |
-| Migration `0091_caregiver_client_labels.sql` | `673dea984d97433cad1df663a890233acb2d240eb87abb8434db655d9a7596f3` |
-| Migration `0092_bulk_import.sql` | `2dc18c125b459750431981dad2dd257630c6864e5ed41102770e6d9d1f992121` |
-| Migration `0093_staff_duplicates.sql` | `952e1c9176ecee8b9475fd45f923fdff175bf78de14341a61b46e49d9f28affa` |
-| Migration `0094_standard_document_types.sql` | `b0a28f483462a826aac0c9bb1e8e7b4ad8d26bfea80156668ab80874508f8d91` |
+| Migration `0103_caregiver_signin_override.sql` | `963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54` |
+| Migration `0104_caregiver_client_labels.sql` | `7e492ae24aff345ef15f0905e51bb0ee0c801857f6e1ee549fdf4b45f9e68712` |
+| Migration `0105_bulk_import.sql` | `2dc18c125b459750431981dad2dd257630c6864e5ed41102770e6d9d1f992121` |
+| Migration `0106_staff_duplicates.sql` | `952e1c9176ecee8b9475fd45f923fdff175bf78de14341a61b46e49d9f28affa` |
+| Migration `0107_standard_document_types.sql` | `b0a28f483462a826aac0c9bb1e8e7b4ad8d26bfea80156668ab80874508f8d91` |
 | Rollback `0090` / `0091` | `75cc1db8b9af4f4d61e909f8eb5e8245b88c5c71032ad35bcf41f49b9779a56e` / `843580f116fb7a682da1c1313c605aa7db507e1186ce60b8176d9b68d03f385d` |
 | Rollback `0092` / `0093` / `0094` | `b6e96f069b28a7e790869ef5e02f1a9ae7da6dd72cb5eb71661e66f0dd2ff09a` / `24fe53618b70ab48b519813021fd06ce8f8671d9fa0aa32b16449b61caf839ff` / `1d0cbfe10b6b20baf2af221e3812949603332029a1343cc214238b7ddca67d44` |
 | Pending migrations set (5 files, `LC_ALL=C sha256sum -- *.sql \| sha256sum`) | `dc971a797a07aa4b2d1bfe9b6a5aa60f987d19380983aec126ceefefb4faca06` |
 | Pending rollback set (5 files) | `b0bb79933c75defa1a680ccafe73ad088a4f45418024a9c5b6dd40e633660b44` |
 | All 88 released migration files (unchanged since the 0088 release) | `049c52cb3cbc0c90efad7003967d8bfe8297cd771d2d471d5b42506a889e372c` |
-| `pnpm-lock.yaml` (includes the dependency overrides) | `ff6caae63c43f9e98c5386ac65ec49a43ba331fe8ed4f8ef6a179f8a8c49fbc0` |
+| `pnpm-lock.yaml` (includes the dependency overrides) | `8bcc5a445284d84ddef2885544c09d6219356f537e62468c9e40d931fcd8b267` |
 | Handler code asset (cdk synth, `-c env=prod`) | `7baa45221daa410dec24424c55dd64605e5ce2fe36059165a4f5d958239346eb.zip` (local synthesis; confirm against CI artifact before any deployment) |
 | IdentityHandler code asset | `7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip` (identical to the 0088 release: unchanged) |
 | API routes in the assembly | 253 (the previous deployed TEST commit `464dea64` synthesizes 250; the gate allows exactly these 3 added: `POST /v1/caregivers/{caregiverRecordId}/signin-override`, `GET /v1/signin-overrides`, `POST /v1/imports/{kind}`) |

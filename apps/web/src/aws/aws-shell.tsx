@@ -145,6 +145,7 @@ export function AwsShell({ children }: PropsWithChildren) {
 
   const view = viewKind(role);
   const isCaregiver = view === "CAREGIVER";
+  const hasCaregiverAccess = isCaregiver || hasPermission("availability.manage_own");
   const canSeeAttention = hasPermission("visits.read");
   const canReadVisits = hasPermission("visits.read");
   // The same destinations and the same permission conditions as before; only the grouping and the labels changed. Sidebar items are the first of each group's tabs;
@@ -181,6 +182,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/settings/roles", label: "Roles & Permissions", group: "Settings", show: staff && hasPermission("staff.read") },
     // Agency Settings opens the first agency page the person may use (branding, then services, then continuity); the others are its tabs.
     { to: agencyTo, label: "Agency Settings", group: "Settings", show: staff && (canSettings || canServices || canContinuity) },
+    { to: "/business-compliance", label: "Business Compliance", group: "Settings", show: staff && hasPermission("accounts.manage") },
     { to: "/accounts", label: "Accounts", group: "Settings", show: staff && hasPermission("accounts.manage") },
     { to: "/settings/branding", label: "Branding", group: "Settings", show: staff && canSettings && agencyTo !== "/settings/branding" },
     { to: SERVICES_PATH, label: "Services", group: "Settings", show: staff && canServices && agencyTo !== SERVICES_PATH },
@@ -188,10 +190,10 @@ export function AwsShell({ children }: PropsWithChildren) {
     // Appearance is everyone's; it is also in the menu footer next to Profile.
     { to: "/settings/appearance", label: "Appearance", group: "Settings", tabOnly: true, under: "Agency Settings", show: true },
     // The caregiver's own day. There is no separate tasks page: verifying a visit is the caregiver's task.
-    { to: "/my-shifts", label: "My Schedule", group: "My Work", show: isCaregiver },
-    { to: "/service-verification", label: "Verify Visit", group: "My Work", show: isCaregiver },
-    { to: "/availability", label: "Availability", group: "My Work", show: isCaregiver },
-    { to: "/documents", label: "My documents", group: "My Work", show: isCaregiver && hasPermission("documents.manage_own") },
+    { to: "/my-shifts", label: "My Schedule", group: "My Work", show: hasCaregiverAccess },
+    { to: "/service-verification", label: "Verify Visit", group: "My Work", show: hasCaregiverAccess },
+    { to: "/availability", label: "Availability", group: "My Work", show: hasCaregiverAccess },
+    { to: "/documents", label: "My documents", group: "My Work", show: hasCaregiverAccess && hasPermission("documents.manage_own") },
   ];
   const groups = visibleGroups(links);
   // Each badge is ONE server count (COUNT_DEFINITIONS.md). Billing shows what is ready for approval and Visits to review shows exception review: the two are never merged.

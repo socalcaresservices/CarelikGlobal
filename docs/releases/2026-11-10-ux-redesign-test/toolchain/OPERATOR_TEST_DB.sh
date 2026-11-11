@@ -93,8 +93,8 @@ JS
     psql -X --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -v org_slug=ogevia-test-slice -v caregiver_code=TEST-CG-01 -f "$REPO/infra/aws/db/deploy/07_seed_ux_demo_visits.sql"
     [[ "$(Q ogevia_sv_test "select exists (select 1 from ogevia.shifts where organization_id='7e570000-0000-4000-8000-000000000001' and status='scheduled')")" == t ]] || { echo 'STOP: no synthetic demo shift was created; API/web remain unmodified'; exit 2; }
   fi
-  [[ "$(Q ogevia_sv_test "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations")" == 93/0094 ]] || { echo 'STOP: wrong ledger'; exit 2; }
-  EXPECTED=$(for f in "$REPO"/infra/aws/db/migrations/*.sql "$REPO"/infra/aws/db/pending/migrations/009[0-4]_*.sql; do n=$(basename "$f"); printf '%s|%s|%s\n' "${n:0:4}" "$n" "$(sha256sum "$f" | cut -c1-64)"; done)
+  [[ "$(Q ogevia_sv_test "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations")" == 107/0107 ]] || { echo 'STOP: wrong ledger'; exit 2; }
+  EXPECTED=$(for f in "$REPO"/infra/aws/db/migrations/*.sql "$REPO"/infra/aws/db/pending/live-test/migrations/*.sql "$REPO"/infra/aws/db/pending/migrations/010[3-7]_*.sql; do n=$(basename "$f"); printf '%s|%s|%s\n' "${n:0:4}" "$n" "$(sha256sum "$f" | cut -c1-64)"; done)
   [[ "$(Q ogevia_sv_test 'select version||'"'"'|'"'"'||name||'"'"'|'"'"'||checksum from ogevia_meta.schema_migrations order by version')" == "$EXPECTED" ]] || { echo 'STOP: ledger filename/checksum mismatch'; exit 2; }
   ROLE_OK=$(Q ogevia_sv_test "select (rolcanlogin and not rolinherit and not rolsuper and not rolcreatedb and not rolcreaterole and not rolreplication and not rolbypassrls and pg_has_role(rolname,'ogevia_app','MEMBER')) from pg_roles where rolname='ogevia_test_app'")
   [[ "$ROLE_OK" == t ]] || { echo 'STOP: TEST login privilege mismatch'; exit 2; }
@@ -112,7 +112,7 @@ JS
     printf 'ogevia-postgres|ogevia_sv_test|%s\n' "$(date -u +%FT%TZ)" > "$BACKUP.meta"
     echo "TEST-only logical backup: $BACKUP"
   fi
-  echo 'ISOLATED DATABASE VERIFIED: 93/0094, all checksums, unprivileged TEST login. API/web NOT deployed by this mode.'
+  echo 'ISOLATED DATABASE VERIFIED: 107/0107, all checksums, unprivileged TEST login. API/web NOT deployed by this mode.'
   exit 0
 fi
 
@@ -126,11 +126,11 @@ TS="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="$HOME/phaseC_ux_${MODE}_${TS}.txt"
 
 SHA=f4316c5f1a9a844dc7749152243271cee003e94c
-MIGS=(0090_caregiver_signin_override 0091_caregiver_client_labels 0092_bulk_import 0093_staff_duplicates 0094_standard_document_types)
-declare -A UP_SHA=( [0090_caregiver_signin_override]=963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54 [0091_caregiver_client_labels]=673dea984d97433cad1df663a890233acb2d240eb87abb8434db655d9a7596f3 [0092_bulk_import]=2dc18c125b459750431981dad2dd257630c6864e5ed41102770e6d9d1f992121 [0093_staff_duplicates]=952e1c9176ecee8b9475fd45f923fdff175bf78de14341a61b46e49d9f28affa [0094_standard_document_types]=b0a28f483462a826aac0c9bb1e8e7b4ad8d26bfea80156668ab80874508f8d91 )
-declare -A DOWN_SHA=( [0090_caregiver_signin_override]=75cc1db8b9af4f4d61e909f8eb5e8245b88c5c71032ad35bcf41f49b9779a56e [0091_caregiver_client_labels]=843580f116fb7a682da1c1313c605aa7db507e1186ce60b8176d9b68d03f385d [0092_bulk_import]=b6e96f069b28a7e790869ef5e02f1a9ae7da6dd72cb5eb71661e66f0dd2ff09a [0093_staff_duplicates]=24fe53618b70ab48b519813021fd06ce8f8671d9fa0aa32b16449b61caf839ff [0094_standard_document_types]=1d0cbfe10b6b20baf2af221e3812949603332029a1343cc214238b7ddca67d44 )
-PEND_UP_SET=dc971a797a07aa4b2d1bfe9b6a5aa60f987d19380983aec126ceefefb4faca06
-PEND_DOWN_SET=b0bb79933c75defa1a680ccafe73ad088a4f45418024a9c5b6dd40e633660b44
+MIGS=(0103_caregiver_signin_override 0104_caregiver_client_labels 0105_bulk_import 0106_staff_duplicates 0107_standard_document_types)
+declare -A UP_SHA=( [0103_caregiver_signin_override]=75cc1db8b9af4f4d61e909f8eb5e8245b88c5c71032ad35bcf41f49b9779a56e [0104_caregiver_client_labels]=843580f116fb7a682da1c1313c605aa7db507e1186ce60b8176d9b68d03f385d [0105_bulk_import]=b6e96f069b28a7e790869ef5e02f1a9ae7da6dd72cb5eb71661e66f0dd2ff09a [0106_staff_duplicates]=24fe53618b70ab48b519813021fd06ce8f8671d9fa0aa32b16449b61caf839ff [0107_standard_document_types]=1d0cbfe10b6b20baf2af221e3812949603332029a1343cc214238b7ddca67d44 )
+declare -A DOWN_SHA=( [0103_caregiver_signin_override]=75cc1db8b9af4f4d61e909f8eb5e8245b88c5c71032ad35bcf41f49b9779a56e [0104_caregiver_client_labels]=843580f116fb7a682da1c1313c605aa7db507e1186ce60b8176d9b68d03f385d [0105_bulk_import]=b6e96f069b28a7e790869ef5e02f1a9ae7da6dd72cb5eb71661e66f0dd2ff09a [0106_staff_duplicates]=24fe53618b70ab48b519813021fd06ce8f8671d9fa0aa32b16449b61caf839ff [0107_standard_document_types]=1d0cbfe10b6b20baf2af221e3812949603332029a1343cc214238b7ddca67d44 )
+PEND_UP_SET=98260e0692cd7d234d593a15b40c224327679d5b94daa2b692b0a45deaa5c78b
+PEND_DOWN_SET=b5a90c430dbd5172c5948fe7ba75be20441ff5e1a01717cba6a0db2a6105c700
 SET88_SHA=049c52cb3cbc0c90efad7003967d8bfe8297cd771d2d471d5b42506a889e372c         # all 88 released migration files (unchanged since the 0088 release)
 VSQL_SHA=0f78a265376152a4f14aea523bce10d86398966dcd6d268a298c81c0365cd1ab
 IID_EXPECT=i-0ce8db2d7e5839dd5; ADMIN_SG=sg-00e01e2ca80442c1f; APP_SG=sg-064ffce3bcbe8eb3b; RDS_SG=sg-00530a1f4f7648e65     # last recorded values: the read-only checks U1/U2 must confirm them; the script stops if live state differs
@@ -268,7 +268,7 @@ GOT=$(psql -X -At -d "$DB" -c "select current_database()") || stop "connection t
 echo "guard ok: $GOT"
 
 ro() { PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000" psql -X -At -d "$DB" -c "begin read only;" -c "set local role ogevia_readonly;" -c "$1" -c "rollback;" 2>&1 | grep -v -E '^(BEGIN|ROLLBACK|SET)$'; }
-state() { LEDGER=$(ro "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations"); echo "state: ledger=$LEDGER (expected baseline $EXPECT_LEDGER; applied UX ledger 93/0094)"; }
+state() { LEDGER=$(ro "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations"); echo "state: ledger=$LEDGER (expected baseline $EXPECT_LEDGER; applied UX ledger 107/0107)"; }
 # VERIFY_0090_0094.sql: one row per check, name|t|detail; a row containing |f| fails. expect=absent before, expect=present after.
 vrun() { local want="$1" out n bad
   out=$(PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=60000" psql -X -At -F '|' -d "$DB" -v expect="$want" -c "begin read only;" -f "$VSQL" -c "rollback;" 2>&1 | grep -v -E '^(BEGIN|ROLLBACK|SET)$')
@@ -278,7 +278,7 @@ vrun() { local want="$1" out n bad
   return 0
 }
 before_ok() { state; [[ "$LEDGER" == "$EXPECT_LEDGER" ]] || stop "ledger is $LEDGER, expected $EXPECT_LEDGER: TEST is not the baseline this release was prepared for"; vrun absent || stop "some of the new objects already exist, or the baseline differs; do NOT apply"; }
-after_ok()  { state; [[ "$LEDGER" == "93/0094" ]] || { echo "!!! ledger changed to $LEDGER"; return 1; }; vrun present || { echo "!!! POST-STATE DOES NOT MATCH"; return 1; }; echo "POST-STATE MATCHES"; }
+after_ok()  { state; [[ "$LEDGER" == "107/0107" ]] || { echo "!!! ledger changed to $LEDGER"; return 1; }; vrun present || { echo "!!! POST-STATE DOES NOT MATCH"; return 1; }; echo "POST-STATE MATCHES"; }
 guarded_psql() { # file, migration stem, apply|rollback; SQL and ledger change commit together
   local file="$1" stem="$2" direction="$3" version="${2:0:4}" checksum="${UP_SHA[$2]}"
   local before after
@@ -319,7 +319,7 @@ case "$MODE" in
   rollback)
     echo "ROLLBACK drops caregiver_signin_overrides, import_batches, staff_merge_links WITH their rows (0090, 0092, 0093 are BACKUP REQUIRED: the TEST backup is $OGEVIA_TEST_BACKUP). Records created by imports and merges stay. Merged staff profiles stay inactive."
     confirm "ROLLBACK 0094-0090" "Only after a stop condition, and web and API have been rolled back first."
-    for n in 0094_standard_document_types 0093_staff_duplicates 0092_bulk_import 0091_caregiver_client_labels 0090_caregiver_signin_override; do
+    for n in 0107_standard_document_types 0106_staff_duplicates 0105_bulk_import 0104_caregiver_client_labels 0103_caregiver_signin_override; do
       if [[ "$(ro "select count(*) from ogevia_meta.schema_migrations where version = '${n:0:4}'")" == 0 ]]; then
         echo "--- $n not recorded; nothing to roll back"; continue
       fi

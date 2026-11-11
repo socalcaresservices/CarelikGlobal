@@ -105,7 +105,10 @@ def isolated_gate(baseline_dir, candidate_dir):
         'Value': {'Ref': 'AppDatabaseSecret8F772B62'}, 'Export': {
             'Name': 'Ogevia-prod-DatabaseSecret:ExportsOutputRefAppDatabaseSecret8F772B622E5A091B'}}}
     for s in ['Parameters', 'Conditions', 'Mappings', 'Rules', 'Transform']:
-        assert secret_template.get(s) == old['Ogevia-prod-ServiceVerificationApi.template.json'].get(s), 'unexpected credential-stack ' + s
+        reference = old['Ogevia-prod-ServiceVerificationApi.template.json'].get(s)
+        if s == 'Parameters':
+            reference = {k: v for k, v in reference.items() if k not in ['ClientQrEncryptionKey', 'RepairCodeBucket', 'RepairCodeKey']}
+        assert secret_template.get(s) == reference, 'unexpected credential-stack ' + s
     print('ISOLATED EXPECTED-ONLY: YES (API target/credential/ingress, additive endpoint grant, TEST RDS alarms, retained secret)')
     return 0
 
@@ -154,8 +157,11 @@ def main():
             l2, n2 = json.loads(json.dumps(l)), json.loads(json.dumps(n))
             for d in (l2, n2):
                 d.get("Properties", {}).get("Code", {}).pop("S3Key", None)
+                d.get("Properties", {}).get("Code", {}).pop("S3Bucket", None)
                 d.get("Metadata", {}).pop("aws:asset:path", None)
-            if l2 == n2:
+                if not d.get("Metadata"):
+                    d.pop("Metadata", None)
+            if l2 == n2 and nr[k].get("Properties", {}).get("Code", {}).get("S3Bucket") == "cdk-hnb659fds-assets-300094796789-us-west-2":
                 changed_handler.append(k)
                 continue
         bad.append("CHANGED resource %s (%s)" % (k, lr[k].get("Type")))

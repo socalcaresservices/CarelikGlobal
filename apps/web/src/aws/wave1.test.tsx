@@ -137,7 +137,7 @@ async function startAndEnd(api: ReturnType<typeof fakeApi>, reason?: string) {
   await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
   fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
-  await screen.findByRole("heading", { name: "Verify visit details" });
+  await screen.findByRole("heading", { name: "Confirm visit with client" });
   return api;
 }
 
@@ -220,7 +220,7 @@ describe("confirmation choices and attestation (G05, G06)", () => {
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
     fireEvent.click(screen.getByRole("checkbox", { name: new RegExp(ATTESTATION_TEXT.slice(0, 30)) }));
     fireEvent.click(screen.getByRole("button", { name: /Confirm visit/ }));
-    expect(await screen.findByRole("heading", { name: "Visit saved" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Signature saved" })).toBeInTheDocument();
     const dl = within(document.querySelector('dl[aria-label="Visit result"]') as HTMLElement);
     expect(dl.getByText("Billing ready")).toBeInTheDocument();
     expect(screen.getByText(/Billing ready does not mean billed/)).toBeInTheDocument();

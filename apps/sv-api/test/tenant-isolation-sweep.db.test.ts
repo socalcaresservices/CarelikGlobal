@@ -241,6 +241,7 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "versionId") return /client-document-versions/.test(fam) ? ids.clientVersionId : ids.versionId;
   if (name === "approvalId") return /billing-approvals/.test(fam) ? ids.billingApprovalId : ids.caregiverSvcApprovalId ?? ids.caregiverServiceApprovalId;
   if (name === "decisionId") return ids.decisionId;
+  if (route === "POST /v1/business-documents" && name === "id") return undefined;
   if (ids[name]) return ids[name];
   if (name === "status" && route === "GET /v1/availability/requests") return "pending";
   if (name === "kind") return route === "GET /v1/readiness/flags" ? "service" : "weekly";

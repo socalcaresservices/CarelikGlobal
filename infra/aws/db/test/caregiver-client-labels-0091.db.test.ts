@@ -5,8 +5,8 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, createTestDb, freshClient, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
-const UP = new URL("../pending/migrations/0091_caregiver_client_labels.sql", import.meta.url);
-const DOWN = new URL("../pending/rollback/0091_caregiver_client_labels.down.sql", import.meta.url);
+const UP = new URL("../pending/migrations/0104_caregiver_client_labels.sql", import.meta.url);
+const DOWN = new URL("../pending/rollback/0104_caregiver_client_labels.down.sql", import.meta.url);
 let db: TestDb;
 let w: World;
 let assigned: { client: string };
@@ -38,6 +38,8 @@ describe("0091 caregiver client labels", () => {
     const mine = rows.find((r) => r.client_id === assigned.client);
     expect(mine.display_label).toBe("Alexandra F.");
     expect(JSON.stringify(rows)).not.toMatch(/Fernandez|Quillfeather|Brenda/);
+    const legacy = await call(w.caregiverA1, "select ogevia_api.caregiver_visible_client_name($1,$2,'client') label", [w.orgA, assigned.client]);
+    expect(legacy[0].label).toBe("Alexandra F.");
   });
 
   it("negative: a caregiver with no assignment or shift for a client does not receive that client at all, so no name", async () => {

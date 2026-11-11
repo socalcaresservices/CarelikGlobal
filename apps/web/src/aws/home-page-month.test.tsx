@@ -20,6 +20,7 @@ vi.mock("@/providers/organization-provider", () => ({
 }));
 vi.mock("./aws-workspace", async (orig) => ({
   ...(await orig<typeof import("./aws-workspace")>()),
+  useAwsApi: () => ({ get: vi.fn() }),
   useUtilisation: (monthStart: string) => {
     monthsRequested.push(monthStart);
     return { data: [], isLoading: false, isError: false };

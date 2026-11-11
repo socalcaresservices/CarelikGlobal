@@ -23,7 +23,7 @@ export function ContinuityStatusCard() {
   const s = continuityState(status.data);
   // Home's "Outage readiness" notice: one line (heading, status, link). Amber, with a symbol and words (not colour alone), when the pack is stale.
   return (
-    <section aria-labelledby="outage-readiness-heading" className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-0 rounded-og border px-3 py-1 ${s.stale ? "border-amber-600 bg-amber-50" : "border-og-line bg-og-card"}`}>
+    <section aria-labelledby="outage-readiness-heading" className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-0 rounded-og border px-3 py-1 ${s.stale ? "border-2 border-orange-500 bg-og-alert" : "border-og-line bg-og-card"}`}>
       <div className="min-w-0 py-1 text-sm">
         <h3 id="outage-readiness-heading" className="inline font-semibold text-og-ink">Outage readiness</h3>
         <span className={s.stale ? "font-semibold text-amber-900" : "text-og-sub"}> · {s.stale ? <span aria-hidden="true">▲ </span> : null}{s.text}.</span>
@@ -70,7 +70,7 @@ export function ContinuityPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Continuity pack</h1>
-      <Card className={`p-3 ${s.stale ? "border-2 border-amber-500 bg-amber-50" : ""}`}>
+      <Card className={`p-3 ${s.stale ? "border-2 border-orange-500 bg-og-alert" : ""}`}>
         <p className={`text-base ${s.stale ? "font-bold text-amber-900" : ""}`}>{status.isError ? "Status could not be loaded." : `${s.text}.`}</p>
         <Hint details="Hours are this month's authorized and remaining hours; clients are the active ones; outage records are the numbered visit records. It shows the exact time its data was taken.">One file with the next 14 days of shifts, hours, clients, the Care Team and outage records. It opens in any browser without Ogevia.</Hint>
         <Button className="mt-3 min-h-11 w-full sm:w-auto" disabled={busy} onClick={() => void download()}>

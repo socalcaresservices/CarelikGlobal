@@ -176,8 +176,8 @@ describe("where the actions land", () => {
   });
   it("?coverage=1 shows only shifts that need coverage", async () => {
     renderAt("/schedule?coverage=1", FULL, { shifts: () => json(200, { shifts: [shift("ok", 60, 120), shift("open", 90, 150, { coverageState: "needs_coverage", caregiverRecordId: null, caregiverName: null, caregiverCode: null })] }) });
-    await screen.findByText(/unfilled this week/);
-    expect(screen.getByLabelText("Unfilled only")).toBeChecked();
+    await screen.findByRole("table", { name: "Unfilled shifts" });
+    expect(screen.getByRole("heading", { name: "Coverage date range" })).toBeInTheDocument();
     expect(screen.queryByText("Client ok")).toBeNull();
   });
   it("without the parameters the schedule opens as before", async () => {

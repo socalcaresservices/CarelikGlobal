@@ -41,7 +41,7 @@ describe("notifications bell", () => {
     const button = await screen.findByTestId("notifications-button");
     expect(button.getAttribute("aria-label")).toBe("Notifications unavailable");
     fireEvent.click(button);
-    expect((await screen.findByRole("alert")).textContent).toMatch(/could not be loaded/);
+    await waitFor(() => expect(screen.getAllByRole("alert").some((alert) => /Notifications could not be loaded/i.test(alert.textContent ?? ""))).toBe(true));
   });
 
   it("people who cannot see attention items get no bell", async () => {

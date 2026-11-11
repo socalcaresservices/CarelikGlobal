@@ -105,7 +105,7 @@ export interface OgeviaEnvironmentConfig {
    * that environment (demo first); with it off the two routes are not in the API at all.
    * staffManagement (pending migration 0086, infra/aws/db/pending): on for the pilot/test slice and, since the owner's approval of 2026-10-26, on for production (PRD below). An environment that has not applied 0086 must keep it false.
    */
-  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean };
+  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean; readonly liveTestRepairs?: boolean };
   readonly auth: {
     /**
      * Existing Cognito app client the API's JWT authorizer accepts (audience).
@@ -321,6 +321,13 @@ export const ISOLATED_TEST_TARGET = {
   appSecretName: "ogevia/test/database/app",
 } as const;
 
+/** Preserve the already accepted TEST 0102 features; never enables production routes. */
+export function resolveLiveTestBaseline(config: OgeviaEnvironmentConfig, value: unknown): OgeviaEnvironmentConfig {
+  if (value === undefined) return config;
+  if (value !== "0102" || config.envName !== "prod" || config.database.purpose !== "test-slice") throw new Error("liveTestBaseline=0102 is TEST-only");
+  return { ...structuredClone(config), features: { ...config.features, liveTestRepairs: true } };
+}
+
 /** No opt-in means no changes. Master ARN is metadata resolved by the operator, never a secret value. */
 export function resolveTestDatabase(config: OgeviaEnvironmentConfig, choice: unknown, masterSecretArn?: unknown): OgeviaEnvironmentConfig {
   if (choice === undefined || choice === "shared") return config;
@@ -334,6 +341,7 @@ export function resolveTestDatabase(config: OgeviaEnvironmentConfig, choice: unk
   const next = structuredClone(config);
   return {
     ...next,
+    features: { ...next.features, liveTestRepairs: true },
     existing: { ...next.existing,
       securityGroups: { ...next.existing.securityGroups, prodRds: ISOLATED_TEST_TARGET.securityGroupId },
       databases: { prod: { instanceIdentifier: ISOLATED_TEST_TARGET.instanceIdentifier, endpointAddress: ISOLATED_TEST_TARGET.endpointAddress, port: 5432,

@@ -40,7 +40,7 @@ it("validates a TEST-only logical backup and refuses corruption or the wrong dat
   expect(check().status).not.toBe(0);
 });
 it("records checksums atomically, refuses reapply, and removes only rolled-back ledger rows", async () => {
-  const stems = readdirSync(new URL("migrations/", pending)).filter((f) => /^009[0-4]_.*\.sql$/.test(f)).sort().map((f) => f.slice(0, -4));
+  const stems = readdirSync(new URL("migrations/", pending)).filter((f) => /^010[3-7]_.*\.sql$/.test(f)).sort().map((f) => f.slice(0, -4));
   expect(stems).toHaveLength(5);
   await db.admin.query(`create function ogevia_meta.reject_ux_ledger() returns trigger language plpgsql as $$ begin raise exception 'Synthetic ledger failure'; end $$;
     create trigger reject_ux_ledger before insert on ogevia_meta.schema_migrations for each row execute function ogevia_meta.reject_ux_ledger()`);
@@ -50,7 +50,7 @@ it("records checksums atomically, refuses reapply, and removes only rolled-back 
   await db.admin.query("drop trigger reject_ux_ledger on ogevia_meta.schema_migrations; drop function ogevia_meta.reject_ux_ledger()");
   for (const stem of stems) { const r = run(stem, "apply"); expect(r.status, r.stderr + r.stdout).toBe(0); }
   const ledger = await db.admin.query("select version, checksum from ogevia_meta.schema_migrations where version >= '0090' order by version");
-  expect(ledger.rows.map((r) => r.version)).toEqual(["0090", "0091", "0092", "0093", "0094"]);
+  expect(ledger.rows.map((r) => r.version)).toEqual(["0103", "0104", "0105", "0106", "0107"]);
   expect(ledger.rows.map((r) => r.checksum)).toEqual(stems.map((s) => createHash("sha256").update(readFileSync(new URL(`migrations/${s}.sql`, pending))).digest("hex")));
   const retry = run(stems[0]!, "apply"); expect(retry.status).not.toBe(0); expect(retry.stdout).toContain("already recorded");
   for (const stem of [...stems].reverse()) { const r = run(stem, "rollback"); expect(r.status, r.stderr + r.stdout).toBe(0); }
@@ -58,10 +58,10 @@ it("records checksums atomically, refuses reapply, and removes only rolled-back 
   expect(run(stems[0]!, "rollback").status).not.toBe(0);
 });
 it("the operator rollback handles a release stopped after only two files applied", async () => {
-  const stems = readdirSync(new URL("migrations/", pending)).filter((f) => /^009[0-4]_.*\.sql$/.test(f)).sort().map((f) => f.slice(0, -4));
+  const stems = readdirSync(new URL("migrations/", pending)).filter((f) => /^010[3-7]_.*\.sql$/.test(f)).sort().map((f) => f.slice(0, -4));
   for (const stem of stems.slice(0, 2)) { const r = run(stem, "apply"); expect(r.status, r.stderr + r.stdout).toBe(0); }
   const array = stems.map((s) => `[${s}]=${createHash("sha256").update(readFileSync(new URL(`migrations/${s}.sql`, pending))).digest("hex")}`).join(" ");
-  const start = script.indexOf("    for n in 0094_standard_document_types");
+  const start = script.indexOf("    for n in 0107_standard_document_types");
   const loop = script.slice(start, script.indexOf("    state; vrun absent", start));
   const url = new URL(ADMIN_URL);
   const repo = fileURLToPath(new URL("../../../../", import.meta.url)).replaceAll("\\", "/");

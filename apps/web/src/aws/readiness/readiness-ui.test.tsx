@@ -62,9 +62,11 @@ describe("administrator matching inputs", () => {
     fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "12" } });
     expect(screen.getByRole("button", { name: "Save location" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "92595" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save location" }));
+    const save = screen.getByRole("button", { name: "Save location" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
     expect(await screen.findByText("Location saved.")).toBeInTheDocument();
-    expect(posts(calls, `/v1/caregivers/${CG}/zip`)[0]?.body.zip).toBe("92595");
+    expect(posts(calls, `/v1/caregivers/${CG}/zip`)[0]?.body).toMatchObject({ zip: "92595", city: "Wildomar" });
   });
 
   it("records optional client preferences separately from mandatory requirements", async () => {

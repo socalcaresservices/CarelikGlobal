@@ -1,7 +1,8 @@
+import { MatchingLocation } from "./readiness/matching-inputs";
+import { CaregiverServices } from "./readiness/service-approvals";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { nameWithCode } from "./name-label";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
@@ -49,16 +50,27 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
   const refresh = useRefreshCareTeam();
   const { activeOrganizationId } = useOrganization();
   const [v, setV] = useState({ first: "", last: "", preferred: "" });
+  const [zip, setZip] = useState("");
+  const [city, setCity] = useState<string | null>(null);
+  const lookup = useQuery({
+    queryKey: ["matching-city-suggestion", activeOrganizationId, zip],
+    enabled: !!activeOrganizationId && /^\d{5}$/.test(zip) && city === null,
+    queryFn: () => api.get<{ city: string | null; candidates?: string[] }>("/v1/location-data", { organizationId: activeOrganizationId, suggestZip: zip }),
+    retry: false,
+  });
+  const displayedCity = city ?? lookup.data?.city ?? "";
   const [status, setStatus] = useState<Exclude<CaregiverStatus, "inactive" | "interview" | "offer" | "pending_documents">>("applicant");
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const key = useRef(newIdempotencyKey());
   const set = (k: "first" | "last" | "preferred") => (x: string) => { setV((o) => ({ ...o, [k]: x })); key.current = newIdempotencyKey(); };
   async function submit() {
     if (!v.first.trim() || !v.last.trim()) return setState({ busy: false, error: "Enter the caregiver's first and last name." });
+    if (lookup.isFetching) return;
     setState({ busy: true, error: null });
     try {
       const r = await api.post<{ caregiver: { caregiverRecordId: string } }>("/v1/caregivers", {
         organizationId: activeOrganizationId, firstName: v.first.trim(), lastName: v.last.trim(), preferredName: v.preferred.trim() || null, status,
+        ...(zip ? { zip, city: displayedCity.trim() || null } : {}),
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       await refresh();
@@ -76,6 +88,13 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
       </div>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 sm:grid-cols-2">
         <NameFields v={v} set={set} idPrefix="new-cg" />
+        <label>ZIP code (optional)<input className={inputClass} inputMode="numeric" pattern="[0-9]{5}" maxLength={5} value={zip}
+          onChange={(e) => { setZip(e.target.value); setCity(null); key.current = newIdempotencyKey(); }} /></label>
+        <label>City (optional)<input className={inputClass} list="new-cg-cities" maxLength={100} value={displayedCity}
+          onChange={(e) => { setCity(e.target.value); key.current = newIdempotencyKey(); }} /></label>
+        <datalist id="new-cg-cities">{lookup.data?.candidates?.map((candidate) => <option key={candidate} value={candidate} />)}</datalist>
+        {lookup.isFetching ? <p role="status">Looking up the city…</p> : null}
+        {lookup.isError ? <p role="status">City lookup is unavailable. Enter the city manually.</p> : null}
         <div>
           <label htmlFor="new-cg-status" className="block text-xs font-medium text-slate-700">Starting status</label>
           <select id="new-cg-status" value={status} onChange={(e) => { setStatus(e.target.value as typeof status); key.current = newIdempotencyKey(); }} className="mt-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
@@ -83,7 +102,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
           </select>
         </div>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
-        <div className="sm:col-span-2"><Button type="submit" disabled={state.busy}>{state.busy ? "Adding…" : "Add caregiver"}</Button></div>
+        <div className="sm:col-span-2"><Button type="submit" disabled={state.busy || lookup.isFetching}>{state.busy ? "Adding…" : "Add caregiver"}</Button></div>
       </form>
     </Card>
   );
@@ -98,7 +117,8 @@ export function CareTeamPage() {
   const overridden = new Set((overrides.data ?? []).map((o) => o.caregiverRecordId));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<WorkStatus | "current" | "all">("current");
-  const [adding, setAdding] = useState(false);
+  const [params] = useSearchParams();
+  const [adding, setAdding] = useState(() => params.get("add") === "1");
   const [added, setAdded] = useState<string | null>(null);
   const shown = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -113,7 +133,7 @@ export function CareTeamPage() {
         <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Caregivers</h1><InfoTip label="About Caregivers" title="Caregivers">Manage caregiver profiles, services and onboarding.</InfoTip></div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add caregiver"}</Button> : null}
       </div>
-      {adding ? <AddCaregiverForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
+      {canManage && adding ? <AddCaregiverForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
       {added ? <p role="status" className="text-sm text-emerald-800">Caregiver added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.</p> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div className="flex min-w-[220px] flex-1 items-center gap-1.5">
@@ -148,7 +168,7 @@ export function CareTeamPage() {
                   <td className="w-10 px-3 py-1 text-right align-middle tabular-nums text-slate-600" data-testid="row-no">{i + 1}</td>
                   <th scope="row" className="px-3 py-1 font-normal">
                     <Link to={`/care-team/${c.caregiverRecordId}`} className="inline-flex min-h-[44px] flex-wrap items-baseline gap-x-3 gap-y-0 py-0.5 md:min-h-[30px]">
-                      <span className="font-semibold text-slate-950 underline">{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</span>
+                      <span className="font-semibold text-slate-950 underline">{caregiverName(c)}</span>
                       <span className={`text-xs font-normal ${c.hasSignIn ? "text-slate-700" : "text-amber-900"}`}>
                         {signInLabel(c)} · {c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
                       </span>
@@ -173,6 +193,46 @@ export function CareTeamPage() {
   );
 }
 
+function CaregiverContactEmail({ c }: { c: Caregiver }) {
+  const api = useAwsApi();
+  const qc = useQueryClient();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const [email, setEmail] = useState<string | null>(null);
+  const [result, setResult] = useState<{ error: boolean; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const roster = useQuery({
+    queryKey: ["aws-staff", activeOrganizationId],
+    queryFn: () => api.get<{ staff: { caregiverRecordId: string | null; contactEmail: string | null }[] }>("/v1/staff", { organizationId: activeOrganizationId }),
+    enabled: !!activeOrganizationId && hasPermission("staff.read"),
+  });
+  const savedEmail = roster.data?.staff.find((row) => row.caregiverRecordId === c.caregiverRecordId)?.contactEmail;
+  return <Card>
+    <form className="grid items-end gap-2 sm:grid-cols-[1fr_auto]" onSubmit={async (event) => {
+      event.preventDefault();
+      if (saving || !email?.trim()) return;
+      setSaving(true); setResult(null);
+      try {
+        await api.post(`/v1/caregivers/${encodeURIComponent(c.caregiverRecordId)}/contact`, {
+          organizationId: activeOrganizationId, email: email.trim(),
+        }, { idempotencyKey: newIdempotencyKey() });
+        setEmail(null);
+        setResult({ error: false, text: "Contact email saved." });
+        await Promise.all(["aws-staff", "aws-caregivers", "caregiver-readiness", "aws-accounts"].map((key) =>
+          qc.invalidateQueries({ queryKey: [key] })));
+      } catch (cause) {
+        setResult({ error: true, text: message(cause, "Email could not be saved.") });
+      } finally { setSaving(false); }
+    }}>
+      <label className="text-sm font-medium">Caregiver contact email
+        <input className={inputClass} type="email" autoComplete="off" required maxLength={254}
+          placeholder="Enter the caregiver's email" value={email ?? savedEmail ?? ""} onChange={(event) => setEmail(event.target.value)} />
+      </label>
+      <Button type="submit" disabled={saving || !email?.trim()}>{saving ? "Saving…" : "Save contact email"}</Button>
+      <p className="text-xs text-slate-600 sm:col-span-2">{!hasPermission("staff.read") ? "Your role cannot view the saved contact." : roster.isError ? "Saved contact could not be loaded." : roster.isLoading ? "Loading saved contact…" : !savedEmail ? "No contact email saved." : "Saved contact email is shown above."} Use App sign-in to manage invitations. Saving a contact address does not update an existing sign-in email.</p>
+      {result ? <p role={result.error ? "alert" : "status"} className="text-sm sm:col-span-2">{result.text}</p> : null}
+    </form>
+  </Card>;
+}
 function CaregiverDetails({ c }: { c: Caregiver }) {
   const api = useAwsApi();
   const refresh = useRefreshCareTeam();
@@ -236,7 +296,7 @@ function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) 
       {!canManage ? (
         <p className="mt-1 text-sm text-slate-700">{c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"} · {SCHEDULING_LABEL[c.schedulingMode ?? "fixed"]}</p>
       ) : (
-        <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid gap-2 sm:grid-cols-2">
+        <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <div><label htmlFor="emp-hire" className="block text-xs font-medium text-slate-700">Hire type</label>
             <select id="emp-hire" value={hire} onChange={(e) => { setHire(e.target.value); key.current = newIdempotencyKey(); }} className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
               <option value="">Not recorded</option><option value="direct_hire">{HIRE_LABEL.direct_hire}</option><option value="eor">{HIRE_LABEL.eor}</option>
@@ -245,10 +305,11 @@ function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) 
             <select id="emp-mode" value={mode} onChange={(e) => { setMode(e.target.value); key.current = newIdempotencyKey(); }} className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
               <option value="fixed">{SCHEDULING_LABEL.fixed}</option><option value="flexible">{SCHEDULING_LABEL.flexible}</option>
             </select></div>
-          <p className="flex items-center gap-1.5 text-xs text-slate-600 sm:col-span-2">Family relationship is recorded per client on each assignment.<InfoTip>EOR does not mean family, and Direct Hire does not require fixed shifts.</InfoTip></p>
+          <Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Save hire type and scheduling"}</Button>
+          <p className="flex items-center gap-1.5 text-xs text-slate-600 sm:col-span-3">Family relationship is recorded per client on each assignment.<InfoTip>EOR does not mean family, and Direct Hire does not require fixed shifts.</InfoTip></p>
           {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
           {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-2">{state.done}</p> : null}
-          <div className="sm:col-span-2"><Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Save hire type and scheduling"}</Button></div>
+
         </form>
       )}
     </SummarySection>
@@ -282,12 +343,13 @@ function HireDateForm({ c }: { c: Caregiver }) {
     }
   }
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-end" aria-label="Hire date">
+    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid gap-2 sm:grid-cols-[auto_auto_1fr_auto] sm:items-end" aria-label="Hire date">
+      <p className="text-sm"><span className="block text-xs font-medium">Hire type</span>{c.hireType ? HIRE_LABEL[c.hireType] : "Not recorded"}</p>
       <div><label htmlFor="hire-date" className="block text-xs font-medium text-slate-700">Hire date</label><input id="hire-date" type="date" value={v.date} onChange={(e) => { setV((o) => ({ ...o, date: e.target.value })); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
       <div><label htmlFor="hire-reason" className="block text-xs font-medium text-slate-700">Reason</label><input id="hire-reason" value={v.reason} maxLength={500} onChange={(e) => { setV((o) => ({ ...o, reason: e.target.value })); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
       <Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Save hire date"}</Button>
-      {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p> : null}
-      {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-3">Saved. The change is in the audit history.</p> : null}
+      {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-4">{state.error}</p> : null}
+      {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-4">Saved. The change is in the audit history.</p> : null}
     </form>
   );
 }
@@ -372,20 +434,42 @@ export function CaregiverDetailPage() {
         <span className="text-xs text-slate-500">{c.caregiverCode}</span>
         {!c.hasSignIn && (overrides.data ?? []).some((o) => o.caregiverRecordId === c.caregiverRecordId) ? <OverrideBadge /> : null}
       </div>
+      <section className="space-y-2" aria-label="Contact and employment">
+      <h2 className="text-base font-semibold">Contact and employment</h2>
+      {canManage ? <CaregiverContactEmail key={c.caregiverRecordId} c={c} /> : null}
+      {canManage ? <Card className="space-y-3">
+        <h2 className="text-sm font-semibold">Employment</h2>
+        <HireDateForm c={c} />
+        <EmploymentCard c={c} canManage={canManage} />
+      </Card> : null}
+      {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={c.caregiverRecordId} /> : null}
+      </section>
+      <section className="space-y-2" aria-label="Readiness and services">
+      <h2 className="text-base font-semibold">Readiness and services</h2>
       <ReadinessChecklist caregiverRecordId={c.caregiverRecordId} canManage={canManage} hasContact={!!c.hasContact} />
+      {hasPermission("caregiver_services.read") ? <CaregiverServices caregiverRecordId={c.caregiverRecordId} /> : null}
+      </section>
+      <section className="space-y-2" aria-label="Assignments and availability">
+      <h2 className="text-base font-semibold">Assignments and availability</h2>
+      <InfoTip label="About assigned clients">Select a client name to open their record.</InfoTip>
       <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
       <CaregiverReadiness caregiverRecordId={c.caregiverRecordId} />
+      </section>
+      <section className="space-y-2" aria-label="Documents and record details">
+      <h2 className="text-base font-semibold">Documents and record details</h2>
       <CaregiverFiles caregiverRecordId={c.caregiverRecordId} />
       {canManage ? (
         <SummarySection title="Details" summary={`${caregiverName(c)} · ${c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"}`}>
           <div className="space-y-3">
             <CaregiverDetails c={c} />
-            <HireDateForm c={c} />
-            <EmploymentCard c={c} canManage={canManage} />
+
+
             <DeactivateForm c={c} />
           </div>
         </SummarySection>
       ) : null}
+      </section>
+      <Link to="/care-team" className="inline-block text-sm underline">Back to all caregivers</Link>
     </div>
   );
 }

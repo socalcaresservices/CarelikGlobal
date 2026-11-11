@@ -1,3 +1,5 @@
+import { AwsProtectedRoute } from "./aws-auth-pages";
+import { ClientQrCheckin, QrSignInGate } from "./client-qr";
 // AWS build root (VITE_AUTH_PROVIDER=cognito): Cognito managed login (code +
 // PKCE) -> Ogevia AWS API. Nothing in this tree creates a Supabase client.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -13,13 +15,14 @@ import { ServiceVerificationPage } from "@/pages/service-verification-page";
 import { ServiceVerificationReportsPage } from "@/pages/service-verification-reports-page";
 import { useOrganization } from "@/providers/organization-provider";
 import { RolesPermissionsPage, StaffPage, StaffTypesPage } from "./staff-pages";
-import { AuthCallbackPage, AwsLoginPage, AwsProtectedRoute } from "./aws-auth-pages";
+import { AuthCallbackPage, AwsLoginPage } from "./aws-auth-pages";
 import { AwsOrganizationProvider } from "./aws-organization-provider";
 import { AwsLanding, AwsShell } from "./aws-shell";
 import { BillingReviewPage } from "./billing-review-page";
 import { VisitReviewPage } from "./visit-review-page";
 import { BillingRoundingSettingsPage } from "./billing-rounding";
 import { VisitRulesPage } from "./visit-rules-page";
+import { BusinessCompliancePage } from "./business-compliance-page";
 import { AccountsPage } from "./accounts-page";
 import { CareRequestsPage } from "./care-requests-page";
 import { CaregiverAvailabilityPage } from "./caregiver-availability-page";
@@ -75,6 +78,8 @@ const queryClient = new QueryClient({
 });
 
 export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: AwsApiClient }) {
+  const location = useLocation();
+  const ProtectedRoute = location.pathname === "/checkin" ? QrSignInGate : AwsProtectedRoute;
   return (
     <Routes>
       <Route path="/login" element={<AwsLoginPage />} />
@@ -86,12 +91,13 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
       <Route
         path="*"
         element={
-          <AwsProtectedRoute>
+          <ProtectedRoute key={location.pathname === "/checkin" ? location.key : "protected"}>
             <AwsOrganizationProvider api={api}>
               <AwsBackendProvider api={api}>
                 <AwsShell>
                   <Routes>
                     <Route path="/" element={<AwsLanding home={<AwsHomePage />} />} />
+                    <Route path="/checkin" element={<ClientQrCheckin />} />
                     <Route path="/service-verification" element={<ServiceVerificationPage />} />
                     <Route path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />
                     <Route path="/billing-review" element={<BillingReviewPage />} />
@@ -99,6 +105,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path={SHIFT_REQUESTS_PATH} element={<CareRequestsPage api={api} />} />
                     <Route path="/care-requests" element={<MovedTo to={SHIFT_REQUESTS_PATH} />} />
                     <Route path="/accounts" element={<AccountsPage />} />
+                    <Route path="/business-compliance" element={<BusinessCompliancePage />} />
                     <Route path="/staff" element={<StaffPage />} />
                     <Route path="/settings/staff-types" element={<StaffTypesPage />} />
                     <Route path="/settings/roles" element={<RolesPermissionsPage />} />
@@ -134,7 +141,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                 </AwsShell>
               </AwsBackendProvider>
             </AwsOrganizationProvider>
-          </AwsProtectedRoute>
+          </ProtectedRoute>
         }
       />
     </Routes>

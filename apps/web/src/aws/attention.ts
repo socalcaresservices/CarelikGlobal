@@ -63,8 +63,8 @@ export function useAttentionOverview() {
 
 /** Word + symbol + classes for a tone. Used by every row and tile so a status looks the same wherever it appears. */
 export const TONE: Record<Tone, { word: string; icon: string; badge: string; text: string }> = {
-  red: { word: "Critical", icon: "●", badge: "bg-red-100 text-red-800", text: "text-red-700" },
-  amber: { word: "Urgent", icon: "▲", badge: "bg-amber-100 text-amber-900", text: "text-amber-800" },
+  red: { word: "Critical", icon: "●", badge: "border-2 border-red-600 bg-og-alert text-og-ink", text: "text-red-700" },
+  amber: { word: "Urgent", icon: "▲", badge: "border-2 border-orange-500 bg-og-alert text-og-ink", text: "text-amber-800" },
   neutral: { word: "Routine", icon: "○", badge: "bg-slate-100 text-slate-700", text: "text-og-sub" },
 };
 

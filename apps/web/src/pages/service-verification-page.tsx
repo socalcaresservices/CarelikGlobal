@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@carelik/auth";
 import { Button, Card, StatusBadge, cn } from "@carelik/ui";
 import { caregiverDifferenceNote } from "@/lib/hours-accounting";
+import { CaregiverAccessHelp } from "@/components/caregiver-access-help";
 import { useOrganization } from "@/providers/organization-provider";
 import { SignaturePad } from "@/components/signature-pad";
 import {
@@ -51,6 +52,7 @@ interface EndedVisit {
   timeOut: string;
   workedMinutes: number;
   clientCode: string;
+  clientName?: string | null | undefined;
   serviceCode: string;
   serviceName: string;
   visitNumber: string | null;
@@ -319,9 +321,8 @@ export function ServiceVerificationPage() {
 
   const scheduledToday = useMemo(
     () =>
-      (clientsQuery.data ?? []).filter(
-        (client) => !!client.next_scheduled_starts_at,
-      ),
+      (clientsQuery.data ?? []).filter((client) => !!client.next_scheduled_starts_at)
+        .sort((a, b) => Date.parse(a.next_scheduled_starts_at!) - Date.parse(b.next_scheduled_starts_at!)),
     [clientsQuery.data],
   );
   const notScheduledToday = useMemo(
@@ -451,6 +452,7 @@ export function ServiceVerificationPage() {
         timeOut: visit.time_out,
         workedMinutes: visit.worked_minutes,
         clientCode: visit.client_code,
+        clientName: visit.client_name,
         serviceCode: visit.service_code,
         serviceName: visit.service_name,
         visitNumber: visit.visit_number,
@@ -587,6 +589,7 @@ export function ServiceVerificationPage() {
         timeOut: ended.time_out,
         workedMinutes: ended.worked_minutes,
         clientCode: active.client_code,
+        clientName: active.client_name,
         serviceCode: active.service_code,
         serviceName: active.service_name,
         visitNumber: active.visit_number,
@@ -721,6 +724,7 @@ export function ServiceVerificationPage() {
 
   return (
     <div className="mx-auto max-w-md pb-20">
+
       <Card className="overflow-hidden rounded-3xl border-slate-200 p-3 shadow-sm sm:p-3">
         <div className="space-y-4">
           <BrandHeader
@@ -974,7 +978,7 @@ export function ServiceVerificationPage() {
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
                     No active service authorization is available for Client{" "}
-                    {selectedClient.client_code}.
+                    {selectedClient.client_name ? `${selectedClient.client_name} · ` : ""}{selectedClient.client_code}.
                   </p>
                   <p className="mt-1">
                     A manager must add, renew, or assign the correct service
@@ -1114,7 +1118,7 @@ export function ServiceVerificationPage() {
                     Client
                   </p>
                   <p className="mt-1 text-lg font-bold text-slate-950">
-                    {active.client_code}
+                    {active.client_name ? `${active.client_name} · ` : ""}{active.client_code}
                   </p>
                 </div>
                 <div>
@@ -1196,10 +1200,10 @@ export function ServiceVerificationPage() {
                   id="confirm-visit-heading"
                   className="text-xl font-semibold text-slate-950"
                 >
-                  Verify visit details
+                  Confirm visit with client
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">
-                  Review before collecting client or guardian confirmation.
+                  Show the client or guardian the actual visit times before they sign.
                 </p>
               </div>
 
@@ -1218,7 +1222,7 @@ export function ServiceVerificationPage() {
                 className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-og-card p-3 text-sm"
               >
                 <dt className="text-slate-500">Client</dt>
-                <dd className="font-semibold text-slate-950">{endedVisit.clientCode}</dd>
+                <dd className="font-semibold text-slate-950">{endedVisit.clientName ? `${endedVisit.clientName} · ` : ""}{endedVisit.clientCode}</dd>
                 <dt className="text-slate-500">Service</dt>
                 <dd className="font-semibold text-slate-950">
                   {endedVisit.serviceCode} · {endedVisit.serviceName}
@@ -1475,7 +1479,7 @@ export function ServiceVerificationPage() {
                   {confirmationMode === "exception" ||
                   (wave1 && result.status === "administrator_review")
                     ? "Saved for manager review"
-                    : "Visit saved"}
+                    : signatureKind === "verbal" ? "Visit saved" : "Signature saved"}
                 </h1>
                 <p className="mt-2 text-sm text-slate-500">
                   {confirmationMode === "exception"
@@ -1489,7 +1493,7 @@ export function ServiceVerificationPage() {
               </div>
               <div className="rounded-2xl bg-slate-50 p-3 text-left text-sm">
                 <p className="font-semibold text-slate-950">
-                  Client {endedVisit.clientCode} · {endedVisit.serviceName}
+                  {endedVisit.clientName ? `${endedVisit.clientName} · ` : "Client "}{endedVisit.clientCode} · {endedVisit.serviceName}
                 </p>
                 <p className="mt-1 text-slate-600">
                   {formatClockTime(endedVisit.timeIn)}–
@@ -1604,6 +1608,7 @@ export function ServiceVerificationPage() {
           </footer>
         </div>
       </Card>
+      {backend.kind === "aws" && phase === "select" ? <CaregiverAccessHelp /> : null}
     </div>
   );
 }

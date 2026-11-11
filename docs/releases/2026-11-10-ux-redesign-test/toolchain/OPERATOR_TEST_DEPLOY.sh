@@ -13,6 +13,99 @@
 #   web          [window only] build for TEST, upload (no delete), invalidate CloudFront, then web-verify
 #   web-verify   READ-ONLY: what the TEST site serves (must carry the pinned commit)
 #   rollback-web / rollback-api   only after a stop condition; allowed after the window to restore known-good
+# Current isolated TEST comparison: read-only AWS calls, no database connection.
+# The legacy shared-release modes below remain historical and are not this cutover.
+if [[ "${1:-}" == isolated-compare ]]; then
+  set -euo pipefail
+  set +x +H
+  umask 077
+  : "${REPO:?set the reviewed checkout}"
+  : "${OGEVIA_RELEASE_COMMIT:?set the reviewed full commit}"
+  [[ "$(git -C "$REPO" rev-parse HEAD)" == "$OGEVIA_RELEASE_COMMIT" ]] || { echo 'STOP: checkout differs'; exit 2; }
+  [[ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]] || { echo 'STOP: tracked checkout changes'; exit 2; }
+  export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER=""
+  A() { aws --cli-connect-timeout 5 --cli-read-timeout 60 "$@"; }
+  [[ "$(A sts get-caller-identity --query Account --output text)" == 300094796789 ]] || { echo 'STOP: wrong account'; exit 2; }
+  B="${OGEVIA_ISOLATED_CAPTURE:-$(mktemp -d /tmp/ogevia-isolated-capture.XXXXXX)}"
+  [[ "$B" == /* && ! -L "$B" ]] || { echo 'STOP: capture directory must be absolute and private'; exit 2; }
+  mkdir -p "$B"
+  [[ -z "$(find "$B" -mindepth 1 -maxdepth 1 -print -quit)" ]] || { echo 'STOP: use a new empty capture directory'; exit 2; }
+  chmod 700 "$B"
+  echo "CAPTURE: $B"
+  TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # Redact only the earlier known local capture, if explicitly supplied. Never print its contents.
+  if [[ -n "${OGEVIA_PREVIOUS_CAPTURE:-}" ]]; then
+    case "$OGEVIA_PREVIOUS_CAPTURE" in /tmp/ogevia-release.*/capture) ;; *) echo 'STOP: unexpected previous capture path'; exit 2;; esac
+    python3 - "$OGEVIA_PREVIOUS_CAPTURE/test-lambda.json" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1])
+if p.exists() and p.stat().st_size:
+    data=json.loads(p.read_text())
+    env=data.get('Environment',{}).get('Variables',{})
+    if 'OGEVIA_QR_ENCRYPTION_KEY' in env:
+        del env['OGEVIA_QR_ENCRYPTION_KEY']
+        p.write_text(json.dumps(data,indent=2)+'\n')
+        print('Previous local QR key capture redacted; no value displayed.')
+PY
+  fi
+  out() { A cloudformation describe-stacks --stack-name "$1" --query "Stacks[0].Outputs[?OutputKey=='$2'].OutputValue" --output text; }
+  TEST_BUCKET=$(out Ogevia-prod-WebHosting SiteBucketName)
+  TEST_DIST=$(out Ogevia-prod-WebHosting DistributionId)
+  [[ -n "$TEST_BUCKET" && "$TEST_BUCKET" != None && -n "$TEST_DIST" && "$TEST_DIST" != None ]] || { echo 'STOP: missing TEST web targets'; exit 2; }
+  [[ "$TEST_BUCKET" != "$(out Ogevia-prd-WebHosting SiteBucketName)" && "$TEST_DIST" != "$(out Ogevia-prd-WebHosting DistributionId)" ]] || { echo 'STOP: web targets shared with production'; exit 2; }
+  printf '%s\n%s\n' "$TEST_BUCKET" "$TEST_DIST" > "$B/web-targets.txt"
+  git -C "$REPO" rev-parse HEAD > "$B/release-commit.txt"
+  MASTER_ARN=$(A rds describe-db-instances --db-instance-identifier ogevia-postgres --query 'DBInstances[0].MasterUserSecret.SecretArn' --output text)
+  printf '%s\n' "$MASTER_ARN" > "$B/candidate-master-arn.txt"
+  for stack in Ogevia-prod-ServiceVerificationApi Ogevia-prod-Observability Ogevia-prod-NetworkEgress Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability; do
+    A cloudformation get-template --stack-name "$stack" --template-stage Original --query TemplateBody --output json > "$B/$stack.template.json"
+    A cloudformation describe-stacks --stack-name "$stack" --output json > "$B/$stack.stack.json"
+  done
+  FN=$(A cloudformation list-stack-resources --stack-name Ogevia-prod-ServiceVerificationApi --output json | jq -er '[.StackResourceSummaries[] | select(.ResourceType=="AWS::Lambda::Function" and (.LogicalResourceId|startswith("Handler")))] | if length==1 then .[0].PhysicalResourceId else error("Expected one API Handler") end')
+  # Only allowlisted metadata. The QR encryption-key value is never printed or persisted.
+  A lambda get-function-configuration --function-name "$FN" --query '{FunctionName:FunctionName,CodeSha256:CodeSha256,LastModified:LastModified,RevisionId:RevisionId,Runtime:Runtime,VpcConfig:VpcConfig,Database:{host:Environment.Variables.DB_HOST,name:Environment.Variables.DB_NAME,secretArn:Environment.Variables.DB_SECRET_ARN}}' > "$B/test-lambda.json"
+  LOCATION=$(A lambda get-function --function-name "$FN" --query 'Code.Location' --output text)
+  curl -fsS --connect-timeout 5 --max-time 120 "$LOCATION" -o "$B/test-lambda.zip"
+  unset LOCATION
+  python3 - "$B" <<'PY'
+import base64,hashlib,json,pathlib,sys,zipfile
+b=pathlib.Path(sys.argv[1]); expected=json.loads((b/'test-lambda.json').read_text())['CodeSha256']
+assert base64.b64encode(hashlib.sha256((b/'test-lambda.zip').read_bytes()).digest()).decode()==expected, 'STOP: rollback ZIP does not match the live Handler'
+with zipfile.ZipFile(b/'test-lambda.zip') as z:
+    info=z.getinfo('index.js')
+    assert info.file_size <= 10_000_000, 'STOP: unexpected live Handler bundle size'
+    assert hashlib.sha256(z.read(info)).hexdigest()=='51801cff1705dc6e1cc6b8a9ed3a02a28ef25f1ad94e568388a9d435a963a591', 'STOP: live Handler differs from the recovered accepted 0102 source artifact; reconcile it before deployment'
+t=json.loads((b/'Ogevia-prod-ServiceVerificationApi.template.json').read_text())
+qr=t['Parameters']['ClientQrEncryptionKey']
+assert qr.get('Type')=='String' and qr.get('NoEcho') is True and qr.get('Default','')=='', 'STOP: QR parameter metadata is not safe to preserve'
+assert set(qr)<=set('Type NoEcho Default Description AllowedPattern AllowedValues MinLength MaxLength ConstraintDescription'.split()), 'STOP: unexpected QR parameter fields'
+(b/'qr-parameter-spec.json').write_text(json.dumps(qr))
+(b/'handler-tags.json').write_text(json.dumps(t['Resources']['Handler886CB40B']['Properties'].get('Tags',[])))
+print('Verified rollback ZIP; QR key stays in its existing NoEcho parameter.')
+PY
+  A s3 sync "s3://$TEST_BUCKET" "$B/web-before" --only-show-errors
+  QR_SPEC=$(cat "$B/qr-parameter-spec.json"); TAGS=$(cat "$B/handler-tags.json")
+  cd "$REPO"
+  for target in shared isolated; do
+    context=()
+    [[ "$target" != isolated ]] || context=(-c testDatabase=isolated -c "testMasterSecretArn=$MASTER_ARN")
+    pnpm --dir infra/aws exec cdk synth '*' --quiet --lookups=false -c env=prod -c mode=plan -c liveTestBaseline=0102 -c "liveQrParameterSpec=$QR_SPEC" -c "liveTestHandlerTags=$TAGS" "${context[@]}" --output "$B/$target"
+  done
+  python3 "$TOOL/diff_gate_ux.py" --live "$B/Ogevia-prod-ServiceVerificationApi.template.json" --new "$B/shared/Ogevia-prod-ServiceVerificationApi.template.json" --expect pre
+  python3 "$TOOL/diff_gate_ux.py" --isolated-assemblies "$B/shared" "$B/isolated"
+  python3 - "$B" "$TOOL" <<'PY'
+import pathlib,runpy,sys
+b=pathlib.Path(sys.argv[1]);g=runpy.run_path(str(pathlib.Path(sys.argv[2])/'diff_gate_ux.py'))
+for s in ['Ogevia-prod-NetworkEgress','Ogevia-prod-Observability']:
+    assert g['norm'](g['load'](b/(s+'.template.json')))==g['norm'](g['load'](b/'shared'/(s+'.template.json'))), 'STOP: live drift in '+s
+print('LIVE SHARED BASELINES: match')
+PY
+  find "$B" -type f -not -name SHA256SUMS -exec sha256sum {} + > "$B/SHA256SUMS"
+  printf '\033[32m%s\033[0m\n' 'COMPARISON PASSED — NOTHING DEPLOYED'
+  echo "Keep this private rollback capture: $B"
+  exit 0
+fi
+
 set +x +H
 umask 077
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER="" CDK_DISABLE_CLI_TELEMETRY=true

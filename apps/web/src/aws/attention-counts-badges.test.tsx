@@ -143,12 +143,10 @@ describe("Scheduling: the badge, the overview figure and the lists agree; past s
     expect(screen.getAllByText("Missed: no visit record").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("'Unfilled only' hides the ended shifts (they are Missed, not uncovered)", async () => {
-    renderAt("/schedule", BILL, COUNTS, SHIFTS);
+  it("coverage view hides ended shifts and retains the unfilled list", async () => {
+    renderAt("/schedule?coverage=1", BILL, COUNTS, SHIFTS);
     await screen.findByRole("heading", { name: "Unfilled (3)" });
-    const box = screen.getByRole("checkbox", { name: /Unfilled only/ });
-    box.click();
-    await waitFor(() => expect(screen.getByText(/No other shift is unfilled this week\./)).toBeInTheDocument());
+    expect(screen.getByRole("heading", { name: "Coverage date range" })).toBeInTheDocument();
     expect(screen.queryAllByText("Missed: no visit record")).toHaveLength(0);
   });
 

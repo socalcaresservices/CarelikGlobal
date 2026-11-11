@@ -1,11 +1,13 @@
+import { BusinessComplianceTile } from "./business-compliance-page";
 import { HOURS_DEFINITIONS, HOURS_EQUATION_TEXT, HOURS_TOTAL_NOTE } from "@/lib/hours-accounting";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useDashboardAppearance, type DashboardChartStyle } from "./appearance/appearance-hooks";
 import { Link } from "react-router-dom";
 import { ContinuityStatusCard } from "./continuity-page";
 import { useOrganization } from "@/providers/organization-provider";
 import { streams, TONE, useAttentionOverview, type Stream } from "./attention";
-import { hoursLabel, useUtilisation, type UtilisationRow } from "./aws-workspace";
+import { hoursLabel, moneyLabel, useAwsApi, useUtilisation, type UtilisationRow } from "./aws-workspace";
 import { financeView } from "./finance-view";
 import { Chart } from "./ui/chart";
 import { CollapseButton, QuickActions, RefreshStatus, TodaysVisits, TopIssues } from "./home-extras";
@@ -21,8 +23,98 @@ import { InfoTip } from "./ui/info-tip";
 const sum = (rows: UtilisationRow[], key: keyof UtilisationRow) => rows.reduce((t, r) => t + Number(r[key] ?? 0), 0);
 
 /** Zero-state sentences ("Nothing overdue...") are not worth a line on a compact tile: the zero and the unit already say it. */
+type DashboardDatum = { label: string; value: number; display: string };
+
+/** Divide each area in proportion to the values, alternating the split axis. */
+function treemap(data: DashboardDatum[], x = 0, y = 0, w = 100, h = 100): { row: DashboardDatum; x: number; y: number; w: number; h: number }[] {
+  if (data.length < 2) return data.map((row) => ({ row, x, y, w, h }));
+  const [first, ...rest] = data;
+  if (!first) return [];
+  const ratio = first.value / data.reduce((sum, row) => sum + row.value, 0);
+  return w >= h
+    ? [{ row: first, x, y, w: w * ratio, h }, ...treemap(rest, x + w * ratio, y, w * (1 - ratio), h)]
+    : [{ row: first, x, y, w, h: h * ratio }, ...treemap(rest, x, y + h * ratio, w, h * (1 - ratio))];
+}
+function DashboardVisual({ title, data, style, current, colors }: {
+  title: string; data: DashboardDatum[]; style: DashboardChartStyle; current: "segmented" | "bar"; colors: readonly string[];
+}) {
+  const mode = style === "current" ? current : style;
+  const total = data.reduce((acc, row) => acc + Math.max(0, row.value), 0);
+  const max = Math.max(1, ...data.map((row) => row.value));
+  let angle = 0;
+  const stops = data.map((row, index) => {
+    const start = angle;
+    angle += total ? Math.max(0, row.value) / total * 360 : 0;
+    return `${colors[index % colors.length]} ${start}deg ${angle}deg`;
+  });
+  return <figure aria-label={title} className="space-y-2">
+    {total > 0 && mode === "treemap" ? <div aria-hidden="true" className="relative h-24 overflow-hidden rounded-xl">
+      {treemap(data.filter((row) => row.value > 0)).map(({ row, x, y, w, h }) =>
+        <div key={row.label} className="absolute rounded-md border-2 border-og-card" style={{
+          left: `${x}%`, top: `${y}%`, width: `${w}%`, height: `${h}%`, backgroundColor: colors[data.indexOf(row) % colors.length],
+        }} />)}
+    </div> : null}
+    {total > 0 && mode === "pie" ? <div aria-hidden="true" className="mx-auto h-28 w-28 rounded-full ring-2 ring-og-card"
+      style={{ background: `conic-gradient(${stops.join(", ")})` }} /> : null}
+    {total > 0 && mode === "segmented" ? <div aria-hidden="true" className="flex h-5 overflow-hidden rounded-full">
+      {data.map((row, i) => <div key={row.label} style={{ width: `${Math.max(0, row.value) / total * 100}%`, backgroundColor: colors[i % colors.length] }} />)}
+    </div> : null}
+    <ul className="space-y-2 text-sm">
+      {data.map((row, i) => <li key={row.label}>
+        <div className="flex justify-between gap-2"><span><span aria-hidden="true" className="mr-2 inline-block h-2.5 w-2.5 rounded-sm"
+          style={{ backgroundColor: colors[i % colors.length] }} />{row.label}</span><strong className="shrink-0">{row.display}</strong></div>
+        {mode === "bar" ? <div aria-hidden="true" className="mt-1 h-2 overflow-hidden rounded-full bg-og-line/60">
+          <div className="h-full rounded-full" style={{ width: `${Math.max(0, row.value) / max * 100}%`, backgroundColor: colors[i % colors.length] }} />
+        </div> : null}
+      </li>)}
+    </ul>
+  </figure>;
+}
 const QUIET = /^(Nothing|Every)\b/;
 
+interface ExpiringAuthorization {
+  clientId: string; clientCode: string; serviceName: string; endsOn: string;
+  daysLeft: number; availableMinutes: number; estimatedCents: number | string | null;
+}
+
+function ExpiringHours({ showMoney }: { showMoney: boolean }) {
+  const api = useAwsApi();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const query = useQuery({
+    queryKey: ["aws-utilisation", activeOrganizationId, "expiring"],
+    enabled: !!activeOrganizationId && hasPermission("visits.read"),
+    queryFn: async () => {
+      const result = await api.get<{ expiring?: ExpiringAuthorization[] }>("/v1/reports/utilisation",
+        { organizationId: activeOrganizationId, expiring: "true" });
+      if (!Array.isArray(result.expiring)) throw new Error("Expiring hours were not returned.");
+      return result.expiring;
+    },
+  });
+  if (!hasPermission("visits.read")) return null;
+  const expiring = query.data ?? [];
+  return <section aria-label="Hours expiring soon" className="space-y-2 rounded-og border border-og-line bg-og-card p-3">
+    <div className="flex items-center gap-2"><h2 className="font-semibold">Hours expiring soon</h2>
+      <InfoTip label="About expiring hours">Available hours in the month the authorization ends. The dollar estimate uses rates on file.</InfoTip></div>
+    {query.isLoading ? <p className="text-sm">Loading expiring hours…</p> : null}
+    {query.isError ? <p role="alert" className="text-sm text-red-700">Could not load expiring hours. <button aria-label="Retry expiring hours" className="underline" onClick={() => void query.refetch()}>Retry</button></p> : null}
+    {query.data?.length === 0 ? <p className="text-sm text-og-sub">No available hours expire in the next 30 days.</p> : null}
+    {query.data?.length ? <div className="grid gap-2 sm:grid-cols-3">
+      {([[0, 7], [8, 14], [15, 30]] as const).map(([min, max]) => {
+        const rows = expiring.filter((r) => r.daysLeft >= min && r.daysLeft <= max);
+        const minutes = rows.reduce((total, r) => total + Number(r.availableMinutes), 0);
+        const rated = rows.filter((r) => r.estimatedCents != null);
+        return <details key={min} className="rounded border border-og-line p-2">
+          <summary className="cursor-pointer font-medium">{min}–{max} days · {hoursLabel(minutes)}</summary>
+          {showMoney && rated.length ? <p className="text-sm">Estimated value {moneyLabel(rated.reduce((total, r) => total + Number(r.estimatedCents), 0))}</p> : null}
+          {showMoney && rated.length < rows.length ? <p className="text-sm">Some hours have no rate.</p> : null}
+          <ul className="mt-2 space-y-1 text-sm">{rows.map((r, i) => <li key={i}>
+            <Link className="underline" to={`/service-verification/reports?${new URLSearchParams({ view: "reconciliation", client: r.clientId, month: r.endsOn.slice(0, 7) })}`}>{r.clientCode}</Link> · {r.serviceName} · {hoursLabel(r.availableMinutes)} · {r.endsOn}
+          </li>)}</ul>
+        </details>;
+      })}
+    </div> : null}
+  </section>;
+}
 function Tile({ s, unavailable = false }: { s: Stream; unavailable?: boolean }) {
   const t = TONE[s.tone];
   const hot = s.tone !== "neutral";
@@ -79,6 +171,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "re
 export function AwsHomePage() {
   const { hasPermission } = useOrganization();
   const { tz } = useAgencyClock();
+  const { chartStyle, colors } = useDashboardAppearance();
   const [month, setMonth] = useState(() => agencyMonth(tz)); // the AGENCY's month, not the browser's (F7)
   const overview = useAttentionOverview();
   // The attention tile and the work list are two requests. When the list fails the tile cannot be trusted to agree with it, so it reads Unavailable, never 0.
@@ -110,6 +203,18 @@ export function AwsHomePage() {
   const overLimit = hasHoursData ? sum(rows, "hoursOverLimitMinutes") : sum(rows, "overLimitMinutes");
   const leftTotal = hasHoursData ? sum(rows, "hoursLeftMinutes") : sum(rows, "remainingMinutes");
   const billable = finance.items[0];
+  const remainingByService = rows.map((row) => ({
+    label: row.serviceName,
+    value: Math.max(0, Number(row.hoursLeftMinutes ?? row.remainingMinutes ?? 0)),
+  })).filter((row) => row.value > 0);
+  const availableMinutes = remainingByService.reduce((total, row) => total + row.value, 0);
+  const moneyBars = ([
+    ["Approved for billing", "approvedValueCents"],
+    ["Potential value of unused hours", "unusedValueCents"],
+  ] as const).flatMap(([label, key]) => {
+    const rated = rows.filter((row) => row[key] != null);
+    return rated.length ? [{ label, cents: sum(rated, key) }] : [];
+  });
   return (
     <div className="space-y-3">
       <PageHeader
@@ -137,8 +242,58 @@ export function AwsHomePage() {
       </section>
 
       <TopIssues />
-
+      <BusinessComplianceTile />
       <TodaysVisits />
+      <ExpiringHours showMoney={isOwnerFinance} />
+
+      {rows.length > 0 ? <section aria-label="Hours and money to watch" className={`grid gap-3 lg:grid-cols-2 ${isOwnerFinance ? "xl:grid-cols-3" : ""}`}>
+        <Link className="text-xs font-semibold text-og-link underline col-span-full" to="/settings/appearance">Chart appearance</Link>
+        <article className="space-y-2 rounded-og border border-og-line bg-og-card p-4">
+          <h2 className="text-lg font-bold text-og-ink">Hours available to schedule</h2>
+          <p className="text-2xl font-bold tabular-nums text-og-ink">{hoursLabel(availableMinutes)}</p>
+          <InfoTip label="About these figures">Hours still available in the selected month. Pending and reserved hours are already accounted for.</InfoTip>
+          {remainingByService.length > 0 ? <DashboardVisual title="Unused hours by service" style={chartStyle} colors={colors} current="segmented"
+            data={remainingByService.map((row) => ({ ...row, display: hoursLabel(row.value) }))} /> : null}
+          <p className="text-sm text-og-sub">{ending} {ending === 1 ? "authorization ends" : "authorizations end"} within 30 days. Review end dates to see which unused hours may expire.</p>
+          <Link className={linkClass} to="/service-verification/reports?view=reconciliation">Review client authorizations</Link>
+        </article>
+        {isOwnerFinance ? <article className="space-y-2 rounded-og border border-og-line bg-og-card p-4">
+          <h2 className="text-lg font-bold text-og-ink">Billing and potential value</h2>
+          <DashboardVisual title="Approved billing and potential unused value" style={chartStyle} colors={colors} current="bar"
+            data={moneyBars.map(({ label, cents }) => ({ label, value: cents, display: moneyLabel(cents) ?? "Unavailable" }))} />
+          {moneyBars.length < 2 ? <p className="text-sm text-og-sub">Only available dollar amounts are shown.</p> : null}
+          <InfoTip label="About these figures">Unused value is an estimate based on recorded rates. Approved billing does not show payment received.</InfoTip>
+          {finance.missingRates > 0 ? <p className="text-sm text-amber-900">{finance.missingRates} authorizations lack a rate. The estimate may be incomplete.</p> : null}
+        </article> : null}
+        <article className="space-y-3 rounded-og border border-og-line bg-og-card p-4">
+          <h2 className="text-lg font-bold text-og-ink">Worked vs authorized hours</h2>
+          <p className="text-sm font-semibold tabular-nums text-og-ink">{workedLabel} worked · {hoursLabel(sum(rows, "authorizedMinutes"))} authorized</p>
+          <InfoTip label="About these figures">Compare services for the selected month. Hours not yet worked may already be reserved for upcoming shifts.</InfoTip>
+          <figure aria-label="Worked and authorized hours by service">
+            <ul className="space-y-3">
+              {rows.map((row) => {
+                const authorized = Number(row.authorizedMinutes ?? 0);
+                const worked = Number(row.workedMinutes ?? 0);
+                const scale = Math.max(1, authorized, worked);
+                return <li key={row.serviceId} className="space-y-1 border-t border-og-line pt-2 text-sm">
+                  <p className="font-semibold">{row.serviceName}</p>
+                  <div className="flex flex-wrap justify-between gap-x-2 text-xs tabular-nums">
+                    <span>Worked {hoursLabel(worked)}</span>
+                    <span>Authorized {hoursLabel(authorized)}</span>
+                  </div>
+                  <div aria-hidden="true" className="space-y-1">
+                    <div className="h-2 rounded-full" style={{ width: `${worked / scale * 100}%`, backgroundColor: colors[0] }} />
+                    <div className="h-2 rounded-full opacity-40" style={{ width: `${authorized / scale * 100}%`, backgroundColor: colors[1] }} />
+                  </div>
+                  <p className="text-xs text-og-sub">{authorized === 0 ? "No authorized hours in this month"
+                    : worked > authorized ? `${hoursLabel(worked - authorized)} worked above authorized`
+                    : `${hoursLabel(authorized - worked)} not yet worked · ${Math.round(worked / authorized * 100)}% worked`}</p>
+                </li>;
+              })}
+            </ul>
+          </figure>
+        </article>
+      </section> : null}
 
       <details data-testid="hours-billing-detail" className="rounded-og border border-og-line bg-og-card px-3">
         <summary className="flex min-h-[44px] cursor-pointer items-center text-sm font-semibold text-og-ink">Hours, billing and outage readiness</summary>

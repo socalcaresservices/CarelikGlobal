@@ -265,7 +265,7 @@ describe("appearance preferences", () => {
     renderApp("/settings/appearance", { role: "manager" });
     const mine = await screen.findByRole("form", { name: "My view" });
     expect(within(mine).getAllByRole("radio")).toHaveLength(5 + 6 + 3 + 3 + 4 + 3);
-    expect(within(mine).getByRole("group", { name: "Background" })).toBeInTheDocument();
+    expect(within(mine).getByRole("group", { name: "Page background" })).toBeInTheDocument();
   });
 });
 

@@ -1,4 +1,5 @@
 import { HoursBreakdown } from "@/components/hours-breakdown";
+import { MissingScheduledVisits } from "@/components/missing-scheduled-visits";
 import { ShortHelp } from "@/aws/help-text";
 import { hoursLeftText } from "@/lib/hours-accounting";
 import { Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -421,7 +422,7 @@ export function ServiceVerificationReportsPage() {
   const [closeError, setCloseError] = useState<string | null>(null);
   const closeKey = useRef(newIdempotencyKey());
 
-  const [clientFilter, setClientFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState(() => new URLSearchParams(window.location.search).get("client") ?? "");
   const [caregiverFilter, setCaregiverFilter] = useState(
     () => new URLSearchParams(window.location.search).get("caregiver") ?? "",
   );
@@ -463,7 +464,10 @@ export function ServiceVerificationReportsPage() {
   }, [viewFromUrl, defaultView]);
   const narrow = useIsNarrow();
   const [linkCopied, setLinkCopied] = useState(false);
-  const [reportMonth, setReportMonth] = useState(currentPacificMonth);
+  const [reportMonth, setReportMonth] = useState(() => {
+    const month = new URLSearchParams(window.location.search).get("month");
+    return month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : currentPacificMonth();
+  });
   const [showSuperseded, setShowSuperseded] = useState(false);
   const [visitColumns, setVisitColumns] = useState<Set<VisitColumn>>(() => {
     try {
@@ -1253,13 +1257,13 @@ export function ServiceVerificationReportsPage() {
                                       <li key={entry.id} className="rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                           <p className="font-medium text-slate-900">
-                                            Revision {index + 1} · {entry.corrected_by_name}
+                                              {entry.before_snapshot.timeIn ? `Revision ${index + 1}` : "Missing punches recorded"} · {entry.corrected_by_name}
                                           </p>
                                           <p className="text-xs text-slate-500">{formatDateTime(entry.created_at)}</p>
                                         </div>
                                         <p className="mt-1 text-slate-600">Reason: {entry.reason}</p>
                                         <p className="mt-1 text-xs text-slate-500">
-                                          {formatTimeRange(entry.before_snapshot.timeIn, entry.before_snapshot.timeOut)}
+                                            {entry.before_snapshot.timeIn ? formatTimeRange(entry.before_snapshot.timeIn, entry.before_snapshot.timeOut) : "No recorded punches"}
                                           {" "}({formatDuration(entry.before_snapshot.workedMinutes)})
                                           {" "}→{" "}
                                           {formatTimeRange(entry.after_snapshot.timeIn, entry.after_snapshot.timeOut)}
@@ -2091,28 +2095,11 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 Monthly hours & billing
               </h3>
-              <InfoTip label="Help">
-                Each row is one client + service + authorization lineage.
-                Services are never combined. Worked and billable time remain
-                separate so documentation or authorization differences cannot
-                be hidden by a client-level total.
-              </InfoTip>
-              <p className="mt-1 max-w-3xl text-xs text-slate-500">
-                <strong>Billable (eligible)</strong> is confirmed time within the
-                authorization; <strong>Approved</strong> is what a person approved
-                for billing. Approval is not submission: Ogevia does not submit to
-                payers or track submissions.{" "}
-                <strong>Reserved</strong> is scheduled time not yet delivered (ahead, underway, or ended with no visit record and awaiting a person's decision); nothing is released automatically.
-                <strong> Pending</strong> is worked time not yet billable (awaiting confirmation or in review) and the shift time held for it. Open Details on a row for the full equation:
-                Authorized = Billable + Rounding + Pending + Reserved + Hours left, where Hours left below zero is shown as Over limit and is never offset against another authorization.
-              </p>
-              {backend.kind === "aws" ? (
-                <p className="mt-1 text-xs print:hidden">
-                  <Link className="font-medium text-slate-800 underline" to="/">
-                    Agency-wide utilization by service is on Home
-                  </Link>
-                </p>
-              ) : null}
+              <div className="flex flex-wrap gap-2 print:hidden">
+                <InfoTip label="About monthly hours">Each row is one client + service + authorization lineage. Authorized = Billable + Rounding + Pending + Reserved + Hours left. Over-limit hours are never offset against another authorization.</InfoTip>
+                <InfoTip label="About billing and reservations">Billable is confirmed time within the authorization. Approved means cleared for billing. Approval is not submission or payment. Pending work awaits confirmation or review. Reserved time is scheduled and still held.</InfoTip>
+                {backend.kind === "aws" ? <InfoTip label="About agency totals" more={{ to: "/", label: "See totals on Dashboard" }}>The Dashboard shows agency-wide hours by service.</InfoTip> : null}
+              </div>
             </div>
             <div className="flex items-end gap-2 print:hidden">
               {canExport && monthlyServiceRows.length > 0 ? (
@@ -2769,6 +2756,7 @@ export function ServiceVerificationReportsPage() {
         </>
       ) : null}
 
+      {reportView === "exceptions" ? <MissingScheduledVisits filters={{ clientId: clientFilter || null, serviceId: serviceFilter || null, caregiverUserId: caregiverFilter || null, dateFrom: dateFrom || null, dateTo: dateTo || null, status: null }} /> : null}
       {reportView === "exceptions" && incompleteVisits.length > 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">
@@ -2929,7 +2917,7 @@ export function ServiceVerificationReportsPage() {
         <Card>
           <h3 className="font-semibold text-slate-950">Exceptions</h3>
           <p className="mt-2 text-sm text-emerald-700">
-            No visits currently need manager attention for these filters.
+            No existing visit records currently need manager attention for these filters. Missing scheduled records are listed separately above.
           </p>
         </Card>
       ) : null}

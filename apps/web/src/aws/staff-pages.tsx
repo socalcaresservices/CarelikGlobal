@@ -1,7 +1,7 @@
 import { Fragment, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { ImportButton } from "./import-drawer";
@@ -39,9 +39,7 @@ const ROLE_NAME: Record<string, string> = {
 };
 const roleName = (role: string | null) => (role ? ROLE_NAME[role] ?? role : "No access");
 const ACCESS_LABEL: Record<StaffRow["accessStatus"], string> = { none: "No sign-in", invitation_pending: "Invited", active: "Active", disabled: "Disabled" };
-/** What the Status column and its filter show: an inactive profile first, otherwise the state of the person's sign-in. */
-const statusOf = (r: StaffRow) => (r.status === "inactive" ? "Inactive" : ACCESS_LABEL[r.accessStatus]);
-const STATUS_CHOICES = ["Active", "Invited", "Disabled", "No sign-in", "Inactive"] as const;
+const STATUS_CHOICES = ["Active", "Invited", "Disabled", "No sign-in"] as const;
 const ACCESS_BADGE: Record<StaffRow["accessStatus"], string> = {
   none: "bg-slate-100 text-slate-800", invitation_pending: "bg-amber-100 text-amber-900", active: "bg-emerald-100 text-emerald-900", disabled: "bg-slate-200 text-slate-800",
 };
@@ -88,10 +86,13 @@ export function StaffPage() {
   const canAccounts = hasPermission("accounts.manage");
   const [panel, setPanel] = useState<Panel | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const person = params.get("person");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [roleFilter, setRoleFilter] = useState(ALL);
   const [statusFilter, setStatusFilter] = useState(ALL);
+  const [recordFilter, setRecordFilter] = useState(ALL);
   const staff = useQuery({
     queryKey: staffKey(activeOrganizationId),
     queryFn: () => api.get<{ staff: StaffRow[] }>("/v1/staff", { organizationId: activeOrganizationId }),
@@ -110,12 +111,14 @@ export function StaffPage() {
   const activeTypes = (types.data?.staffTypes ?? []).filter((t) => t.isActive);
   const needle = search.trim().toLowerCase();
   const rows = all.filter((r) =>
-    (!needle || [r.displayName, r.staffTypeName, r.contactEmail, r.phone].some((v) => v?.toLowerCase().includes(needle)))
+    (!person || r.userId === person)
+    && (!needle || [r.displayName, r.staffTypeName, r.contactEmail, r.phone].some((v) => v?.toLowerCase().includes(needle)))
     && (typeFilter === ALL || (typeFilter === "none" ? r.staffTypeId === null : r.staffTypeId === typeFilter))
     && (roleFilter === ALL || (r.systemRole ?? "none") === roleFilter)
-    && (statusFilter === ALL || statusOf(r) === statusFilter));
-  const filtered = needle !== "" || typeFilter !== ALL || roleFilter !== ALL || statusFilter !== ALL;
-  const clear = () => { setSearch(""); setTypeFilter(ALL); setRoleFilter(ALL); setStatusFilter(ALL); };
+    && (statusFilter === ALL || ACCESS_LABEL[r.accessStatus] === statusFilter)
+    && (recordFilter === ALL || r.status === recordFilter));
+  const filtered = !!person || needle !== "" || typeFilter !== ALL || roleFilter !== ALL || statusFilter !== ALL || recordFilter !== ALL;
+  const clear = () => { if (person) setParams({}); setSearch(""); setTypeFilter(ALL); setRoleFilter(ALL); setStatusFilter(ALL); setRecordFilter(ALL); };
   const rolesPresent = [...new Set(all.map((r) => r.systemRole ?? "none"))].sort((x, y) => roleName(x === "none" ? null : x).localeCompare(roleName(y === "none" ? null : y)));
 
   return (
@@ -123,12 +126,12 @@ export function StaffPage() {
       <PageHeader
         title="Staff"
         lead="Everyone who works for the agency. A staff type is only a label; a person's role decides what they can do."
-        action={canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="people" onDone={finish} /><Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add staff</Button></div> : undefined}
+        action={canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="people" onDone={finish} />{hasPermission("caregivers.manage") ? <Link className="inline-flex min-h-11 items-center text-sm text-og-link underline" to="/care-team?add=1">Add caregiver</Link> : null}<Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add office staff</Button></div> : undefined}
       />
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
       {canManage && all.length > 0 ? <BulkInvite rows={all} onDone={finish} /> : null}
       {canManage ? <PossibleDuplicates /> : null}
-      {panel?.kind === "add" ? <ProfileForm title="Add staff" types={activeTypes} onDone={finish} onCancel={() => setPanel(null)} /> : null}
+      {panel?.kind === "add" ? <ProfileForm title="Add office staff" types={activeTypes} onDone={finish} onCancel={() => setPanel(null)} /> : null}
       {all.length > 0 ? (
         <div role="search" aria-label="Find staff" className="flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2">
           <label className="min-w-[12rem] flex-1 text-xs font-medium text-slate-700">Search
@@ -147,10 +150,17 @@ export function StaffPage() {
               {rolesPresent.map((r) => <option key={r} value={r}>{roleName(r === "none" ? null : r)}</option>)}
             </select>
           </label>
-          <label className="text-xs font-medium text-slate-700">Status
+          <label className="text-xs font-medium text-slate-700">Sign-in status
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${filterClass} mt-0.5 block`}>
-              <option value={ALL}>All statuses</option>
+              <option value={ALL}>All sign-in statuses</option>
               {STATUS_CHOICES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-700">Staff record status
+            <select value={recordFilter} onChange={(e) => setRecordFilter(e.target.value)} className={`${filterClass} mt-0.5 block`}>
+              <option value={ALL}>All records</option>
+              <option value="active">Active record</option>
+              <option value="inactive">Inactive record</option>
             </select>
           </label>
           {filtered ? <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px]" onClick={clear}>Clear Filters</Button> : null}
@@ -170,8 +180,8 @@ export function StaffPage() {
                 <th scope="col" className="px-3 py-1.5 font-semibold">Name</th>
                 <th scope="col" className="px-3 py-1.5 font-semibold">Staff Type</th>
                 <th scope="col" className="px-3 py-1.5 font-semibold">Role</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Email</th>
+                <th scope="col" className="px-3 py-1.5 font-semibold">Sign-in status</th><th scope="col" className="px-3 py-1.5 font-semibold">Staff record</th>
+                <th scope="col" className="px-3 py-1.5 font-semibold">Contact email</th>
                 <th scope="col" className="px-3 py-1.5 font-semibold">Phone</th>
                 <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Actions</span></th>
               </tr>
@@ -201,12 +211,11 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
   onOpen: (kind: PanelKind) => void; onClose: () => void; onDone: (text: string) => Promise<void>;
 }) {
   const isProfile = row.profileId !== null, isMember = row.staffKey.startsWith("member:"), isCaregiver = row.caregiverRecordId !== null;
-  const changeableRole = !row.isSelf && row.systemRole !== null && (ASSIGNABLE_ROLES as readonly string[]).includes(row.systemRole);
+  const changeableRole = !row.isSelf && row.userId !== null && row.systemRole !== null && (row.systemRole === "caregiver" || (ASSIGNABLE_ROLES as readonly string[]).includes(row.systemRole));
   const hasAccount = row.accessStatus === "active" || row.accessStatus === "invitation_pending" || row.accessStatus === "disabled";
   const btn = (label: string, kind: PanelKind, shown = label) => (
     <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px] px-2 py-1 text-xs" aria-label={`${label}: ${row.displayName}`} onClick={() => onOpen(kind)}>{shown}</Button>
   );
-  const status = statusOf(row);
   const more = [
     canManage && isMember && types.length > 0 ? btn("Add profile", "member") : null,
     canManage && changeableRole ? btn("Change role", "role") : null,
@@ -217,12 +226,13 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
       <tr className="block border-b border-slate-100 py-1.5 last:border-0 md:table-row md:py-0 md:align-top">
         <td className="hidden w-10 px-3 py-1 text-right tabular-nums text-slate-600 md:table-cell" data-testid="row-no">{index}</td>
         <th scope="row" className="block px-3 py-0.5 font-medium text-slate-950 md:table-cell md:py-1">
-          {row.displayName}{row.isSelf ? <span className="ml-1 text-xs font-normal text-slate-600">· you</span> : null}
+          {row.caregiverRecordId ? <Link className="text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>{row.displayName}</Link> : row.displayName}{row.isSelf ? <span className="ml-1 text-xs font-normal text-slate-600">· you</span> : null}
         </th>
         <td className={cell} data-label="Staff Type">{row.staffTypeName ?? <span className="text-slate-500">—</span>}</td>
         <td className={cell} data-label="Role">{roleName(row.systemRole)}</td>
-        <td className={cell} data-label="Status"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${row.status === "inactive" ? "bg-slate-200 text-slate-800" : ACCESS_BADGE[row.accessStatus]}`}>{status}</span></td>
-        <td className={`${cell} break-all`} data-label="Email">{row.contactEmail ?? <span className="text-slate-500">—</span>}</td>
+        <td className={cell} data-label="Sign-in status"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${ACCESS_BADGE[row.accessStatus]}`}>{ACCESS_LABEL[row.accessStatus]}</span></td>
+        <td className={cell} data-label="Staff record">{row.status === "inactive" ? "Inactive record" : "Active record"}</td>
+        <td className={`${cell} break-all`} data-label="Contact email">{row.contactEmail ?? <span className="text-slate-500">—</span>}</td>
         <td className={`${cell} whitespace-nowrap`} data-label="Phone">{row.phone ?? <span className="text-slate-500">—</span>}</td>
         <td className="block px-3 py-1 md:table-cell">
           <div className="flex flex-wrap items-center gap-1">
@@ -243,7 +253,7 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
       </tr>
       {open ? (
         <tr className="block border-b border-slate-100 bg-og-page md:table-row">
-          <td colSpan={8} className="block px-3 py-2 md:table-cell">
+          <td colSpan={9} className="block px-3 py-2 md:table-cell">
             {open.kind === "edit" ? <ProfileForm title="Edit staff" row={row} types={types} onDone={onDone} onCancel={onClose} /> : null}
             {open.kind === "member" ? <MemberForm row={row} types={types} onDone={onDone} onCancel={onClose} /> : null}
             {open.kind === "invite" ? <InviteForm row={row} onDone={onDone} onCancel={onClose} /> : null}
@@ -304,7 +314,7 @@ function ProfileForm({ title, row, types, onDone, onCancel }: { title: string; r
         ) : null}
       </div>
       {save.isError ? <p role="alert" className="text-sm text-red-700">{message(save.error, "The change could not be saved.")}</p> : null}
-      <FormActions pending={save.isPending} label={row ? "Save" : "Add staff"} onCancel={onCancel} disabled={!name.trim() || !typeId} />
+      <FormActions pending={save.isPending} label={row ? "Save" : "Add office staff"} onCancel={onCancel} disabled={!name.trim() || !typeId} />
     </form>
   );
 }
@@ -452,8 +462,9 @@ function RoleForm({ row, onDone, onCancel }: { row: StaffRow; onDone: (t: string
   return (
     <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-2" aria-label="Change role">
       <h2 className="text-base font-semibold text-slate-950">Change the role of {row.displayName}</h2>
+      {row.caregiverRecordId ? <p>Office roles keep caregiver access under the same sign-in.</p> : null}
       <label className="block text-sm font-medium text-slate-800">Role
-        <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_NAME[r]}</option>)}</select>
+        <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>{row.caregiverRecordId ? <option value="caregiver">Caregiver only</option> : null}{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_NAME[r]}</option>)}</select>
       </label>
       <label className="block text-sm font-medium text-slate-800">Reason
         <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} className={inputClass} />

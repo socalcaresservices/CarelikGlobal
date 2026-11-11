@@ -26,7 +26,7 @@ export interface MigrationFile {
   readonly runAsAdmin: boolean;
 }
 
-export interface MigrationOptions { readonly includePendingUx?: boolean }
+export interface MigrationOptions { readonly includePendingUx?: boolean; readonly includeLiveTest?: boolean }
 
 export function loadMigrations(options: MigrationOptions = {}): MigrationFile[] {
   const files = readdirSync(MIGRATIONS_DIR)
@@ -50,12 +50,26 @@ export function loadMigrations(options: MigrationOptions = {}): MigrationFile[] 
       runAsAdmin: sql.startsWith("-- ogevia:run-as=admin"),
     };
   });
-  if (!options.includePendingUx) return released;
+  if (!options.includePendingUx && !options.includeLiveTest) return released;
+  const liveDir = new URL("../pending/live-test/", import.meta.url);
+  const ledger = JSON.parse(readFileSync(new URL("expected-ledger-0102.json", liveDir), "utf8")) as Array<{version: string; name: string; checksum: string}>;
+  if (ledger.length !== 102 || ledger.some((row, i) => Number(row.version) !== i + 1)) throw new Error("Invalid accepted TEST migration manifest");
+  for (const [i, file] of released.entries()) {
+    if (file.name !== ledger[i]?.name || file.checksum !== ledger[i]?.checksum) throw new Error(`Accepted TEST baseline differs at ${file.name}`);
+  }
+  const live = ledger.slice(88).map((row) => {
+    const sql = readFileSync(new URL(`migrations/${row.name}`, liveDir), "utf8");
+    const checksum = createHash("sha256").update(sql).digest("hex");
+    if (checksum !== row.checksum || !row.name.startsWith(row.version + "_")) throw new Error(`Accepted TEST migration drift at ${row.name}`);
+    return { ...row, sql, runAsAdmin: sql.startsWith("-- ogevia:run-as=admin") };
+  });
+  if (!options.includePendingUx) return [...released, ...live];
   if (released.length !== 88 || released.at(-1)?.version !== "0088") throw new Error("UX pending set requires the reviewed 0001–0088 baseline");
   const pending = new URL("../pending/migrations/", import.meta.url);
-  const names = ["0090_caregiver_signin_override.sql", "0091_caregiver_client_labels.sql", "0092_bulk_import.sql", "0093_staff_duplicates.sql", "0094_standard_document_types.sql"];
-  // 0089 was withdrawn, not silently applied or reused. Original bytes/names/checksums are kept.
-  return [...released, ...names.map((name) => {
+  const names = ["0103_caregiver_signin_override.sql", "0104_caregiver_client_labels.sql", "0105_bulk_import.sql", "0106_staff_duplicates.sql", "0107_standard_document_types.sql"];
+  // Live TEST already uses 0089–0102. The unreleased UX files are now 0103–0107;
+  // the unrelated withdrawn UX 0089 is not resurrected. Accepted bytes stay immutable.
+  return [...released, ...live, ...names.map((name) => {
     const sql = readFileSync(new URL(name, pending), "utf8");
     return { version: name.slice(0, 4), name, sql, checksum: createHash("sha256").update(sql).digest("hex"), runAsAdmin: false };
   })];
@@ -71,9 +85,9 @@ export async function migrate(
   log: (line: string) => void = () => {},
   options: MigrationOptions = {},
 ): Promise<MigrateResult> {
-  if (options.includePendingUx) {
+  if (options.includePendingUx || options.includeLiveTest) {
     const db = (await client.query<{ name: string }>("select current_database() as name")).rows[0]?.name;
-    if (db !== "ogevia_sv_test" && !/^ogevia_test_[0-9a-f]{12}$/.test(db ?? "")) throw new Error("Pending UX migrations are TEST-only; refusing this database");
+    if (db !== "ogevia_sv_test" && db !== "ogevia_local_harness" && !/^ogevia_test_[0-9a-f]{12}$/.test(db ?? "")) throw new Error("Pending UX migrations are TEST-only; refusing this database");
   }
   const migrations = loadMigrations(options);
   await client.query("select pg_advisory_lock($1)", [RUNNER_LOCK_KEY]);

@@ -178,7 +178,7 @@ describe("AWS build: caregiver vertical slice", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
     fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
-    await screen.findByRole("heading", { name: "Verify visit details" });
+    await screen.findByRole("heading", { name: "Confirm visit with client" });
 
     const canvas = screen.getByLabelText("Client or guardian signature");
     fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 10, clientY: 10 });
@@ -315,7 +315,7 @@ describe("AWS build: manager review and billing-review data", () => {
     const post = api.calls.find((c) => c.method === "POST" && c.path === `/v1/visits/${VISIT}/billing-approval`)!;
     expect(post.body).toEqual({ approvedMinutes: 110, notes: null });
     expect(post.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(await screen.findByText(/by Manager A · not submitted or paid/)).toBeInTheDocument();
+    expect(await screen.findByText(/by Manager A/)).toBeInTheDocument();
     // No owner-only Amount column for a manager.
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
   });

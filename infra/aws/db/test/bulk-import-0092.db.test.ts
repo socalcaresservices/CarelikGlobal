@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, createTestDb, expectPgError, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
-const UP = new URL("../pending/migrations/0092_bulk_import.sql", import.meta.url);
-const DOWN = new URL("../pending/rollback/0092_bulk_import.down.sql", import.meta.url);
+const UP = new URL("../pending/migrations/0105_bulk_import.sql", import.meta.url);
+const DOWN = new URL("../pending/rollback/0105_bulk_import.down.sql", import.meta.url);
 let db: TestDb;
 let w: World;
 let staffType: string;

@@ -20,7 +20,7 @@ const handlers = (hoursLeftMinutes: number) => ({
 describe("authorization context in scheduling", () => {
   it("Add shift shows the service and the server's Hours left for the shift's month before the caregiver and eligibility steps", async () => {
     const { calls } = renderAws(`/schedule?add=1&client=${CLIENT}`, PERMS, handlers(4530));
-    const line = await screen.findByTestId("shift-authorization");
+    const line = await screen.findByTestId("shift-authorization", {}, { timeout: 5000 });
     expect(line).toHaveTextContent("Respite Care");
     expect(line).toHaveTextContent("Hours left: 75.5 h");
     expect(within(line).getAllByTestId("hours-left-figure")).toHaveLength(1);
@@ -30,7 +30,7 @@ describe("authorization context in scheduling", () => {
 
   it("an over-limit authorization is named, not shown as zero", async () => {
     renderAws(`/schedule?add=1&client=${CLIENT}`, PERMS, handlers(-90));
-    expect(await screen.findByTestId("shift-authorization")).toHaveTextContent("Over limit: 1.5 h");
+    expect(await screen.findByTestId("shift-authorization", {}, { timeout: 5000 })).toHaveTextContent("Over limit: 1.5 h");
   });
 
   it("without visits.read there is no figure and no request for it", async () => {

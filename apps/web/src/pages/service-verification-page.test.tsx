@@ -135,7 +135,7 @@ function mockRpcImplementation(overrides: Record<string, unknown> = {}) {
 async function openConfirmation() {
   fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
   await screen.findByRole("heading", {
-    name: "Verify visit details",
+    name: "Confirm visit with client",
   });
 }
 
@@ -517,7 +517,7 @@ describe("ServiceVerificationPage v3", () => {
     });
     renderPage();
 
-    await screen.findByRole("heading", { name: "Verify visit details" });
+    await screen.findByRole("heading", { name: "Confirm visit with client" });
     expect(screen.getByText(/entered by your agency because the visit was not signed out/)).toBeInTheDocument();
   });
 
@@ -538,7 +538,7 @@ describe("ServiceVerificationPage v3", () => {
     renderPage();
 
     expect(
-      await screen.findByRole("heading", { name: "Verify visit details" }),
+      await screen.findByRole("heading", { name: "Confirm visit with client" }),
     ).toBeInTheDocument();
     expect(screen.getByText("C-104")).toBeInTheDocument();
     expect(screen.getByText("2 hr")).toBeInTheDocument();
@@ -609,7 +609,7 @@ describe("ServiceVerificationPage v3", () => {
       confirmation_reason: null,
     });
     expect(
-      await screen.findByRole("heading", { name: "Visit saved" }),
+      await screen.findByRole("heading", { name: "Signature saved" }),
     ).toBeInTheDocument();
     const outcome = screen.getByLabelText("Visit result");
     expect(outcome).toHaveTextContent("Worked2 hr");
@@ -736,7 +736,7 @@ describe("ServiceVerificationPage v3", () => {
     fireEvent.click(screen.getByRole("button", { name: /Confirm visit/ }));
 
     expect(
-      await screen.findByRole("heading", { name: "Visit saved" }),
+      await screen.findByRole("heading", { name: "Signature saved" }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Client confirmation was recorded/i),

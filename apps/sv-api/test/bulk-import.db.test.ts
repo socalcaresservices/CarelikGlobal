@@ -20,7 +20,7 @@ beforeAll(async () => {
   const c = await db.admin.connect();
   try {
     await c.query("begin"); await c.query("set local role ogevia_owner");
-    await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0092_bulk_import.sql", import.meta.url), "utf8"));
+    await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0105_bulk_import.sql", import.meta.url), "utf8"));
     await c.query("reset role"); await c.query("commit");
   } catch (e) { await c.query("rollback"); throw e; } finally { c.release(); }
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence: new MemoryEvidenceStore(), identity: new MemoryIdentityAdmin(), log: (l: unknown) => logs.push(l) });

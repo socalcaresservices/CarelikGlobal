@@ -21,7 +21,7 @@ beforeAll(async () => {
   try {
     await c.query("begin");
     await c.query("set local role ogevia_owner");
-    await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0090_caregiver_signin_override.sql", import.meta.url), "utf8"));
+    await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0103_caregiver_signin_override.sql", import.meta.url), "utf8"));
     await c.query("reset role");
     await c.query("commit");
   } catch (e) { await c.query("rollback"); throw e; } finally { c.release(); }

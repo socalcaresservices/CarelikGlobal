@@ -6,7 +6,6 @@ import { RoundingSection } from "./billing-rounding";
 import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, APPROVAL_STATUS_NOTE, approvableMinutes, billingStateOf, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { activeFilterCount, applyBillingFilters, filterOptions, NO_FILTERS, type BillingFilters } from "./billing-filters";
 import { Button, Card } from "@carelik/ui";
-import { ShortHelp } from "./help-text";
 import { InfoTip } from "./ui/info-tip";
 import { CompactAlert } from "./ui/compact-alert";
 import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
@@ -124,7 +123,7 @@ export function BillingReviewPage() {
                       if (a) {
                         return (
                           <div className="flex items-center gap-2 whitespace-nowrap">
-                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h <span className="text-xs font-normal text-slate-500">by {a.approvedByName} · not submitted or paid</span></p>
+                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h <span className="text-xs font-normal text-slate-500">by {a.approvedByName}</span></p>
                             {canApprove ? (
                               <button type="button" className="text-xs text-slate-600 underline" onClick={() => { setNotice(null); setPending({ kind: "void", approval: a, reason: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
                                 Void approval
@@ -334,12 +333,10 @@ export function BillingReviewPage() {
             {pending.kind === "approve" ? (
               <>
                 <p className="text-sm font-medium text-slate-900">Approve visit {pending.row.visitNumber ?? ""} for billing</p>
-                <ShortHelp
-                  className="text-xs text-slate-600"
-                  details="Approval records your name and the time. It does not submit anything to a payer and does not mean it was paid."
-                >
-                  {pending.row.reviewDecision === "accept_late_confirmation" ? "Accepted from a late confirmation" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h). You can approve less, never more.
-                </ShortHelp>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                  <span>{pending.row.reviewDecision === "accept_late_confirmation" ? "Late confirmation accepted" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h)</span>
+                  <InfoTip label="About approved minutes">You can approve fewer minutes than the billable total. Approval records your name and the time.</InfoTip>
+                </div>
                 <label className="block text-xs font-medium text-slate-600">
                   Approved minutes
                   <input inputMode="numeric" value={pending.minutes} onChange={(e) => setPending({ ...pending, minutes: e.target.value, error: null })} className="mt-1 block w-32 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -352,7 +349,7 @@ export function BillingReviewPage() {
             ) : (
               <>
                 <p className="text-sm font-medium text-slate-900">Void the billing approval for visit {pending.approval.visitNumber ?? ""}</p>
-                <p className="text-xs text-slate-600">The approval stays in the record as voided, with your reason. The visit shows as Voided and can be approved again.</p>
+                <InfoTip label="What happens when you void an approval">The approval stays in History with your reason. The visit shows as Voided and can be approved again.</InfoTip>
                 <label className="block text-xs font-medium text-slate-600">
                   Reason (required)
                   <input value={pending.reason} maxLength={1000} onChange={(e) => setPending({ ...pending, reason: e.target.value, error: null })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />

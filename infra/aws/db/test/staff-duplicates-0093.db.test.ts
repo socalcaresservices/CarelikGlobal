@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asActor, createTestDb, expectPgError, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
-const UP = new URL("../pending/migrations/0093_staff_duplicates.sql", import.meta.url);
-const DOWN = new URL("../pending/rollback/0093_staff_duplicates.down.sql", import.meta.url);
+const UP = new URL("../pending/migrations/0106_staff_duplicates.sql", import.meta.url);
+const DOWN = new URL("../pending/rollback/0106_staff_duplicates.down.sql", import.meta.url);
 let db: TestDb;
 let w: World;
 let type: string;
@@ -24,7 +24,7 @@ const merge = (keep: string, dup: string, reason = "Same person entered twice (s
 const status = async (id: string) => (await db.admin.query("select status from ogevia.staff_profiles where id = $1", [id])).rows[0].status as string;
 
 beforeAll(async () => {
-  db = await createTestDb();
+  db = await createTestDb({ includeLiveTest: true });
   w = await seedWorld(db, 1200);
   await run(UP);
   type = (await call(w.ownerA, "select ogevia_api.create_staff_type($1,'Office (synthetic)') as id", [w.orgA]))[0].id;

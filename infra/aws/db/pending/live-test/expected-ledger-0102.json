@@ -1,0 +1,512 @@
+[
+  {
+    "version": "0001",
+    "name": "0001_roles_schemas_extensions.sql",
+    "checksum": "c629bad576ebdc1f85007eed49134d4204d8fa9c6f54621aacde906e2b4caf94"
+  },
+  {
+    "version": "0002",
+    "name": "0002_identity_tenancy.sql",
+    "checksum": "110041017aed22ed1ae31e6ff1d78359876678a8e584b7b1eb2e9105f7a15d15"
+  },
+  {
+    "version": "0003",
+    "name": "0003_care_directory.sql",
+    "checksum": "b70220796cd7320e77de3067db55c5c3d754edfcf4ad00e95bf2d5540a241d45"
+  },
+  {
+    "version": "0004",
+    "name": "0004_authorizations.sql",
+    "checksum": "e1a8dc36caec27b22734df7e54b3c5be7f21955c25dc9d1a693562e06554c597"
+  },
+  {
+    "version": "0005",
+    "name": "0005_service_visits.sql",
+    "checksum": "eb5fddc0d4185c44852d9a48d59da0336af17e77996fd691541e8df7b9967155"
+  },
+  {
+    "version": "0006",
+    "name": "0006_service_verification_api.sql",
+    "checksum": "0e2e3f478317781295a830fc7c35cbf18577273f7743138c80e138337ce4f0be"
+  },
+  {
+    "version": "0007",
+    "name": "0007_reporting_billing_review.sql",
+    "checksum": "3817682c2d029a174c579df8d757da402d7447966112f6dc27b90d0d0a365794"
+  },
+  {
+    "version": "0008",
+    "name": "0008_grants.sql",
+    "checksum": "5c547542c0290d9323b07c45a4467d5c2e1f7e5af67000ac63f1e35764003c48"
+  },
+  {
+    "version": "0009",
+    "name": "0009_api_context_evidence_read.sql",
+    "checksum": "0db289e3e29ba63125a18b0c531bab6bd4d9fc6440c200f367de716f579958a3"
+  },
+  {
+    "version": "0010",
+    "name": "0010_reporting_acceptance_improvements.sql",
+    "checksum": "a96984432d3ef738d6df170bc8662da24b724abc96f969f64500ff320bd9666f"
+  },
+  {
+    "version": "0011",
+    "name": "0011_care_requests_availability.sql",
+    "checksum": "5edeb848fa5cf830b420bddcba7927242f322e6d53166161824d37f01b26ef61"
+  },
+  {
+    "version": "0012",
+    "name": "0012_care_portal_request_list.sql",
+    "checksum": "f8c8ca5129185a513a4572fdee6084854e70b5dc97fbb84726ccabfcf9cedacc"
+  },
+  {
+    "version": "0013",
+    "name": "0013_link_visits_to_shifts.sql",
+    "checksum": "326793f3b9bb36a924a219a6f4af49a39e42ae4ca2b6d0fb8b750f3a2693d52d"
+  },
+  {
+    "version": "0014",
+    "name": "0014_visit_access_from_scheduled_shift.sql",
+    "checksum": "bfb9ff7ae982a672b7e89091920c2c546efde62278454feecff317b27effef36"
+  },
+  {
+    "version": "0015",
+    "name": "0015_manager_close_missed_visit.sql",
+    "checksum": "bdb751c3d5ecadccf381b6b5f17da50ab9b00086f82ed285844eed7d98d237ed"
+  },
+  {
+    "version": "0016",
+    "name": "0016_remaining_minutes_count_reservations.sql",
+    "checksum": "47a960dbe360e05e58296de0ce845f547d53b58bc91e390fdcbcfa8992d7be6f"
+  },
+  {
+    "version": "0017",
+    "name": "0017_next_scheduled_service.sql",
+    "checksum": "9743e4666fcb58d609e376b8fdd91bca95b66ab605160792aa0f06fdb7420852"
+  },
+  {
+    "version": "0018",
+    "name": "0018_correction_keeps_unchanged_times.sql",
+    "checksum": "7df812b86164393c0dac319f34d14881daf5180edf157fae26797a5cdefcb842"
+  },
+  {
+    "version": "0019",
+    "name": "0019_billing_approval.sql",
+    "checksum": "7299cbe28a36be80290a100b747a9b65bf3a62e76706715889f352feb4830c99"
+  },
+  {
+    "version": "0020",
+    "name": "0020_workspace_identity_attention_utilisation.sql",
+    "checksum": "26cf02135c5aac18406a5de95b68c8a710564ab83ee9d709e5e2361983c07d3c"
+  },
+  {
+    "version": "0021",
+    "name": "0021_staff_documents.sql",
+    "checksum": "fe8436ace1f4df42ec859e99c8f462334b56296f7aa4935af17b4393fa619df3"
+  },
+  {
+    "version": "0022",
+    "name": "0022_client_authorization_admin.sql",
+    "checksum": "42ae965d00b3e6d4b36138c534d1a1f8888559ffa5f7e077f60f99a923d8701d"
+  },
+  {
+    "version": "0023",
+    "name": "0023_caregiver_service_admin.sql",
+    "checksum": "d9d6d0b107aca9c2037697fe61473dfca6c5a8f2d32413a09b2cd9febf542ba4"
+  },
+  {
+    "version": "0024",
+    "name": "0024_assignment_admin.sql",
+    "checksum": "1ef63f3d7cf2bf0c303526615546ffbd4542525e24540b217d53b46cf38d5ab0"
+  },
+  {
+    "version": "0025",
+    "name": "0025_invitations_planned_assignments.sql",
+    "checksum": "bad0bcb4cd3d8484bdfd0eac5b8082e542b58fb4769c99bf4277634b819c88b0"
+  },
+  {
+    "version": "0026",
+    "name": "0026_staff_shifts_coverage.sql",
+    "checksum": "3e1b3fb57fd4d3e42d34b28930ff53bbb2a78a7af2026237582e62516544dab9"
+  },
+  {
+    "version": "0027",
+    "name": "0027_continuity_pack.sql",
+    "checksum": "53a5711fbedea60134e83a4bcf8d785432c827fca128cca18cd794d49cfa8168"
+  },
+  {
+    "version": "0028",
+    "name": "0028_outage_visit_records.sql",
+    "checksum": "3ef54557b7b4f6a1f5abb552dc0dc0c19a6790f9e6bae543aa008db542045a8c"
+  },
+  {
+    "version": "0029",
+    "name": "0029_billing_rounding.sql",
+    "checksum": "03a828928c63db96393ba350e314a0b2d73fea4a7621c9d9ecc509775cdb9874"
+  },
+  {
+    "version": "0030",
+    "name": "0030_caregiver_hire_scheduling_billing_review.sql",
+    "checksum": "ef569e9372c854a5d0c67cbfe9bd8b8efc424eba17540da8a86b9959c4ca9ea5"
+  },
+  {
+    "version": "0031",
+    "name": "0031_visit_review_decisions.sql",
+    "checksum": "d20ef968a61573c226b7aedd1a3db0bbb45884f5d13791cdb4a8585137e2bbfc"
+  },
+  {
+    "version": "0032",
+    "name": "0032_shift_card_held_reservations.sql",
+    "checksum": "a30a8d59437ed79a3cb92c72c5fed923c55e8c037c2f584f40cce53149160d70"
+  },
+  {
+    "version": "0033",
+    "name": "0033_document_reminders_attention.sql",
+    "checksum": "25b689f7a47fd35e9c727f0848a2dc31832a9a4ba6dd925594b5c1d03c609651"
+  },
+  {
+    "version": "0034",
+    "name": "0034_recurring_shift_series.sql",
+    "checksum": "7e6272660711b0e9b65ea7a9400fb86361014efbe1273f062b7071500e810682"
+  },
+  {
+    "version": "0035",
+    "name": "0035_dst_local_times.sql",
+    "checksum": "01da6cf6d90d0caa239c0c7307c1e6db10f1223ac6fe1042fcff7b307fe7a700"
+  },
+  {
+    "version": "0036",
+    "name": "0036_signature_recovery.sql",
+    "checksum": "a3c96bb59bbec01cafb9f1d63cd29b940f8c4737b11b3bea9708267da9661089"
+  },
+  {
+    "version": "0037",
+    "name": "0037_overnight_availability.sql",
+    "checksum": "c0d6b9d26f54be8ab291ffd9e85131088994111ca92673a153157c945265389b"
+  },
+  {
+    "version": "0038",
+    "name": "0038_org_letterhead_contact.sql",
+    "checksum": "f7d95b333d4c9c00faab273d53a300678840049d6ed84e862c118138e6f1b6b1"
+  },
+  {
+    "version": "0039",
+    "name": "0039_availability_approval.sql",
+    "checksum": "8ed7bd90be852c522b182f4f52cbd60466cfc0f7e9b6253153d695e851f5d4fe"
+  },
+  {
+    "version": "0040",
+    "name": "0040_caregiver_service_approvals.sql",
+    "checksum": "4470781ae98f975f88e415781f80462804e654f410ed27af313385f42e43206d"
+  },
+  {
+    "version": "0041",
+    "name": "0041_required_documents.sql",
+    "checksum": "38f44d7a1060cd19157281f9f22ad3057af185f44b44288a9763c9140ec60d0d"
+  },
+  {
+    "version": "0042",
+    "name": "0042_readiness_gate.sql",
+    "checksum": "23e5265bb43776a3ebf0c9893b7c19c1731ab9a470bdd2f9ef3a3432516dc9cf"
+  },
+  {
+    "version": "0043",
+    "name": "0043_explainable_matching.sql",
+    "checksum": "171864e61d3fea462cd9a8022797c7e7db67bb639151fa393489e9a62f98bd2c"
+  },
+  {
+    "version": "0044",
+    "name": "0044_readiness_review.sql",
+    "checksum": "f1e49cb5f4197b8ee9c741f67e05fe011d4a67dd22bc7c9ba37aa753ce3210d6"
+  },
+  {
+    "version": "0045",
+    "name": "0045_manual_care_offer.sql",
+    "checksum": "997dbad73f3be0a4c4a651c17b0b035784cd976ed2240e620b9d609615264133"
+  },
+  {
+    "version": "0046",
+    "name": "0046_visit_start_availability.sql",
+    "checksum": "190a06f423d54beb3f0c0f65156728b540c4452aaf8215f3c5ad92ea65810b81"
+  },
+  {
+    "version": "0047",
+    "name": "0047_availability_override_one_shift.sql",
+    "checksum": "df9ffa154e2b11dee7fb20892cd824cdac2e899aa3f7462ebff7971ae5ab4379"
+  },
+  {
+    "version": "0048",
+    "name": "0048_account_status_enable_disable.sql",
+    "checksum": "6fbbfee4e2213fe989d1de8e6af368a16ab8812a921da36d360ab5dae1139dc2"
+  },
+  {
+    "version": "0049",
+    "name": "0049_reservation_not_counted_when_late_confirmation_accepted.sql",
+    "checksum": "996f535491b586ae2249ef652238426e1a00647bcb5e956026c7f663401d35de"
+  },
+  {
+    "version": "0050",
+    "name": "0050_wave1_visit_review_and_variance_rule.sql",
+    "checksum": "a5d5d1ca2ecaf034920dacec24639ddf38a37efcdce3990b7221870d93738c0a"
+  },
+  {
+    "version": "0051",
+    "name": "0051_wave1_open_shift_pickup.sql",
+    "checksum": "72bcf7070135a7e34303640b4d7972aba7e2c39972f22383471a80c3246d325d"
+  },
+  {
+    "version": "0052",
+    "name": "0052_reservation_not_counted_when_review_visit_counted_as_used.sql",
+    "checksum": "b01e5d36b5d3a322c7dc8181dff08c4946a2be0a30d7aae577ff6c6c1ea41bf4"
+  },
+  {
+    "version": "0053",
+    "name": "0053_scheduling_patterns_hour_limits_makeup.sql",
+    "checksum": "503f499cb58e37e848652c9158f8e753278a2c2a510d0237e22d0f76556054c8"
+  },
+  {
+    "version": "0054",
+    "name": "0054_recruiting_onboarding_checklist.sql",
+    "checksum": "2f85e122fb53bd13e9a2e99422dd7a9472d3136e7f3cff3c8f0ca534bbcf1d1b"
+  },
+  {
+    "version": "0055",
+    "name": "0055_caregiver_compliance_hold.sql",
+    "checksum": "e6183ad380e644e797f89b0d60aeb774687cc4eda30c5a7d78027b102c40b2a4"
+  },
+  {
+    "version": "0056",
+    "name": "0056_attention_streams_appearance.sql",
+    "checksum": "a44c5231e71b5f930998bfd9b70ffb229ca106a1b24d86dcd7ce4bdf20379429"
+  },
+  {
+    "version": "0057",
+    "name": "0057_authorization_tiers_unclamped_balances.sql",
+    "checksum": "7a7dcd90acd695f0fa70fe0e4e42e7ea4ceb59a688e93f8f535125df9b31853f"
+  },
+  {
+    "version": "0058",
+    "name": "0058_attention_tiers_separate_queues.sql",
+    "checksum": "fdddb5ec60b0a038d61bfdcbf8092c59861af57b9960cd16d2fc9c9181cd2b8f"
+  },
+  {
+    "version": "0059",
+    "name": "0059_attention_boundary_review_clock.sql",
+    "checksum": "ef18d240de7db2aab128dce495f9e1cd6477c455a2ab99326119c11be8062e5a"
+  },
+  {
+    "version": "0060",
+    "name": "0060_agency_work_hour_limits.sql",
+    "checksum": "f370a3e07bd221002922c524da1fda3a6f87c298df9bae7d8e8df00cd53dabf6"
+  },
+  {
+    "version": "0061",
+    "name": "0061_recurring_save_valid_report_rejected.sql",
+    "checksum": "8f56b96e76728aa3754e9ea71b42bd676d54e42a92274c645d36a0a2eb2fd2c8"
+  },
+  {
+    "version": "0062",
+    "name": "0062_billing_states.sql",
+    "checksum": "056023e7edd1bf18b0764e5cd954867ca56a9bfcb8442445886faeadc8198d64"
+  },
+  {
+    "version": "0063",
+    "name": "0063_open_shift_pickup_requires_confirmation.sql",
+    "checksum": "8176db0afdd6bc82edf45d36467ed797865e40cd6e761a85f6d7ea57ee633987"
+  },
+  {
+    "version": "0064",
+    "name": "0064_compliance_hold_history_and_alerts.sql",
+    "checksum": "f00e09b77242f71ba95039eb73606c40e92298b2268e67f2e96e6dfb24c0464f"
+  },
+  {
+    "version": "0065",
+    "name": "0065_office_assignment_authorization_recheck.sql",
+    "checksum": "fe6d932216938d0e09f76bf17a3565c5c4b44a6c9788fe5201e38a41bfe84996"
+  },
+  {
+    "version": "0066",
+    "name": "0066_compliance_shift_document_risks.sql",
+    "checksum": "8c024d7bac7bf5cf43623a9dffc864462d4fa6edf624835fefebb9bbd4226512"
+  },
+  {
+    "version": "0067",
+    "name": "0067_reservation_buckets_and_reconciliation.sql",
+    "checksum": "323510d2ee326ca74bfd32b4f322217374aa3671a7beab27f510ffd1bed13901"
+  },
+  {
+    "version": "0068",
+    "name": "0068_authorization_amendment_impacts.sql",
+    "checksum": "b21307b21a97e79346315c101fca5e3117e98f47308e531ad3e4d79fbb39f4d5"
+  },
+  {
+    "version": "0069",
+    "name": "0069_report_export_permission_and_audit.sql",
+    "checksum": "4ae3bc5f95e1e39ac9e92cb9c7fb387b0cae6ec30dfa460ba34d38aae0efcca9"
+  },
+  {
+    "version": "0070",
+    "name": "0070_monthly_chain_report.sql",
+    "checksum": "75960d86722bc98a4ac9e0444f3348e414ff8461b00128d79667ede33eaad43f"
+  },
+  {
+    "version": "0071",
+    "name": "0071_authorization_decrease_review_and_delivered_unverified.sql",
+    "checksum": "5db4d8e5fe46f41d68add2cfb0b9ff2a3e77790c4306880aa2c198af024882b2"
+  },
+  {
+    "version": "0072",
+    "name": "0072_export_request_and_generation.sql",
+    "checksum": "1ee7849c50ab0826093524b667fec4488f786da00ec487f5a82a9078e9c44c28"
+  },
+  {
+    "version": "0073",
+    "name": "0073_agency_deadlines_and_issue_identity.sql",
+    "checksum": "1acf4ea8b68a644f70f86641d6041c6fa0c6f26a3f0e3c805eccb90d4926e616"
+  },
+  {
+    "version": "0074",
+    "name": "0074_client_documents_readiness_holds_audit.sql",
+    "checksum": "4641ef759f67513f0f0041f1bb39fc4d4b62c276407a6b08f946cee76cd53c8e"
+  },
+  {
+    "version": "0075",
+    "name": "0075_shift_display_states.sql",
+    "checksum": "d2a25cd3e8adcc4a807364b6d550e8fc5501d72a67d6d49022269cc733dbe62b"
+  },
+  {
+    "version": "0076",
+    "name": "0076_agency_performance_audit_report.sql",
+    "checksum": "7ab0337dbbc2e429cd29c98bda998420adafabc8a4c5b70660fb0e0c5c5b4c7b"
+  },
+  {
+    "version": "0077",
+    "name": "0077_attention_counts_and_in_app_notifications.sql",
+    "checksum": "6e56b9d395f50456de72deceae52bf768cafd4c56aaac59452f3a73d1c36d0b6"
+  },
+  {
+    "version": "0078",
+    "name": "0078_assignment_outcome_and_limit_messages.sql",
+    "checksum": "173f7dd00c754785945becb4364be212494b81bb3911b8be77fd5800aa16b599"
+  },
+  {
+    "version": "0079",
+    "name": "0079_hours_accounting_one_bucket.sql",
+    "checksum": "720f3cfdb11d1e43ffa28c541d4451caba7dca486b55fd5db8fa88b68001a246"
+  },
+  {
+    "version": "0080",
+    "name": "0080_attention_counts_one_definition.sql",
+    "checksum": "5a728b9a79fd0dc76badc04c0a0b607ffb3099fdd2fbff6b7f01de2a2d894342"
+  },
+  {
+    "version": "0081",
+    "name": "0081_review_corrections_pending_closed_cpr_tb.sql",
+    "checksum": "fa1a3ef3283686984a5ee919d6ad13844e84d703344247f7d42e00b8c81b42bd"
+  },
+  {
+    "version": "0082",
+    "name": "0082_lineage_lock_all_consumption_paths_review_audit.sql",
+    "checksum": "f556aa76eeb0b5f5eaf69f88e027aa3be1d908229cbd8278eaf40133bf20509a"
+  },
+  {
+    "version": "0083",
+    "name": "0083_owner_hours_reopen_guard_correct_closed.sql",
+    "checksum": "a309770cd33fb7bb502adf90dadb9dfba8e656f969330a0686bdd06ae00c299c"
+  },
+  {
+    "version": "0084",
+    "name": "0084_action_needed_over_limit.sql",
+    "checksum": "e3ae5f0ef877a37f8ccc976928efc813abb8a0dab2381d61b9f11f96f6770935"
+  },
+  {
+    "version": "0085",
+    "name": "0085_create_caregiver_gate_no_service_void.sql",
+    "checksum": "c402a292bbb00afe75c199975974ad1547ddd3eef9fda0f0199ab2a19e2734f0"
+  },
+  {
+    "version": "0086",
+    "name": "0086_staff_management.sql",
+    "checksum": "8eb7b4a353300ba78156bd58a0df6cbc9857b677cec0e8ec51233fcda5a16a4f"
+  },
+  {
+    "version": "0087",
+    "name": "0087_staff_invitation_acceptance.sql",
+    "checksum": "f9d75d8c776005873b6019ca2d76353d182772144b9946cadd3291cdbad4cf88"
+  },
+  {
+    "version": "0088",
+    "name": "0088_caregiver_readiness_approve_for_work.sql",
+    "checksum": "dc20f327794a6f9b6e4f79d201550f1d0a9970e2e4b800c27b598213c82cf34f"
+  },
+  {
+    "version": "0089",
+    "name": "0089_manager_record_missing_visit.sql",
+    "checksum": "c549e57ba05d6f7e00d694e02d3e283b88120d74e86ebfb1e2135ec001a3c97b"
+  },
+  {
+    "version": "0090",
+    "name": "0090_staff_caregiver_contact.sql",
+    "checksum": "cae28d8249e1347de92c1cc14caaad79b7b9feccc0affb372229c80abdeeb6e8"
+  },
+  {
+    "version": "0091",
+    "name": "0091_matching_city.sql",
+    "checksum": "19af013964d6d7c7ee9812bd44be202ddbadc816cfae9fb94b4e7d672be90144"
+  },
+  {
+    "version": "0092",
+    "name": "0092_missing_visit_reason_labels.sql",
+    "checksum": "0e03c4b87e968d791837d111cd59099d4a4dc2be647347c21db31ad8620ca019"
+  },
+  {
+    "version": "0093",
+    "name": "0093_business_document_tracker.sql",
+    "checksum": "3d1b7b50a72ac3b2fa582a9401969fc01eddae80e3dc484595c45b4dfbba5073"
+  },
+  {
+    "version": "0094",
+    "name": "0094_caregiver_calendar_status.sql",
+    "checksum": "8211ba6478363cda352e4dbc94e365b08dbdfb1a8584b3d8e50f2fa9e8bc37df"
+  },
+  {
+    "version": "0095",
+    "name": "0095_caregiver_client_names.sql",
+    "checksum": "137428c37402acd4e770660ac2c1903ce88a3c780f98270336ddb62d5eba8e4c"
+  },
+  {
+    "version": "0096",
+    "name": "0096_expiring_authorization_hours.sql",
+    "checksum": "f2ed7f8f2f0b37a04d886573440cddca449e70a08c1c9d1bfdda0debc7dcaf11"
+  },
+  {
+    "version": "0097",
+    "name": "0097_expiry_month_boundaries.sql",
+    "checksum": "a579a83401a7d50be301ea8b4ac460a7cb2fe93f1c9751c1a30cde715919e084"
+  },
+  {
+    "version": "0098",
+    "name": "0098_matching_city_suggestions.sql",
+    "checksum": "009c5e5e6e0bb9fab52aa897946744361a5477ea0c2541702aa89bc18339601f"
+  },
+  {
+    "version": "0099",
+    "name": "0099_business_document_attachments.sql",
+    "checksum": "55e459a44331725cac629864d538241c81dcd62fabf338c55615ac0c8f6c7564"
+  },
+  {
+    "version": "0100",
+    "name": "0100_business_document_renewal_issues.sql",
+    "checksum": "0fda9fcc18d31f3f251808b932b565a681f5c3b28adac6db44f3383b1ec8add3"
+  },
+  {
+    "version": "0101",
+    "name": "0101_caregiver_office_role.sql",
+    "checksum": "7b4eb95c3e06689e4b198f6bf8d2cc542002290a501036063d91821da484e6bb"
+  },
+  {
+    "version": "0102",
+    "name": "0102_client_qr_checkin.sql",
+    "checksum": "bb3f57d2c81b331a1f8732eecb00b986c2ed4c07cc352a9717358306aab631ec"
+  }
+]

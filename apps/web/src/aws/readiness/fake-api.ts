@@ -144,6 +144,7 @@ export function fakeApi(opts: FakeOptions) {
       case `POST /v1/clients/${CLIENT}/zip`:
         return json(200, { saved: true });
       case "GET /v1/location-data":
+        if (url.searchParams.has("suggestZip")) return json(200, { city: url.searchParams.get("suggestZip") === "92595" ? "Wildomar" : null });
         return json(200, { status: { distanceDataLoaded: false } });
       case "POST /v1/experience-tags":
         return json(201, { tagId: SVC });

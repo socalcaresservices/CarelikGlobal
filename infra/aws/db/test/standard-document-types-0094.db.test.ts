@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, seedWorld, type TestDb, type World } from "./harness.js";
 
-const UP = new URL("../pending/migrations/0094_standard_document_types.sql", import.meta.url);
-const DOWN = new URL("../pending/rollback/0094_standard_document_types.down.sql", import.meta.url);
+const UP = new URL("../pending/migrations/0107_standard_document_types.sql", import.meta.url);
+const DOWN = new URL("../pending/rollback/0107_standard_document_types.down.sql", import.meta.url);
 let db: TestDb; let w: World;
 const run = async (url: URL) => { const c = await db.admin.connect(); try { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(url, "utf8")); await c.query("reset role"); await c.query("commit"); } catch (e) { await c.query("rollback"); throw e; } finally { c.release(); } };
 const names = async (org: string) => (await db.admin.query("select name, requires_expiry from ogevia.document_types where organization_id = $1 order by name", [org])).rows;

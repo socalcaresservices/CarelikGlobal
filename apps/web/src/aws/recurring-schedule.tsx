@@ -157,7 +157,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
         <select id={`${id}-cg`} value={form.caregiverRecordId} onChange={(e) => set("caregiverRecordId", e.target.value)} className={inputClass}>
           <option value="">Open shifts — fill later</option>
           {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => (
-            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>
+            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)}</option>
           ))}
         </select>
       </div>
