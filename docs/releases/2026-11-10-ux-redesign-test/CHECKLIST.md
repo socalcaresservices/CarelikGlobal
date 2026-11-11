@@ -12,7 +12,7 @@ Evidence rules: link or paste real command output and screenshots. Never include
 | Field | Value |
 |---|---|
 | Release ID | `2026-11-10-ux-redesign-test` |
-| Commit SHA to deploy (full 40 characters) | **NOT SET: the owner states it in writing at Phase C (C0).** Last verified candidate: `16d9f21` for A2 to A7; head when this was filled: `32efa0bedc7b7e08e60e44af255d24ae62b4808a` (adds 0094 and docs; only its own tests and the tenant sweep were re-run) |
+| Commit SHA to deploy (full 40 characters) | **NOT SET: the owner states it in writing at Phase C (C0).** Candidate verified on a clean clone: `d7f7147` (A1 to A7); head at last check `c77bc78` (docs and evidence only after `d7f7147`; CI green) |
 | Branch / pull request | `claude/ogevia-ux-audit-redesign-w36cov`; draft PR #108 to `main` (never merged) |
 | Prepared by (name, date) | Claude Code (AI assistant) for the owner, 2026-11-10. Not a human sign-off. |
 | Change classification (tick all) | ☒ feature ☐ bug fix ☒ migration ☒ API ☒ dashboard ☒ report ☒ scheduling ☐ authorization ☒ visits/verification ☒ availability/matching ☒ user admin ☐ notifications ☒ infrastructure (route switches, Lambda bundle) ☐ web only |
@@ -37,14 +37,14 @@ Run on a clean checkout of the commit above. Paste the summary line of each. `OG
 
 | # | Gate | Command | Result | Evidence |
 |---|---|---|---|---|
-| A1 | Install | `pnpm install --frozen-lockfile` | ☐ NOT RUN on a clean checkout. Lockfile with `exceljs` is committed; installs worked in this working copy | |
-| A2 | **Lint (G1)** | `pnpm lint` | ☒ exit 0 | 6 of 6 tasks successful, at `16d9f21` (after removing one unused directive) |
-| A3 | **Typecheck (G2)** | `pnpm typecheck` | ☒ exit 0 | 7 of 7 tasks, at `16d9f21` |
-| A4 | **Unit and static tests (G3a)** | `pnpm test` | ☒ exit 0. Counts: web 1,308 (141 files), infra 684 (36), sv-api 108 (6), auth 150 (9), shared 118 (14), ui 73 (20) | `pnpm test` summary at `16d9f21` |
-| A5 | Build | `pnpm build` | ☒ exit 0 | 6 of 6 tasks, at `16d9f21` |
-| A6 | **Database tests (G3b)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/infra-aws test:db` | ☒ all passed. Counts: 1,155 (106 files). Skips not separately counted (the `test:all` wrapper was not used). 0094's 2 tests added after, passed alone | local PostgreSQL 16, at `16d9f21` |
-| A7 | **API tests (G3c)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/sv-api test:db` | ☒ all passed. Counts: 173 (26 files), including the cross-tenant sweep with all pending migrations applied (re-run after 0094: 9/9) | same |
-| A8 | CI run on the pull request | link | ☐ **NOT CONFIRMED for the head.** Runs 417 (`d48fcc3`) and 418 (`37fe719`) green; 419 (`dc76485`) failed in the tenant sweep, fixed in `16d9f21`; no result read for `16d9f21` or later | GitHub Actions, branch above |
+| A1 | Install | `pnpm install --frozen-lockfile` | ☒ ok | fresh clone of `d7f7147`, exit 0 |
+| A2 | **Lint (G1)** | `pnpm lint` | ☒ exit 0 | clean clone of `d7f7147` |
+| A3 | **Typecheck (G2)** | `pnpm typecheck` | ☒ exit 0 | clean clone of `d7f7147` |
+| A4 | **Unit and static tests (G3a)** | `pnpm test` | ☒ exit 0. Counts: web 1,309 (141 files), infra 684 (36), sv-api 110 (6), auth 150 (9), shared 118 (14), ui 73 (20) | `pnpm test:all` step 1, clean clone of `d7f7147` |
+| A5 | Build | `pnpm build` | ☒ exit 0 | clean clone of `d7f7147` |
+| A6 | **Database tests (G3b)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/infra-aws test:db` | ☒ all passed, **0 skipped**. Counts: 1,157 (107 files) | `pnpm test:all` final line "PASS all suites ran, none skipped, all passed", clean clone of `d7f7147`, local PostgreSQL 16 |
+| A7 | **API tests (G3c)** | `OGEVIA_TEST_DATABASE_URL=... pnpm --filter @carelik/sv-api test:db` | ☒ all passed, **0 skipped**. Counts: 173 (26 files), including the cross-tenant sweep with all pending migrations applied | same run |
+| A8 | CI run on the pull request | link | ☒ green for every commit from `16d9f21` to the head: runs 421 to 428 (head `c77bc78` = run 428). Earlier failures 416, 419, 420 were fixed (tenant sweep, lint warning) | GitHub Actions, branch above |
 | A9 | Test counts did not drop versus the baseline (process section 3.1) | | ☐ **no, explained:** the web suite went from 1,303 to 1,308 net; 18 old tests that asserted the removed header chip, the "Needs attention now" tile and the tab strip were rewritten to the new design, not skipped. No numeric baseline file was compared | |
 
 Change-specific:
@@ -52,7 +52,7 @@ Change-specific:
 - ☒ Every changed rule has a test (0090 to 0094 each have database, API and web tests); "fails without the change" was **not demonstrated for each**: ____________ partial
 - ☒ Covered: invalid and malformed files, duplicate rows, re-upload of the same file, partial-failure rollback, 1,000-row and 2,001-row files, wrong role, other tenant, unauthenticated, network refusal messages. **Not covered:** concurrent imports of different files racing on the same names (serialized by an advisory lock, not stress-tested)
 - ☒ Migration: new files only; applied files unedited; `.down.sql` present and classified; rollback tests run. `01_schema_version.sql` and ledger-tail tests: **N/A by design** (pending files are outside the ledger until a later integration)
-- ☐ Migration touches `SECURITY DEFINER`, grants or tenant access: **`docs/security-review-checklist.md` NOT COMPLETED.** 0090 to 0093 add SECURITY DEFINER functions; a human review is required before Phase C
+- ☐ Migration touches `SECURITY DEFINER`, grants or tenant access: **Applied by Claude, human sign-off still needed:** `SECURITY_AND_COMPATIBILITY_REVIEW.md` (all new functions checked; SEC-1 zip-bomb crash FIXED, SEC-2 FIXED, SEC-3 exceljs dependency advisories need the owner's decision)
 - ☒ API: permission, other-tenant, unauthenticated, bad-input and (if it creates records) idempotency tests exist; `slice-contract.test.ts` passes
 - ☒ UI: states tested on every changed screen; 390 px: 0 of 20 office screens overflow and 0 controls under 44 px (emulated, `touch-targets.mjs`); 1280 px not re-measured in this pass; contrast tests pass inside the web suite
 - ☐ Not audited line by line: new Import, Duplicates and CPR/TB setup contain short inline sentences by design
@@ -65,12 +65,12 @@ Change-specific:
 | B1 | `harness:setup` run on this commit (fresh database, all migrations applied; migration count: ___) | ☒ | Ledger 0001 to 0088 applied by `harness:setup`; then 0090 to 0093 applied by hand with psql. **0094 not applied to the harness** (its database test covers it); count 88 + 4 outside the ledger |
 | B2 | `harness:build` and `harness:serve` run on this commit | ☒ | built after the touch-target change; served at https://localhost (commit `16d9f21` plus the CSS change, since committed) |
 | B3 | Seed data covers the change (if not, `setup.ts` was extended in this change) | ☒ | `harness:seed-today -- --startable` (visit today), two synthetic duplicate staff, client cities. `setup.ts` not extended; the duplicates and cities were inserted by a one-off SQL block |
-| B4 | Every catalog ID in the Feature Test Plan performed as the named persona (list IDs and PASS/FAIL below) | ☐ **NOT DONE** (no Feature Test Plan yet). Done instead: recording of 70 owner and 18 caregiver screens, the touch-target walk of 20 screens as Olivia Owner, the offline preview check | |
-| B5 | Screenshots saved under `docs/releases/<release-id>/evidence/` (desktop 1280 for administrator, 390 for caregiver) | ☐ **NOT SAVED to this folder.** Earlier galleries: `docs/ux/pr2/`, `docs/ux/pr3/`; the final Staff and Dashboard 390 px captures were viewed but not committed | |
+| B4 | Every catalog ID in the Feature Test Plan performed as the named persona (list IDs and PASS/FAIL below) | ☐ **PARTIAL.** `FEATURE_TEST_PLAN.md` written (UXR-01 to UXR-23). Automated cases pass; harness screenshots done for UXR-01, 02, 09, 13; UXR-01c, 14c, 22, 03b need the owner. Done instead: recording of 70 owner and 18 caregiver screens, the touch-target walk of 20 screens as Olivia Owner, the offline preview check | |
+| B5 | Screenshots saved under `docs/releases/<release-id>/evidence/` (desktop 1280 for administrator, 390 for caregiver) | ☒ saved for the administrator at 1360 and 390 px (10 files); **caregiver-screen captures not saved** (shown in the preview only). Earlier galleries: `docs/ux/pr2/`, `docs/ux/pr3/`; the final Staff and Dashboard 390 px captures were viewed but not committed | |
 | B6 | Bug fix or rule change: **before and after** screenshots of the same record | ☐ partial | before/after for navigation and help in `docs/ux/pr2/`, `pr3/`; none for R19, R23, R11, R6, R7 |
 | B7 | Browser console and network: no unexpected errors or 4xx/5xx | ☐ partial | the offline preview: 0 page errors, 0 network requests. Live harness console/network not inspected |
 | B8 | Negative checks: forbidden action refused for the wrong role; Caregiver sees no Administrator data | ☒ | automated: tenant isolation sweep (9/9, all pending migrations applied), per-route 401/403/404 tests for override, import, duplicates; unassigned caregiver gets no client name (0091 test) |
-| B9 | Regression set R spot-checked | ☐ **NOT DONE** | |
+| B9 | Regression set R spot-checked | ☐ **PARTIAL:** `pilot-regression-local.sh`: 35 passed, 0 failed, 1 not run (SMK-06 needs the deployed API address; exit code 3, the gate needs 0). Report `evidence/regress-local.md` | |
 | B10 | List what the harness **cannot** prove and that this change touches (Cognito, authorizer, IAM, S3/KMS, CloudFront, RDS TLS, email): ____________ | ☒ carried to C6 | Touches: Lambda bundle size and cold start (`exceljs`), the real JWT authorizer on 5 new routes, API Gateway payload limit for a 2 MB import (base64 about 2.8 MB), shared RDS instance behaviour. Does not touch S3/KMS, CloudFront config, email, IAM |
 
 Catalog results (copy rows as needed):

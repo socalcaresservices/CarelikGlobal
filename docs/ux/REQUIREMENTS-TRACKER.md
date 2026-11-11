@@ -75,3 +75,4 @@ Added 2026-11-10 from `docs/ux/ogevia-ux-audit.md` and `docs/ux/ogevia-redesign-
 
 
 - 2026-11-10 (milestone 3): R19 built (one headline number); R23 built behind pending 0091; override migration renumbered 0089 -> 0090 (an earlier withdrawn 0089 existed in history); start-without-authorization negative test added; U1-U4 CloudShell block and demo/production DB separation proposal written (docs/aws).
+- 2026-11-11: possible-duplicates merge form now opens in one group only (R6); import workbook zip-bomb guard and caregiver-permission preview check added (R11, pending 0092); Feature Test Plan, security and compatibility review written; clean-clone gates and CI green at the head (see the TEST release checklist).
