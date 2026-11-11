@@ -1,7 +1,6 @@
 // R11 bulk import over HTTP (pending migration 0092, applied on top of 0001-0088) through the real Lambda handler and a real disposable PostgreSQL.
 // SYNTHETIC data only.
 import { readFileSync } from "node:fs";
-import ExcelJS from "exceljs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, seedWorld, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { MemoryEvidenceStore } from "../src/evidence";
@@ -52,13 +51,14 @@ describe("POST /v1/imports/{kind}", () => {
     expect(await count("caregiver_records")).toBe(before + 1);
   });
 
-  it("reads an .xlsx upload the same way", async () => {
-    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet("c");
-    ws.addRow(["first_name", "last_name", "city"]); ws.addRow(["Xena", "Sheet", "Springfield"]);
-    const bytes = Buffer.from(await wb.xlsx.writeBuffer());
-    const r = await call(w.ownerA, "clients", { organizationId: w.orgA, fileName: "clients.xlsx", contentBase64: b64(bytes), confirm: true });
-    expect(r.status).toBe(200);
-    expect(r.body.import.created).toBe(1);
+  it("refuses XLSX and renamed archives without writing clients", async () => {
+    const before = await count("clients");
+    for (const fileName of ["clients.xlsx", "clients.csv"]) {
+      const r = await call(w.ownerA, "clients", { organizationId: w.orgA, fileName, contentBase64: b64("PK archive"), confirm: true });
+      expect(r.status).toBe(422);
+      expect(r.body.error.message).toMatch(/Upload a \.csv file/);
+    }
+    expect(await count("clients")).toBe(before);
   });
 
   it("malformed files are 422 with a plain message and nothing is written; a bad type is 404; bad base64 is 400", async () => {

@@ -82,12 +82,12 @@ export function ImportButton({ kind, onDone }: { kind: Kind; onDone?: (text: str
       <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center font-semibold text-og-accent underline md:min-h-[32px]">{copy.button}</button>
       <Drawer open={open} title={copy.title} onClose={close}>
         <div className="space-y-3 text-sm text-slate-800">
-          <p>Choose a CSV or Excel (.xlsx) file. Nothing is created until you check the file and then confirm.</p>
+          <p>Choose a CSV file (up to 2 MB and 2,000 rows). Nothing is created until you check the file and then confirm.</p>
           <p>{copy.columns}</p>
           <Button type="button" variant="secondary" onClick={downloadTemplate}>Download the template</Button>
           <label className="block font-semibold text-og-ink">
             File
-            <input type="file" accept=".csv,.xlsx,text/csv" className="mt-1 block min-h-[44px] w-full text-sm"
+            <input type="file" accept=".csv,text/csv" className="mt-1 block min-h-[44px] w-full text-sm"
               onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); setError(null); }} />
           </label>
           <Button type="button" disabled={!file || busy} onClick={() => void send(false)}>{busy && !result ? "Checking…" : "Check the file"}</Button>

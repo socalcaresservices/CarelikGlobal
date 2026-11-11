@@ -5,11 +5,11 @@ Read-only: compares two CloudFormation templates (JSON files) and exits 0 only i
   python3 diff_gate_ux.py --live LIVE.json --new NEW.json [--expect pre|post]
       LIVE.json = `aws cloudformation get-template --stack-name Ogevia-prod-ServiceVerificationApi --template-stage Original --query TemplateBody --output json`
       NEW.json  = the synthesized Ogevia-prod-ServiceVerificationApi.template.json
-      --expect pre  (default) the 5 new routes must be ADDED (the release is not deployed yet)
+      --expect pre  (default) the 3 new routes must be ADDED (the release is not deployed yet)
       --expect post           NO difference at all (the release is deployed); used after the deployment
 
 ALLOW-LIST for --expect pre:
-  * exactly these 5 AWS::ApiGatewayV2::Route resources are ADDED (by RouteKey), nothing else is added or removed;
+  * exactly these 3 AWS::ApiGatewayV2::Route resources are ADDED (by RouteKey), nothing else is added or removed;
   * the Lambda function whose logical id starts with `Handler` may change ONLY Properties.Code.S3Key and Metadata `aws:asset:path` (the new code asset);
   * everything else is identical: every other resource (IAM, permissions, integrations, authorizer, log groups, events), Parameters, Outputs, Conditions, Mappings,
     Rules, Transform, Description. AWS::CDK::Metadata is ignored; the value of the `ogevia:deployment-status` tag is ignored (it carries the approval reference).
@@ -21,8 +21,6 @@ NEW_ROUTES = {
     "POST /v1/caregivers/{caregiverRecordId}/signin-override",
     "GET /v1/signin-overrides",
     "POST /v1/imports/{kind}",
-    "GET /v1/staff/duplicates",
-    "POST /v1/staff/{profileId}/merge",
 }
 SECTIONS = ["AWSTemplateFormatVersion", "Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform"]
 
@@ -77,7 +75,7 @@ def main():
         else:
             bad.append("UNEXPECTED added resource %s (%s %s)" % (k, r.get("Type"), rk or ""))
     if a.expect == "pre" and added_keys != NEW_ROUTES:
-        bad.append("expected the 5 new routes to be added; missing: %s" % sorted(NEW_ROUTES - added_keys))
+        bad.append("expected the 3 new routes to be added; missing: %s" % sorted(NEW_ROUTES - added_keys))
     if a.expect == "post" and added:
         bad.append("expected NO difference after deployment, but %d resources would be added" % len(added))
     changed_handler = []

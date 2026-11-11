@@ -11,7 +11,7 @@
 #   REPO=... SNAPSHOT_ID=<id> bash OPERATOR_TEST_DB.sh apply   S5: apply 0090, 0091, 0092, 0093, 0094 in that order, each in its own transaction, then VERIFY expect=present
 #   bash OPERATOR_TEST_DB.sh final                             S10: read-only closing read
 #   REPO=... SNAPSHOT_ID=<id> bash OPERATOR_TEST_DB.sh rollback   only after a stop condition: down scripts 0094 -> 0090 (web and API rolled back first)
-# Never touches ogevia_prd. Never starts or stops a host. Never prints a secret. Connects to ogevia_sv_test only (hard-coded, checked). Writes no ledger row (the files stay outside the ledger).
+# Never touches ogevia_prd. Never starts or stops a host. Never prints a secret. Connects to ogevia_sv_test only (hard-coded, checked). Records each migration checksum in the ledger in the same transaction.
 set +x +H
 umask 077
 export AWS_PAGER="" AWS_DEFAULT_REGION=us-west-2
@@ -28,7 +28,7 @@ declare -A DOWN_SHA=( [0090_caregiver_signin_override]=75cc1db8b9af4f4d61e909f8e
 PEND_UP_SET=dc971a797a07aa4b2d1bfe9b6a5aa60f987d19380983aec126ceefefb4faca06
 PEND_DOWN_SET=b0bb79933c75defa1a680ccafe73ad088a4f45418024a9c5b6dd40e633660b44
 SET88_SHA=049c52cb3cbc0c90efad7003967d8bfe8297cd771d2d471d5b42506a889e372c         # all 88 released migration files (unchanged since the 0088 release)
-VSQL_SHA=33b7d540e944bb88767093a961d957b00e99014d1557f068312d85e28a15c3ea
+VSQL_SHA=f8d574c4f5f9025315383f40b6bb1e2c117dc829d314cba1c9490e863557d66c
 IID_EXPECT=i-0ce8db2d7e5839dd5; ADMIN_SG=sg-00e01e2ca80442c1f; APP_SG=sg-064ffce3bcbe8eb3b; RDS_SG=sg-00530a1f4f7648e65     # last recorded values: the read-only checks U1/U2 must confirm them; the script stops if live state differs
 RDS_ID=ogevia-prod-postgres; DB=ogevia_sv_test; ACCOUNT=300094796789; TAG=ogevia-db-admin-temp; LOCAL_PORT=15432
 WIN_START_TXT="${OGEVIA_WINDOW_START:-}"; WIN_END_TXT="${OGEVIA_WINDOW_END:-}"
@@ -105,12 +105,13 @@ case "$MODE" in probe|snapshot|apply|final) need_window;; esac
 for c in aws jq; do command -v "$c" >/dev/null 2>&1 || stop "missing tool: $c"; done
 [[ "$(aws sts get-caller-identity --query Account --output text)" == "$ACCOUNT" ]] || stop "wrong AWS account"
 
-snapshot_check() {   # read-only: the pre-ux snapshot must exist, be available, encrypted, belong to this instance; "fresh" (migrate/snapshot) also requires age < 4 h
+snapshot_check() {
+  local SNAPSHOT_FRESHNESS="${1:-}"   # read-only: the pre-ux snapshot must exist, be available, encrypted, belong to this instance; "fresh" (migrate/snapshot) also requires age < 4 h
   [[ "${SNAPSHOT_ID:-}" == "$RDS_ID-pre-ux-"* ]] || stop "set SNAPSHOT_ID to the id printed by the snapshot mode ($RDS_ID-pre-ux-...)"
   local d; d=$(aws rds describe-db-snapshots --db-snapshot-identifier "$SNAPSHOT_ID" --query 'DBSnapshots[0].[Status,Encrypted,DBInstanceIdentifier,SnapshotCreateTime]' --output text) || stop "snapshot not found"
   echo "snapshot: $SNAPSHOT_ID  $d"
   set -- $d; [[ "$1" == available && "$2" == True && "$3" == "$RDS_ID" ]] || stop "snapshot is not available/encrypted/for $RDS_ID"
-  if [[ "${1:-}" == fresh ]]; then local t; t=$(date -u -d "$4" +%s 2>/dev/null) || stop "cannot read the snapshot time"; [[ $(( $(date -u +%s) - t )) -lt 14400 ]] || stop "snapshot is older than 4 hours"; fi
+  if [[ "$SNAPSHOT_FRESHNESS" == fresh ]]; then local t; t=$(date -u -d "$4" +%s 2>/dev/null) || stop "cannot read the snapshot time"; [[ $(( $(date -u +%s) - t )) -lt 14400 ]] || stop "snapshot is older than 4 hours"; fi
 }
 
 if [[ "$MODE" == snapshot ]]; then
@@ -173,7 +174,7 @@ GOT=$(psql -X -At -d "$DB" -c "select current_database()") || stop "connection t
 echo "guard ok: $GOT"
 
 ro() { PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000" psql -X -At -d "$DB" -c "begin read only;" -c "set local role ogevia_readonly;" -c "$1" -c "rollback;" 2>&1 | grep -v -E '^(BEGIN|ROLLBACK|SET)$'; }
-state() { LEDGER=$(ro "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations"); echo "state: ledger=$LEDGER (pending migrations are outside the ledger, so it must stay $EXPECT_LEDGER)"; }
+state() { LEDGER=$(ro "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations"); echo "state: ledger=$LEDGER (expected baseline $EXPECT_LEDGER; applied UX ledger 93/0094)"; }
 # VERIFY_0090_0094.sql: one row per check, name|t|detail; a row containing |f| fails. expect=absent before, expect=present after.
 vrun() { local want="$1" out n bad
   out=$(PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=60000" psql -X -At -F '|' -d "$DB" -v expect="$want" -c "begin read only;" -f "$VSQL" -c "rollback;" 2>&1 | grep -v -E '^(BEGIN|ROLLBACK|SET)$')
@@ -183,20 +184,31 @@ vrun() { local want="$1" out n bad
   return 0
 }
 before_ok() { state; [[ "$LEDGER" == "$EXPECT_LEDGER" ]] || stop "ledger is $LEDGER, expected $EXPECT_LEDGER: TEST is not the baseline this release was prepared for"; vrun absent || stop "some of the new objects already exist, or the baseline differs; do NOT apply"; }
-after_ok()  { state; [[ "$LEDGER" == "$EXPECT_LEDGER" ]] || { echo "!!! ledger changed to $LEDGER"; return 1; }; vrun present || { echo "!!! POST-STATE DOES NOT MATCH"; return 1; }; echo "POST-STATE MATCHES"; }
-guarded_psql() { # $1 = file; ONE transaction as ogevia_owner; stops on the first error
-  psql -X -v ON_ERROR_STOP=1 -1 -d "$DB" -c "set local role ogevia_owner" -f "$1" 2>&1 | sed -E 's#postgres://[^ ]*#postgres://<redacted>#g'; return "${PIPESTATUS[0]}"; }
+after_ok()  { state; [[ "$LEDGER" == "93/0094" ]] || { echo "!!! ledger changed to $LEDGER"; return 1; }; vrun present || { echo "!!! POST-STATE DOES NOT MATCH"; return 1; }; echo "POST-STATE MATCHES"; }
+guarded_psql() { # file, migration stem, apply|rollback; SQL and ledger change commit together
+  local file="$1" stem="$2" direction="$3" version="${2:0:4}" checksum="${UP_SHA[$2]}"
+  local before after
+  before="select pg_advisory_xact_lock(4317001);"
+  if [[ "$direction" == apply ]]; then
+    before+=" do \$\$ begin if exists (select 1 from ogevia_meta.schema_migrations where version = '$version') then raise exception 'Migration already recorded; do not reapply'; end if; end \$\$;"
+    after="insert into ogevia_meta.schema_migrations(version,name,checksum) values ('$version','$stem.sql','$checksum');"
+  else
+    before+=" do \$\$ begin if not exists (select 1 from ogevia_meta.schema_migrations where version = '$version' and checksum = '$checksum' and name = '$stem.sql') then raise exception 'Missing or changed migration ledger row'; end if; end \$\$;"
+    after="delete from ogevia_meta.schema_migrations where version = '$version';"
+  fi
+  psql -X -v ON_ERROR_STOP=1 -1 -d "$DB" -c "$before" -c "set local role ogevia_owner" -f "$file" -c "reset role" -c "$after" 2>&1 | sed -E 's#postgres://[^ ]*#postgres://<redacted>#g'; return "${PIPESTATUS[0]}";
+}
 
 case "$MODE" in
   probe) before_ok ;;
   final) state; vrun present || true ;;
   apply)
     before_ok
-    confirm "APPLY 0090-0094" "About to apply, in this order and each in its own transaction, to $DB only: ${MIGS[*]}. Snapshot $SNAPSHOT_ID is verified. No ledger row is written. Window ends $WIN_END_TXT UTC."
+    confirm "APPLY 0090-0094" "About to apply, in this order and each in its own transaction, to $DB only: ${MIGS[*]}. Snapshot $SNAPSHOT_ID is verified. Each checksum is recorded atomically in the migration ledger. Window ends $WIN_END_TXT UTC."
     DONE=()
     for n in "${MIGS[@]}"; do
       echo "--- applying $n (sha256 ${UP_SHA[$n]:0:16}...)"
-      if guarded_psql "$REPO/infra/aws/db/pending/migrations/$n.sql"; then DONE+=("$n"); else
+      if guarded_psql "$REPO/infra/aws/db/pending/migrations/$n.sql" "$n" apply; then DONE+=("$n"); else
         echo "!!! $n FAILED and its transaction was rolled back. Applied before it: ${DONE[*]:-none}."
         echo "!!! Do not continue. Report to the owner. If anything in the applied list must be undone, use the rollback mode (newest first)."; exit 3; fi
     done
@@ -205,7 +217,7 @@ case "$MODE" in
     echo "ROLLBACK drops caregiver_signin_overrides, import_batches, staff_merge_links WITH their rows (0090, 0092, 0093 are BACKUP REQUIRED: the snapshot is $SNAPSHOT_ID). Records created by imports and merges stay. Merged staff profiles stay inactive."
     confirm "ROLLBACK 0094-0090" "Only after a stop condition, and web and API have been rolled back first."
     for n in 0094_standard_document_types 0093_staff_duplicates 0092_bulk_import 0091_caregiver_client_labels 0090_caregiver_signin_override; do
-      echo "--- rolling back $n"; guarded_psql "$REPO/infra/aws/db/pending/rollback/$n.down.sql" || stop "rollback of $n failed; do not retry; report"
+      echo "--- rolling back $n"; guarded_psql "$REPO/infra/aws/db/pending/rollback/$n.down.sql" "$n" rollback || stop "rollback of $n failed; do not retry; report"
     done
     state; vrun absent || stop "after the rollback the verification does not show the baseline: report" ;;
 esac

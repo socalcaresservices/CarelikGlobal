@@ -24,6 +24,7 @@ describe("import drawer", () => {
     const dialog = await open();
     expect(within(dialog).getByRole("button", { name: "Check the file" })).toBeDisabled();
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    expect(within(dialog).getByLabelText("File")).toHaveAttribute("accept", ".csv,text/csv");
     choose(dialog, file());
     fireEvent.click(within(dialog).getByRole("button", { name: "Check the file" }));
     const result = await within(dialog).findByTestId("import-result", undefined, { timeout: 15000 });

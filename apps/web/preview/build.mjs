@@ -1,6 +1,7 @@
 // PREVIEW ONLY. Turns a recording into ONE self-contained html file: the real app built by vite (all JS and CSS inlined) plus the replay data.
 //   node preview/build.mjs preview-dist/recording.json "what changed 1" "what changed 2" ...
 // The file name carries the commit; no server and no network are needed to open it.
+import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -13,7 +14,8 @@ if (!recordingPath) { console.error("usage: node preview/build.mjs <recording.js
 const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8" }).trim();
 const sha = git("rev-parse", "HEAD");
 const dirty = git("status", "--porcelain", "--untracked-files=no") !== "";
-execFileSync("npx", ["vite", "build", "--config", "vite.preview.config.ts", "--logLevel", "warn"], { cwd: root, stdio: "inherit" });
+const vite = join(dirname(createRequire(import.meta.url).resolve("vite/package.json")), "bin/vite.js");
+execFileSync(process.execPath, [vite, "build", "--config", "vite.preview.config.ts", "--logLevel", "warn"], { cwd: root, stdio: "inherit" });
 
 const app = join(root, "preview-dist/app");
 let html = readFileSync(join(app, "index.html"), "utf8");

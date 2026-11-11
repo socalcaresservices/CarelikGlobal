@@ -49,3 +49,12 @@ select 'permission caregivers.signin_override ' || :'expect', case when :'expect
        else (select count(*) from ogevia.role_permissions where permission_key = 'caregivers.signin_override') = 2 end, ''
 union all
 select 'ledger unchanged (pending migrations are outside the ledger): 88 rows, max 0088', (select count(*) = 88 and max(version) = '0088' from ogevia_meta.schema_migrations), '';
+
+-- Applied files are recorded with the same names/checksums the normal runner uses.
+with expected(version, name, checksum) as (values
+  ('0090', '0090_caregiver_signin_override.sql', '963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54'),
+  ('0091', '0091_caregiver_client_labels.sql', '673dea984d97433cad1df663a890233acb2d240eb87abb8434db655d9a7596f3'),
+  ('0092', '0092_bulk_import.sql', '2dc18c125b459750431981dad2dd257630c6864e5ed41102770e6d9d1f992121'),
+  ('0093', '0093_staff_duplicates.sql', '952e1c9176ecee8b9475fd45f923fdff175bf78de14341a61b46e49d9f28affa'),
+  ('0094', '0094_standard_document_types.sql', 'b0a28f483462a826aac0c9bb1e8e7b4ad8d26bfea80156668ab80874508f8d91')
+) select 'ledger_' || e.version, case when :'expect' = 'present' then exists (select 1 from ogevia_meta.schema_migrations m where m.version=e.version and m.name=e.name and m.checksum=e.checksum) else not exists (select 1 from ogevia_meta.schema_migrations m where m.version=e.version) end, e.name from expected e;

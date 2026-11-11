@@ -99,7 +99,7 @@ export interface OgeviaEnvironmentConfig {
    * Release switches: a feature whose API routes are added to this environment's API Gateway only when the owner has approved its release there.
    * staffDuplicates (pending migration 0093, infra/aws/db/pending): R6 duplicate-staff report and merge-review. OFF everywhere until the owner approves its release; adds
    * GET /v1/staff/duplicates and POST /v1/staff/{profileId}/merge only.
-   * bulkImport (pending migration 0092, infra/aws/db/pending): R11 import of people and clients from a CSV/XLSX file. OFF everywhere until the owner approves its release; turning it on
+   * bulkImport (pending migration 0092, infra/aws/db/pending): R11 import of people and clients from a CSV file. OFF everywhere until the owner approves its release; turning it on
    * without applying 0092 would make the route fail. Adds POST /v1/imports/{kind} only.
    * signInOverride (pending migration 0090, infra/aws/db/pending): the administrator override for a caregiver who has not signed in yet. OFF everywhere until the owner approves its release in
    * that environment (demo first); with it off the two routes are not in the API at all.
@@ -187,7 +187,7 @@ const PROD: OgeviaEnvironmentConfig = {
     region: OGEVIA_REGION,
     terminationProtection: true,
     logRetention: RetentionDays.ONE_YEAR,
-    features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: true },
+    features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: false },
     auth: {
       appClientId: "1i27abbina08fvg1i9u8vprgo9",
       // VERIFIED in repo: README.md APP_URL and organization-provider.tsx.

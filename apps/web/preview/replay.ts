@@ -71,10 +71,11 @@ export function createPreviewFetch(data: PreviewData, persona: string, now: () =
       }
       return json(200, { visit: null });
     }
-    // Preview-only stand-ins for two actions whose result depends on what the person picks. The import check reads the chosen CSV in the browser (an .xlsx gets a sample result);
+    // Preview-only stand-ins for two actions whose result depends on what the person picks. The import check reads the chosen CSV in the browser (CSV only);
     // a merge is accepted and the duplicates list is then empty. Nothing is stored anywhere.
     if (method === "POST" && /^\/v1\/imports\/(people|clients)$/.test(path)) {
       const body = JSON.parse(String(init?.body ?? "{}")) as { confirm?: boolean; contentBase64?: string; fileName?: string };
+      if (!body.fileName?.toLowerCase().endsWith(".csv") || (body.contentBase64 && atob(body.contentBase64).startsWith("PK"))) return json(422, { error: { code: "invalid_file", message: "Upload a .csv file. Save Excel workbooks as CSV first." } });
       const kind = path.endsWith("clients") ? "clients" : "people";
       let total = 3, dup = 1; const bad: Array<{ row: number; status: "invalid" | "duplicate"; message: string }> = [];
       if (body.fileName?.toLowerCase().endsWith(".csv") && body.contentBase64) {

@@ -64,6 +64,21 @@ describe("0093 duplicate staff", () => {
     await expect(db.admin.query("delete from ogevia.staff_merge_links where merged_profile_id = $1", [dup])).rejects.toThrow();
   });
 
+  it("preserves history and never redirects caregiver records to an office profile", async () => {
+    const keep = await staff("History Twin"), dup = await staff("history twin");
+    const before = (await db.admin.query("select id, action, entity_id, actor_user_id from ogevia.audit_events where entity_id = $1 order by id", [dup])).rows;
+    // The schema must not acquire a shift/visit/assignment FK to staff_profiles silently.
+    const refs = (await db.admin.query(`select distinct conrelid::regclass::text as table_name from pg_constraint
+      where contype = 'f' and confrelid = 'ogevia.staff_profiles'::regclass`)).rows;
+    expect(refs.map((r) => r.table_name)).toEqual(["ogevia.staff_merge_links"]);
+    const caregivers = (await db.admin.query("select * from ogevia.caregiver_records order by id")).rows;
+    await merge(keep, dup);
+    expect((await db.admin.query("select id, action, entity_id, actor_user_id from ogevia.audit_events where entity_id = $1 and action <> 'staff.merged' order by id", [dup])).rows).toEqual(before);
+    expect((await db.admin.query("select * from ogevia.caregiver_records order by id")).rows).toEqual(caregivers);
+    const listed = await call(w.ownerA, "select * from ogevia_api.list_staff($1)", [w.orgA]);
+    expect(listed.find((r) => r.profile_id === dup)).toMatchObject({ status: "inactive" });
+  });
+
   it("refusals: unrelated people, a record with an invitation or sign-in, the same record, a short reason, another agency's record, and a person without staff rights", async () => {
     const x = await staff("Una Unrelated"), y = await staff("Vic Different");
     await expectPgError(merge(x, y), "OGC09", /do not match/);
