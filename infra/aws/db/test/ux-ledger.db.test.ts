@@ -57,3 +57,16 @@ it("records checksums atomically, refuses reapply, and removes only rolled-back 
   expect((await db.admin.query("select count(*)::int n from ogevia_meta.schema_migrations")).rows[0].n).toBe(88);
   expect(run(stems[0]!, "rollback").status).not.toBe(0);
 });
+it("the operator rollback handles a release stopped after only two files applied", async () => {
+  const stems = readdirSync(new URL("migrations/", pending)).filter((f) => /^009[0-4]_.*\.sql$/.test(f)).sort().map((f) => f.slice(0, -4));
+  for (const stem of stems.slice(0, 2)) { const r = run(stem, "apply"); expect(r.status, r.stderr + r.stdout).toBe(0); }
+  const array = stems.map((s) => `[${s}]=${createHash("sha256").update(readFileSync(new URL(`migrations/${s}.sql`, pending))).digest("hex")}`).join(" ");
+  const start = script.indexOf("    for n in 0094_standard_document_types");
+  const loop = script.slice(start, script.indexOf("    state; vrun absent", start));
+  const url = new URL(ADMIN_URL);
+  const repo = fileURLToPath(new URL("../../../../", import.meta.url)).replaceAll("\\", "/");
+  const r = spawnSync("bash", ["-c", `declare -A UP_SHA=(${array}); DB="$PGDATABASE"; stop() { echo "$*"; exit 2; }; ro() { psql -X -At -d "$DB" -c "$1"; }; ${fn}\n${loop}`], { encoding: "utf8", env: { ...process.env, PGHOST: url.hostname, PGPORT: url.port || "5432", PGUSER: decodeURIComponent(url.username), PGPASSWORD: decodeURIComponent(url.password), PGDATABASE: db.name, REPO: repo } });
+  expect(r.status, r.stderr + r.stdout).toBe(0);
+  expect((await db.admin.query("select count(*)::int n from ogevia_meta.schema_migrations")).rows[0].n).toBe(88);
+  expect((await db.admin.query("select to_regclass('ogevia.caregiver_signin_overrides') r")).rows[0].r).toBeNull();
+});

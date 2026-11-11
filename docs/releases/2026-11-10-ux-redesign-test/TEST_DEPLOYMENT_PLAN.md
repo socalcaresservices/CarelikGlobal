@@ -32,7 +32,7 @@ No RDS instance snapshot is part of the proposed commands: it would include prod
 
 ## Migration ledger
 
-The older plan intentionally kept pending migrations outside the ledger to preserve old pinned release packages. That would let later promotion reapply the same SQL. Fixed in the existing operator transaction: advisory lock → refuse an existing version → apply as `ogevia_owner` → reset role → insert version/original filename/SHA-256 → commit. A ledger failure rolls back the schema change too. Down SQL and deletion of its matching checksum row also commit together. Read-only verification now checks all five ledger checksums.
+The older plan intentionally kept pending migrations outside the ledger to preserve old pinned release packages. That would let later promotion reapply the same SQL. Fixed in the existing operator transaction: advisory lock → refuse an existing version → apply as `ogevia_owner` → reset role → insert version/original filename/SHA-256 → commit. A ledger failure rolls back the schema change too. Rollback skips versions never applied, so an interrupted two-file release is recoverable; final verification now returns failure rather than swallowing a mismatch. Down SQL and deletion of its matching checksum row also commit together. Read-only verification now checks all five ledger checksums.
 
 Expected ledger: before **88/0088**, after **93/0094**, after full rollback **88/0088**. 0089 was withdrawn; do not resurrect its old SQL. Future normal-runner promotion must use the identical 0090–0094 filenames/bytes and explicitly reserve the withdrawn 0089 slot while updating the contiguous-set expectations. Until then the normal runner refuses unknown UX ledger versions, so it cannot silently reapply them.
 

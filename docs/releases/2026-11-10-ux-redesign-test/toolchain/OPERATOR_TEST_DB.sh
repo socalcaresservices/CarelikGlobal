@@ -200,7 +200,7 @@ case "$MODE" in
     backup_check
     echo "OGEVIA_TEST_BACKUP=$OGEVIA_TEST_BACKUP" ;;
   probe) before_ok ;;
-  final) state; vrun present || true ;;
+  final) after_ok ;;
   apply)
     before_ok
     confirm "APPLY 0090-0094" "About to apply, in this order and each in its own transaction, to $DB only: ${MIGS[*]}. TEST logical backup $OGEVIA_TEST_BACKUP is verified. Each checksum is recorded atomically in the migration ledger. Window ends $WIN_END_TXT UTC."
@@ -216,6 +216,9 @@ case "$MODE" in
     echo "ROLLBACK drops caregiver_signin_overrides, import_batches, staff_merge_links WITH their rows (0090, 0092, 0093 are BACKUP REQUIRED: the TEST backup is $OGEVIA_TEST_BACKUP). Records created by imports and merges stay. Merged staff profiles stay inactive."
     confirm "ROLLBACK 0094-0090" "Only after a stop condition, and web and API have been rolled back first."
     for n in 0094_standard_document_types 0093_staff_duplicates 0092_bulk_import 0091_caregiver_client_labels 0090_caregiver_signin_override; do
+      if [[ "$(ro "select count(*) from ogevia_meta.schema_migrations where version = '${n:0:4}'")" == 0 ]]; then
+        echo "--- $n not recorded; nothing to roll back"; continue
+      fi
       echo "--- rolling back $n"; guarded_psql "$REPO/infra/aws/db/pending/rollback/$n.down.sql" "$n" rollback || stop "rollback of $n failed; do not retry; report"
     done
     state; vrun absent || stop "after the rollback the verification does not show the baseline: report" ;;
