@@ -12,7 +12,7 @@ Evidence rules: link or paste real command output and screenshots. Never include
 | Field | Value |
 |---|---|
 | Release ID | `2026-11-10-ux-redesign-test` |
-| Commit SHA to deploy (full 40 characters) | **NOT SET: the owner states it in writing at Phase C (C0).** **Proposed release commit `69b122fff193c76a624bed31cdd7e6d71b4e5359`** (adds the dependency overrides and the TEST-only switches to the code verified on a clean clone at `d7f7147`); CI for it: see `RELEASE_READINESS.md`. Not authorized by the owner yet |
+| Commit SHA to deploy (full 40 characters) | **NOT SET: the owner states it in writing at Phase C (C0).** **Proposed release commit `7f9483d39690ae94db2710465d6995cd0b82b271`** (adds the dependency overrides and the TEST-only switches to the code verified on a clean clone at `d7f7147`); CI run 431 on it: success. Not authorized by the owner yet |
 | Branch / pull request | `claude/ogevia-ux-audit-redesign-w36cov`; draft PR #108 to `main` (never merged) |
 | Prepared by (name, date) | Claude Code (AI assistant) for the owner, 2026-11-10. Not a human sign-off. |
 | Change classification (tick all) | ☒ feature ☐ bug fix ☒ migration ☒ API ☒ dashboard ☒ report ☒ scheduling ☐ authorization ☒ visits/verification ☒ availability/matching ☒ user admin ☐ notifications ☒ infrastructure (route switches, Lambda bundle) ☐ web only |

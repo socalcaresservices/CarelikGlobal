@@ -5,7 +5,7 @@
 ## 1. What the owner must state in writing (the Phase C statement)
 | Field | Value |
 |---|---|
-| Release commit (full 40 characters) | **Proposed: `69b122fff193c76a624bed31cdd7e6d71b4e5359`** (branch `claude/ogevia-ux-audit-redesign-w36cov`). It contains: the redesign, pending migrations 0090 to 0094 (files only), the TEST switches ON, and the dependency overrides (`a709eb1`). If the owner drops any piece, the SHA changes and CI must be read again. |
+| Release commit (full 40 characters) | **Proposed: `7f9483d39690ae94db2710465d6995cd0b82b271`** (branch `claude/ogevia-ux-audit-redesign-w36cov`). It contains: the redesign, pending migrations 0090 to 0094 (files only), the TEST switches ON, the dependency overrides (`a709eb1`) and the route-parity test fix. CI run 431: success (validate, harness, postgres). Commits made after it are documents only and are NOT deployed (check out this SHA exactly). If the owner drops any piece, the SHA changes and CI must be read again. |
 | Target | TEST only: stacks `Ogevia-prod-*`, database `ogevia_sv_test` (banner "TEST — synthetic data only") |
 | Operator (who runs the commands) | **To be named by the owner.** Claude Code cannot run AWS commands. (The 0088 release used a named operator; do not assume the same person.) |
 | Window | To be stated by the owner (start and end, Pacific). Avoid the daily demo hours; the seed script refuses to run after 21:00 Pacific |
