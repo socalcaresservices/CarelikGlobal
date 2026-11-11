@@ -6,7 +6,7 @@
 |---|---|
 | **Application commit (the proposed application commit; NOT approved for deployment)** | `f4316c5f1a9a844dc7749152243271cee003e94c` (branch `claude/ogevia-ux-audit-redesign-w36cov`; CI run 436: success; final continuation head still needs its own green run). The continuation after it changes tests/release tooling/docs, not app behavior. |
 | Target | TEST only: stacks `Ogevia-prod-*`, database `ogevia_sv_test`. Never `Ogevia-prd-*` or `ogevia_prd` |
-| `OPERATOR_TEST_DB.sh` sha256 | `dfff09905e3919cef001b770ccd84fb7d331b4882bc02ca2fbdaae56cef1d4bf` |
+| `OPERATOR_TEST_DB.sh` sha256 | `83b756d8b4fdb0425afefa72033ad0bd7a9abe0a878f79ebd904b1f164f994a2` |
 | `OPERATOR_TEST_DEPLOY.sh` sha256 | `76167deb03cbe46e69d406eab55bd2a3a3db7817efd612cba2210a33f2a109de` |
 | `diff_gate_ux.py` sha256 | `e66aff283370a447a22f143a20c3b1aeb6fcdf093bcaea2b82b46ce57a836fd7` |
 | `VERIFY_0090_0094.sql` sha256 | `0f78a265376152a4f14aea523bce10d86398966dcd6d268a298c81c0365cd1ab` |

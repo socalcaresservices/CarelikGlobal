@@ -91,6 +91,7 @@ JS
     unset APP_PASSWORD
     psql -X --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -v ux_ready=true -v owner_sub="$OWNER_SUB" -v manager_sub="$MANAGER_SUB" -v caregiver_sub="$CAREGIVER_SUB" -f "$REPO/infra/aws/db/deploy/02_seed_synthetic_test_slice.sql"
     psql -X --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -v org_slug=ogevia-test-slice -v caregiver_code=TEST-CG-01 -f "$REPO/infra/aws/db/deploy/07_seed_ux_demo_visits.sql"
+    [[ "$(Q ogevia_sv_test "select exists (select 1 from ogevia.shifts where organization_id='7e570000-0000-4000-8000-000000000001' and status='scheduled')")" == t ]] || { echo 'STOP: no synthetic demo shift was created; API/web remain unmodified'; exit 2; }
   fi
   [[ "$(Q ogevia_sv_test "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations")" == 93/0094 ]] || { echo 'STOP: wrong ledger'; exit 2; }
   EXPECTED=$(for f in "$REPO"/infra/aws/db/migrations/*.sql "$REPO"/infra/aws/db/pending/migrations/009[0-4]_*.sql; do n=$(basename "$f"); printf '%s|%s|%s\n' "${n:0:4}" "$n" "$(sha256sum "$f" | cut -c1-64)"; done)

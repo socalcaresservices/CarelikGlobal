@@ -1,3 +1,5 @@
+> Superseded for the current isolated TEST cutover: use docs/aws/DEMO_PROD_DATABASE_SEPARATION_PROPOSAL.md. The shared-instance commands below are retained as historical release evidence, not the current execution path. No deployment is authorized by either document.
+
 # Exact CloudShell commands — TEST preparation only
 
 **Only section 1 is read-only and ready to run now. Section 2 is a prepared future sequence, not authorization to execute it. Nothing here was run against AWS.** CloudShell: us-west-2, account 300094796789.

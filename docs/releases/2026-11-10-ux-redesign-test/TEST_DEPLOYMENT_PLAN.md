@@ -1,3 +1,5 @@
+> Superseded for the current isolated TEST cutover: use docs/aws/DEMO_PROD_DATABASE_SEPARATION_PROPOSAL.md. The shared-instance commands below are retained as historical release evidence, not the current execution path. No deployment is authorized by either document.
+
 # TEST deployment preparation — not executed
 
 Current application: `f4316c5f1a9a844dc7749152243271cee003e94c`, continuing draft PR #108. Later changes in this continuation are test/release tooling and documentation. No merge, deploy, AWS migration, IAM change or production-data access has occurred.

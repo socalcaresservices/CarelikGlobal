@@ -25,6 +25,12 @@ it("seeds distinct synthetic sign-ins and an approved caregiver through the exis
   expect((await client.query("select count(*)::int n from ogevia.caregiver_work_approvals where source='approval'")).rows[0].n).toBe(1);
   expect((await client.query("select count(*)::int n from ogevia.document_types")).rows[0].n).toBe(0);
   expect((await client.query("select role from ogevia.organization_memberships m join ogevia.app_users u on u.id=m.user_id where u.cognito_sub=$1", [subs.owner])).rows[0].role).toBe("organization_owner");
+  // Make the existing time-sensitive demo seed deterministic at local noon.
+  // Only this disposable fixture's timezone changes; no production clock is mocked.
+  const offset = Number((await client.query("select extract(hour from now() at time zone 'UTC')::int - 12 as n")).rows[0].n);
+  await client.query("update ogevia.organizations set timezone=$1", [`Etc/GMT${offset >= 0 ? "+" : ""}${offset}`]);
+  execFileSync("psql", [url(), "-X", "-v", "ON_ERROR_STOP=1", "-v", "org_slug=ogevia-test-slice", "-v", "caregiver_code=TEST-CG-01", "-f", fileURLToPath(new URL("../deploy/07_seed_ux_demo_visits.sql", import.meta.url))], { stdio: ["ignore", "pipe", "pipe"] });
+  expect((await client.query("select count(*)::int n from ogevia.shifts where status='scheduled'")).rows[0].n).toBe(2);
 });
 it("refuses a second seed rather than changing an existing agency", async () => {
   const before = (await client.query("select count(*)::int n from ogevia.audit_events")).rows[0].n;
