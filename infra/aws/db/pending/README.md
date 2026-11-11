@@ -1,3 +1,5 @@
+> Current UX release rule (owner decision, 2026-11-10): do not apply 0090–0094 as untracked SQL. The existing UX operator script records version, original filename and SHA-256 in the migration ledger in the same transaction as each file. It checks/removes that row atomically on rollback. Expected applied ledger is **93/0094**, because 0089 is withdrawn; the baseline is 88/0088. A future promotion must preserve these exact filenames/bytes and represent withdrawn 0089 explicitly when updating the normal runner's contiguous set. Until then that runner refuses the unknown applied UX versions; it cannot silently reapply them. Duplicate merging stays OFF in TEST and production. Import is CSV only.
+
 # Pending migrations
 
 Written and tested, but **not part of any release**. They are not in `migrations/`, so `db:migrate`, the release packages (which pin the exact `0001-0085` set by hash and count) and `createTestDb()` do not see them.

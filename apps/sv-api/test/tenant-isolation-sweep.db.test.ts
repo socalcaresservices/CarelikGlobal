@@ -309,7 +309,7 @@ const SWEEP_ROUTES = ORG_ID_ROUTES.filter(hasEntityOrOrg);
 // Routes about the caller alone (no organization and no id): nothing of org A can be named.
 const SELF_ONLY = ORG_ID_ROUTES.filter((k) => !hasEntityOrOrg(k));
 
-const norm = (x: string) => x.replace(/\d{4}-\d{2}-\d{2}T[\d:.]+(?:\+\d{2}:\d{2}|Z)/g, "<time>");
+const norm = (x: string) => x.replace(/\d{4}-\d{2}-\d{2}T[\d:.]+(?:[+-]\d{2}:\d{2}|Z)/g, "<time>");
 const STRANGER_MARKERS = ["CAREGIVER_A", "MANAGER_A", "OWNER_A", "SCHEDULER_A", "org-a", "Synthetic Pat"];
 /** The same request with every org A entity id replaced by a fresh random id (so "exists in another agency" cannot differ from "does not exist"). */
 function neutral<T>(value: T): T {

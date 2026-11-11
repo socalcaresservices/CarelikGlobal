@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Phase C DEPLOYMENT script for the UX redesign release, TEST only (cdk diff, API deploy, web publish). Derived from STELLA_PHASE_C_DEPLOY.sh (2026-11-01). DRAFT. NOT RUN. NOT AUTHORIZED.
 # Operator: whoever the owner names in the written Phase C statement. Deploys ONLY Ogevia-prod-ServiceVerificationApi and the TEST web site; never an Ogevia-prd-* stack,
-# never NetworkEgress/WebHosting/EvidenceStorage/Observability, never the database (that is OPERATOR_TEST_DB.sh). Expected API change: exactly 5 new routes and the Handler code asset (diff_gate_ux.py).
+# never NetworkEgress/WebHosting/EvidenceStorage/Observability, never the database (that is OPERATOR_TEST_DB.sh). Expected API change: exactly 3 new routes and the Handler code asset (diff_gate_ux.py).
 #   export OGEVIA_WINDOW_START="YYYY-MM-DD HH:MM:SS" OGEVIA_WINDOW_END="YYYY-MM-DD HH:MM:SS"   (UTC, from the owner's statement; no default)
 #   REPO=<checkout at the pinned SHA, deps installed> OGEVIA_DEPLOY_APPROVAL=<the owner's GO reference> bash OPERATOR_TEST_DEPLOY.sh <mode>
 #   selftest     local only: assembly and gate checks (no AWS)
-#   synth        build the CloudFormation assembly in /tmp (no AWS change) and check it against the pinned asset keys and 255 routes
+#   synth        build the CloudFormation assembly in /tmp (no AWS change) and check it against the pinned asset keys and 253 routes
 #   capture      READ-ONLY baseline and rollback material (live API template, Lambda config and code ref, web bucket copy)
 #   check        READ-ONLY: expected-only gate (live API template vs assembly) + the cdk diff text
 #   deploy-api   [window only] re-checks, asks you to type DEPLOY-Ogevia-prod-ServiceVerificationApi, deploys that one stack, then post-api
-#   post-api     READ-ONLY checks after the deployment (including 401 without a token on each of the 5 new routes)
+#   post-api     READ-ONLY checks after the deployment (including 401 without a token on each of the 3 new routes)
 #   web          [window only] build for TEST, upload (no delete), invalidate CloudFront, then web-verify
 #   web-verify   READ-ONLY: what the TEST site serves (must carry the pinned commit)
 #   rollback-web / rollback-api   only after a stop condition; allowed after the window to restore known-good
@@ -18,12 +18,12 @@ umask 077
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER="" CDK_DISABLE_CLI_TELEMETRY=true
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="${1:-}"
-SHA=7f9483d39690ae94db2710465d6995cd0b82b271
+SHA=f4316c5f1a9a844dc7749152243271cee003e94c
 ACCOUNT=300094796789; API=Ogevia-prod-ServiceVerificationApi; WEBSTACK=Ogevia-prod-WebHosting
 ASSEMBLY="${ASSEMBLY:-/tmp/ogevia-cdk-ux.out}"; B="${OGEVIA_BEFORE:-$HOME/ogevia-before-ux}"
-EXPECT_HANDLER_KEY=af1a87696ace52f31d40afa75121de98e893c1ae18124cde10a1f480973707bb.zip
+EXPECT_HANDLER_KEY=7baa45221daa410dec24424c55dd64605e5ce2fe36059165a4f5d958239346eb.zip
 EXPECT_IDENTITY_KEY=7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759.zip
-EXPECT_ROUTES=255
+EXPECT_ROUTES=253
 WIN_START_TXT="${OGEVIA_WINDOW_START:-}"; WIN_END_TXT="${OGEVIA_WINDOW_END:-}"   # UTC "YYYY-MM-DD HH:MM:SS", from the owner's written statement; unset = nothing may run
 WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-120}" aws "$@"; }
@@ -149,8 +149,8 @@ case "$MODE" in
     A cloudformation get-template --stack-name $API --template-stage Original --query TemplateBody --output json > "$B/gate-live-after.json"
     python3 -I -B "$HERE/diff_gate_ux.py" --live "$B/gate-live-after.json" --new "$ASSEMBLY/$API.template.json" --expect post || stop "the deployed stack differs from the assembly"
     Z=00000000-0000-4000-8000-000000000000
-    for p in /v1/me /v1/signin-overrides /v1/staff/duplicates; do c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API_URL$p"); echo "GET $p without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401 for $p"; done
-    for p in /v1/imports/people /v1/staff/$Z/merge /v1/caregivers/$Z/signin-override; do c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST -H 'content-type: application/json' -d '{}' "$API_URL$p"); echo "POST $p without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401 for $p"; done
+    for p in /v1/me /v1/signin-overrides; do c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API_URL$p"); echo "GET $p without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401 for $p"; done
+    for p in /v1/imports/people /v1/caregivers/$Z/signin-override; do c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST -H 'content-type: application/json' -d '{}' "$API_URL$p"); echo "POST $p without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401 for $p"; done
     c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -H "authorization: Bearer forged.token.value" "$API_URL/v1/signin-overrides"); echo "GET /v1/signin-overrides with a forged token: $c"; [[ "$c" == 401 ]] || stop "expected 401 for a forged token"
     echo "POST-API OK" ;;
   web)

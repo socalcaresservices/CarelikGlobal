@@ -1,3 +1,5 @@
+> Current owner decisions (2026-11-10): Excel/ZIP parsing and exceljs are removed; the Excel-library options below are historical and require no selection. SEC-5 privacy is accepted as built. Duplicate merge stays OFF in both environments. CPR/TB remains one-click. Current evidence/commands: RELEASE_READINESS.md and TEST_DEPLOYMENT_PLAN.md. No new sign-off form is requested. The prepared DB script uses a TEST-only logical dump, refuses instance snapshots, and records migration checksums transactionally. Nothing deployed or applied to AWS.
+
 # SEC-3: the exceljs dependency advisories (analysis and recommendation)
 
 Prepared by Claude Code (AI assistant), 2026-11-11, from `pnpm audit --prod` run in `apps/sv-api` on the tree before the fix. **This is analysis. It is not security approval; the owner or a human reviewer decides.** Package under review: `exceljs@4.4.0` (the latest published version; there is no newer exceljs to upgrade to).

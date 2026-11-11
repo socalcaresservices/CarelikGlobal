@@ -1,3 +1,5 @@
+> Current owner decisions (2026-11-10): Excel/ZIP parsing and exceljs are removed; the Excel-library options below are historical and require no selection. SEC-5 privacy is accepted as built. Duplicate merge stays OFF in both environments. CPR/TB remains one-click. Current evidence/commands: RELEASE_READINESS.md and TEST_DEPLOYMENT_PLAN.md. No new sign-off form is requested. The prepared DB script uses a TEST-only logical dump, refuses instance snapshots, and records migration checksums transactionally. Nothing deployed or applied to AWS.
+
 # Release package (PREPARED, NOT EXECUTED): UX redesign, TEST only
 
 **Owner decision 3 (2026-11-10):** "Prepare and verify a TEST-only release." Nothing in this file has been run. Production (`Ogevia-prd-*`, `ogevia_prd`) is not touched by any step.

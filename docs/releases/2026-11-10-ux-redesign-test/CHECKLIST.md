@@ -1,3 +1,5 @@
+> Current owner decisions (2026-11-10): Excel/ZIP parsing and exceljs are removed; the Excel-library options below are historical and require no selection. SEC-5 privacy is accepted as built. Duplicate merge stays OFF in both environments. CPR/TB remains one-click. Current evidence/commands: RELEASE_READINESS.md and TEST_DEPLOYMENT_PLAN.md. No new sign-off form is requested. The prepared DB script uses a TEST-only logical dump, refuses instance snapshots, and records migration checksums transactionally. Nothing deployed or applied to AWS.
+
 # Release checklist: 2026-11-10-ux-redesign-test (TEST only; Phase A and B evidence prepared, C to E NOT STARTED)
 
 > Status 2026-11-10: nothing deployed. Evidence for A and B is in `RELEASE_PACKAGE.md` section 6 and `docs/ux/REQUIREMENTS-TRACKER.md`. Phase C waits for the owner's written statement (SHA, TEST only, operator, window).

@@ -1,7 +1,9 @@
 // Exercise the actual prepared operator transaction on a disposable local database.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ADMIN_URL, createTestDb, type TestDb } from "./harness.js";
@@ -20,6 +22,23 @@ function run(stem: string, direction: "apply" | "rollback") {
     encoding: "utf8", env: { ...process.env, PGHOST: url.hostname, PGPORT: url.port || "5432", PGUSER: decodeURIComponent(url.username), PGPASSWORD: decodeURIComponent(url.password), PGDATABASE: db.name, MIGRATION_FILE: file },
   });
 }
+it("validates a TEST-only logical backup and refuses corruption or the wrong database", () => {
+  const url = new URL(ADMIN_URL); url.pathname = `/${db.name}`;
+  const file = join(mkdtempSync(join(tmpdir(), "ux-backup-")), "test.dump");
+  const dump = spawnSync("pg_dump", ["--format=custom", "--dbname", url.toString(), "--file", file], { encoding: "utf8" });
+  expect(dump.status, dump.stderr).toBe(0);
+  const unixFile = process.platform === "win32" ? file.replaceAll("\\", "/").replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`) : file;
+  writeFileSync(file + ".sha256", `${createHash("sha256").update(readFileSync(file)).digest("hex")}  ${unixFile}\n`);
+  writeFileSync(file + ".meta", `${db.name}|${Math.floor(Date.now() / 1000)}\n`);
+  const backupFn = script.slice(script.indexOf("backup_check() {"), script.indexOf("\nfor c in psql", script.indexOf("backup_check() {")));
+  const check = () => spawnSync("bash", ["-c", `stop() { echo "$*"; exit 2; }; MODE=apply; DB="$EXPECTED_DB"; ${backupFn}\nbackup_check`], { encoding: "utf8", env: { ...process.env, OGEVIA_TEST_BACKUP: unixFile, EXPECTED_DB: db.name } });
+  expect(check().status).toBe(0);
+  writeFileSync(file + ".meta", `wrong_database|${Math.floor(Date.now() / 1000)}\n`);
+  expect(check().status).not.toBe(0);
+  writeFileSync(file + ".meta", `${db.name}|${Math.floor(Date.now() / 1000)}\n`);
+  writeFileSync(file, "corrupt archive");
+  expect(check().status).not.toBe(0);
+});
 it("records checksums atomically, refuses reapply, and removes only rolled-back ledger rows", async () => {
   const stems = readdirSync(new URL("migrations/", pending)).filter((f) => /^009[0-4]_.*\.sql$/.test(f)).sort().map((f) => f.slice(0, -4));
   expect(stems).toHaveLength(5);

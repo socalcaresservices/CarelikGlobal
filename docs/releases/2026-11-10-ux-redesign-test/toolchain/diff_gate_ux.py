@@ -94,7 +94,7 @@ def main():
         bad.append("CHANGED resource %s (%s)" % (k, lr[k].get("Type")))
     if a.expect == "post" and changed_handler:
         bad.append("expected NO difference after deployment, but the Handler code asset still differs")
-    print("added: %d route(s) %s" % (len(added_keys), "(the 5 expected)" if added_keys == NEW_ROUTES else sorted(added_keys)))
+    print("added: %d route(s) %s" % (len(added_keys), "(the 3 expected)" if added_keys == NEW_ROUTES else sorted(added_keys)))
     print("Handler code asset changed: %s" % (", ".join(changed_handler) or "no"))
     if bad:
         print("EXPECTED-ONLY: NO")

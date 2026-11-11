@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Phase C DATABASE script for the UX redesign release: pending migrations 0090 to 0094 on the TEST database ONLY. Derived from STELLA_PHASE_C_DB.sh (2026-11-01) with the same access, TLS, cleanup
 # and guard mechanics. DRAFT. NOT RUN. NOT AUTHORIZED. Operator: whoever the owner names in the written Phase C statement.
-# Authority needed BEFORE any mode except selftest: the owner's written Phase C statement (commit 7f9483d..., TEST only, operator, window) AND the owner's explicit G1-style authorization for the temporary
+# Authority needed BEFORE any mode except selftest: the owner's written Phase C statement (commit f4316c5..., TEST only, operator, window) AND the owner's explicit G1-style authorization for the temporary
 # security-group attach and the TEST admin credential held in memory only (this script does exactly that, as the 0088 script did; that earlier approval does NOT carry over).
 #
 #   bash OPERATOR_TEST_DB.sh selftest                          local only: pin and logic checks, no AWS, no database
 #   export OGEVIA_WINDOW_START="YYYY-MM-DD HH:MM:SS" OGEVIA_WINDOW_END="YYYY-MM-DD HH:MM:SS"   (UTC, from the owner's statement; no default: nothing runs without it)
 #   REPO=<checkout at the pinned SHA> bash OPERATOR_TEST_DB.sh probe        S2: read-only baseline: ledger 88/0088 and NONE of the new objects (VERIFY_0090_0094.sql expect=absent)
-#   bash OPERATOR_TEST_DB.sh snapshot                          S4: one manual RDS snapshot; prints the snapshot id
-#   REPO=... SNAPSHOT_ID=<id> bash OPERATOR_TEST_DB.sh apply   S5: apply 0090, 0091, 0092, 0093, 0094 in that order, each in its own transaction, then VERIFY expect=present
+#   bash OPERATOR_TEST_DB.sh backup                          S4: TEST-only logical dump; prints its path
+#   REPO=... OGEVIA_TEST_BACKUP=<path> bash OPERATOR_TEST_DB.sh apply   S5: apply 0090, 0091, 0092, 0093, 0094 in that order, each in its own transaction, then VERIFY expect=present
 #   bash OPERATOR_TEST_DB.sh final                             S10: read-only closing read
-#   REPO=... SNAPSHOT_ID=<id> bash OPERATOR_TEST_DB.sh rollback   only after a stop condition: down scripts 0094 -> 0090 (web and API rolled back first)
+#   REPO=... OGEVIA_TEST_BACKUP=<path> bash OPERATOR_TEST_DB.sh rollback   only after a stop condition: down scripts 0094 -> 0090 (web and API rolled back first)
 # Never touches ogevia_prd. Never starts or stops a host. Never prints a secret. Connects to ogevia_sv_test only (hard-coded, checked). Records each migration checksum in the ledger in the same transaction.
 set +x +H
 umask 077
@@ -21,7 +21,7 @@ VSQL="$HERE/VERIFY_0090_0094.sql"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="$HOME/phaseC_ux_${MODE}_${TS}.txt"
 
-SHA=7f9483d39690ae94db2710465d6995cd0b82b271
+SHA=f4316c5f1a9a844dc7749152243271cee003e94c
 MIGS=(0090_caregiver_signin_override 0091_caregiver_client_labels 0092_bulk_import 0093_staff_duplicates 0094_standard_document_types)
 declare -A UP_SHA=( [0090_caregiver_signin_override]=963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54 [0091_caregiver_client_labels]=673dea984d97433cad1df663a890233acb2d240eb87abb8434db655d9a7596f3 [0092_bulk_import]=2dc18c125b459750431981dad2dd257630c6864e5ed41102770e6d9d1f992121 [0093_staff_duplicates]=952e1c9176ecee8b9475fd45f923fdff175bf78de14341a61b46e49d9f28affa [0094_standard_document_types]=b0a28f483462a826aac0c9bb1e8e7b4ad8d26bfea80156668ab80874508f8d91 )
 declare -A DOWN_SHA=( [0090_caregiver_signin_override]=75cc1db8b9af4f4d61e909f8eb5e8245b88c5c71032ad35bcf41f49b9779a56e [0091_caregiver_client_labels]=843580f116fb7a682da1c1313c605aa7db507e1186ce60b8176d9b68d03f385d [0092_bulk_import]=b6e96f069b28a7e790869ef5e02f1a9ae7da6dd72cb5eb71661e66f0dd2ff09a [0093_staff_duplicates]=24fe53618b70ab48b519813021fd06ce8f8671d9fa0aa32b16449b61caf839ff [0094_standard_document_types]=1d0cbfe10b6b20baf2af221e3812949603332029a1343cc214238b7ddca67d44 )
@@ -60,7 +60,7 @@ cleanup() {                      # one time, on every exit: success, error, INT,
     [[ -z "$RDS_SRC_BEFORE" || "$s" == "$RDS_SRC_BEFORE" ]] || { echo "!!! RDS SG SOURCES DIFFER FROM BEFORE. Change nothing; tell the owner."; bad=1; }
     [[ "$bad" == 0 ]] && echo "RESTORE VERIFIED: admin host back to baseline, RDS SG unchanged." || { echo "RESTORE NOT VERIFIED (see !!! lines)"; [[ "$rc" == 0 ]] && rc=1; }
   fi
-  if [[ "$MODE" =~ ^(probe|snapshot|apply)$ && -n "$WIN_END" ]] && ! in_window; then echo "NOTE: this step finished after the window end (at the end of the authorized window). It was allowed to complete (A12 forbids BEGINNING new activity). Start NO further step; report. Rollback to known-good only."; fi
+  if [[ "$MODE" =~ ^(probe|backup|apply)$ && -n "$WIN_END" ]] && ! in_window; then echo "NOTE: this step finished after the window end (at the end of the authorized window). It was allowed to complete (A12 forbids BEGINNING new activity). Start NO further step; report. Rollback to known-good only."; fi
   echo "END (UTC): $(date -u +%FT%TZ)  mode=$MODE  exit=$rc  log=$LOG"
   exit "$rc"
 }
@@ -98,36 +98,26 @@ if [[ "$MODE" == selftest ]]; then
   [[ -n "${REPO:-}" ]] && check_repo || echo "REPO not set: pin check skipped (set REPO to test it)"
   echo "selftest done"; exit 0
 fi
-case "$MODE" in probe|snapshot|apply|final|rollback) ;; *) stop "usage: selftest | probe | snapshot | apply | final | rollback (see header)";; esac
+case "$MODE" in probe|backup|snapshot|apply|final|rollback) ;; *) stop "usage: selftest | probe | backup | apply | final | rollback (see header)";; esac
 exec > >(tee -a "$LOG") 2>&1
 echo "START (UTC): $(date -u +%FT%TZ)  mode=$MODE  log=$LOG"
-case "$MODE" in probe|snapshot|apply|final) need_window;; esac
+case "$MODE" in probe|backup|apply|final) need_window;; esac
 for c in aws jq; do command -v "$c" >/dev/null 2>&1 || stop "missing tool: $c"; done
 [[ "$(aws sts get-caller-identity --query Account --output text)" == "$ACCOUNT" ]] || stop "wrong AWS account"
 
-snapshot_check() {
-  local SNAPSHOT_FRESHNESS="${1:-}"   # read-only: the pre-ux snapshot must exist, be available, encrypted, belong to this instance; "fresh" (migrate/snapshot) also requires age < 4 h
-  [[ "${SNAPSHOT_ID:-}" == "$RDS_ID-pre-ux-"* ]] || stop "set SNAPSHOT_ID to the id printed by the snapshot mode ($RDS_ID-pre-ux-...)"
-  local d; d=$(aws rds describe-db-snapshots --db-snapshot-identifier "$SNAPSHOT_ID" --query 'DBSnapshots[0].[Status,Encrypted,DBInstanceIdentifier,SnapshotCreateTime]' --output text) || stop "snapshot not found"
-  echo "snapshot: $SNAPSHOT_ID  $d"
-  set -- $d; [[ "$1" == available && "$2" == True && "$3" == "$RDS_ID" ]] || stop "snapshot is not available/encrypted/for $RDS_ID"
-  if [[ "$SNAPSHOT_FRESHNESS" == fresh ]]; then local t; t=$(date -u -d "$4" +%s 2>/dev/null) || stop "cannot read the snapshot time"; [[ $(( $(date -u +%s) - t )) -lt 14400 ]] || stop "snapshot is older than 4 hours"; fi
+# Instance snapshots also contain production on the recorded shared server. They are deliberately not offered here.
+[[ "$MODE" != snapshot ]] || stop "An RDS snapshot includes production on the shared instance. Use backup (TEST-only logical dump)."
+backup_check() {
+  [[ "${OGEVIA_TEST_BACKUP:-}" == /* && -f "$OGEVIA_TEST_BACKUP" && -f "$OGEVIA_TEST_BACKUP.sha256" && -f "$OGEVIA_TEST_BACKUP.meta" ]] || stop "set OGEVIA_TEST_BACKUP to the TEST backup printed by backup mode"
+  sha256sum --check --status "$OGEVIA_TEST_BACKUP.sha256" || stop "TEST backup checksum mismatch"
+  local dbname made; IFS='|' read -r dbname made < "$OGEVIA_TEST_BACKUP.meta"
+  [[ "$dbname" == "$DB" && "$made" =~ ^[0-9]+$ ]] || stop "backup metadata is not for TEST"
+  if [[ "$MODE" == apply ]]; then [[ $(( $(date -u +%s) - made )) -ge 0 && $(( $(date -u +%s) - made )) -lt 14400 ]] || stop "TEST backup is older than 4 hours"; fi
+  [[ "$(pg_restore --list "$OGEVIA_TEST_BACKUP" | sed -n 's/^;[[:space:]]*dbname: //p')" == "$DB" ]] || stop "archive is not a TEST database backup"
 }
-
-if [[ "$MODE" == snapshot ]]; then
-  [[ "$(aws rds describe-db-instances --db-instance-identifier "$RDS_ID" --query 'DBInstances[0].DBInstanceStatus' --output text)" == available ]] || stop "RDS instance is not available"
-  SNAP="$RDS_ID-pre-ux-$(date -u +%Y%m%dT%H%MZ | tr 'A-Z' 'a-z')"
-  echo "creating snapshot $SNAP (GO step 3; one snapshot)"
-  aws rds create-db-snapshot --db-instance-identifier "$RDS_ID" --db-snapshot-identifier "$SNAP" --query 'DBSnapshot.[DBSnapshotIdentifier,Status]' --output text || stop "create-db-snapshot failed"
-  echo "waiting until available (this can take several minutes)..."
-  aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAP" || stop "snapshot did not become available; do NOT migrate"
-  SNAPSHOT_ID="$SNAP"; snapshot_check fresh; echo "SNAPSHOT_ID=$SNAP   <-- use this for migrate and rollback"; exit 0
-fi
-
-
-for c in psql session-manager-plugin; do command -v "$c" >/dev/null 2>&1 || stop "missing tool: $c"; done
+for c in psql pg_dump pg_restore session-manager-plugin; do command -v "$c" >/dev/null 2>&1 || stop "missing tool: $c"; done
 [[ -f "$VSQL" ]] || stop "cannot find $VSQL"
-if [[ "$MODE" == apply || "$MODE" == rollback ]]; then check_repo; if [[ "$MODE" == apply ]]; then snapshot_check fresh; else snapshot_check; fi; fi
+if [[ "$MODE" == apply || "$MODE" == rollback ]]; then check_repo; backup_check; fi
 if [[ "$MODE" == rollback ]]; then
   confirm "OWNER AUTHORIZED DB ROLLBACK ACCESS" "A DATABASE ROLLBACK needs the temporary security-group attach and the TEST admin credential. Type the phrase only if the owner has authorized it for this release, in writing. Down scripts run newest first: 0094, 0093, 0092, 0091, 0090."
 else
@@ -200,11 +190,20 @@ guarded_psql() { # file, migration stem, apply|rollback; SQL and ledger change c
 }
 
 case "$MODE" in
+  backup)
+    before_ok
+    OGEVIA_TEST_BACKUP="${OGEVIA_TEST_BACKUP:-$HOME/ogevia_sv_test-pre-ux-$TS.dump}"
+    [[ ! -e "$OGEVIA_TEST_BACKUP" ]] || stop "backup file already exists; refusing to overwrite"
+    pg_dump --no-password --format=custom --dbname="$DB" --file="$OGEVIA_TEST_BACKUP" || stop "TEST backup failed"
+    sha256sum -- "$OGEVIA_TEST_BACKUP" > "$OGEVIA_TEST_BACKUP.sha256"
+    printf '%s|%s\n' "$DB" "$(date -u +%s)" > "$OGEVIA_TEST_BACKUP.meta"
+    backup_check
+    echo "OGEVIA_TEST_BACKUP=$OGEVIA_TEST_BACKUP" ;;
   probe) before_ok ;;
   final) state; vrun present || true ;;
   apply)
     before_ok
-    confirm "APPLY 0090-0094" "About to apply, in this order and each in its own transaction, to $DB only: ${MIGS[*]}. Snapshot $SNAPSHOT_ID is verified. Each checksum is recorded atomically in the migration ledger. Window ends $WIN_END_TXT UTC."
+    confirm "APPLY 0090-0094" "About to apply, in this order and each in its own transaction, to $DB only: ${MIGS[*]}. TEST logical backup $OGEVIA_TEST_BACKUP is verified. Each checksum is recorded atomically in the migration ledger. Window ends $WIN_END_TXT UTC."
     DONE=()
     for n in "${MIGS[@]}"; do
       echo "--- applying $n (sha256 ${UP_SHA[$n]:0:16}...)"
@@ -214,7 +213,7 @@ case "$MODE" in
     done
     after_ok || exit 3 ;;
   rollback)
-    echo "ROLLBACK drops caregiver_signin_overrides, import_batches, staff_merge_links WITH their rows (0090, 0092, 0093 are BACKUP REQUIRED: the snapshot is $SNAPSHOT_ID). Records created by imports and merges stay. Merged staff profiles stay inactive."
+    echo "ROLLBACK drops caregiver_signin_overrides, import_batches, staff_merge_links WITH their rows (0090, 0092, 0093 are BACKUP REQUIRED: the TEST backup is $OGEVIA_TEST_BACKUP). Records created by imports and merges stay. Merged staff profiles stay inactive."
     confirm "ROLLBACK 0094-0090" "Only after a stop condition, and web and API have been rolled back first."
     for n in 0094_standard_document_types 0093_staff_duplicates 0092_bulk_import 0091_caregiver_client_labels 0090_caregiver_signin_override; do
       echo "--- rolling back $n"; guarded_psql "$REPO/infra/aws/db/pending/rollback/$n.down.sql" "$n" rollback || stop "rollback of $n failed; do not retry; report"

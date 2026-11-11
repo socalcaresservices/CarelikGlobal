@@ -1,39 +1,23 @@
-# Release readiness status (2026-11-11). TEST only. Nothing deployed, merged or applied. Security NOT approved.
+# Current release evidence — TEST preparation only
 
-**Proposed release commit: `7f9483d39690ae94db2710465d6995cd0b82b271`.** CI run 431 on exactly this commit: success (validate, harness, postgres). Earlier candidate `69b122f` failed CI (a production-vs-TEST route parity test) and is superseded.
+Application code: `f4316c5f1a9a844dc7749152243271cee003e94c` on the existing draft PR #108 branch. Initial branch/remote HEAD was `82d40e6`; changes after `7f9483d` at that point were docs only. The continuation after f4316c5 changes tests/release tooling/docs, not app behavior. No AWS action, migration, merge or production data access occurred.
 
-## CloudShell read-only checks U1 to U4 (run in us-west-2, account 300094796789; they only read)
-Full block and interpretation: `docs/aws/DEMO_AUTODEPLOY_READONLY_CHECKS.md`. Summary of what each verifies:
-| Check | Command family | What it verifies | Needed for |
-|---|---|---|---|
-| 0 | `aws sts get-caller-identity` | You are in the right account | every step |
-| U1 | `aws rds describe-db-instances` (table) | Which RDS instance holds `ogevia_sv_test`, that it is private, backed up and sized as expected, and whether TEST and production share it (records say yes) | snapshot step S4, separation proposal, risk statement |
-| U2 | `aws iam list-attached-role-policies` / `list-role-policies` for `OgeviaDBAdminSSMRole`; `aws ec2 describe-instances` for the admin host | What the admin host can reach and that it is running | migration step S5 |
-| U3 | `aws cloudformation list-stacks`, `describe-stacks` outputs of the web-hosting stacks, `aws cloudfront list-distributions`, `aws iam list-open-id-connect-providers` | TEST web bucket and distribution ids, and that they differ from production's | web deploy S7 and rollback copy S4 |
-| U4 | not AWS: GitHub Settings, Billing and plans, Usage | Actions minutes available (only for the optional automated-deploy proposal) | automation proposal only |
+Implemented: CSV only, no Excel/ZIP parser or exceljs; 2 MB and 2,000-row limits retained. Existing templates were CSV, so no Excel template asset existed. Duplicate merge routes OFF in TEST and production. Privacy labels and explicit CPR/TB setup preserved. The previous TEST flags had duplicates ON, contradicting the handoff; corrected. Import and sign-in override remain ON for the proposed TEST release and OFF in production.
 
-## Status table
-| Item | Status | Detail |
-|---|---|---|
-| Dependency advisories (all 9 audit entries) analysed | **PASS (analysis)** | `SEC-3_EXCELJS_ADVISORIES.md`: 8 high/moderate brace-expansion findings + 1 uuid; not reachable (0 calls on a hostile read); patches exist; overrides clear all 9 |
-| Security approval | **BLOCKED (owner)** | Not given; sign-off lines are blank on purpose |
-| Overrides fix verified | **PASS** | audit through exceljs 9 to 0; parser 10/10, import API 6/6; bundle 1.13 MB, loads |
-| Final CI on the exact release commit `7f9483d` | **PASS** | run 431 success |
-| Local gates on a clean clone | **PASS** at `d7f7147` (before overrides and switches); infra suite re-run after the switches found and fixed one parity test; CI run 431 covers lint, typecheck, build, unit and database suites on the final commit |
-| Switches: TEST on, production off | **PASS** | switch tests and the parity test assert exactly the 5 routes differ |
-| U1 to U4 commands | **PASS (provided)** / results **BLOCKED** | need you or the operator to run them |
-| TEST deployment plan | **PASS (prepared)** | `TEST_DEPLOYMENT_PLAN.md`; pinned toolchain generated in `toolchain/` (2026-11-11): scripts, hashes, commands; selftests pass; AWS calls not verified |
-| 23-case Feature Test Plan | **PASS (kept)** | section 7 says which cases need TEST |
-| Local regression (smoke and regression set) | **BLOCKED in part** | 35 pass, 0 fail, 1 not run (SMK-06 needs the deployed API) |
-| Feature cases needing deployed TEST | **BLOCKED** | UXR-08c, 09b, 19 (cold start), 21, 23, TEST parts of 01 to 16, UXR-18 final gate |
-| Feature cases needing you or a phone | **BLOCKED** | UXR-01c, 03b, 13 wording, 14c, 22 |
-| Phase A and B sign-offs | **BLOCKED (person)** | blank on purpose |
-| Phase C | **NOT STARTED** | needs your written statement |
+Measured Lambda JS: 1,924,002 → 954,575 bytes, 969,427 bytes / 50.4% smaller, using the same CJS/node22/minify/pg-native-external settings and the original parser for comparison. TEST synthesis succeeds, 253 routes, 3 additions (override GET/POST and import POST); duplicate routes absent.
 
-## Who does what
-| I can complete independently (done or doable now) | Needs your approval or decision | Needs you, the operator, or a physical device |
-|---|---|---|
-| Analysis, patches prepared, CI reads, plan and checklist text, generating the pinned toolchain and run commands for the commit once you authorize, re-running any local test | Security approval and SEC-3 option (A/B/C/D); SEC-5 (caregiver sees first name + initial, city); the Phase C statement (commit, TEST only, operator, window); applying migrations; deploying; merging; whether to delete the separate-database proposal or approve it | Running U1 to U4 in CloudShell; running every Phase C command; UXR-01c, 03b, 14c, 22; judging R27 wording; UAT |
+Focused local checks: parser 7/7, import API 6/6, import UI 5/5, R6 DB 5/5, route switches/parity 6/6, ledger/backup 2/2, cross-tenant sweep 9/9; 0 skipped in these focused runs. Lint 6 tasks, typecheck 7, build 6 pass. Ledger test proves failed ledger insert rolls back schema, repeat apply is refused, checksum rows match, rollback removes each row atomically. Backup test uses a real disposable DB dump and refuses wrong-database metadata/corruption. API cross-tenant test previously compared negative-offset timestamps literally; its normalization now treats positive/negative UTC offsets alike, without changing tenant assertions.
 
-## Recommendation
-**Do not start Phase C yet; the candidate is ready for you to decide.** Specifically: (1) read `SEC-3_EXCELJS_ADVISORIES.md` and choose option A (recommended) or another, and sign or reject the security review; (2) run U1 to U4 and send me the output so the plan's database and bucket names are confirmed rather than assumed; (3) name the operator and the window and give the written Phase C statement for commit `7f9483d`; then I generate the pinned toolchain for that commit and the operator can begin at S0. Releasing to **TEST only** is reasonable once those three are done. **Production is not recommended or authorized** by anything here.
+Full local Windows runs are **not green and not waived**: initial unit/static run 463 failed / 559 passed before web completion (sandbox/path/Bash/CDK issues); infra DB 1121 passed / 7 failed / 31 skipped (existing shell/psql/path and output issues); API DB 172 passed / 1 failed before the timestamp-normalization fix, then full 9-case tenant sweep passes. The last typecheck/lint passes include the new backup tests. The required clean Linux/PostgreSQL 18 `pnpm test:all` run is the release gate, including every static/unit/DB/API suite and no skips. CI now explicitly selects PostgreSQL 18 client tools for the backup test.
+
+CI on f4316c5: run 436; validate and harness passed when this record was prepared, postgres still running. **This is not a green final-CI claim.** Consult the newest run on the final PR head, not run 431 or this intermediate run. Final results are reported separately after completion; no deployment is authorized by a green run.
+
+Preview: existing real-app preview tooling, 70 owner / 18 caregiver recorded responses from a local synthetic DB with 0090–0094 applied only locally. Offline QA at 1360 and 390 px: 0 external requests, 0 page errors, no horizontal overflow. Start → End → signature → Confirm reaches “Saved for manager review”. Changes are not persisted beyond the preview's existing caregiver state machine. It is a UX preview, not an import/DB acceptance environment.
+
+R6: only an uninvited office profile without sign-in can be deactivated; no caregiver merge. Shifts, visits and assignments retain caregiver/user references. Inactive office profile and previous audit history remain readable; a merge audit/link is added. Nothing is deleted or reassigned. No product fix needed; the boundary is covered by the DB test.
+
+Migration process: old script omitted the ledger to preserve old release pins. Fixed: each pending file and version/name/SHA-256 ledger row commit together, with lock/reapply refusal; rollback checks the checksum and removes the row transactionally. Ledger becomes 93/0094 (withdrawn 0089), returns to 88/0088 after full rollback. Future promotion must preserve bytes and reserve withdrawn 0089 while updating normal-runner pins; no raw reapply outside the ledger.
+
+Production risk: recorded/configured shared RDS means **yes**, TEST work can affect production availability via shared resources even though all SQL targets TEST. Live topology remains unverified. Read-only proof commands compare Lambda DB_HOST/DB_NAME with RDS endpoints; an instance count is not proof. Recommendation: separate TEST RDS first. Proposed backup is a TEST-only logical dump, not a snapshot containing production; snapshot mode now refuses. Per-step effects and exact commands are in TEST_DEPLOYMENT_PLAN.md and toolchain/PHASE_C_COMMANDS.md.
+
+Owner decisions already settled are not reopened. Only the shared-RDS decision remains (recommend separate first after the read-only checks). Physical phone check, production DevTools capture, live version numbers and the stray ▲▼ dropdown identification remain owner follow-ups; they did not block this work. No new checklist or signature document was created.
