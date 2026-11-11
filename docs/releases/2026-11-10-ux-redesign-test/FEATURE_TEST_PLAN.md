@@ -78,3 +78,8 @@ Columns: **Pass/fail criterion** is the exact condition for PASS (anything else 
 | API | Previous template; switches off removes the 5 routes | nothing | Operator | minutes |
 | Database | `.down.sql` newest first 0094 to 0090 (SAFE for 0091, 0094; BACKUP REQUIRED for 0090, 0092, 0093 which drop their tables) | Records created by imports and merges stay (they are ordinary records); merged profiles stay inactive until set active | Operator, after a manual snapshot | minutes |
 | Data created during the release | Never deleted by hand; corrected through the product | | | |
+
+## 7. Where each case can run (23 cases kept; nothing removed)
+| Needs the **deployed TEST environment** | Needs the **owner or a physical device** | Done or doable **independently** (automated or local) |
+|---|---|---|
+| UXR-08c (2 MB / 2,000-row import through the gateway and Lambda), UXR-09b (duplicate report on real TEST staff), UXR-19 cold start on real Lambda, UXR-21 (migrations on the real TEST database), UXR-23 and SMK-06 (401 on the 5 routes), UXR-18 final gate (regression runner in `aws` mode, exit 0), TEST parts of UXR-01 to UXR-16 (every role opens every menu item) | UXR-01c (stray control), UXR-03b (production error from DevTools), UXR-13 wording judgment, UXR-14c (real phone), UXR-22 (live version), UXR-09b merge choices (you decide each merge) | UXR-01 to UXR-12, UXR-14, UXR-15, UXR-16, UXR-17, UXR-19 (local part), UXR-20: automated and harness cases, already passed at the release candidate or re-run by CI |
