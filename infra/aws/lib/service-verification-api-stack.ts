@@ -6,6 +6,7 @@ import {
   Validations,
   type StackProps,
 } from "aws-cdk-lib";
+import * as ec2 from "aws-cdk-lib/aws-ec2";
 import { AccessLogFormat } from "aws-cdk-lib/aws-apigateway";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
@@ -434,10 +435,20 @@ export class ServiceVerificationApiStack extends Stack {
     const trustedUserPoolId = props.authority?.userPoolId ?? existing.userPool.userPoolId;
     const trustedUserPoolArn = props.authority?.userPoolArn ?? `arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`;
     const trustedClientIds = props.authority ? props.authority.appClientIds : [config.auth.appClientId, ...(props.extraAppClientIds ?? [])];
-    if (config.database.purpose === "production" && !props.appDatabaseSecret) {
+    if ((config.database.purpose === "production" || config.database.isolatedTest) && !props.appDatabaseSecret) {
       throw new Error("Production API requires its dedicated database secret; it never falls back to the test slice's");
     }
     const appDatabaseSecret = props.appDatabaseSecret ?? existing.appDatabaseSecret;
+    if (config.database.isolatedTest) {
+      // Imported groups are immutable; this explicit, reviewable rule belongs to the TEST API stack.
+      new ec2.CfnSecurityGroupIngress(this, "IsolatedTestDatabaseIngress", {
+        groupId: config.existing.securityGroups.prodRds,
+        sourceSecurityGroupId: config.existing.securityGroups.prodApp,
+        ipProtocol: "tcp", fromPort: 5432, toPort: 5432,
+        description: "TEST API access to the isolated TEST database only",
+      });
+    }
+
 
     this.handlerLogGroup = new logs.LogGroup(this, "HandlerLogGroup", {
       retention: config.logRetention,

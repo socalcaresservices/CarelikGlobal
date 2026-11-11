@@ -6,9 +6,9 @@
 |---|---|
 | **Application commit (the proposed application commit; NOT approved for deployment)** | `f4316c5f1a9a844dc7749152243271cee003e94c` (branch `claude/ogevia-ux-audit-redesign-w36cov`; CI run 436: success; final continuation head still needs its own green run). The continuation after it changes tests/release tooling/docs, not app behavior. |
 | Target | TEST only: stacks `Ogevia-prod-*`, database `ogevia_sv_test`. Never `Ogevia-prd-*` or `ogevia_prd` |
-| `OPERATOR_TEST_DB.sh` sha256 | `3fa33685e8d079cc307044353540cdf65b960fd010cca4354b5a0e16bd7604db` |
+| `OPERATOR_TEST_DB.sh` sha256 | `dfff09905e3919cef001b770ccd84fb7d331b4882bc02ca2fbdaae56cef1d4bf` |
 | `OPERATOR_TEST_DEPLOY.sh` sha256 | `76167deb03cbe46e69d406eab55bd2a3a3db7817efd612cba2210a33f2a109de` |
-| `diff_gate_ux.py` sha256 | `675261d5f16439ee5967a20d4c4f05e7074dd023bcd123171b250799078c3bab` |
+| `diff_gate_ux.py` sha256 | `e66aff283370a447a22f143a20c3b1aeb6fcdf093bcaea2b82b46ce57a836fd7` |
 | `VERIFY_0090_0094.sql` sha256 | `0f78a265376152a4f14aea523bce10d86398966dcd6d268a298c81c0365cd1ab` |
 | Migration `0090_caregiver_signin_override.sql` | `963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54` |
 | Migration `0091_caregiver_client_labels.sql` | `673dea984d97433cad1df663a890233acb2d240eb87abb8434db655d9a7596f3` |
@@ -31,3 +31,6 @@
 ## Current verification
 The previous verification narrative concerned 7f9483d and is superseded. Current app: f4316c5; 253 routes; 3 additions; duplicate routes remain absent. Typecheck, lint, build and TEST synthesis pass locally. Windows full suites have recorded failures, not waived. CI and the final release record must be read before deployment.
 The DB script now makes a TEST-only logical backup, refuses instance snapshot mode, and commits each migration and its ledger row atomically. Applied ledger: 93/0094 (0089 was withdrawn); rollback: 88/0088. The backup file, checksum and metadata must stay together. No AWS command was run here.
+
+## Isolated TEST cutover supersedes the shared release commands
+The current separation recipe is docs/aws/DEMO_PROD_DATABASE_SEPARATION_PROPOSAL.md. Its explicit isolated-* DB modes use the final green release commit, candidate ogevia-postgres, no SG attachment, a fresh dedicated TEST login/secret and ledger 93/0094. The new --isolated-assemblies gate compares the shared and isolated assemblies without loosening the original UX gate. The legacy application SHA/assets above remain historical pins for the shared UX package; they do not pin or authorize the separation candidate. No deployment has run.

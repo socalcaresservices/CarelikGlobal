@@ -26,11 +26,13 @@ export interface MigrationFile {
   readonly runAsAdmin: boolean;
 }
 
-export function loadMigrations(): MigrationFile[] {
+export interface MigrationOptions { readonly includePendingUx?: boolean }
+
+export function loadMigrations(options: MigrationOptions = {}): MigrationFile[] {
   const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
     .sort();
-  return files.map((name, index) => {
+  const released = files.map((name, index) => {
     const match = FILE_PATTERN.exec(name);
     if (!match) throw new Error(`Bad migration file name: ${name}`);
     const version = match[1]!;
@@ -48,6 +50,15 @@ export function loadMigrations(): MigrationFile[] {
       runAsAdmin: sql.startsWith("-- ogevia:run-as=admin"),
     };
   });
+  if (!options.includePendingUx) return released;
+  if (released.length !== 88 || released.at(-1)?.version !== "0088") throw new Error("UX pending set requires the reviewed 0001–0088 baseline");
+  const pending = new URL("../pending/migrations/", import.meta.url);
+  const names = ["0090_caregiver_signin_override.sql", "0091_caregiver_client_labels.sql", "0092_bulk_import.sql", "0093_staff_duplicates.sql", "0094_standard_document_types.sql"];
+  // 0089 was withdrawn, not silently applied or reused. Original bytes/names/checksums are kept.
+  return [...released, ...names.map((name) => {
+    const sql = readFileSync(new URL(name, pending), "utf8");
+    return { version: name.slice(0, 4), name, sql, checksum: createHash("sha256").update(sql).digest("hex"), runAsAdmin: false };
+  })];
 }
 
 export interface MigrateResult {
@@ -58,8 +69,13 @@ export interface MigrateResult {
 export async function migrate(
   client: ClientBase,
   log: (line: string) => void = () => {},
+  options: MigrationOptions = {},
 ): Promise<MigrateResult> {
-  const migrations = loadMigrations();
+  if (options.includePendingUx) {
+    const db = (await client.query<{ name: string }>("select current_database() as name")).rows[0]?.name;
+    if (db !== "ogevia_sv_test" && !/^ogevia_test_[0-9a-f]{12}$/.test(db ?? "")) throw new Error("Pending UX migrations are TEST-only; refusing this database");
+  }
+  const migrations = loadMigrations(options);
   await client.query("select pg_advisory_lock($1)", [RUNNER_LOCK_KEY]);
   try {
     await client.query(`

@@ -78,7 +78,7 @@ export class NetworkEgressStack extends Stack {
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
         actions: ["secretsmanager:GetSecretValue"],
-        resources: [config.existing.appDatabaseSecretArn, ...peers.map(secretArnPattern)],
+        resources: [config.existing.appDatabaseSecretArn, ...peers.map(secretArnPattern), ...(config.database.isolatedTest ? [secretArnPattern(config)] : [])],
         conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
       }),
     );

@@ -1,6 +1,6 @@
 import { App } from "aws-cdk-lib";
 import { buildOgeviaApp, resolveMode } from "../lib/app.js";
-import { assertAccount, resolveEnvironment } from "../lib/config.js";
+import { assertAccount, resolveEnvironment, resolveTestDatabase } from "../lib/config.js";
 
 // cdk-nag (AwsSolutions + HIPAA Security) is enforced by the unit tests via
 // NagPack.validateScope(). It is not registered as a synth-time validation
@@ -8,7 +8,7 @@ import { assertAccount, resolveEnvironment } from "../lib/config.js";
 // during `cdk synth`, so registering them here would only look like a control.
 
 const app = new App();
-const config = resolveEnvironment(app.node.tryGetContext("env"));
+const config = resolveTestDatabase(resolveEnvironment(app.node.tryGetContext("env")), app.node.tryGetContext("testDatabase"), app.node.tryGetContext("testMasterSecretArn"));
 const approval = process.env.OGEVIA_DEPLOY_APPROVAL;
 const mode = resolveMode(app.node.tryGetContext("mode"), approval);
 assertAccount(config, process.env.CDK_DEFAULT_ACCOUNT);

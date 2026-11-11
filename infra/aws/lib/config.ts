@@ -141,6 +141,8 @@ export interface OgeviaEnvironmentConfig {
    */
   readonly database: {
     readonly purpose: "test-slice" | "production";
+    /** Explicit opt-in cutover to the separately hosted synthetic TEST database. */
+    readonly isolatedTest?: boolean;
     /** Database inside the existing RDS instance. */
     readonly name: string;
     /** Production only: the dedicated application login role. */
@@ -310,6 +312,37 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
   prd: PRD,
 };
 
+/** Proposed isolated TEST target, verified by the owner via read-only AWS/catalog inventory. */
+export const ISOLATED_TEST_TARGET = {
+  instanceIdentifier: "ogevia-postgres",
+  endpointAddress: "ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com",
+  securityGroupId: "sg-0bc0f1315fd0feaf2",
+  appLogin: "ogevia_test_app",
+  appSecretName: "ogevia/test/database/app",
+} as const;
+
+/** No opt-in means no changes. Master ARN is metadata resolved by the operator, never a secret value. */
+export function resolveTestDatabase(config: OgeviaEnvironmentConfig, choice: unknown, masterSecretArn?: unknown): OgeviaEnvironmentConfig {
+  if (choice === undefined || choice === "shared") return config;
+  if (choice !== "isolated" || config.envName !== "prod" || config.database.purpose !== "test-slice") {
+    throw new Error("Isolated TEST database is available only for env=prod with testDatabase=isolated");
+  }
+  const prefix = `arn:aws:secretsmanager:${config.region}:${config.account}:secret:rds!db-`;
+  if (typeof masterSecretArn !== "string" || !masterSecretArn.startsWith(prefix) || !/rds!db-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[A-Za-z0-9]{6}$/.test(masterSecretArn) || masterSecretArn === PRODUCTION_FOUNDATION.databases.prod.masterSecretArn) {
+    throw new Error("Provide the candidate RDS managed master-secret ARN metadata as testMasterSecretArn (never production's)");
+  }
+  const next = structuredClone(config);
+  return {
+    ...next,
+    existing: { ...next.existing,
+      securityGroups: { ...next.existing.securityGroups, prodRds: ISOLATED_TEST_TARGET.securityGroupId },
+      databases: { prod: { instanceIdentifier: ISOLATED_TEST_TARGET.instanceIdentifier, endpointAddress: ISOLATED_TEST_TARGET.endpointAddress, port: 5432,
+        securityGroupIds: [ISOLATED_TEST_TARGET.securityGroupId], owner: { kind: "unmanaged" }, masterSecretArn } },
+    },
+    database: { ...next.database, isolatedTest: true, appLogin: ISOLATED_TEST_TARGET.appLogin, appSecretName: ISOLATED_TEST_TARGET.appSecretName },
+  };
+}
+
 /** Secret ARN pattern (Secrets Manager appends "-" + 6 random characters). */
 export function secretArnPattern(config: OgeviaEnvironmentConfig): string {
   return `arn:aws:secretsmanager:${config.region}:${config.account}:secret:${config.database.appSecretName}-??????`;
@@ -325,6 +358,16 @@ export function assertDatabaseConfig(config: OgeviaEnvironmentConfig): void {
   const { database: db } = config;
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(db.name ?? "")) {
     throw new Error(`env "${config.envName}": database.name is missing or malformed`);
+  }
+  if (db.isolatedTest && (config.envName !== "prod" || db.purpose !== "test-slice" ||
+      config.existing.databases.prod.endpointAddress !== ISOLATED_TEST_TARGET.endpointAddress ||
+      config.existing.databases.prod.instanceIdentifier !== ISOLATED_TEST_TARGET.instanceIdentifier ||
+      config.existing.securityGroups.prodRds !== ISOLATED_TEST_TARGET.securityGroupId ||
+      config.existing.databases.prod.securityGroupIds.length !== 1 ||
+      config.existing.databases.prod.securityGroupIds[0] !== ISOLATED_TEST_TARGET.securityGroupId ||
+      config.existing.databases.prod.port !== 5432 ||
+      db.appLogin !== ISOLATED_TEST_TARGET.appLogin || db.appSecretName !== ISOLATED_TEST_TARGET.appSecretName)) {
+    throw new Error("Isolated TEST database configuration differs from the reviewed target");
   }
   if (db.purpose === "test-slice") {
     if (config.envName === "prd" || db.name !== config.testSlice.databaseName) {

@@ -15,7 +15,7 @@ ALLOW-LIST for --expect pre:
     Rules, Transform, Description. AWS::CDK::Metadata is ignored; the value of the `ogevia:deployment-status` tag is ignored (it carries the approval reference).
 Any other difference: exit 1 and the Operator STOPS. Nothing here talks to AWS.
 """
-import argparse, json, sys
+import argparse, copy, json, pathlib, sys
 
 NEW_ROUTES = {
     "POST /v1/caregivers/{caregiverRecordId}/signin-override",
@@ -49,7 +49,74 @@ def load(path):
     return t
 
 
+def isolated_gate(baseline_dir, candidate_dir):
+    """Compare two local CDK assemblies; never contacts AWS. Defaults remain shared.
+
+    First run the ordinary live API -> shared UX gate separately. For NetworkEgress
+    and Observability, compare the live templates to the shared baseline as well.
+    This second gate permits only the reviewed separation delta, never live drift.
+    """
+    def assembly(directory):
+        return {p.name: norm(load(p)) for p in pathlib.Path(directory).glob('Ogevia-prod-*.template.json')}
+    old, new = assembly(baseline_dir), assembly(candidate_dir)
+    secret_name = 'Ogevia-prod-DatabaseSecret.template.json'
+    assert old and secret_name not in old and set(new) == set(old) | {secret_name}, 'unexpected stack set'
+    expected = copy.deepcopy(old)
+    api = expected['Ogevia-prod-ServiceVerificationApi.template.json']['Resources']
+    secret_ref = {'Fn::ImportValue': 'Ogevia-prod-DatabaseSecret:ExportsOutputRefAppDatabaseSecret8F772B622E5A091B'}
+    handler = api['Handler886CB40B']['Properties']['Environment']['Variables']
+    assert handler['DB_NAME'] == 'ogevia_sv_test' and handler['DB_HOST'] == 'ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com'
+    handler['DB_HOST'] = 'ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com'
+    handler['DB_SECRET_ARN'] = secret_ref
+    policy = api['HandlerPolicy7544C855']['Properties']['PolicyDocument']['Statement']
+    next(s for s in policy if s.get('Sid') == 'ReadAppDatabaseSecret')['Resource'] = secret_ref
+    api['IsolatedTestDatabaseIngress'] = {'Type': 'AWS::EC2::SecurityGroupIngress', 'Properties': {
+        'Description': 'TEST API access to the isolated TEST database only', 'FromPort': 5432,
+        'GroupId': 'sg-0bc0f1315fd0feaf2', 'IpProtocol': 'tcp',
+        'SourceSecurityGroupId': 'sg-064ffce3bcbe8eb3b', 'ToPort': 5432}}
+    endpoint = expected['Ogevia-prod-NetworkEgress.template.json']['Resources']['SecretsManagerEndpoint5E83C66B']['Properties']['PolicyDocument']['Statement']
+    statement = next(s for s in endpoint if s.get('Action') == 'secretsmanager:GetSecretValue')
+    assert statement['Resource'] == [
+        'arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ',
+        'arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/prd/database/app-??????']
+    statement['Resource'].append('arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/test/database/app-??????')
+    for r in expected['Ogevia-prod-Observability.template.json']['Resources'].values():
+        for d in r.get('Properties', {}).get('Dimensions', []):
+            if d['Name'] == 'DBInstanceIdentifier':
+                assert d['Value'] == 'ogevia-prod-postgres'
+                d['Value'] = 'ogevia-postgres'
+    for name in old:
+        assert expected[name] == new[name], 'unexpected separation change in ' + name
+    secret_template = new[secret_name]
+    resources = {k: v for k, v in secret_template['Resources'].items() if v['Type'] != 'AWS::CDK::Metadata'}
+    assert set(resources) == {'AppDatabaseSecret8F772B62'}, 'unexpected credential-stack resources'
+    secret = resources['AppDatabaseSecret8F772B62']
+    assert secret['Type'] == 'AWS::SecretsManager::Secret'
+    assert secret['DeletionPolicy'] == secret['UpdateReplacePolicy'] == 'Retain'
+    props = secret['Properties']
+    assert set(props) == {'Name', 'Description', 'GenerateSecretString', 'Tags'}
+    assert props['Name'] == 'ogevia/test/database/app'
+    assert props['GenerateSecretString'] == {'ExcludePunctuation': True, 'GenerateStringKey': 'password',
+        'IncludeSpace': False, 'PasswordLength': 40,
+        'SecretStringTemplate': '{"username":"ogevia_test_app","dbname":"ogevia_sv_test"}'}
+    assert secret_template.get('Outputs') == {'AppSecretName': {'Value': {'Fn::Select': [0, {
+        'Fn::Split': ['-', {'Fn::Select': [6, {'Fn::Split': [':', {'Ref': 'AppDatabaseSecret8F772B62'}]}]}]}]}},
+        'ExportsOutputRefAppDatabaseSecret8F772B622E5A091B': {
+        'Value': {'Ref': 'AppDatabaseSecret8F772B62'}, 'Export': {
+            'Name': 'Ogevia-prod-DatabaseSecret:ExportsOutputRefAppDatabaseSecret8F772B622E5A091B'}}}
+    for s in ['Parameters', 'Conditions', 'Mappings', 'Rules', 'Transform']:
+        assert secret_template.get(s) == old['Ogevia-prod-ServiceVerificationApi.template.json'].get(s), 'unexpected credential-stack ' + s
+    print('ISOLATED EXPECTED-ONLY: YES (API target/credential/ingress, additive endpoint grant, TEST RDS alarms, retained secret)')
+    return 0
+
+
 def main():
+    if len(sys.argv) == 4 and sys.argv[1] == '--isolated-assemblies':
+        try:
+            return isolated_gate(sys.argv[2], sys.argv[3])
+        except (AssertionError, KeyError, ValueError, StopIteration) as e:
+            print('ISOLATED EXPECTED-ONLY: NO', str(e))
+            return 1
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", required=True)
     ap.add_argument("--new", required=True)

@@ -12,6 +12,109 @@
 #   bash OPERATOR_TEST_DB.sh final                             S10: read-only closing read
 #   REPO=... OGEVIA_TEST_BACKUP=<path> bash OPERATOR_TEST_DB.sh rollback   only after a stop condition: down scripts 0094 -> 0090 (web and API rolled back first)
 # Never touches ogevia_prd. Never starts or stops a host. Never prints a secret. Connects to ogevia_sv_test only (hard-coded, checked). Records each migration checksum in the ledger in the same transaction.
+# Isolated TEST modes below have independent guards: preflight/verify/backup are
+# read-only against AWS/database; initialize needs a later explicit TEST GO/window.
+# They never attach SGs. The legacy shared-instance instructions above apply only
+# to the legacy modes below this branch. Prepared only, not execution authorization.
+if [[ "${1:-}" == isolated-* ]]; then
+  set -euo pipefail
+  set +x +H
+  umask 077
+  MODE="$1"; REPO="${REPO:?set REPO to the reviewed checkout}"
+  case "$MODE" in isolated-preflight|isolated-initialize|isolated-verify|isolated-backup) ;; *) echo 'STOP: unknown isolated mode'; exit 2;; esac
+  [[ "$(git -C "$REPO" rev-parse HEAD)" == "${OGEVIA_RELEASE_COMMIT:?set the reviewed full commit}" ]] || { echo 'STOP: checkout differs'; exit 2; }
+  [[ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]] || { echo 'STOP: tracked checkout changes'; exit 2; }
+  if [[ "$MODE" == isolated-initialize ]]; then
+    [[ "${OGEVIA_ISOLATED_TEST_GO:-}" == initialize-ogevia-postgres ]] || { echo 'STOP: no explicit isolated TEST initialization authorization'; exit 2; }
+    START=$(date -u -d "${OGEVIA_WINDOW_START:?set approved UTC window}" +%s)
+    END=$(date -u -d "${OGEVIA_WINDOW_END:?set approved UTC window}" +%s)
+    NOW=$(date -u +%s); [[ "$NOW" -ge "$START" && "$NOW" -lt "$END" ]] || { echo 'STOP: outside approved window'; exit 2; }
+    for name in OWNER_SUB MANAGER_SUB CAREGIVER_SUB; do [[ "${!name:-}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || { echo "STOP: $name must identify a confirmed synthetic TEST account"; exit 2; }; done
+    [[ "$OWNER_SUB" != "$MANAGER_SUB" && "$OWNER_SUB" != "$CAREGIVER_SUB" && "$MANAGER_SUB" != "$CAREGIVER_SUB" ]] || { echo 'STOP: distinct TEST identities required'; exit 2; }
+    HOUR=$(TZ=America/Los_Angeles date +%H); [[ "$((10#$HOUR))" -ge 1 && "$((10#$HOUR))" -lt 21 ]] || { echo 'STOP: choose a 01:00–20:59 Pacific window for the existing demo-day seed'; exit 2; }
+  fi
+  export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER="" AWS_CLI_AUTO_PROMPT=off
+  A() { aws --cli-connect-timeout 5 --cli-read-timeout 30 "$@"; }
+  [[ "$(A sts get-caller-identity --query Account --output text)" == 300094796789 ]] || { echo 'STOP: wrong account'; exit 2; }
+  HOST=ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com; PORT=15433
+  META=$(A rds describe-db-instances --db-instance-identifier ogevia-postgres --query 'DBInstances[0].{host:Endpoint.Address,public:PubliclyAccessible,secret:MasterUserSecret.SecretArn,groups:VpcSecurityGroups[].VpcSecurityGroupId}' --output json)
+  [[ "$(jq -r .host <<<"$META")" == "$HOST" && "$(jq -r .public <<<"$META")" == false ]] || { echo 'STOP: target host/privacy mismatch'; exit 2; }
+  jq -e '.groups == ["sg-0bc0f1315fd0feaf2"]' <<<"$META" >/dev/null || { echo 'STOP: candidate SGs differ'; exit 2; }
+  MASTER_ARN=$(jq -er '.secret | select(startswith("arn:"))' <<<"$META")
+  D=$(mktemp -d); TUNNEL=""
+  finish_isolated() { unset PGPASSWORD OGEVIA_DATABASE_URL MASTER U P APP_SECRET APP_PASSWORD; if [[ -n "$TUNNEL" ]]; then pkill -P "$TUNNEL" 2>/dev/null || true; kill "$TUNNEL" 2>/dev/null || true; wait "$TUNNEL" 2>/dev/null || true; fi; rm -f "$D/ca.pem" "$D/tunnel.log" "$D/resolve.cjs"; rmdir "$D" 2>/dev/null || true; }
+  trap finish_isolated EXIT
+  curl -fsS --connect-timeout 5 --max-time 30 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o "$D/ca.pem"
+  A ssm start-session --target i-0ce8db2d7e5839dd5 --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters "{\"host\":[\"$HOST\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"$PORT\"]}" >"$D/tunnel.log" 2>&1 &
+  TUNNEL=$!; UP=0
+  for _ in $(seq 1 30); do if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then UP=1; break; fi; kill -0 "$TUNNEL" 2>/dev/null || break; sleep 1; done
+  [[ "$UP" == 1 ]] || { echo 'STOP: candidate tunnel failed'; cat "$D/tunnel.log"; exit 2; }
+  MASTER=$(A secretsmanager get-secret-value --secret-id "$MASTER_ARN" --query SecretString --output text)
+  U=$(jq -er .username <<<"$MASTER"); P=$(jq -er .password <<<"$MASTER"); unset MASTER
+  unset PGSERVICE PGSERVICEFILE PGPASSFILE
+  export PGHOST="$HOST" PGHOSTADDR=127.0.0.1 PGPORT="$PORT" PGSSLMODE=verify-full PGSSLROOTCERT="$D/ca.pem" PGCONNECT_TIMEOUT=10 PGUSER="$U" PGPASSWORD="$P" PGOPTIONS='-c statement_timeout=120000'
+  Q() { PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=30000' psql -X -At --no-password -v ON_ERROR_STOP=1 -d "$1" -c "$2"; }
+  # Metadata only. A new login must not inherit existing Ogevia API privileges in the legacy database.
+  if [[ "$MODE" == isolated-preflight || "$MODE" == isolated-initialize ]]; then
+    [[ "$(Q postgres "select count(*) from pg_database where datname='ogevia_sv_test'")" == 0 ]] || { echo 'STOP: candidate TEST database already exists; never overwrite'; exit 2; }
+    [[ "$(Q postgres "select count(*) from pg_roles where rolname='ogevia_test_app'")" == 0 ]] || { echo 'STOP: isolated login already exists; never rotate it automatically'; exit 2; }
+    PRIVILEGED=$(Q postgres "select count(*) from pg_roles where rolname in ('ogevia_owner','ogevia_app','ogevia_readonly') and (rolsuper or rolcreatedb or rolcreaterole or rolreplication or rolbypassrls)")
+    [[ "$PRIVILEGED" == 0 ]] || { echo 'STOP: existing runtime roles are privileged; do not alter legacy roles'; exit 2; }
+    ELEVATED=$(Q postgres "select case when to_regrole('ogevia_app') is null or to_regrole('rds_superuser') is null then false else pg_has_role('ogevia_app','rds_superuser','MEMBER') end")
+    [[ "$ELEVATED" == f ]] || { echo 'STOP: existing runtime role has RDS administrator membership'; exit 2; }
+    PARENT=$(Q postgres "select case when to_regrole('ogevia_app') is null then false else exists (select 1 from pg_roles where pg_has_role('ogevia_app',oid,'MEMBER') and (rolname='ogevia_owner' or rolsuper or rolcreatedb or rolcreaterole or rolreplication or rolbypassrls)) end")
+    [[ "$PARENT" == f ]] || { echo 'STOP: runtime role can assume a privileged parent; do not alter legacy memberships'; exit 2; }
+    LEGACY=$(Q ogevia "select case when to_regrole('ogevia_app') is null then false else exists (select 1 from pg_namespace n where n.nspname in ('ogevia','ogevia_api') and has_schema_privilege('ogevia_app', n.oid, 'USAGE')) end")
+    [[ "$LEGACY" == f ]] || { echo 'STOP: shared runtime role has legacy-schema access; review role isolation before creating a login. No legacy data was read.'; exit 2; }
+  fi
+  if [[ "$MODE" == isolated-preflight ]]; then
+    Q postgres "select datname, pg_get_userbyid(datdba) from pg_database where not datistemplate order by datname"
+    echo 'PREFLIGHT PASS: candidate-only access; no database, role, secret or networking changes'; exit 0
+  fi
+  if [[ "$MODE" == isolated-initialize ]]; then
+    APP_SECRET=$(A secretsmanager get-secret-value --secret-id ogevia/test/database/app --query SecretString --output text)
+    [[ "$(jq -r .username <<<"$APP_SECRET")" == ogevia_test_app && "$(jq -r .dbname <<<"$APP_SECRET")" == ogevia_sv_test ]] || { echo 'STOP: wrong TEST credential metadata'; exit 2; }
+    APP_PASSWORD=$(jq -er .password <<<"$APP_SECRET"); unset APP_SECRET
+    [[ "$APP_PASSWORD" =~ ^[A-Za-z0-9]{40}$ ]] || { echo 'STOP: unexpected generated password format'; exit 2; }
+    psql -X --no-password -v ON_ERROR_STOP=1 -d postgres -v fresh_only=true -f "$REPO/infra/aws/db/deploy/00_create_test_database.sql"
+    # Node pg uses verify-full and the same CA, with DNS overridden only for this tunnel host.
+    cat > "$D/resolve.cjs" <<'JS'
+const dns=require('node:dns'), host=process.env.OGEVIA_TUNNEL_HOST, orig=dns.lookup;
+dns.lookup=function(h,o,cb){if(typeof o==='function'){cb=o;o={};}if(h===host)return process.nextTick(cb,null,...(o?.all?[[{address:'127.0.0.1',family:4}]]:['127.0.0.1',4]));return orig.call(this,h,o,cb);};
+JS
+    uri() { printf '%s' "$1" | jq -sRr @uri; }
+    export OGEVIA_TUNNEL_HOST="$HOST" NODE_OPTIONS="--require=$D/resolve.cjs"
+    export OGEVIA_DATABASE_URL="postgres://$(uri "$U"):$(uri "$P")@$HOST:$PORT/ogevia_sv_test?sslmode=verify-full&sslrootcert=$(uri "$D/ca.pem")"
+    OGEVIA_ALLOW_REMOTE_MIGRATION=approved-by-owner OGEVIA_INCLUDE_PENDING_UX=test-only pnpm --dir "$REPO" --filter @carelik/infra-aws db:migrate
+    unset OGEVIA_DATABASE_URL NODE_OPTIONS
+    printf "\\set isolated_test true\n\\set app_user 'ogevia_test_app'\n\\set app_password '%s'\n\\i '%s'\n" "$APP_PASSWORD" "$REPO/infra/aws/db/deploy/01_app_login_role.sql" | psql -X -q --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test
+    unset APP_PASSWORD
+    psql -X --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -v ux_ready=true -v owner_sub="$OWNER_SUB" -v manager_sub="$MANAGER_SUB" -v caregiver_sub="$CAREGIVER_SUB" -f "$REPO/infra/aws/db/deploy/02_seed_synthetic_test_slice.sql"
+    psql -X --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -v org_slug=ogevia-test-slice -v caregiver_code=TEST-CG-01 -f "$REPO/infra/aws/db/deploy/07_seed_ux_demo_visits.sql"
+  fi
+  [[ "$(Q ogevia_sv_test "select count(*)||'/'||max(version) from ogevia_meta.schema_migrations")" == 93/0094 ]] || { echo 'STOP: wrong ledger'; exit 2; }
+  EXPECTED=$(for f in "$REPO"/infra/aws/db/migrations/*.sql "$REPO"/infra/aws/db/pending/migrations/009[0-4]_*.sql; do n=$(basename "$f"); printf '%s|%s|%s\n' "${n:0:4}" "$n" "$(sha256sum "$f" | cut -c1-64)"; done)
+  [[ "$(Q ogevia_sv_test 'select version||'"'"'|'"'"'||name||'"'"'|'"'"'||checksum from ogevia_meta.schema_migrations order by version')" == "$EXPECTED" ]] || { echo 'STOP: ledger filename/checksum mismatch'; exit 2; }
+  ROLE_OK=$(Q ogevia_sv_test "select (rolcanlogin and not rolinherit and not rolsuper and not rolcreatedb and not rolcreaterole and not rolreplication and not rolbypassrls and pg_has_role(rolname,'ogevia_app','MEMBER')) from pg_roles where rolname='ogevia_test_app'")
+  [[ "$ROLE_OK" == t ]] || { echo 'STOP: TEST login privilege mismatch'; exit 2; }
+  APP_SECRET=$(A secretsmanager get-secret-value --secret-id ogevia/test/database/app --query SecretString --output text)
+  [[ "$(jq -r .username <<<"$APP_SECRET")" == ogevia_test_app && "$(jq -r .dbname <<<"$APP_SECRET")" == ogevia_sv_test ]] || { echo 'STOP: isolated application credential metadata mismatch'; exit 2; }
+  APP_PASSWORD=$(jq -er .password <<<"$APP_SECRET"); unset APP_SECRET
+  LOGIN_OK=$(PGUSER=ogevia_test_app PGPASSWORD="$APP_PASSWORD" PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=30000' psql -X -At --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -c "select current_user||'|'||has_table_privilege('ogevia_app','ogevia.clients','SELECT')::text||'|'||has_function_privilege('ogevia_app','ogevia_api.begin_request(text,uuid)','EXECUTE')::text")
+  unset APP_PASSWORD
+  [[ "$LOGIN_OK" == 'ogevia_test_app|false|true' ]] || { echo 'STOP: isolated login authentication or API-only privileges failed'; exit 2; }
+  if [[ "$MODE" == isolated-backup ]]; then
+    BACKUP="${OGEVIA_TEST_BACKUP:-$HOME/ogevia_sv_test-isolated-$(date -u +%Y%m%dT%H%M%SZ).dump}"
+    [[ "$BACKUP" == /* && ! -e "$BACKUP" ]] || { echo 'STOP: backup path must be absolute and new'; exit 2; }
+    pg_dump --no-password --format=custom --dbname=ogevia_sv_test --file="$BACKUP"
+    sha256sum "$BACKUP" > "$BACKUP.sha256"
+    printf 'ogevia-postgres|ogevia_sv_test|%s\n' "$(date -u +%FT%TZ)" > "$BACKUP.meta"
+    echo "TEST-only logical backup: $BACKUP"
+  fi
+  echo 'ISOLATED DATABASE VERIFIED: 93/0094, all checksums, unprivileged TEST login. API/web NOT deployed by this mode.'
+  exit 0
+fi
+
 set +x +H
 umask 077
 export AWS_PAGER="" AWS_DEFAULT_REGION=us-west-2

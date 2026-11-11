@@ -6,6 +6,26 @@
 -- The two subs are the Cognito `sub` values returned by admin-create-user for
 -- the two test sign-ins. Idempotent (fixed synthetic ids, ON CONFLICT).
 \set ON_ERROR_STOP on
+\if :{?ux_ready}
+\else
+  \set ux_ready false
+\endif
+\if :ux_ready
+select current_database() = 'ogevia_sv_test' and not exists (select 1 from ogevia.organizations) as fresh_target \gset
+\if :fresh_target
+\else
+  do $$ begin raise exception 'UX synthetic seed requires an empty ogevia_sv_test'; end $$;
+\endif
+\if :{?owner_sub}
+\else
+  do $$ begin raise exception 'UX seed requires a synthetic owner sub'; end $$;
+\endif
+select :'owner_sub' <> :'manager_sub' and :'owner_sub' <> :'caregiver_sub' and :'manager_sub' <> :'caregiver_sub' as distinct_actors \gset
+\if :distinct_actors
+\else
+  do $$ begin raise exception 'Synthetic owner, manager and caregiver must be distinct'; end $$;
+\endif
+\endif
 begin;
 
 insert into ogevia.organizations (id, slug, display_name, timezone)
@@ -58,6 +78,19 @@ select v.id, '7e570000-0000-4000-8000-000000000001', v.client_id, '7e570000-0000
 from (values ('7e570000-0000-4000-8000-0000000000a1'::uuid, '7e570000-0000-4000-8000-0000000000c1'::uuid, 600),
              ('7e570000-0000-4000-8000-0000000000a2'::uuid, '7e570000-0000-4000-8000-0000000000c2'::uuid, 120)) as v(id, client_id, minutes)
 on conflict (id) do nothing;
+
+\if :ux_ready
+insert into ogevia.app_users (cognito_sub, display_name) values (:'owner_sub', 'TEST OWNER (synthetic)');
+insert into ogevia.organization_memberships (organization_id, user_id, role)
+select '7e570000-0000-4000-8000-000000000001', id, 'organization_owner' from ogevia.app_users where cognito_sub = :'owner_sub';
+select id as ux_record from ogevia.caregiver_records where organization_id = '7e570000-0000-4000-8000-000000000001' and caregiver_code='TEST-CG-01' \gset
+set local role ogevia_app;
+select ogevia_api.begin_request(:'owner_sub', gen_random_uuid());
+select ogevia_api.verify_background_check('7e570000-0000-4000-8000-000000000001', :'ux_record', 'approved', 'Synthetic demo fixture; not a real clearance', null);
+select ogevia_api.record_onboarding_item('7e570000-0000-4000-8000-000000000001', :'ux_record', 'training', 'complete', null, null, 'Synthetic demo fixture', null);
+select ogevia_api.approve_caregiver_for_work('7e570000-0000-4000-8000-000000000001', :'ux_record', null);
+reset role;
+\endif
 
 commit;
 
