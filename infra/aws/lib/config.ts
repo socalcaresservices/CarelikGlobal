@@ -180,6 +180,70 @@ export interface OgeviaEnvironmentConfig {
 /** ACM certificate (us-east-1) for app/admin/demo.ogevia.com, issued 2026-10-23. */
 const WEB_CERTIFICATE_ARN = "arn:aws:acm:us-east-1:300094796789:certificate/bfc4e928-f387-4804-a8d6-6eb351cfb526";
 
+// Keep the verified production foundation independent of future TEST overrides.
+// Cloning copies nested database/security-group/subnet references too. No AWS target changes here.
+const PRODUCTION_FOUNDATION: ExistingFoundationIds = {
+  vpc: {
+    vpcId: "vpc-0ee9df0c38297cbc1",
+    cidr: "10.20.0.0/16",
+    availabilityZones: ["us-west-2a", "us-west-2b"],
+    publicSubnets: [
+      {
+        subnetId: "subnet-04eadfc8b60aa82a0",
+        availabilityZone: "us-west-2a",
+        routeTableId: "rtb-01743eaf415a10e5a",
+      },
+      {
+        subnetId: "subnet-0877a622ff17a7eda",
+        availabilityZone: "us-west-2b",
+        routeTableId: "rtb-01743eaf415a10e5a",
+      },
+    ],
+    privateSubnets: [
+      {
+        subnetId: "subnet-08d40e6ac210b09e5",
+        availabilityZone: "us-west-2a",
+        routeTableId: "rtb-0bb8bac7d607a3737",
+      },
+      {
+        subnetId: "subnet-02b96c15c06ac5010",
+        availabilityZone: "us-west-2b",
+        routeTableId: "rtb-049d4448ab6a01e48",
+      },
+    ],
+  },
+  dataLayerStackName: "ogevia-prod-data-layer",
+  securityGroups: {
+    prodApp: "sg-064ffce3bcbe8eb3b",
+    prodRds: "sg-00530a1f4f7648e65",
+    dbAdmin: "sg-00e01e2ca80442c1f",
+  },
+  ssmEndpoints: {
+    ssm: "vpce-09dff848221f90105",
+    ssmMessages: "vpce-0cfe984c8b634eb0d",
+  },
+  databases: {
+    prod: {
+      instanceIdentifier: "ogevia-prod-postgres",
+      endpointAddress:
+        "ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com",
+      port: 5432,
+      securityGroupIds: ["sg-00530a1f4f7648e65"],
+      owner: {
+        kind: "cloudformation",
+        stackName: "ogevia-prod-data-layer",
+        logicalId: "PostgreSQLDatabase",
+      },
+      masterSecretArn:
+        "arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-ceb5276c-c146-4b3d-9ce6-dab7b70e0cfa-PRte3a",
+    },
+  },
+  appDatabaseSecretArn:
+    "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ",
+  cognitoUserPoolId: "us-west-2_849AYz5J7",
+};
+const TEST_FOUNDATION: ExistingFoundationIds = structuredClone(PRODUCTION_FOUNDATION);
+
 const PROD: OgeviaEnvironmentConfig = {
     envName: "prod",
     customDomains: { hostnames: ["demo.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
@@ -193,66 +257,7 @@ const PROD: OgeviaEnvironmentConfig = {
       // VERIFIED in repo: README.md APP_URL and organization-provider.tsx.
       allowedOrigins: ["https://app.ogevia.com"],
     },
-    existing: {
-      vpc: {
-        vpcId: "vpc-0ee9df0c38297cbc1",
-        cidr: "10.20.0.0/16",
-        availabilityZones: ["us-west-2a", "us-west-2b"],
-        publicSubnets: [
-          {
-            subnetId: "subnet-04eadfc8b60aa82a0",
-            availabilityZone: "us-west-2a",
-            routeTableId: "rtb-01743eaf415a10e5a",
-          },
-          {
-            subnetId: "subnet-0877a622ff17a7eda",
-            availabilityZone: "us-west-2b",
-            routeTableId: "rtb-01743eaf415a10e5a",
-          },
-        ],
-        privateSubnets: [
-          {
-            subnetId: "subnet-08d40e6ac210b09e5",
-            availabilityZone: "us-west-2a",
-            routeTableId: "rtb-0bb8bac7d607a3737",
-          },
-          {
-            subnetId: "subnet-02b96c15c06ac5010",
-            availabilityZone: "us-west-2b",
-            routeTableId: "rtb-049d4448ab6a01e48",
-          },
-        ],
-      },
-      dataLayerStackName: "ogevia-prod-data-layer",
-      securityGroups: {
-        prodApp: "sg-064ffce3bcbe8eb3b",
-        prodRds: "sg-00530a1f4f7648e65",
-        dbAdmin: "sg-00e01e2ca80442c1f",
-      },
-      ssmEndpoints: {
-        ssm: "vpce-09dff848221f90105",
-        ssmMessages: "vpce-0cfe984c8b634eb0d",
-      },
-      databases: {
-        prod: {
-          instanceIdentifier: "ogevia-prod-postgres",
-          endpointAddress:
-            "ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com",
-          port: 5432,
-          securityGroupIds: ["sg-00530a1f4f7648e65"],
-          owner: {
-            kind: "cloudformation",
-            stackName: "ogevia-prod-data-layer",
-            logicalId: "PostgreSQLDatabase",
-          },
-          masterSecretArn:
-            "arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-ceb5276c-c146-4b3d-9ce6-dab7b70e0cfa-PRte3a",
-        },
-      },
-      appDatabaseSecretArn:
-        "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ",
-      cognitoUserPoolId: "us-west-2_849AYz5J7",
-    },
+    existing: TEST_FOUNDATION,
     database: {
       purpose: "test-slice",
       // Single source: the Lambda's DB_NAME for env=prod is the test slice.
@@ -284,6 +289,7 @@ const PROD: OgeviaEnvironmentConfig = {
  */
 const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
+  existing: PRODUCTION_FOUNDATION,
   envName: "prd",
   features: { staffManagement: true, signInOverride: false, bulkImport: false, staffDuplicates: false },   // production: the owner approved the staff-management release on 2026-10-25 (Pacific) together with migration 0086 (db/pending, applied outside the ledger like TEST); see docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md
   customDomains: { hostnames: ["app.ogevia.com", "admin.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
