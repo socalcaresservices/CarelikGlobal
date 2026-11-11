@@ -57,7 +57,15 @@ def isolated_gate(baseline_dir, candidate_dir):
     This second gate permits only the reviewed separation delta, never live drift.
     """
     def assembly(directory):
-        return {p.name: norm(load(p)) for p in pathlib.Path(directory).glob('Ogevia-prod-*.template.json')}
+        result = {}
+        for p in pathlib.Path(directory).glob('Ogevia-prod-*.template.json'):
+            template = norm(load(p))
+            # Match the live UX gate: CDK telemetry reports which construct types
+            # each CLI process used. It is not an application or permission change.
+            template['Resources'] = {k: v for k, v in template['Resources'].items()
+                                     if v.get('Type') != 'AWS::CDK::Metadata'}
+            result[p.name] = template
+        return result
     old, new = assembly(baseline_dir), assembly(candidate_dir)
     secret_name = 'Ogevia-prod-DatabaseSecret.template.json'
     assert old and secret_name not in old and set(new) == set(old) | {secret_name}, 'unexpected stack set'
@@ -74,6 +82,11 @@ def isolated_gate(baseline_dir, candidate_dir):
         'Description': 'TEST API access to the isolated TEST database only', 'FromPort': 5432,
         'GroupId': 'sg-0bc0f1315fd0feaf2', 'IpProtocol': 'tcp',
         'SourceSecurityGroupId': 'sg-064ffce3bcbe8eb3b', 'ToPort': 5432}}
+    if 'Metadata' in new['Ogevia-prod-ServiceVerificationApi.template.json']['Resources'].get('IsolatedTestDatabaseIngress', {}):
+        # The one newly approved rule has this exact CLI-generated construct path.
+        # Other metadata keys or paths still fail the equality check below.
+        api['IsolatedTestDatabaseIngress']['Metadata'] = {
+            'aws:cdk:path': 'Ogevia-prod-ServiceVerificationApi/IsolatedTestDatabaseIngress'}
     endpoint = expected['Ogevia-prod-NetworkEgress.template.json']['Resources']['SecretsManagerEndpoint5E83C66B']['Properties']['PolicyDocument']['Statement']
     statement = next(s for s in endpoint if s.get('Action') == 'secretsmanager:GetSecretValue')
     assert statement['Resource'] == [

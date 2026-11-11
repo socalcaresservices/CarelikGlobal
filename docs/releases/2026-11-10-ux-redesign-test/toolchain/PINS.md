@@ -10,7 +10,7 @@
 | Target | TEST only: stacks `Ogevia-prod-*`, database `ogevia_sv_test`. Never `Ogevia-prd-*` or `ogevia_prd` |
 | `OPERATOR_TEST_DB.sh` sha256 | `09fbb2f97102494b8b000a5edfc877ad648248e859e8805209e5285c2524685d` |
 | `OPERATOR_TEST_DEPLOY.sh` sha256 | `d5d1c988e51156391a1f6ec4c463d421c96e76e0a8b53363258be3a3ca8068c9` |
-| `diff_gate_ux.py` sha256 | `2a9af4da78b8ac7e4a9e1e52384746a1f6de4bb5a2632242a6fa80533eeea368` |
+| `diff_gate_ux.py` sha256 | `5ae675435abfe0c87324f6ef4a549722033053f12611611bc9ddad2b3dde00ba` |
 | `VERIFY_0090_0094.sql` sha256 | `0f78a265376152a4f14aea523bce10d86398966dcd6d268a298c81c0365cd1ab` |
 | Migration `0103_caregiver_signin_override.sql` | `963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54` |
 | Migration `0104_caregiver_client_labels.sql` | `7e492ae24aff345ef15f0905e51bb0ee0c801857f6e1ee549fdf4b45f9e68712` |
