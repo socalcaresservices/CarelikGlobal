@@ -10,7 +10,7 @@ let db: TestDb, world: World, handler: ReturnType<typeof createHandler>;
 const logs: unknown[] = [];
 beforeAll(async () => {
   vi.stubEnv("OGEVIA_QR_ENCRYPTION_KEY", "a".repeat(64));
-  db = await createTestDb();
+  db = await createTestDb({ includePendingUx: true });
   world = await seedWorld(db, 600);
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() },
     evidence: new MemoryEvidenceStore(), identity: new MemoryIdentityAdmin(), log: (record) => logs.push(record) });

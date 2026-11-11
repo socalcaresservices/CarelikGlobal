@@ -8,7 +8,7 @@ import { CONFIG, event } from "./fixtures";
 
 let db: TestDb, w: World, handler: ReturnType<typeof createHandler>;
 beforeAll(async () => {
-  db = await createTestDb(); w = await seedWorld(db, 600);
+  db = await createTestDb({ includePendingUx: true }); w = await seedWorld(db, 600);
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence: new MemoryEvidenceStore(), identity: new MemoryIdentityAdmin(), log: () => {} });
 });
 afterAll(async () => db?.drop());
