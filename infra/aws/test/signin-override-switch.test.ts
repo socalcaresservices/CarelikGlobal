@@ -1,5 +1,5 @@
 // The sign-in override routes (pending migration 0090) are added to an environment's API only when its `features.signInOverride` switch is on.
-// It is OFF in the test slice and in production until the owner approves the release in that environment, so no deployed API changes by merging this code.
+// It is ON for the TEST stack (`ENVIRONMENTS.prod`) in this release candidate and OFF for production (`prd`) until the owner approves a production release, so no deployed API changes by merging this code.
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp } from "../lib/app.js";
@@ -17,15 +17,15 @@ describe("signInOverride route switch", () => {
   it("marks exactly the two override routes", () => {
     expect(OVERRIDE).toEqual(["GET /v1/signin-overrides", "POST /v1/caregivers/{caregiverRecordId}/signin-override"]);
   });
-  it("is OFF in the test slice and in production: neither route is in the API", () => {
-    expect(ENVIRONMENTS.prod.features.signInOverride).toBe(false);
+  it("is ON for the TEST stack and OFF for production: the routes exist only in TEST", () => {
+    expect(ENVIRONMENTS.prod.features.signInOverride).toBe(true);
     expect(ENVIRONMENTS.prd.features.signInOverride).toBe(false);
-    for (const env of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) for (const k of OVERRIDE) expect(keys(env).some((r) => r.key === k), k).toBe(false);
+    for (const k of OVERRIDE) { expect(keys(ENVIRONMENTS.prod).some((r) => r.key === k), k).toBe(true); expect(keys(ENVIRONMENTS.prd).some((r) => r.key === k), k).toBe(false); }
   });
-  it("when the switch is turned on, both routes exist and require a JWT (nothing is public)", () => {
-    const on = { ...ENVIRONMENTS.prod, features: { ...ENVIRONMENTS.prod.features, signInOverride: true } } as OgeviaEnvironmentConfig;
-    const have = keys(on);
+  it("with the switch on the routes require a JWT (nothing is public) and are the only difference from the same stack with it off", () => {
+    const off = { ...ENVIRONMENTS.prod, features: { ...ENVIRONMENTS.prod.features, signInOverride: false } } as OgeviaEnvironmentConfig;
+    const have = keys(ENVIRONMENTS.prod);
     for (const k of OVERRIDE) expect(have.find((r) => r.key === k), k).toMatchObject({ auth: "JWT" });
-    expect(have.length).toBe(keys(ENVIRONMENTS.prod).length + 2);
+    expect(have.length).toBe(keys(off).length + 2);
   });
 });

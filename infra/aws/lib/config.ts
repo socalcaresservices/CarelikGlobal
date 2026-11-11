@@ -187,7 +187,7 @@ const PROD: OgeviaEnvironmentConfig = {
     region: OGEVIA_REGION,
     terminationProtection: true,
     logRetention: RetentionDays.ONE_YEAR,
-    features: { staffManagement: true, signInOverride: false, bulkImport: false, staffDuplicates: false },
+    features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: true },
     auth: {
       appClientId: "1i27abbina08fvg1i9u8vprgo9",
       // VERIFIED in repo: README.md APP_URL and organization-provider.tsx.

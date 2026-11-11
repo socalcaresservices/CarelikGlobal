@@ -1,5 +1,5 @@
 // The bulk import route (pending migration 0092) is added to an environment's API only when its `features.bulkImport` switch is on.
-// OFF in the test slice and in production until the owner approves the release in that environment, so merging this code changes no deployed API.
+// ON for the TEST stack (`ENVIRONMENTS.prod`) in this release candidate and OFF for production (`prd`) until the owner approves a production release, so merging this code changes no deployed API.
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp } from "../lib/app.js";
@@ -15,14 +15,15 @@ const IMPORT = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "bulkImpo
 
 describe("bulkImport route switch", () => {
   it("marks exactly the one import route", () => expect(IMPORT).toEqual(["POST /v1/imports/{kind}"]));
-  it("is OFF in the test slice and in production", () => {
-    expect(ENVIRONMENTS.prod.features.bulkImport).toBe(false);
+  it("is ON for the TEST stack and OFF for production: the routes exist only in TEST", () => {
+    expect(ENVIRONMENTS.prod.features.bulkImport).toBe(true);
     expect(ENVIRONMENTS.prd.features.bulkImport).toBe(false);
-    for (const env of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) expect(keys(env).some((r) => r.key === IMPORT[0])).toBe(false);
+    for (const k of IMPORT) { expect(keys(ENVIRONMENTS.prod).some((r) => r.key === k), k).toBe(true); expect(keys(ENVIRONMENTS.prd).some((r) => r.key === k), k).toBe(false); }
   });
-  it("when turned on, the route exists and requires a JWT", () => {
-    const on = { ...ENVIRONMENTS.prod, features: { ...ENVIRONMENTS.prod.features, bulkImport: true } } as OgeviaEnvironmentConfig;
-    expect(keys(on).find((r) => r.key === IMPORT[0])).toMatchObject({ auth: "JWT" });
-    expect(keys(on).length).toBe(keys(ENVIRONMENTS.prod).length + 1);
+  it("with the switch on the routes require a JWT (nothing is public) and are the only difference from the same stack with it off", () => {
+    const off = { ...ENVIRONMENTS.prod, features: { ...ENVIRONMENTS.prod.features, bulkImport: false } } as OgeviaEnvironmentConfig;
+    const have = keys(ENVIRONMENTS.prod);
+    for (const k of IMPORT) expect(have.find((r) => r.key === k), k).toMatchObject({ auth: "JWT" });
+    expect(have.length).toBe(keys(off).length + 1);
   });
 });
