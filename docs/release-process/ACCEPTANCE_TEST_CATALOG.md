@@ -322,3 +322,6 @@ Every new feature adds its rows in the same change, with all of: ID, What, How, 
 | ENF | Enforcement enabled on synthetic fixtures | `final-enforcement.db.test.ts` |
 | NTF | In-app notifications | `attention-counts-notifications.db.test.ts`, sv-api `notifications`, web `notifications-bell.test.tsx` |
 | CNT | Sidebar and Action-needed counts equal the list | `attention-counts-notifications.db.test.ts`, `authorization-accounting-risks.db.test.ts` F2/F4 |
+
+## UXR: UX redesign release (2026-11-10, TEST only)
+The cases UXR-01 to UXR-23 are defined, with expected results, pass/fail criteria and evidence, in `docs/releases/2026-11-10-ux-redesign-test/FEATURE_TEST_PLAN.md`. Regression (R) members: UXR-11 (one headline number), UXR-17 (tenant sweep), UXR-20 (switches off in every real stack).
