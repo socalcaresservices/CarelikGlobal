@@ -14,8 +14,8 @@
 ## 2. Before anything is run (read-only; Claude can prepare, the operator runs)
 CloudShell in **us-west-2**, signed in to account 300094796789. Commands and what they prove: `docs/aws/DEMO_AUTODEPLOY_READONLY_CHECKS.md` (U1 database instances, U2 admin-host role, U3 hosting stacks, bucket and distribution ids, U4 GitHub minutes). Results must show: account matches; **U1**: the instance that holds `ogevia_sv_test` (expected `ogevia-prod-postgres`, shared with `ogevia_prd`), private, backups on; **U3**: the TEST web bucket and distribution are **not** the production ones; **U2**: the admin host is running with only the expected security group. Any surprise: stop and report.
 
-## 3. Pins and toolchain (not yet generated)
-The previous release used a pinned toolchain (`PINS.md`, `PHASE_C_COMMANDS.md`, `infra/aws/slice/candidate-pin-check.sh` with `OGEVIA_EXPECT_COMMIT`, migrations hash and lockfile hash). Those files belong to the older candidate and **must be regenerated for the commit above**. I will generate them after authorization; running without them is not allowed by this plan.
+## 3. Pins and toolchain (GENERATED 2026-11-11 for commit `7f9483d`; not authorized, not run)
+Folder `toolchain/`: `PINS.md` (every hash and expected value), `PHASE_C_COMMANDS.md` (the exact command sequence), `OPERATOR_TEST_DB.sh` (snapshot, apply 0090 to 0094, verify, rollback), `OPERATOR_TEST_DEPLOY.sh` (synth, capture, gate, API, web, rollback), `diff_gate_ux.py` (allows exactly the 5 new routes and the Handler asset), `VERIFY_0090_0094.sql` (read-only checks). Derived from the 0088 release scripts; **the old approvals (including the temporary security-group attach) do not carry over and need a fresh written authorization.** Locally verified: selftests, refusal of wrong inputs, the gate against a synthesis of the previously deployed `464dea64`. Not verified: any AWS call.
 
 ## 4. Order of execution (each step has a stop condition; stop means change nothing further and report)
 | Step | Action (operator) | Expected | Stop if |

@@ -22,7 +22,7 @@ Full block and interpretation: `docs/aws/DEMO_AUTODEPLOY_READONLY_CHECKS.md`. Su
 | Local gates on a clean clone | **PASS** at `d7f7147` (before overrides and switches); infra suite re-run after the switches found and fixed one parity test; CI run 431 covers lint, typecheck, build, unit and database suites on the final commit |
 | Switches: TEST on, production off | **PASS** | switch tests and the parity test assert exactly the 5 routes differ |
 | U1 to U4 commands | **PASS (provided)** / results **BLOCKED** | need you or the operator to run them |
-| TEST deployment plan | **PASS (prepared)** | `TEST_DEPLOYMENT_PLAN.md`; pinned toolchain for this commit not yet generated |
+| TEST deployment plan | **PASS (prepared)** | `TEST_DEPLOYMENT_PLAN.md`; pinned toolchain generated in `toolchain/` (2026-11-11): scripts, hashes, commands; selftests pass; AWS calls not verified |
 | 23-case Feature Test Plan | **PASS (kept)** | section 7 says which cases need TEST |
 | Local regression (smoke and regression set) | **BLOCKED in part** | 35 pass, 0 fail, 1 not run (SMK-06 needs the deployed API) |
 | Feature cases needing deployed TEST | **BLOCKED** | UXR-08c, 09b, 19 (cold start), 21, 23, TEST parts of 01 to 16, UXR-18 final gate |
