@@ -1,3 +1,18 @@
+# Production deployed — 2026-11-11 (America/Los_Angeles)
+
+Owner-provided CloudShell evidence confirms the production database, API and website are deployed. Application source remains 6cbab00b2795d0cfe42bf644adc6a559adda7c76. Production database ogevia_prd has all 107 exact version/name/checksum ledger rows. The API's actual deployed Handler index.js matches accepted TEST SHA-256 98e84618f6eeaf6472985db06db9132cf39d887d296d38301ee0137e3a6e991c. Production routes, dedicated authentication and the existing NoEcho QrEncryptionKey0102 parameter/value were preserved. The narrow legacy function-owner normalization committed with the five migrations; application grants were not broadened.
+
+Live production origin: https://d3l4psdkokkvnb.cloudfront.net
+Production website publication passed the existing dedicated production pool/domain/client assertion, uploaded index-BwZUq_5c.js, and finished with PRODUCTION WEBSITE VERIFIED after comparing the live CloudFront index against the uploaded build. Final website retry used /tmp npm/XDG/temp caches to avoid the full CloudShell home volume; it ran the existing production web-only deploy, with no database/API rerun. Earlier API resume reported the deployed code hash passed. No production authenticated acceptance is claimed yet; owner sign-in remains the final human check. Do not create a real visit merely for testing.
+
+Deployment operator 8e00abddad9bc3f2d13a8a73e1ce86391ba25ab7 passed CI #455 (https://github.com/socalcaresservices/CarelikGlobal/actions/runs/43165282549). TEST had already passed owner/caregiver sign-ins and synthetic Start -> End -> Confirm acceptance. Production import, duplicate merge and sign-in override routes remain off. No account, DNS, Cognito or shared endpoint policy changes were part of this production update. The temporary migration admin-host attachment was restored before API/web resume. PR #108 is still unmerged.
+
+Private production rollback: s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-production-release/ogevia-production-release.IDQpRP/before-update.tgz. Preserve this archive. Do not rerun ux-release or the now-executed change set. API/web rollback retains additive schema and post-release data; database restore needs a separate recovery plan.
+
+---
+
+## Historical preparation and deployment evidence (superseded by the completed release above)
+
 # TEST deployed and accepted — production preparation
 
 Owner-reported CloudShell result: TEST DEPLOYED, database/API/web smoke checks passed, production API/Observability templates unchanged. Deployed application source is 6cbab00b2795d0cfe42bf644adc6a559adda7c76; isolated database ledger 107/0107 and every migration checksum verified; unprivileged login verified. The TEST API now targets ogevia-postgres / ogevia_sv_test. The reviewed additive shared endpoint grant was applied; this does not mean no shared infrastructure changed.
