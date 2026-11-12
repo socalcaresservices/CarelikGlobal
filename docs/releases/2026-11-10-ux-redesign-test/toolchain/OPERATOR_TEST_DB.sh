@@ -101,7 +101,7 @@ JS
   APP_SECRET=$(A secretsmanager get-secret-value --secret-id ogevia/test/database/app --query SecretString --output text)
   [[ "$(jq -r .username <<<"$APP_SECRET")" == ogevia_test_app && "$(jq -r .dbname <<<"$APP_SECRET")" == ogevia_sv_test ]] || { echo 'STOP: isolated application credential metadata mismatch'; exit 2; }
   APP_PASSWORD=$(jq -er .password <<<"$APP_SECRET"); unset APP_SECRET
-  LOGIN_OK=$(PGUSER=ogevia_test_app PGPASSWORD="$APP_PASSWORD" PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=30000' psql -X -At --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -c "select current_user||'|'||has_table_privilege('ogevia_app','ogevia.clients','SELECT')::text||'|'||has_function_privilege('ogevia_app','ogevia_api.begin_request(text,uuid)','EXECUTE')::text")
+  LOGIN_OK=$(PGUSER=ogevia_test_app PGPASSWORD="$APP_PASSWORD" PGOPTIONS='-c default_transaction_read_only=on -c statement_timeout=30000' psql -X -qAt --no-password -v ON_ERROR_STOP=1 -d ogevia_sv_test -c "begin read only; set local role ogevia_app; select session_user||'|'||has_table_privilege(current_user,'ogevia.clients','SELECT')::text||'|'||has_function_privilege(current_user,'ogevia_api.begin_request(text,uuid)','EXECUTE')::text; rollback;")
   unset APP_PASSWORD
   [[ "$LOGIN_OK" == 'ogevia_test_app|false|true' ]] || { echo 'STOP: isolated login authentication or API-only privileges failed'; exit 2; }
   if [[ "$MODE" == isolated-backup ]]; then

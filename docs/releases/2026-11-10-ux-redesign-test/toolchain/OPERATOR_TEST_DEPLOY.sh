@@ -1,4 +1,107 @@
 #!/usr/bin/env bash
+# Resume the known post-seed verification stop. Never initializes or seeds a DB.
+if [[ "${1:-}" == cloudshell-resume ]]; then
+  set -euo pipefail
+  set +x +H
+  umask 077
+  WORK="${2:?set the original /tmp/ogevia-run directory}"
+  OPERATOR_COMMIT="${3:?set the pinned operator commit}"
+  [[ "$WORK" =~ ^/tmp/ogevia-run\.[A-Za-z0-9]+$ && -d "$WORK" && ! -L "$WORK" ]] || { echo 'STOP: invalid original workspace'; exit 1; }
+  [[ "$OPERATOR_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'STOP: invalid operator commit'; exit 1; }
+  SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  export REPO="$WORK/repo" OGEVIA_RELEASE_COMMIT=6cbab00b2795d0cfe42bf644adc6a559adda7c76
+  BASE=$(sed -n 's/^CAPTURE: //p' "$WORK/release.log" | tail -n 1)
+  [[ "$BASE" =~ ^/tmp/ogevia-isolated-capture\.[A-Za-z0-9]+$ && -d "$BASE/approved" && ! -L "$BASE" ]] || { echo 'STOP: approved capture is unavailable'; exit 1; }
+  export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
+  A() { aws --cli-connect-timeout 5 --cli-read-timeout 60 "$@"; }
+  stop() { echo "STOP: $*"; exit 1; }
+  stage() { CURRENT_STEP="$1"; printf '\033[32m%s\033[0m\n' "$CURRENT_STEP"; }
+  test "$(A sts get-caller-identity --query Account --output text)" = 300094796789 || stop 'wrong AWS account'
+  exec 9>/tmp/ogevia-test-release.lock
+  flock -n 9 || stop 'another TEST release is running'
+  exec > >(tee "$WORK/resume-$(date -u +%Y%m%dT%H%M%SZ).log") 2>&1
+  CURRENT_STEP=resume-verification
+  trap 'rc=$?; [[ "$rc" == 0 ]] || echo "STOPPED during $CURRENT_STEP. Preserve $WORK and $BASE; no initialization was rerun."' EXIT
+  export COREPACK_HOME="$WORK/corepack" XDG_CACHE_HOME="$WORK/cache" npm_config_cache="$WORK/npm-cache" COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+  for bin in /tmp/ogevia-*/node-v22.*-linux-*/bin; do [[ ! -x "$bin/node" ]] || { export PATH="$bin:$PATH"; break; }; done
+  export PATH="$WORK/bin:$PATH"
+  test "$(node -p 'process.versions.node.split(".")[0]')" = 22 || stop 'restore the original Node 22 PATH'
+  test "$(git -C "$REPO" rev-parse HEAD)" = "$OGEVIA_RELEASE_COMMIT"
+  test "$(cat "$BASE/release-commit.txt")" = "$OGEVIA_RELEASE_COMMIT"
+  test -z "$(git -C "$REPO" status --porcelain --untracked-files=no)"
+  export OWNER_SUB=685183b0-f041-70fb-270e-d8ca934231d2 MANAGER_SUB=58d173c0-e0d1-709f-4288-116f2ed5dbfc CAREGIVER_SUB=8861c310-9081-70d4-85f7-0a33f9a58a94
+  for sub in "$OWNER_SUB" "$MANAGER_SUB" "$CAREGIVER_SUB"; do
+    result=$(A cognito-idp list-users --user-pool-id us-west-2_849AYz5J7 --filter "sub = \"$sub\"" --query 'Users[].{Enabled:Enabled,Status:UserStatus}' --output json)
+    jq -e 'length==1 and .[0].Enabled==true and .[0].Status=="CONFIRMED"' <<<"$result" >/dev/null || stop "required TEST account is not confirmed: $sub"
+  done
+  statuses=$(A cloudformation describe-stacks --query "Stacks[?starts_with(StackName, 'Ogevia-prod-')].StackStatus" --output text)
+  [[ "$statuses" != *IN_PROGRESS* && "$statuses" != *FAILED* ]] || stop 'TEST stack is busy or failed'
+  TOOL="$REPO/docs/releases/2026-11-10-ux-redesign-test/toolchain"
+  DB_TOOL="$WORK/OPERATOR_TEST_DB.verified.sh"
+  curl -fsS --retry 3 --connect-timeout 10 --max-time 120 "https://raw.githubusercontent.com/socalcaresservices/CarelikGlobal/$OPERATOR_COMMIT/docs/releases/2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh" -o "$DB_TOOL"
+  printf '%s  %s\n' 20c1ff63b57ea3d8a490904128f7ffa80531f907889aab68d5cff7b9c258ff7f "$DB_TOOL" | sha256sum --check
+  stage '[resume 1/5] Verify existing assembly and unchanged live targets'
+  python3 "$TOOL/diff_gate_ux.py" --live "$BASE/Ogevia-prod-ServiceVerificationApi.template.json" --new "$BASE/shared/Ogevia-prod-ServiceVerificationApi.template.json" --expect pre
+  python3 "$TOOL/diff_gate_ux.py" --isolated-assemblies "$BASE/shared" "$BASE/approved"
+  bash "$SELF" cloudshell-baseline "$BASE" "$TOOL/diff_gate_ux.py"
+  for stack in Ogevia-prod-ServiceVerificationApi Ogevia-prod-NetworkEgress Ogevia-prod-Observability Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability; do
+    A cloudformation get-template --stack-name "$stack" --template-stage Original --query TemplateBody --output json > "$BASE/$stack.resume-current.json"
+    python3 - "$BASE/$stack.template.json" "$BASE/$stack.resume-current.json" <<'PY'
+import json, sys
+assert json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])), 'live stack changed since the approved capture'
+PY
+  done
+  FN=$(jq -er .FunctionName "$BASE/test-lambda.json")
+  test "$(A lambda get-function-configuration --function-name "$FN" --query CodeSha256 --output text)" = "$(jq -er .CodeSha256 "$BASE/test-lambda.json")" || stop 'live Lambda changed since capture'
+  python3 - "$BASE" <<'PY'
+import hashlib, json, pathlib, sys
+b=pathlib.Path(sys.argv[1]); t=json.loads((b/'approved/Ogevia-prod-ServiceVerificationApi.template.json').read_text())
+r=t['Resources']['Handler886CB40B']
+assert r['Properties']['Code']['S3Key']=='ed01f08a2df9d8870ed44c25912ce9c9d18f4e6dd73dba29594c954a538c983b.zip'
+assert hashlib.sha256((b/'approved'/r['Metadata']['aws:asset:path']/'index.js').read_bytes()).hexdigest()=='98e84618f6eeaf6472985db06db9132cf39d887d296d38301ee0137e3a6e991c'
+PY
+  export OGEVIA_DEPLOY_APPROVAL=owner-chat-20261111 OGEVIA_WINDOW_START="$(date -u '+%F %T')" OGEVIA_WINDOW_END="$(date -u -d '+60 minutes' '+%F %T')"
+  window() { [[ "$(date -u +%s)" -lt "$(date -u -d "$OGEVIA_WINDOW_END" +%s)" ]] || stop 'execution window ended'; }
+  stage '[resume 2/5] Verify and back up the existing TEST database; no initialization'
+  bash "$DB_TOOL" isolated-verify
+  export OGEVIA_TEST_BACKUP="$BASE/isolated-verified-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  bash "$DB_TOOL" isolated-backup
+  ASSETS=cdk-hnb659fds-assets-300094796789-us-west-2
+  A s3api get-public-access-block --bucket "$ASSETS" --query PublicAccessBlockConfiguration --output json | jq -e '.BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' >/dev/null || stop 'rollback bucket privacy check failed'
+  A s3api get-bucket-encryption --bucket "$ASSETS" --query 'ServerSideEncryptionConfiguration.Rules' --output json | jq -e 'length>0 and all(.[]; .ApplyServerSideEncryptionByDefault.SSEAlgorithm=="AES256" or .ApplyServerSideEncryptionByDefault.SSEAlgorithm=="aws:kms")' >/dev/null || stop 'rollback bucket encryption check failed'
+  find "$BASE" -type f -not -name SHA256SUMS -exec sha256sum {} + > "$BASE/SHA256SUMS"
+  ARCHIVE="$WORK/verified-before-cutover-$(date -u +%Y%m%dT%H%M%SZ).tgz"
+  tar -czf "$ARCHIVE" -C "$BASE" .
+  BACKUP_URI="s3://$ASSETS/ogevia-test-rollback/$(basename "$WORK")/$(basename "$ARCHIVE")"
+  A s3 cp "$ARCHIVE" "$BACKUP_URI" --only-show-errors
+  echo "PERSISTENT PRIVATE ROLLBACK: $BACKUP_URI"
+  cd "$REPO"
+  stage '[resume 3/5] Apply reviewed TEST endpoint grant, API and alarms'
+  window
+  pnpm --dir infra/aws exec cdk deploy --app "$BASE/approved" --exclusively Ogevia-prod-NetworkEgress --require-approval never
+  window
+  pnpm --dir infra/aws exec cdk deploy --app "$BASE/approved" --exclusively Ogevia-prod-ServiceVerificationApi Ogevia-prod-Observability --previous-parameters --require-approval never
+  stage '[resume 4/5] Publish TEST website'
+  window
+  VITE_APP_VERSION="$OGEVIA_RELEASE_COMMIT" OGEVIA_APP_ENV=test bash infra/aws/scripts/deploy-test-slice.sh web
+  stage '[resume 5/5] Verify live TEST and unchanged production templates'
+  bash "$DB_TOOL" isolated-verify
+  bash infra/aws/scripts/deploy-test-slice.sh smoke
+  A lambda get-function-configuration --function-name "$FN" --query '{host:Environment.Variables.DB_HOST,database:Environment.Variables.DB_NAME}' --output json | jq -e '.host=="ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com" and .database=="ogevia_sv_test"' >/dev/null
+  for stack in Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability; do
+    A cloudformation get-template --stack-name "$stack" --template-stage Original --query TemplateBody --output json > "$BASE/$stack.after.json"
+    python3 - "$BASE/$stack.template.json" "$BASE/$stack.after.json" <<'PY'
+import json, sys
+assert json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])), 'production template changed'
+PY
+  done
+  stage 'TEST DEPLOYED: database/API/web smoke checks passed; production templates unchanged'
+  A cloudformation describe-stacks --stack-name Ogevia-prod-WebHosting --query 'Stacks[0].Outputs[?OutputKey==`WebOrigin`].OutputValue' --output text
+  echo "Private rollback archive: $BACKUP_URI"
+  echo 'Owner/caregiver acceptance is next; production was not deployed by this command.'
+  exit 0
+fi
+
 # Unified CloudShell entry point. Application source remains the green 6cbab00.
 # The owner executes cloudshell-release to start the already-authorized TEST cutover.
 # The standalone baseline mode reads local files only and keeps all functional checks.
@@ -97,6 +200,18 @@ if [[ "${1:-}" == cloudshell-release ]]; then
     pnpm install --frozen-lockfile --store-dir "$WORK/store" --prefer-offline
   fi
   TOOL="$REPO/docs/releases/2026-11-10-ux-redesign-test/toolchain"
+  DB_TOOL="$WORK/OPERATOR_TEST_DB.verified.sh"
+  python3 - "$TOOL/OPERATOR_TEST_DB.sh" "$DB_TOOL" <<'PY'
+import hashlib, pathlib, sys
+s=pathlib.Path(sys.argv[1]).read_text()
+old="select current_user||'|'||has_table_privilege('ogevia_app','ogevia.clients','SELECT')::text||'|'||has_function_privilege('ogevia_app','ogevia_api.begin_request(text,uuid)','EXECUTE')::text"
+new="begin read only; set local role ogevia_app; select session_user||'|'||has_table_privilege(current_user,'ogevia.clients','SELECT')::text||'|'||has_function_privilege(current_user,'ogevia_api.begin_request(text,uuid)','EXECUTE')::text; rollback;"
+assert s.count(old)==1, 'unexpected verifier source'
+line=next(l for l in s.splitlines() if l.startswith('  LOGIN_OK='))
+s=s.replace(line,line.replace(old,new).replace('psql -X -At','psql -X -qAt'))
+assert hashlib.sha256(s.encode()).hexdigest()=='20c1ff63b57ea3d8a490904128f7ffa80531f907889aab68d5cff7b9c258ff7f', 'fixed verifier checksum differs'
+pathlib.Path(sys.argv[2]).write_text(s)
+PY
   stage '[2/8] Capture current live rollback and compare the release'
   BASE=$(mktemp -d /tmp/ogevia-isolated-capture.XXXXXX)
   export OGEVIA_ISOLATED_CAPTURE="$BASE"
@@ -145,10 +260,10 @@ PY
   pnpm --dir infra/aws exec cdk deploy --app "$BASE/approved" --exclusively Ogevia-prod-DatabaseSecret --require-approval never
   stage '[4/8] Initialize and back up the fresh synthetic TEST database'
   window
-  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-initialize
-  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-verify
+  bash "$DB_TOOL" isolated-initialize
+  bash "$DB_TOOL" isolated-verify
   export OGEVIA_TEST_BACKUP="$BASE/isolated-before-cutover.dump"
-  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-backup
+  bash "$DB_TOOL" isolated-backup
   save_evidence before-cutover
   stage '[5/8] Add reviewed TEST access on the shared endpoint'
   window
@@ -160,7 +275,7 @@ PY
   window
   VITE_APP_VERSION="$OGEVIA_RELEASE_COMMIT" OGEVIA_APP_ENV=test bash infra/aws/scripts/deploy-test-slice.sh web
   stage '[8/8] Verify live TEST and unchanged production templates'
-  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-verify
+  bash "$DB_TOOL" isolated-verify
   bash infra/aws/scripts/deploy-test-slice.sh smoke
   FN=$(jq -er .FunctionName "$BASE/test-lambda.json")
   A lambda get-function-configuration --function-name "$FN" --query '{host:Environment.Variables.DB_HOST,database:Environment.Variables.DB_NAME}' --output json | jq -e '.host=="ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com" and .database=="ogevia_sv_test"' >/dev/null
