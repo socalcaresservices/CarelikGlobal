@@ -123,13 +123,42 @@ def js_hash(path):
 def check_changes(d):
     assert d['Status'] == 'CREATE_COMPLETE' and d['ExecutionStatus'] == 'AVAILABLE'
     changes = d['Changes']
-    assert len(changes) == 1, 'only Handler may change'
-    c = changes[0]['ResourceChange']
-    assert c['LogicalResourceId'] == 'Handler886CB40B' and c['ResourceType'] == 'AWS::Lambda::Function'
-    assert c['Action'] == 'Modify' and c['Replacement'] == 'False'
-    assert c['Scope'] == ['Properties']
+    direct = [x['ResourceChange'] for x in changes if x['ResourceChange']['LogicalResourceId']=='Handler886CB40B']
+    assert len(direct)==1, 'exactly one Handler code update is required'
+    c = direct[0]
+    assert c['ResourceType']=='AWS::Lambda::Function' and c['Action']=='Modify' and c['Replacement']=='False'
+    assert c['Scope']==['Properties']
     assert c['Details'] and all(x['Target']['Attribute']=='Properties' and x['Target']['Name']=='Code'
                                 for x in c['Details']), 'only Code may change'
+    # These four exact live resources were reviewed from the production change
+    # set. Their definitions remain byte-for-byte equal in the template. CFN
+    # reports dynamic ARN propagation even though the Handler is not replaced.
+    allowed = {
+        'ApiGETv1meApiPermissionApiScopedOgeviaprdServiceVerificationApiHandlerB5423A9EOgeviaprdServiceVerificationApi79D9FC77F5F026AD':
+            ('AWS::Lambda::Permission','Conditional',{'FunctionName':'Handler886CB40B.Arn'}),
+        'ApiGETv1meHandlerCDA9441F':
+            ('AWS::ApiGatewayV2::Integration','False',{'IntegrationUri':'Handler886CB40B.Arn'}),
+        'ComplianceSweep51D1109D':
+            ('AWS::Events::Rule','False',{'Targets':'Handler886CB40B.Arn'}),
+        'ComplianceSweepAllowEventRuleOgeviaprdServiceVerificationApiHandlerB5423A9EE440EE04':
+            ('AWS::Lambda::Permission','Conditional',{'SourceArn':'ComplianceSweep51D1109D.Arn','FunctionName':'Handler886CB40B.Arn'}),
+    }
+    seen = set()
+    for change in changes:
+        r = change['ResourceChange']; rid = r['LogicalResourceId']
+        assert rid not in seen, 'duplicate resource change'
+        seen.add(rid)
+        if rid=='Handler886CB40B': continue
+        assert rid in allowed, 'unreviewed dependent resource: '+rid
+        kind, replacement, targets = allowed[rid]
+        assert r['ResourceType']==kind and r['Action']=='Modify' and r['Replacement']==replacement
+        assert r['Scope']==['Properties'] and len(r['Details'])==len(targets)
+        observed = {}
+        for x in r['Details']:
+            assert x['Target']['Attribute']=='Properties' and x['Evaluation']=='Dynamic' and x['ChangeSource']=='ResourceAttribute', 'dependent change must be dynamic ARN propagation'
+            name=x['Target']['Name']; assert name not in observed
+            observed[name]=x['CausingEntity']
+        assert observed==targets, 'unexpected dependency property or ARN'
 
 
 def check_ledger(path, after=False):
@@ -161,6 +190,6 @@ if __name__ == '__main__':
         print('PASS: deployed production Handler matches accepted TEST code')
     elif sys.argv[1] == 'changes':
         check_changes(json.loads(pathlib.Path(sys.argv[2]).read_text()))
-        print('PASS: CloudFormation change set modifies Handler Code only, without replacement')
+        print('PASS: Handler Code update with only the four reviewed dynamic ARN dependencies; no Handler replacement')
     else:
         raise SystemExit('usage: sql [local-test-database] | patch live.json candidate.json')

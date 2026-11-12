@@ -1,4 +1,83 @@
 #!/usr/bin/env bash
+# Resume only the verified post-migration stop; no SQL, tunnel, seed or initializer.
+if [[ "${1:-}" == ux-resume ]]; then
+  set -euo pipefail
+  set +x +H
+  umask 077
+  export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
+  A() { aws --cli-connect-timeout 5 --cli-read-timeout 60 "$@"; }
+  stop() { echo "STOP: $*"; exit 1; }
+  [[ "${OGEVIA_DEPLOY_APPROVAL:-}" == owner-production-ux-go ]] || stop 'production authorization required'
+  [[ "$(A sts get-caller-identity --query Account --output text)" == 300094796789 ]] || stop 'wrong account'
+  exec 9>/tmp/ogevia-production-release.lock
+  flock -n 9 || stop 'another production release is running'
+  B="${2:?set the existing verified post-migration workspace}"
+  [[ "$B" =~ ^/tmp/ogevia-production-release\.[A-Za-z0-9]+$ && -d "$B" && ! -L "$B" ]] || stop 'invalid saved workspace'
+  SELF=$(readlink -f "${BASH_SOURCE[0]}"); PLAN="$(dirname "$SELF")/production-ux-release.py"
+  SOURCE=6cbab00b2795d0cfe42bf644adc6a559adda7c76
+  ASSETS=cdk-hnb659fds-assets-300094796789-us-west-2
+  PREFIX="s3://$ASSETS/ogevia-production-release/$(basename "$B")"
+  exec > >(tee "$B/resume.log") 2>&1
+  trap 'rc=$?; [[ "$rc" == 0 ]] || echo "RESUME STOPPED: keep this session open; no migration was run. Log: $B/resume.log"' EXIT
+  for f in ledger.after.json handler.before.json handler.before.zip handler.accepted.zip candidate.template.json change-set.json previous-parameters.json production-before.dump.sha256 before-update.tgz; do
+    [[ -s "$B/$f" ]] || stop "saved evidence missing: $f"
+  done
+  sha256sum --check "$B/production-before.dump.sha256"
+  A s3api head-object --bucket "$ASSETS" --key "ogevia-production-release/$(basename "$B")/before-update.tgz" --query ContentLength --output text | grep -Eq '^[1-9][0-9]*$'
+  for bin in /tmp/ogevia-*/node-v22.*-linux-*/bin; do [[ ! -x "$bin/node" ]] || { export PATH="$bin:$PATH"; break; }; done
+  [[ "$(node -p 'process.versions.node.split(".")[0]')" == 22 ]] || stop 'saved Node 22 tools unavailable'
+  REPO=''
+  while IFS= read -r g; do
+    r="${g%/.git}"
+    if [[ "$(git -C "$r" rev-parse HEAD 2>/dev/null)" == "$SOURCE" && -z "$(git -C "$r" status --porcelain --untracked-files=no)" && -x "$r/apps/web/node_modules/.bin/vite" ]]; then REPO="$r"; break; fi
+  done < <(find /tmp -maxdepth 5 -type d -name .git -print 2>/dev/null)
+  [[ -n "$REPO" ]] || stop 'accepted checkout with installed web dependencies unavailable'
+  export OGEVIA_UX_SOURCE_ROOT="$REPO"
+  python3 "$PLAN" ledger "$B/ledger.after.json" after
+  python3 "$PLAN" assets "$B"
+  python3 "$PLAN" patch "$B/Ogevia-prd-ServiceVerificationApi.template.json" "$B/resume.expected.template.json"
+  python3 "$PLAN" equal "$B/candidate.template.json" "$B/resume.expected.template.json"
+  A cloudformation get-template --stack-name Ogevia-prd-ServiceVerificationApi --template-stage Original --query TemplateBody --output json > "$B/resume.live.template.json"
+  python3 "$PLAN" equal "$B/Ogevia-prd-ServiceVerificationApi.template.json" "$B/resume.live.template.json"
+  FN=$(jq -er .Function "$B/handler.before.json")
+  [[ "$(A lambda get-function-configuration --function-name "$FN" --query CodeSha256 --output text)" == "$(jq -er .CodeSha256 "$B/handler.before.json")" ]] || stop 'production runtime code changed since the verified stop'
+  CHANGE=$(jq -er '.ChangeSetId' "$B/change-set.json")
+  [[ "$CHANGE" == arn:aws:cloudformation:us-west-2:300094796789:changeSet/ogevia-ux-* ]] || stop 'unexpected change-set ARN'
+  A cloudformation describe-change-set --stack-name Ogevia-prd-ServiceVerificationApi --change-set-name "$CHANGE" --output json > "$B/resume.change-set.json"
+  python3 "$PLAN" changes "$B/resume.change-set.json"
+  A cloudformation get-template --stack-name Ogevia-prd-ServiceVerificationApi --change-set-name "$CHANGE" --template-stage Original --query TemplateBody --output json > "$B/resume.change-set.template.json"
+  python3 "$PLAN" equal "$B/candidate.template.json" "$B/resume.change-set.template.json"
+  A s3 cp "s3://$ASSETS/ed01f08a2df9d8870ed44c25912ce9c9d18f4e6dd73dba29594c954a538c983b.zip" "$B/resume.accepted.zip" --only-show-errors
+  python3 "$PLAN" deployed "$B/resume.accepted.zip"
+  echo '[resume 1/2] Execute the reviewed production API change set; migrations are NOT rerun'
+  A cloudformation execute-change-set --stack-name Ogevia-prd-ServiceVerificationApi --change-set-name "$CHANGE"
+  A cloudformation wait stack-update-complete --stack-name Ogevia-prd-ServiceVerificationApi
+  URL=$(A lambda get-function --function-name "$FN" --query Code.Location --output text)
+  curl -fsS --connect-timeout 10 --max-time 120 "$URL" -o "$B/handler.after.zip"; unset URL
+  python3 "$PLAN" deployed "$B/handler.after.zip"
+  A cloudformation get-template --stack-name Ogevia-prd-ServiceVerificationApi --template-stage Original --query TemplateBody --output json > "$B/resume.after.template.json"
+  python3 "$PLAN" equal "$B/candidate.template.json" "$B/resume.after.template.json"
+  echo '[resume 2/2] Publish and verify the production website'
+  [[ "$(A cloudformation describe-stacks --stack-name Ogevia-prd-Auth --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)" == us-west-2_FHJoX71ca ]] || stop 'dedicated production Auth pool differs'
+  VITE_APP_VERSION="$SOURCE" OGEVIA_DEPLOY_APPROVAL=owner-production-ux-go bash "$REPO/infra/aws/scripts/deploy-production.sh" web
+  out_ux_resume() { jq -er --arg key "$2" '.Outputs[] | select(.OutputKey==$key) | .OutputValue' "$B/$1.stack.json"; }
+  WEB=$(out_ux_resume Ogevia-prd-WebHosting WebOrigin); API=$(out_ux_resume Ogevia-prd-ServiceVerificationApi ApiUrl)
+  [[ "$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "${API%/}/v1/me")" == 401 ]] || stop 'API anonymous check failed'
+  for n in $(seq 1 30); do
+    curl -fsS --connect-timeout 10 --max-time 30 -D "$B/resume.web.headers" "$WEB/?release=$SOURCE" -o "$B/resume.web.html"
+    if cmp -s "$B/resume.web.html" "$REPO/apps/web/dist-aws-prd/index.html"; then break; fi
+    sleep 5
+  done
+  cmp -s "$B/resume.web.html" "$REPO/apps/web/dist-aws-prd/index.html" || stop 'website still propagating; do not rerun migrations'
+  grep -qi '^content-security-policy:' "$B/resume.web.headers" || stop 'web CSP missing'
+  A cloudformation get-template --stack-name Ogevia-prod-ServiceVerificationApi --template-stage Original --query TemplateBody --output json > "$B/resume.test.after.json"
+  python3 "$PLAN" equal "$B/Ogevia-prod-ServiceVerificationApi.template.json" "$B/resume.test.after.json"
+  echo 'PRODUCTION DEPLOYED: verified 107 ledger rows retained; accepted API/web code live; TEST API unchanged'
+  echo "Open: $WEB"
+  echo "Private rollback: $PREFIX/before-update.tgz"
+  echo 'No database, security-group or account changes were made by this resume.'
+  exit 0
+fi
 # Existing production deployment entry point, promotion of the owner-accepted TEST app.
 if [[ "${1:-}" == ux-release ]]; then
   set -euo pipefail

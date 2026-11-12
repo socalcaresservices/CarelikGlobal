@@ -95,3 +95,33 @@ it("generates a single transaction with an exact baseline guard and no TEST seed
   expect(r.stdout).not.toMatch(/create database|seed_synthetic|create role/i);
   expect(run("sql", "ogevia_sv_test").status).not.toBe(0);
 });
+function dependentChanges() {
+  const detail = (Name: string, CausingEntity: string) => ({ Target: { Attribute: "Properties", Name }, Evaluation: "Dynamic", ChangeSource: "ResourceAttribute", CausingEntity });
+  const change = (LogicalResourceId: string, ResourceType: string, Replacement: string, Details: unknown[]) => ({ ResourceChange: { LogicalResourceId, ResourceType, Action: "Modify", Replacement, Scope: ["Properties"], Details } });
+  return { Status: "CREATE_COMPLETE", ExecutionStatus: "AVAILABLE", Changes: [
+    change("Handler886CB40B", "AWS::Lambda::Function", "False", [{ Target: { Attribute: "Properties", Name: "Code" }, Evaluation: "Static", ChangeSource: "DirectModification" }]),
+    change("ApiGETv1meApiPermissionApiScopedOgeviaprdServiceVerificationApiHandlerB5423A9EOgeviaprdServiceVerificationApi79D9FC77F5F026AD", "AWS::Lambda::Permission", "Conditional", [detail("FunctionName", "Handler886CB40B.Arn")]),
+    change("ApiGETv1meHandlerCDA9441F", "AWS::ApiGatewayV2::Integration", "False", [detail("IntegrationUri", "Handler886CB40B.Arn")]),
+    change("ComplianceSweep51D1109D", "AWS::Events::Rule", "False", [detail("Targets", "Handler886CB40B.Arn")]),
+    change("ComplianceSweepAllowEventRuleOgeviaprdServiceVerificationApiHandlerB5423A9EE440EE04", "AWS::Lambda::Permission", "Conditional", [detail("SourceArn", "ComplianceSweep51D1109D.Arn"), detail("FunctionName", "Handler886CB40B.Arn")]),
+  ] };
+}
+it.each(["accepted", "unreviewed resource", "static permission", "different ARN", "replacement"])("validates the captured dynamic dependency case: %s", (kind) => {
+  const d: any = dependentChanges();
+  if (kind === "unreviewed resource") d.Changes[1].ResourceChange.LogicalResourceId = "OtherPermission";
+  if (kind === "static permission") d.Changes[1].ResourceChange.Details[0].Evaluation = "Static";
+  if (kind === "different ARN") d.Changes[1].ResourceChange.Details[0].CausingEntity = "OtherFunction.Arn";
+  if (kind === "replacement") d.Changes[2].ResourceChange.Replacement = "True";
+  const dir = mkdtempSync(join(tmpdir(), "production-dependencies-")), file = join(dir, "changes.json");
+  writeFileSync(file, JSON.stringify(d));
+  const r = run("changes", file);
+  if (kind === "accepted") expect(r.status, r.stderr).toBe(0);
+  else expect(r.status).not.toBe(0);
+});
+it("the resume mode contains no database commands or security-group writes", () => {
+  const source = readFileSync(new URL("../scripts/deploy-production.sh", import.meta.url), "utf8");
+  const resume = source.slice(source.indexOf('if [[ "${1:-}" == ux-resume ]]'), source.indexOf('# Existing production deployment entry point'));
+  expect(resume).toContain('execute-change-set');
+  expect(resume).toContain('"$PLAN" ledger "$B/ledger.after.json" after');
+  expect(resume).not.toMatch(/\bpsql\b|\bpg_dump\b|db:migrate|modify-instance-attribute|start-session|seed_synthetic/);
+});
