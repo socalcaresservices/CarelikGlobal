@@ -1,4 +1,55 @@
 #!/usr/bin/env bash
+# Restore post-seed state from durable private rollback evidence, never from a guessed /tmp path.
+if [[ "${1:-}" == cloudshell-recover ]]; then
+  set -euo pipefail
+  set +x +H
+  umask 077
+  OPERATOR_COMMIT="${2:?set the pinned operator commit}"
+  [[ "$OPERATOR_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'STOP: invalid operator commit'; exit 1; }
+  SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
+  A() { aws --cli-connect-timeout 5 --cli-read-timeout 60 "$@"; }
+  test "$(A sts get-caller-identity --query Account --output text)" = 300094796789 || { echo 'STOP: wrong AWS account'; exit 1; }
+  PREPARED_STATE=$(mktemp /tmp/ogevia-prepared.XXXXXX)
+  OGEVIA_PREPARED_STATE="$PREPARED_STATE" bash "$SELF" cloudshell-release prepare-only
+  WORK=$(sed -n '1p' "$PREPARED_STATE")
+  REPO=$(sed -n '2p' "$PREPARED_STATE")
+  [[ "$WORK" =~ ^/tmp/ogevia-run\.[A-Za-z0-9]+$ && -d "$REPO/.git" ]] || { echo 'STOP: preparation did not return a valid checkout'; exit 1; }
+  ASSETS=cdk-hnb659fds-assets-300094796789-us-west-2
+  A s3api list-objects-v2 --bucket "$ASSETS" --prefix ogevia-test-rollback/ --output json > "$WORK/rollback-objects.json"
+  KEY=$(jq -r '(.Contents // []) | map(select(.Key | test("^ogevia-test-rollback/ogevia-run[.][A-Za-z0-9]+/before-release[.]tgz$"))) | sort_by(.LastModified) | last | .Key // empty' "$WORK/rollback-objects.json")
+  [[ -n "$KEY" ]] || { echo 'STOP: no durable pre-release backup found; database has not been changed'; exit 1; }
+  A s3 cp "s3://$ASSETS/$KEY" "$WORK/recovered-before-release.tgz" --only-show-errors
+  BASE=$(mktemp -d /tmp/ogevia-isolated-capture.XXXXXX)
+  python3 - "$WORK/recovered-before-release.tgz" "$BASE" <<'PY'
+import hashlib, pathlib, re, sys, tarfile
+b=pathlib.Path(sys.argv[2])
+with tarfile.open(sys.argv[1], 'r:gz') as t:
+    members=t.getmembers()
+    for m in members:
+        p=pathlib.PurePosixPath(m.name)
+        assert not p.is_absolute() and not pathlib.PureWindowsPath(m.name).drive and '..' not in p.parts and '\\' not in m.name, 'unsafe archive path'
+        assert m.isfile() or m.isdir(), 'unexpected archive link or special file'
+    t.extractall(b, members=members)
+assert (b/'release-commit.txt').read_text().strip()=='6cbab00b2795d0cfe42bf644adc6a559adda7c76', 'backup is for a different source release'
+assert (b/'approved/Ogevia-prod-ServiceVerificationApi.template.json').is_file(), 'approved assembly missing'
+for line in (b/'SHA256SUMS').read_text().splitlines():
+    digest, old=line.split(maxsplit=1)
+    old=old.lstrip('*')
+    parts=pathlib.PurePosixPath(old).parts
+    assert len(parts)>=4 and parts[0]=='/' and parts[1]=='tmp' and re.fullmatch(r'ogevia-isolated-capture\.[A-Za-z0-9]+',parts[2]), 'unexpected checksum path'
+    p=b.joinpath(*parts[3:])
+    assert p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest()==digest, 'recovered file checksum mismatch: '+str(p.relative_to(b))
+print('PERSISTENT ROLLBACK RESTORED: release and file checksums verified')
+PY
+  printf '%s\n' "$REPO" > "$WORK/repo-location.txt"
+  printf 'CAPTURE: %s\n' "$BASE" > "$WORK/release.log"
+  echo "Recovered from s3://$ASSETS/$KEY"
+  echo 'Resuming the existing database. No initializer or seed will run.'
+  bash "$SELF" cloudshell-resume "$WORK" "$OPERATOR_COMMIT"
+  exit "$?"
+fi
+
 # Resume the known post-seed verification stop. Never initializes or seeds a DB.
 if [[ "${1:-}" == cloudshell-resume ]]; then
   set -euo pipefail
@@ -10,6 +61,7 @@ if [[ "${1:-}" == cloudshell-resume ]]; then
   [[ "$OPERATOR_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'STOP: invalid operator commit'; exit 1; }
   SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
   export REPO="$WORK/repo" OGEVIA_RELEASE_COMMIT=6cbab00b2795d0cfe42bf644adc6a559adda7c76
+  [[ ! -f "$WORK/repo-location.txt" ]] || export REPO="$(cat "$WORK/repo-location.txt" )"
   BASE=$(sed -n 's/^CAPTURE: //p' "$WORK/release.log" | tail -n 1)
   [[ "$BASE" =~ ^/tmp/ogevia-isolated-capture\.[A-Za-z0-9]+$ && -d "$BASE/approved" && ! -L "$BASE" ]] || { echo 'STOP: approved capture is unavailable'; exit 1; }
   export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
@@ -18,7 +70,7 @@ if [[ "${1:-}" == cloudshell-resume ]]; then
   stage() { CURRENT_STEP="$1"; printf '\033[32m%s\033[0m\n' "$CURRENT_STEP"; }
   test "$(A sts get-caller-identity --query Account --output text)" = 300094796789 || stop 'wrong AWS account'
   exec 9>/tmp/ogevia-test-release.lock
-  flock -n 9 || stop 'another TEST release is running'
+  flock -w 10 9 || stop 'another TEST release is running'
   exec > >(tee "$WORK/resume-$(date -u +%Y%m%dT%H%M%SZ).log") 2>&1
   CURRENT_STEP=resume-verification
   trap 'rc=$?; [[ "$rc" == 0 ]] || echo "STOPPED during $CURRENT_STEP. Preserve $WORK and $BASE; no initialization was rerun."' EXIT
@@ -136,7 +188,9 @@ if [[ "${1:-}" == cloudshell-release ]]; then
   exec 9>/tmp/ogevia-test-release.lock
   flock -n 9 || stop 'another copy of this TEST release is running'
   WORK=$(mktemp -d /tmp/ogevia-run.XXXXXX)
-  exec > >(tee "$WORK/release.log") 2>&1
+  RUN_LOG="$WORK/release.log"
+  [[ "${2:-}" != prepare-only ]] || RUN_LOG="$WORK/preparation.log"
+  exec > >(tee "$RUN_LOG") 2>&1
   CURRENT_STEP=preparation
   trap 'rc=$?; if [[ "$rc" != 0 ]]; then echo "STOPPED during: $CURRENT_STEP"; echo "Keep this session open. Log: $WORK/release.log"; echo "Do not rerun a partially completed initializer blindly."; fi' EXIT
   export COREPACK_HOME="$WORK/corepack" XDG_CACHE_HOME="$WORK/cache" npm_config_cache="$WORK/npm-cache" COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -212,6 +266,11 @@ s=s.replace(line,line.replace(old,new).replace('psql -X -At','psql -X -qAt'))
 assert hashlib.sha256(s.encode()).hexdigest()=='20c1ff63b57ea3d8a490904128f7ffa80531f907889aab68d5cff7b9c258ff7f', 'fixed verifier checksum differs'
 pathlib.Path(sys.argv[2]).write_text(s)
 PY
+  if [[ "${2:-}" == prepare-only ]]; then
+    printf '%s\n%s\n' "$WORK" "$REPO" > "${OGEVIA_PREPARED_STATE:?set the private state output file}"
+    echo 'PREPARATION COMPLETE: no initializer, secret deployment or cutover ran'
+    exit 0
+  fi
   stage '[2/8] Capture current live rollback and compare the release'
   BASE=$(mktemp -d /tmp/ogevia-isolated-capture.XXXXXX)
   export OGEVIA_ISOLATED_CAPTURE="$BASE"
