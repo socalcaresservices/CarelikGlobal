@@ -81,7 +81,7 @@ if [[ "${1:-}" == ux-release ]]; then
     git -C "$REPO" fetch --filter=blob:none --depth=1 origin "$SOURCE"
     git -C "$REPO" checkout --detach -q FETCH_HEAD
   fi
-  [[ -x "$REPO/apps/web/node_modules/.bin/vite" ]] || pnpm --dir "$REPO" install --frozen-lockfile --store-dir "$WORK/store" --prefer-offline
+  [[ -x "$REPO/apps/web/node_modules/.bin/vite" ]] || corepack pnpm@9.15.4 --dir "$REPO" install --frozen-lockfile --store-dir "$WORK/store" --prefer-offline
   # The helper is operator tooling; its immutable SQL inputs come from the accepted checkout.
   export OGEVIA_UX_SOURCE_ROOT="$REPO"
   python3 "$PLAN" sql > "$WORK/upgrade.sql"

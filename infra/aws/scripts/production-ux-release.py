@@ -14,7 +14,7 @@ import sys
 import base64
 import zipfile
 
-ROOT = pathlib.Path(os.environ.get('OGEVIA_UX_SOURCE_ROOT', pathlib.Path(__file__).resolve().parents[3]))
+ROOT = pathlib.Path(os.environ['OGEVIA_UX_SOURCE_ROOT']) if os.environ.get('OGEVIA_UX_SOURCE_ROOT') else pathlib.Path(__file__).resolve().parents[3]
 SOURCE = '6cbab00b2795d0cfe42bf644adc6a559adda7c76'
 ASSETS = 'cdk-hnb659fds-assets-300094796789-us-west-2'
 KEY = 'ed01f08a2df9d8870ed44c25912ce9c9d18f4e6dd73dba29594c954a538c983b.zip'
@@ -79,9 +79,14 @@ def patch_template(t):
         {'Fn::ImportValue': 'Ogevia-prd-Auth:ExportsOutputRefUserPool19CF3AE1'},
     ), 'dedicated production auth reference differs'
     assert p['Runtime'] == 'nodejs24.x', 'production runtime changed'
-    assert e.get('OGEVIA_QR_ENCRYPTION_KEY') == {'Ref': 'ClientQrEncryptionKey'}
-    assert t['Parameters']['ClientQrEncryptionKey'].get('NoEcho') is True
-    assert not t['Parameters']['ClientQrEncryptionKey'].get('Default'), 'embedded QR default'
+    # The owner's production capture uses QrEncryptionKey0102; TEST uses
+    # ClientQrEncryptionKey. Preserve the actual reference and previous value.
+    qr = e.get('OGEVIA_QR_ENCRYPTION_KEY')
+    assert qr in (None, '', {'Ref': 'ClientQrEncryptionKey'}, {'Ref': 'QrEncryptionKey0102'}), 'unexpected QR configuration'
+    if isinstance(qr, dict):
+        spec = t['Parameters'][qr['Ref']]
+        assert spec.get('NoEcho') is True
+        assert not spec.get('Default'), 'embedded QR default'
     routes = [r['Properties']['RouteKey'] for r in t['Resources'].values()
               if r['Type'] == 'AWS::ApiGatewayV2::Route']
     assert len(routes) == len(set(routes))

@@ -44,6 +44,28 @@ it("preserves the production Auth stack import as well as its resolved runtime p
   t.Resources.Handler886CB40B.Properties.Environment.Variables.COGNITO_USER_POOL_ID = { "Fn::ImportValue": "Ogevia-prod-Auth:ExportsOutputRefUserPool19CF3AE1" };
   expect(patch(t).result.status).not.toBe(0);
 });
+it.each(["absent", "QrEncryptionKey0102"])("preserves production QR configuration when %s", (kind) => {
+  const t: any = fixture();
+  const spec = t.Parameters.ClientQrEncryptionKey;
+  delete t.Parameters.ClientQrEncryptionKey;
+  if (kind === "absent") delete t.Resources.Handler886CB40B.Properties.Environment.Variables.OGEVIA_QR_ENCRYPTION_KEY;
+  else {
+    t.Parameters.QrEncryptionKey0102 = spec;
+    t.Resources.Handler886CB40B.Properties.Environment.Variables.OGEVIA_QR_ENCRYPTION_KEY = { Ref: "QrEncryptionKey0102" };
+  }
+  const { result, output } = patch(t);
+  expect(result.status, result.stderr).toBe(0);
+  const after = JSON.parse(readFileSync(output, "utf8"));
+  after.Resources.Handler886CB40B.Properties.Code = t.Resources.Handler886CB40B.Properties.Code;
+  expect(after).toEqual(t);
+});
+it("loads the explicit source checkout from a shallow standalone download directory", () => {
+  const sourceRoot = fileURLToPath(new URL("../../../", import.meta.url));
+  // Fail if the helper even evaluates its fallback while an explicit root is set.
+  const code = `import os,pathlib,runpy\nos.environ['OGEVIA_UX_SOURCE_ROOT']=${JSON.stringify(sourceRoot)}\nreal=pathlib.Path\ndef path(cls,v):\n if str(v)==${JSON.stringify(helper)}: raise IndexError('shallow standalone fallback evaluated')\n return real(v)\npathlib.Path=type('StandalonePath',(),{'__new__':path})\nrunpy.run_path(${JSON.stringify(helper)},run_name='standalone_test')`;
+  const r = spawnSync(process.env.PYTHON ?? "python3", ["-c", code], { encoding: "utf8" });
+  expect(r.status, r.stderr).toBe(0);
+});
 it.each(["test database", "test identity pool", "exposed QR key", "removed accepted route", "enabled import"])("refuses %s", (kind) => {
   const t: any = fixture();
   const env = t.Resources.Handler886CB40B.Properties.Environment.Variables;
