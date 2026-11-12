@@ -55,7 +55,15 @@ def migration_sql(database='ogevia_prd'):
            "do $production_guard$ begin",
            f"if current_database() <> {literal(database)} then raise exception 'Wrong production database'; end if;",
            "if (select coalesce(jsonb_agg(jsonb_build_object('version',version,'name',name,'checksum',checksum) order by version),'[]'::jsonb) from ogevia_meta.schema_migrations) <> " + literal(expected) + "::jsonb then raise exception 'Production ledger differs from reviewed 102 migrations; no migration applied'; end if;",
-           "end $production_guard$;"]
+           "end $production_guard$;",
+           # Accepted production 0095 was created by its migration admin.
+           # Normalize only this known function, without changing grants or
+           # membership. Repair and all five migrations roll back together.
+           "do $production_owner$ declare existing_owner text; begin",
+           "select pg_get_userbyid(proowner) into existing_owner from pg_proc where oid='ogevia_api.caregiver_visible_client_name(uuid,uuid,text)'::regprocedure;",
+           "if existing_owner=session_user then alter function ogevia_api.caregiver_visible_client_name(uuid,uuid,text) owner to ogevia_owner;",
+           "elsif existing_owner<>'ogevia_owner' then raise exception 'Unexpected owner of caregiver_visible_client_name; no ownership change applied'; end if;",
+           "end $production_owner$;"]
     for row, body in rows:
         sql += ['set local role ogevia_owner;', body, 'reset role;',
                 'insert into ogevia_meta.schema_migrations(version,name,checksum) values ('+
