@@ -1,3 +1,19 @@
+# TEST deployed — authenticated acceptance pending
+
+Owner-reported CloudShell result: TEST DEPLOYED, database/API/web smoke checks passed, production API/Observability templates unchanged. Deployed application source is 6cbab00b2795d0cfe42bf644adc6a559adda7c76; isolated database ledger 107/0107 and every migration checksum verified; unprivileged login verified. The TEST API now targets ogevia-postgres / ogevia_sv_test. The reviewed additive shared endpoint grant was applied; this does not mean no shared infrastructure changed.
+
+Live TEST URL: https://d2xumch5w0izfg.cloudfront.net
+Private rollback archive: s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-test-rollback/ogevia-run.eWYNmc/verified-before-cutover-20261112T035847Z.tgz
+
+Independent public HTTP check: root returns 200, Content-Security-Policy is present, and the served index references the uploaded index-CDoFnwc5.js asset. This is public-page verification, not authenticated workflow acceptance. The owner has been asked to verify owner/caregiver sign-ins and a synthetic Start -> End -> Confirm visit. Those results remain pending. Production has NOT been deployed by this release.
+
+Verifier regression CI #448 passed all three jobs: full test:all 3,814 passed, zero failed/skipped; harness passed; lint/typecheck/build passed. https://github.com/socalcaresservices/CarelikGlobal/actions/runs/43148544387. The final CloudShell recovery helper publication is 28d41eb564c651f84402678235b3b44c6a7d328b; application source remains the reviewed 6cbab00, not the helper's commit. Earlier shared-release pins and preparation-only statements below are historical and do not describe current TEST deployment state.
+
+Production preparation still needs current metadata/ledger/template inventory and a production-scoped migration/backup/rollback plan. Its dedicated Cognito configuration and database are distinct from TEST. Do not deploy the default production migration set or reuse the TEST initializer/seeds without the production analysis. Owner authorization for TEST then production is already recorded; do not ask for the same scope approval again.
+
+---
+
+## Historical preparation evidence
 ## Lost temporary workspace after initialization
 If the original run directory is unavailable, use cloudshell-recover with the pinned operator commit. It prepares only missing local tools/source, reads the newest private before-release archive from the existing CDK asset bucket, checks the source release and all recovered file checksums, and resumes verification/backup/cutover without schema creation or seeding. The database state on RDS is preserved. This avoids hard-coded temporary path assumptions.
 
