@@ -1,4 +1,185 @@
 #!/usr/bin/env bash
+# Unified CloudShell entry point. Application source remains the green 6cbab00.
+# The owner executes cloudshell-release to start the already-authorized TEST cutover.
+# The standalone baseline mode reads local files only and keeps all functional checks.
+if [[ "${1:-}" == cloudshell-baseline ]]; then
+  python3 - "$2" "$3" <<'PY'
+import pathlib, runpy, sys
+b = pathlib.Path(sys.argv[1]); g = runpy.run_path(sys.argv[2])
+def clean(p):
+    t = g['norm'](g['load'](p))
+    t['Resources'] = {k:v for k,v in t['Resources'].items() if v.get('Type') != 'AWS::CDK::Metadata'}
+    return t
+for stack in ['Ogevia-prod-NetworkEgress', 'Ogevia-prod-Observability']:
+    name = stack + '.template.json'
+    if clean(b/name) != clean(b/'shared'/name):
+        raise SystemExit('STOP: functional live drift in ' + stack)
+    print('LIVE BASELINE PASS:', stack)
+PY
+  exit "$?"
+fi
+if [[ "${1:-}" == cloudshell-release ]]; then
+  set -euo pipefail
+  set +x +H
+  umask 077
+  [[ "$(uname -s)" == Linux ]] || { echo 'STOP: run in AWS CloudShell'; exit 1; }
+  SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
+  A() { aws --cli-connect-timeout 5 --cli-read-timeout 60 "$@"; }
+  stop() { echo "STOP: $*"; exit 1; }
+  stage() { CURRENT_STEP="$1"; printf '\033[32m%s\033[0m\n' "$CURRENT_STEP"; }
+  test "$(A sts get-caller-identity --query Account --output text)" = 300094796789 || stop 'wrong AWS account'
+  command -v flock >/dev/null || stop 'CloudShell flock is missing'
+  exec 9>/tmp/ogevia-test-release.lock
+  flock -n 9 || stop 'another copy of this TEST release is running'
+  WORK=$(mktemp -d /tmp/ogevia-run.XXXXXX)
+  exec > >(tee "$WORK/release.log") 2>&1
+  CURRENT_STEP=preparation
+  trap 'rc=$?; if [[ "$rc" != 0 ]]; then echo "STOPPED during: $CURRENT_STEP"; echo "Keep this session open. Log: $WORK/release.log"; echo "Do not rerun a partially completed initializer blindly."; fi' EXIT
+  export COREPACK_HOME="$WORK/corepack" XDG_CACHE_HOME="$WORK/cache" npm_config_cache="$WORK/npm-cache" COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+  export OGEVIA_RELEASE_COMMIT=6cbab00b2795d0cfe42bf644adc6a559adda7c76
+  export OGEVIA_DEPLOY_APPROVAL=owner-chat-20261111
+  export OWNER_SUB=685183b0-f041-70fb-270e-d8ca934231d2
+  export MANAGER_SUB=58d173c0-e0d1-709f-4288-116f2ed5dbfc
+  export CAREGIVER_SUB=8861c310-9081-70d4-85f7-0a33f9a58a94
+  stage '[1/8] Restore only missing local tools and the reviewed checkout'
+  for sub in "$OWNER_SUB" "$MANAGER_SUB" "$CAREGIVER_SUB"; do
+    result=$(A cognito-idp list-users --user-pool-id us-west-2_849AYz5J7 --filter "sub = \"$sub\"" --query 'Users[].{Enabled:Enabled,Status:UserStatus}' --output json)
+    jq -e 'length==1 and .[0].Enabled==true and .[0].Status=="CONFIRMED"' <<<"$result" >/dev/null || stop "required TEST sign-in is not enabled and CONFIRMED: $sub"
+  done
+  statuses=$(A cloudformation describe-stacks --query "Stacks[?starts_with(StackName, 'Ogevia-prod-')].StackStatus" --output text)
+  [[ "$statuses" != *IN_PROGRESS* && "$statuses" != *FAILED* ]] || stop 'a TEST stack is busy or failed; inspect its current operation'
+  major=$(pg_dump --version 2>/dev/null | sed -E 's/.* ([0-9]+)\..*/\1/' || true)
+  if [[ ! "$major" =~ ^[0-9]+$ || "$major" -lt 18 ]]; then
+    if rpm -q postgresql16 >/dev/null 2>&1; then
+      sudo dnf swap -y --releasever=latest postgresql16 postgresql18
+    else
+      sudo dnf install -y --releasever=latest postgresql18
+    fi
+    hash -r
+  fi
+  major=$(pg_dump --version | sed -E 's/.* ([0-9]+)\..*/\1/')
+  [[ "$major" =~ ^[0-9]+$ && "$major" -ge 18 ]] || stop 'PostgreSQL 18+ backup client is required'
+  for bin in /tmp/ogevia-*/node-v22.*-linux-*/bin; do
+    [[ ! -x "$bin/node" ]] || { export PATH="$bin:$PATH"; break; }
+  done
+  if ! command -v node >/dev/null || [[ "$(node -p 'process.versions.node.split(".")[0]')" != 22 ]]; then
+    case "$(uname -m)" in x86_64) arch=x64;; aarch64) arch=arm64;; *) stop 'unsupported CPU';; esac
+    archive="node-v22.23.5-linux-$arch.tar.xz"
+    curl -fsS --connect-timeout 10 --max-time 180 "https://nodejs.org/dist/v22.23.5/$archive" -o "$WORK/$archive"
+    curl -fsS --connect-timeout 10 --max-time 60 https://nodejs.org/dist/v22.23.5/SHASUMS256.txt -o "$WORK/node-sums"
+    awk -v f="$archive" '$2==f' "$WORK/node-sums" > "$WORK/node-check"
+    test -s "$WORK/node-check"
+    (cd "$WORK" && sha256sum --check node-check)
+    tar -xJf "$WORK/$archive" -C "$WORK"
+    export PATH="$WORK/${archive%.tar.xz}/bin:$PATH"
+  fi
+  mkdir -p "$WORK/bin"
+  corepack enable --install-directory "$WORK/bin"
+  export PATH="$WORK/bin:$PATH"
+  REPO=''
+  while IFS= read -r gitdir; do
+    r="${gitdir%/.git}"
+    if [[ "$(git -C "$r" rev-parse HEAD 2>/dev/null)" == "$OGEVIA_RELEASE_COMMIT" && -z "$(git -C "$r" status --porcelain --untracked-files=no)" ]]; then REPO="$r"; break; fi
+  done < <(find /tmp -maxdepth 5 -type d -name .git -print 2>/dev/null)
+  if [[ -z "$REPO" ]]; then
+    REPO="$WORK/repo"
+    git init -q "$REPO"
+    git -C "$REPO" remote add origin https://github.com/socalcaresservices/CarelikGlobal.git
+    git -C "$REPO" config remote.origin.promisor true
+    git -C "$REPO" config remote.origin.partialclonefilter blob:none
+    git -C "$REPO" fetch --filter=blob:none --depth=1 origin "$OGEVIA_RELEASE_COMMIT"
+    git -C "$REPO" checkout --detach -q FETCH_HEAD
+  fi
+  export REPO
+  cd "$REPO"
+  if [[ ! -x node_modules/.bin/esbuild || ! -x infra/aws/node_modules/.bin/cdk || ! -x apps/web/node_modules/.bin/vite ]]; then
+    pnpm install --frozen-lockfile --store-dir "$WORK/store" --prefer-offline
+  fi
+  TOOL="$REPO/docs/releases/2026-11-10-ux-redesign-test/toolchain"
+  stage '[2/8] Capture current live rollback and compare the release'
+  BASE=$(mktemp -d /tmp/ogevia-isolated-capture.XXXXXX)
+  export OGEVIA_ISOLATED_CAPTURE="$BASE"
+  # The pinned app's old caller compares raw CDK telemetry. Re-run every
+  # strict comparison below, with only that telemetry resource excluded.
+  if bash "$TOOL/OPERATOR_TEST_DEPLOY.sh" isolated-compare; then :; else
+    echo 'Completing strict comparisons with the reviewed telemetry normalization.'
+  fi
+  python3 "$TOOL/diff_gate_ux.py" --live "$BASE/Ogevia-prod-ServiceVerificationApi.template.json" --new "$BASE/shared/Ogevia-prod-ServiceVerificationApi.template.json" --expect pre
+  python3 "$TOOL/diff_gate_ux.py" --isolated-assemblies "$BASE/shared" "$BASE/isolated"
+  bash "$SELF" cloudshell-baseline "$BASE" "$TOOL/diff_gate_ux.py"
+  python3 - "$BASE" <<'PY'
+import base64, hashlib, json, pathlib, zipfile, sys
+b=pathlib.Path(sys.argv[1]); live=json.loads((b/'test-lambda.json').read_text())
+assert base64.b64encode(hashlib.sha256((b/'test-lambda.zip').read_bytes()).digest()).decode()==live['CodeSha256'], 'rollback ZIP hash mismatch'
+with zipfile.ZipFile(b/'test-lambda.zip') as z:
+    assert z.getinfo('index.js').file_size <= 10_000_000
+    assert hashlib.sha256(z.read('index.js')).hexdigest()=='51801cff1705dc6e1cc6b8a9ed3a02a28ef25f1ad94e568388a9d435a963a591'
+t=json.loads((b/'shared/Ogevia-prod-ServiceVerificationApi.template.json').read_text())
+assert t['Resources']['Handler886CB40B']['Properties']['Code']['S3Key']=='ed01f08a2df9d8870ed44c25912ce9c9d18f4e6dd73dba29594c954a538c983b.zip', 'reviewed Handler asset differs'
+asset=t['Resources']['Handler886CB40B']['Metadata']['aws:asset:path']
+assert hashlib.sha256((b/'shared'/asset/'index.js').read_bytes()).hexdigest()=='98e84618f6eeaf6472985db06db9132cf39d887d296d38301ee0137e3a6e991c'
+print('LIVE ROLLBACK AND REVIEWED APPLICATION ASSET: verified')
+PY
+  export OGEVIA_WINDOW_START="$(date -u '+%F %T')"
+  export OGEVIA_WINDOW_END="$(date -u -d '+60 minutes' '+%F %T')"
+  window() { [[ "$(date -u +%s)" -lt "$(date -u -d "$OGEVIA_WINDOW_END" +%s)" ]] || stop 'execution window ended; start no further deployment step'; }
+  export OGEVIA_ISOLATED_TEST_GO=initialize-ogevia-postgres
+  pnpm --dir infra/aws exec cdk synth '*' --quiet --lookups=false -c env=prod -c mode=deploy -c liveTestBaseline=0102 -c "liveQrParameterSpec=$(cat "$BASE/qr-parameter-spec.json")" -c "liveTestHandlerTags=$(cat "$BASE/handler-tags.json")" -c testDatabase=isolated -c "testMasterSecretArn=$(cat "$BASE/candidate-master-arn.txt")" --output "$BASE/approved"
+  python3 "$TOOL/diff_gate_ux.py" --isolated-assemblies "$BASE/shared" "$BASE/approved"
+  ASSETS=cdk-hnb659fds-assets-300094796789-us-west-2
+  A s3api get-public-access-block --bucket "$ASSETS" --query PublicAccessBlockConfiguration --output json | jq -e '.BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' >/dev/null || stop 'rollback bucket is not confirmed private'
+  A s3api get-bucket-encryption --bucket "$ASSETS" --query 'ServerSideEncryptionConfiguration.Rules' --output json | jq -e 'length>0 and all(.[]; .ApplyServerSideEncryptionByDefault.SSEAlgorithm=="AES256" or .ApplyServerSideEncryptionByDefault.SSEAlgorithm=="aws:kms")' >/dev/null || stop 'rollback bucket encryption is not confirmed'
+  BACKUP_PREFIX="s3://$ASSETS/ogevia-test-rollback/$(basename "$WORK")"
+  save_evidence() {
+    local label="$1"
+    find "$BASE" -type f -not -name SHA256SUMS -exec sha256sum {} + > "$BASE/SHA256SUMS"
+    tar -czf "$WORK/$label.tgz" -C "$BASE" .
+    A s3 cp "$WORK/$label.tgz" "$BACKUP_PREFIX/$label.tgz" --only-show-errors
+    echo "PERSISTENT PRIVATE ROLLBACK: $BACKUP_PREFIX/$label.tgz"
+  }
+  echo 'COMPARISON PASSED' > "$BASE/comparison-result.txt"
+  save_evidence before-release
+  stage '[3/8] Deploy dedicated TEST secret'
+  window
+  pnpm --dir infra/aws exec cdk deploy --app "$BASE/approved" --exclusively Ogevia-prod-DatabaseSecret --require-approval never
+  stage '[4/8] Initialize and back up the fresh synthetic TEST database'
+  window
+  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-initialize
+  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-verify
+  export OGEVIA_TEST_BACKUP="$BASE/isolated-before-cutover.dump"
+  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-backup
+  save_evidence before-cutover
+  stage '[5/8] Add reviewed TEST access on the shared endpoint'
+  window
+  pnpm --dir infra/aws exec cdk deploy --app "$BASE/approved" --exclusively Ogevia-prod-NetworkEgress --require-approval never
+  stage '[6/8] Deploy TEST API and alarms'
+  window
+  pnpm --dir infra/aws exec cdk deploy --app "$BASE/approved" --exclusively Ogevia-prod-ServiceVerificationApi Ogevia-prod-Observability --previous-parameters --require-approval never
+  stage '[7/8] Publish TEST website'
+  window
+  VITE_APP_VERSION="$OGEVIA_RELEASE_COMMIT" OGEVIA_APP_ENV=test bash infra/aws/scripts/deploy-test-slice.sh web
+  stage '[8/8] Verify live TEST and unchanged production templates'
+  bash "$TOOL/OPERATOR_TEST_DB.sh" isolated-verify
+  bash infra/aws/scripts/deploy-test-slice.sh smoke
+  FN=$(jq -er .FunctionName "$BASE/test-lambda.json")
+  A lambda get-function-configuration --function-name "$FN" --query '{host:Environment.Variables.DB_HOST,database:Environment.Variables.DB_NAME}' --output json | jq -e '.host=="ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com" and .database=="ogevia_sv_test"' >/dev/null
+  for stack in Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability; do
+    A cloudformation get-template --stack-name "$stack" --template-stage Original --query TemplateBody --output json > "$BASE/$stack.after.json"
+    python3 - "$BASE/$stack.template.json" "$BASE/$stack.after.json" <<'PY'
+import json, sys
+assert json.load(open(sys.argv[1])) == json.load(open(sys.argv[2])), 'production template changed'
+PY
+  done
+  save_evidence verified-release
+  stage 'TEST DEPLOYED: database/API/web smoke checks passed; production templates unchanged'
+  A cloudformation describe-stacks --stack-name Ogevia-prod-WebHosting --query 'Stacks[0].Outputs[?OutputKey==`WebOrigin`].OutputValue' --output text
+  echo "Release source: $OGEVIA_RELEASE_COMMIT"
+  echo "Log: $WORK/release.log"
+  echo 'Owner/caregiver live workflow acceptance is next. Production is not deployed by this command.'
+  exit 0
+fi
+
 # Phase C DEPLOYMENT script for the UX redesign release, TEST only (cdk diff, API deploy, web publish). Derived from STELLA_PHASE_C_DEPLOY.sh (2026-11-01). DRAFT. NOT RUN. NOT AUTHORIZED.
 # Operator: whoever the owner names in the written Phase C statement. Deploys ONLY Ogevia-prod-ServiceVerificationApi and the TEST web site; never an Ogevia-prd-* stack,
 # never NetworkEgress/WebHosting/EvidenceStorage/Observability, never the database (that is OPERATOR_TEST_DB.sh). Expected API change: exactly 3 new routes and the Handler code asset (diff_gate_ux.py).

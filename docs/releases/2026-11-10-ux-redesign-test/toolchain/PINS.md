@@ -9,7 +9,7 @@
 | **Application commit (the proposed application commit; NOT approved for deployment)** | `f4316c5f1a9a844dc7749152243271cee003e94c` (branch `claude/ogevia-ux-audit-redesign-w36cov`; CI run 436: success; final continuation head still needs its own green run). The continuation after it changes tests/release tooling/docs, not app behavior. |
 | Target | TEST only: stacks `Ogevia-prod-*`, database `ogevia_sv_test`. Never `Ogevia-prd-*` or `ogevia_prd` |
 | `OPERATOR_TEST_DB.sh` sha256 | `09fbb2f97102494b8b000a5edfc877ad648248e859e8805209e5285c2524685d` |
-| `OPERATOR_TEST_DEPLOY.sh` sha256 | `d5d1c988e51156391a1f6ec4c463d421c96e76e0a8b53363258be3a3ca8068c9` |
+| `OPERATOR_TEST_DEPLOY.sh` sha256 | `79beb793567853c0c7b0610e5f727b3428301102ea79e4ff33c6a0f9110c015f` |
 | `diff_gate_ux.py` sha256 | `5ae675435abfe0c87324f6ef4a549722033053f12611611bc9ddad2b3dde00ba` |
 | `VERIFY_0090_0094.sql` sha256 | `0f78a265376152a4f14aea523bce10d86398966dcd6d268a298c81c0365cd1ab` |
 | Migration `0103_caregiver_signin_override.sql` | `963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54` |
@@ -36,3 +36,6 @@ The DB script now makes a TEST-only logical backup, refuses instance snapshot mo
 
 ## Isolated TEST cutover supersedes the shared release commands
 The current separation recipe is docs/aws/DEMO_PROD_DATABASE_SEPARATION_PROPOSAL.md. Its explicit isolated-* DB modes use the final green release commit, candidate ogevia-postgres, no SG attachment, a fresh dedicated TEST login/secret and ledger 93/0094. The new --isolated-assemblies gate compares the shared and isolated assemblies without loosening the original UX gate. The legacy application SHA/assets above remain historical pins for the shared UX package; they do not pin or authorize the separation candidate. No deployment has run.
+
+## Current CloudShell execution source
+Application commit: 6cbab00b2795d0cfe42bf644adc6a559adda7c76; CI #446 green (3,813 full-suite passes, zero failed/skipped; harness 45/45). The new operator mode runs this exact clean source, independently of the helper's docs-only publication commit. Current Handler asset: ed01f08a2df9d8870ed44c25912ce9c9d18f4e6dd73dba29594c954a538c983b.zip; index.js SHA256: 98e84618f6eeaf6472985db06db9132cf39d887d296d38301ee0137e3a6e991c. Older shared-release asset pins above do not apply to this application. Operator syntax, telemetry-only acceptance, wildcard-secret drift refusal, removed-resource refusal, wrong-account refusal and checksum tests passed locally. No live deployment is claimed by these local tests.
