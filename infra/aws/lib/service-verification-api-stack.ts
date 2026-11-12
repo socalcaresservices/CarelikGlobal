@@ -1,11 +1,13 @@
 import {
   CfnOutput,
+  CfnParameter,
   Duration,
   RemovalPolicy,
   Stack,
   Validations,
   type StackProps,
 } from "aws-cdk-lib";
+import * as ec2 from "aws-cdk-lib/aws-ec2";
 import { AccessLogFormat } from "aws-cdk-lib/aws-apigateway";
 import * as apigw from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
@@ -81,6 +83,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly method: apigw.HttpMethod;
   readonly path: string;
   readonly public?: boolean;
+  /** Added to an environment's API only when that environment's `features` switch is on. */
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -139,6 +143,21 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/accounts" },
   { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/disable" },
   { method: apigw.HttpMethod.POST, path: "/v1/accounts/{userId}/enable" },
+  // Staff management (0086).
+  { method: apigw.HttpMethod.GET, path: "/v1/staff-types", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-types", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-types/{staffTypeId}/rename", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-types/{staffTypeId}/active", feature: "staffManagement" },
+  { method: apigw.HttpMethod.GET, path: "/v1/staff", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-members/{userId}/profile", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}/invitation", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}/invitation/resend", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-roles/{userId}", feature: "staffManagement" },
+  { method: apigw.HttpMethod.GET, path: "/v1/role-permissions", feature: "staffManagement" },
+  { method: apigw.HttpMethod.GET, path: "/v1/staff-audit", feature: "staffManagement" },
+  { method: apigw.HttpMethod.POST, path: "/v1/me/staff-invitations/{organizationId}/accept", feature: "staffManagement" },   // 0087: the invited person accepts
   { method: apigw.HttpMethod.GET, path: "/v1/shifts" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts" },
   { method: apigw.HttpMethod.GET, path: "/v1/shift-series/preview" },
@@ -208,6 +227,26 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/hire-date" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/status" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/background-check/verify" },
+  { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/readiness" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/approve" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/signin-override", feature: "signInOverride" },
+  { method: apigw.HttpMethod.GET, path: "/v1/signin-overrides", feature: "signInOverride" },
+  { method: apigw.HttpMethod.POST, path: "/v1/imports/{kind}", feature: "bulkImport" },
+  // Already live in accepted TEST 0102. They remain gated out of production.
+  { method: apigw.HttpMethod.GET, path: "/v1/reports/missing-visits", feature: "liveTestRepairs" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/missing-visit", feature: "liveTestRepairs" },
+  { method: apigw.HttpMethod.GET, path: "/v1/business-documents", feature: "liveTestRepairs" },
+  { method: apigw.HttpMethod.POST, path: "/v1/business-documents", feature: "liveTestRepairs" },
+  { method: apigw.HttpMethod.POST, path: "/v1/checkin", feature: "liveTestRepairs" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/qr-card", feature: "liveTestRepairs" },
+  { method: apigw.HttpMethod.GET, path: "/v1/staff/duplicates", feature: "staffDuplicates" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}/merge", feature: "staffDuplicates" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/cpr-tb/extend" },
+  { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/cpr-tb/extensions" },
+  { method: apigw.HttpMethod.GET, path: "/v1/compliance/settings" },
+  { method: apigw.HttpMethod.POST, path: "/v1/compliance/settings" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/contact" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/signin-link" },
   { method: apigw.HttpMethod.GET, path: "/v1/compliance/holds" },
   { method: apigw.HttpMethod.POST, path: "/v1/compliance/sweep" },
   // Attention by purpose, appearance preferences, authorizations missing a rate (0054). JWT like every staff route.
@@ -392,6 +431,28 @@ export class ServiceVerificationApiStack extends Stack {
       terminationProtection: props.config.terminationProtection,
     });
     const { config } = props;
+    let qrKey: CfnParameter | undefined;
+    if (config.features.liveTestRepairs) {
+      if (config.envName !== "prod" || config.database.purpose !== "test-slice") throw new Error("Accepted live repair routes are TEST-only");
+      // Retain the existing live parameters and use previous values on deployment.
+      // These artifact parameters become unused when CDK manages the new code asset.
+      new CfnParameter(this, "RepairCodeBucket", { type: "String" });
+      new CfnParameter(this, "RepairCodeKey", { type: "String" });
+      const rawSpec = this.node.tryGetContext("liveQrParameterSpec") as unknown;
+      const spec = (typeof rawSpec === "string" ? JSON.parse(rawSpec) : rawSpec) as Record<string, unknown> | undefined;
+      const allowed = new Set(["Type", "NoEcho", "Default", "Description", "AllowedPattern", "AllowedValues", "MinLength", "MaxLength", "ConstraintDescription"]);
+      if (spec && (spec.Type !== "String" || spec.NoEcho !== true || Object.keys(spec).some((k) => !allowed.has(k)) || (spec.Default !== undefined && spec.Default !== ""))) throw new Error("QR parameter metadata must be NoEcho String without an embedded key");
+      qrKey = new CfnParameter(this, "ClientQrEncryptionKey", spec ? {
+        type: "String", noEcho: true,
+        ...(spec.Default !== undefined ? { default: "" } : {}),
+        description: spec.Description as string | undefined,
+        allowedPattern: spec.AllowedPattern as string | undefined,
+        allowedValues: spec.AllowedValues as string[] | undefined,
+        minLength: spec.MinLength as number | undefined,
+        maxLength: spec.MaxLength as number | undefined,
+        constraintDescription: spec.ConstraintDescription as string | undefined,
+      } : { type: "String", noEcho: true, default: "", allowedPattern: "(?:[0-9a-fA-F]{64})?", description: "Stable per-environment AES-256 key for client QR reprints." });
+    }
     const evidenceBucketName = signatureBucketName(config);
     const signatureObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${SIGNATURE_OBJECT_KEY_PATTERN}`;
     const documentObjectsArn = `arn:aws:s3:::${evidenceBucketName}/${DOCUMENT_OBJECT_KEY_PATTERN}`;
@@ -404,10 +465,20 @@ export class ServiceVerificationApiStack extends Stack {
     const trustedUserPoolId = props.authority?.userPoolId ?? existing.userPool.userPoolId;
     const trustedUserPoolArn = props.authority?.userPoolArn ?? `arn:aws:cognito-idp:${config.region}:${config.account}:userpool/${existing.userPool.userPoolId}`;
     const trustedClientIds = props.authority ? props.authority.appClientIds : [config.auth.appClientId, ...(props.extraAppClientIds ?? [])];
-    if (config.database.purpose === "production" && !props.appDatabaseSecret) {
+    if ((config.database.purpose === "production" || config.database.isolatedTest) && !props.appDatabaseSecret) {
       throw new Error("Production API requires its dedicated database secret; it never falls back to the test slice's");
     }
     const appDatabaseSecret = props.appDatabaseSecret ?? existing.appDatabaseSecret;
+    if (config.database.isolatedTest) {
+      // Imported groups are immutable; this explicit, reviewable rule belongs to the TEST API stack.
+      new ec2.CfnSecurityGroupIngress(this, "IsolatedTestDatabaseIngress", {
+        groupId: config.existing.securityGroups.prodRds,
+        sourceSecurityGroupId: config.existing.securityGroups.prodApp,
+        ipProtocol: "tcp", fromPort: 5432, toPort: 5432,
+        description: "TEST API access to the isolated TEST database only",
+      });
+    }
+
 
     this.handlerLogGroup = new logs.LogGroup(this, "HandlerLogGroup", {
       retention: config.logRetention,
@@ -598,6 +669,7 @@ export class ServiceVerificationApiStack extends Stack {
       allowPublicSubnet: false,
       environment: {
         OGEVIA_ENV: config.envName,
+        ...(qrKey ? { OGEVIA_QR_ENCRYPTION_KEY: qrKey.valueAsString } : {}),
         DB_HOST: existing.prodDatabase.dbInstanceEndpointAddress,
         DB_PORT: existing.prodDatabase.dbInstanceEndpointPort,
         DB_SECRET_ARN: appDatabaseSecret.secretArn,
@@ -627,6 +699,12 @@ export class ServiceVerificationApiStack extends Stack {
     // in parallel and the create fails ("...does not have permissions to call
     // CreateNetworkInterface on EC2"), as seen on the first test-slice deploy.
     this.handler.node.addDependency(policy);
+    const rawTags = this.node.tryGetContext("liveTestHandlerTags") as unknown;
+    const liveTags = typeof rawTags === "string" ? JSON.parse(rawTags) : rawTags;
+    if (liveTags !== undefined) {
+      if (!config.features.liveTestRepairs || !Array.isArray(liveTags) || !liveTags.every((t: any) => typeof t.Key === "string" && typeof t.Value === "string" && /^(project|environment|managed-by|ogevia:.*)$/.test(t.Key)) || !liveTags.some((t: any) => t.Key === "environment" && t.Value === "prod")) throw new Error("Only reviewed TEST Handler metadata tags may be preserved");
+      (this.handler.node.defaultChild as lambda.CfnFunction).addPropertyOverride("Tags", liveTags);
+    }
 
     const authorizer = new HttpJwtAuthorizer(
       "CognitoJwt",
@@ -638,7 +716,8 @@ export class ServiceVerificationApiStack extends Stack {
       description: "Ogevia Service Verification API",
       createDefaultStage: false,
       corsPreflight: {
-        allowOrigins: [...config.auth.allowedOrigins, ...(props.extraAllowedOrigins ?? [])],
+        // API Gateway rejects a duplicated origin (HTTP 400, found on the 2026-11-01 production deploy), so drop repeats and keep first-seen order.
+        allowOrigins: [...new Set([...config.auth.allowedOrigins, ...(props.extraAllowedOrigins ?? [])])],
         allowMethods: [
           apigw.CorsHttpMethod.GET,
           apigw.CorsHttpMethod.POST,
@@ -682,13 +761,28 @@ export class ServiceVerificationApiStack extends Stack {
     // non-public route decides that, not this permission.
     const integration = new HttpLambdaIntegration("Handler", this.handler, { scopePermissionToRoute: false });
     assertPublicRoutesApproved(SERVICE_VERIFICATION_ROUTES);
-    for (const route of SERVICE_VERIFICATION_ROUTES) {
+    for (const route of SERVICE_VERIFICATION_ROUTES.filter((r) => !r.feature || config.features[r.feature])) {
       const created = this.api.addRoutes({
         path: route.path,
         methods: [route.method],
         integration,
         ...(route.public ? {} : { authorizer }),
       });
+      const retainedId: Record<string, string> = {
+        "GET /v1/business-documents": "BusinessDocumentsGet0095",
+        "POST /v1/business-documents": "BusinessDocumentsPost0095",
+        "POST /v1/checkin": "QrCheckinPost0102",
+        "POST /v1/clients/{clientId}/qr-card": "ClientQrCardPost0102",
+      };
+      const logicalId = retainedId[`${route.method} ${route.path}`];
+      if (route.feature === "liveTestRepairs" && logicalId) {
+        for (const r of created) (r.node.defaultChild as apigw.CfnRoute).overrideLogicalId(logicalId);
+      }
+      if (route.feature === "liveTestRepairs") {
+        // The accepted live-derived routes contain Type/Properties only. CDK's
+        // CLI path metadata must not turn them into unrelated live changes.
+        for (const r of created) (r.node.defaultChild as apigw.CfnRoute).addDeletionOverride("Metadata");
+      }
       if (route.public) {
         for (const r of created) Validations.of(r).acknowledge({ id: "AwsSolutions-APIG4", reason: PUBLIC_ROUTE_ACKNOWLEDGEMENT });
       }

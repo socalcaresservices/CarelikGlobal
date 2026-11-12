@@ -23,7 +23,7 @@ const iv = (day: string, from: string, to: string, toDay = day) => ({ starts_at:
 const allWeek = () => [0, 1, 2, 3, 4, 5, 6].map((d) => ({ weekday: d, start_local: "00:00", end_local: "23:59" }));
 
 beforeAll(async () => {
-  db = await createTestDb();
+  db = await createTestDb({ includeLiveTest: true });
   w = await seedWorld(db, 600);
   today = await orgToday(db);
   [recA1, recA2, recA3] = [await recOf(w.caregiverA1), await recOf(w.caregiverA2), await recOf(w.caregiverA3)];
@@ -228,4 +228,16 @@ describe("permissions, tenancy and the care-request list", () => {
     expect((await list()).map((x) => x.caregiver_name.split(" ").pop())).toEqual(["CG-A1"]);
     await expectPgError(call(w.caregiverA1, "select * from ogevia_api.list_available_caregivers($1,$2)", [w.orgA, req]).then((r) => { if (r.length === 0) throw Object.assign(new Error("none"), { code: "OGA03" }); }), "OGA03");
   });
+});
+
+it("suggests only an unambiguous city from the active agency and guards access", async () => {
+  const zip = "01234";
+  const suggest = () => call(w.managerA, "select ogevia_api.suggest_matching_city($1,$2) as city", [w.orgA, zip]);
+  expect((await suggest())[0].city).toBeNull();
+  await call(w.managerA, "select ogevia_api.set_caregiver_zip($1,$2,$3,$4)", [w.orgA, recA1, zip, "Example City"]);
+  expect((await suggest())[0].city).toBe("Example City");
+  await call(w.managerA, "select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [w.orgA, fx.client, zip, "Different City"]);
+  expect((await suggest())[0].city).toBeNull();
+  await expectPgError(call(w.caregiverA1, "select ogevia_api.suggest_matching_city($1,$2)", [w.orgA, zip]), "OGA03");
+  await expectPgError(call(w.managerA, "select ogevia_api.suggest_matching_city($1,$2)", [w.orgA, "1234"]), "OGV22");
 });

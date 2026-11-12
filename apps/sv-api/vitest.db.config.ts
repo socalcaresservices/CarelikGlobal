@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    env: { OGEVIA_TEST_LIVE_BASELINE: "0102" },
     include: ["test/**/*.db.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 60_000,

@@ -6,7 +6,6 @@ import { RoundingSection } from "./billing-rounding";
 import { APPROVAL_STATUS_CLASS, APPROVAL_STATUS_LABEL, APPROVAL_STATUS_NOTE, approvableMinutes, billingStateOf, formatClock, formatDuration, formatUsDate, visitScheduleLabel, type ApprovalStatus } from "./billing-format";
 import { activeFilterCount, applyBillingFilters, filterOptions, NO_FILTERS, type BillingFilters } from "./billing-filters";
 import { Button, Card } from "@carelik/ui";
-import { ShortHelp } from "./help-text";
 import { InfoTip } from "./ui/info-tip";
 import { CompactAlert } from "./ui/compact-alert";
 import { confirmationMethodLabel, formatHours } from "@/lib/service-verification";
@@ -124,7 +123,7 @@ export function BillingReviewPage() {
                       if (a) {
                         return (
                           <div className="flex items-center gap-2 whitespace-nowrap">
-                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h <span className="text-xs font-normal text-slate-500">by {a.approvedByName} · not submitted or paid</span></p>
+                            <p className="font-medium text-emerald-800">Approved {formatHours(a.approvedMinutes)} h <span className="text-xs font-normal text-slate-500">by {a.approvedByName}</span></p>
                             {canApprove ? (
                               <button type="button" className="text-xs text-slate-600 underline" onClick={() => { setNotice(null); setPending({ kind: "void", approval: a, reason: "", key: newIdempotencyKey(), busy: false, error: null }); }}>
                                 Void approval
@@ -190,7 +189,7 @@ export function BillingReviewPage() {
     const code = r.clientCode ?? null;
     return (
       <div>
-        <p className="max-w-[14rem] truncate font-semibold text-slate-950" title={r.clientName ?? undefined}>{r.clientName ? nameWithCode(r.clientName, code, r.clientNameDuplicate) : code ?? "Client"}</p>
+        <p className="max-w-[14rem] break-words font-semibold text-slate-950" title={r.clientName ?? undefined}>{r.clientName ? nameWithCode(r.clientName, code, r.clientNameDuplicate) : code ?? "Client"}</p>
       </div>
     );
   }
@@ -234,10 +233,10 @@ export function BillingReviewPage() {
         <InfoTip label="About billing review">Approve each Ready for Review visit; approval is not submission or payment. Ready for Review means the visit passed the automatic checks. Approved for Billing is a separate human step. Nothing is sent to a payer from this screen.</InfoTip>
        </div>
         <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">From
-          <input type="date" value={from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="block min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
+          <input type="date" value={from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className="block min-h-[44px] md:min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
         </label>
         <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600">To
-          <input type="date" value={to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="block min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
+          <input type="date" value={to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className="block min-h-[44px] md:min-h-[32px] rounded-md border border-slate-200 px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px]" />
         </label>
       </div>
       {loaded.length > 0 ? (
@@ -253,7 +252,7 @@ export function BillingReviewPage() {
                 <select
                   value={filters[x.key]}
                   onChange={setFilter(x.key)}
-                  className={`mt-0.5 block min-h-[32px] w-full min-w-0 rounded-md border px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] ${filters[x.key] ? "border-sky-600 bg-sky-50" : "border-slate-200"}`}
+                  className={`mt-0.5 block min-h-[44px] md:min-h-[32px] w-full min-w-0 rounded-md border px-2 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] ${filters[x.key] ? "border-sky-600 bg-sky-50" : "border-slate-200"}`}
                 >
                   <option value="">{x.all}</option>
                   {x.opts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -315,7 +314,7 @@ export function BillingReviewPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.visitId} className="border-t border-slate-100 align-middle">
-                  <td className="px-2 py-0.5"><div className="flex flex-wrap items-center gap-x-2"><span className="max-w-[11rem] truncate">{clientCell(r)}</span><span className="whitespace-nowrap">{statusPill(r, true)}</span></div></td>
+                  <td className="px-2 py-0.5"><div className="flex flex-wrap items-center gap-x-2"><span className="max-w-[11rem] break-words">{clientCell(r)}</span><span className="whitespace-nowrap">{statusPill(r, true)}</span></div></td>
                   <td className="max-w-[11rem] px-2 py-0.5" title={`${r.caregiverName ?? "—"} · ${serviceText(r)}`}>{r.caregiverName ?? "—"} <span className="text-slate-600">· {serviceText(r)}</span></td>
                   <td className="px-2 py-0.5" title={`${formatUsDate(r.serviceDate)} ${timesText(r)}`}>{formatUsDate(r.serviceDate)} <span className="text-slate-600">{timesText(r)}</span></td>
                   <td className="px-2 py-0.5" title={`${formatDuration(r.workedMinutes)}${r.billableMinutes !== r.workedMinutes ? ` · billable ${formatDuration(r.billableMinutes)}` : ""}`}>{formatDuration(r.workedMinutes)}{r.billableMinutes !== r.workedMinutes ? <span className="text-slate-600"> · billable {formatDuration(r.billableMinutes)}</span> : null}</td>
@@ -334,12 +333,10 @@ export function BillingReviewPage() {
             {pending.kind === "approve" ? (
               <>
                 <p className="text-sm font-medium text-slate-900">Approve visit {pending.row.visitNumber ?? ""} for billing</p>
-                <ShortHelp
-                  className="text-xs text-slate-600"
-                  details="Approval records your name and the time. It does not submit anything to a payer and does not mean it was paid."
-                >
-                  {pending.row.reviewDecision === "accept_late_confirmation" ? "Accepted from a late confirmation" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h). You can approve less, never more.
-                </ShortHelp>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                  <span>{pending.row.reviewDecision === "accept_late_confirmation" ? "Late confirmation accepted" : "Billable"}: {approvableMinutes(pending.row)} min ({formatHours(approvableMinutes(pending.row))} h)</span>
+                  <InfoTip label="About approved minutes">You can approve fewer minutes than the billable total. Approval records your name and the time.</InfoTip>
+                </div>
                 <label className="block text-xs font-medium text-slate-600">
                   Approved minutes
                   <input inputMode="numeric" value={pending.minutes} onChange={(e) => setPending({ ...pending, minutes: e.target.value, error: null })} className="mt-1 block w-32 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -352,7 +349,7 @@ export function BillingReviewPage() {
             ) : (
               <>
                 <p className="text-sm font-medium text-slate-900">Void the billing approval for visit {pending.approval.visitNumber ?? ""}</p>
-                <p className="text-xs text-slate-600">The approval stays in the record as voided, with your reason. The visit shows as Voided and can be approved again.</p>
+                <InfoTip label="What happens when you void an approval">The approval stays in History with your reason. The visit shows as Voided and can be approved again.</InfoTip>
                 <label className="block text-xs font-medium text-slate-600">
                   Reason (required)
                   <input value={pending.reason} maxLength={1000} onChange={(e) => setPending({ ...pending, reason: e.target.value, error: null })} className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />

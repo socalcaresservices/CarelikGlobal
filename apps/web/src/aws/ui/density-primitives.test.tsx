@@ -34,9 +34,13 @@ describe("compact density primitives", () => {
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("HelpLine: one short line plus an info icon for the longer text", () => {
-    render(<HelpLine details="Longer explanation.">Short guidance.</HelpLine>);
-    expect(screen.getByText("Short guidance.")).toBeInTheDocument();
+  it("HelpLine: an info icon only (the text stays in the page for screen readers); `important` keeps the short line visible", () => {
+    const { container } = render(<HelpLine details="Longer explanation.">Short guidance.</HelpLine>);
+    expect(container.querySelector("p")).toBeNull();
+    expect(screen.getByRole("button", { name: "More information" })).toHaveAccessibleDescription("Short guidance. Longer explanation.");
+    cleanup();
+    const shown = render(<HelpLine important details="Longer explanation.">Short guidance.</HelpLine>);
+    expect(shown.container.querySelector("p")).toHaveTextContent("Short guidance.");
     expect(screen.getByRole("button", { name: "More information" })).toBeInTheDocument();
   });
 

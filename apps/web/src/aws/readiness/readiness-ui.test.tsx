@@ -62,9 +62,11 @@ describe("administrator matching inputs", () => {
     fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "12" } });
     expect(screen.getByRole("button", { name: "Save location" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("ZIP code"), { target: { value: "92595" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save location" }));
+    const save = screen.getByRole("button", { name: "Save location" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
     expect(await screen.findByText("Location saved.")).toBeInTheDocument();
-    expect(posts(calls, `/v1/caregivers/${CG}/zip`)[0]?.body.zip).toBe("92595");
+    expect(posts(calls, `/v1/caregivers/${CG}/zip`)[0]?.body).toMatchObject({ zip: "92595", city: "Wildomar" });
   });
 
   it("records optional client preferences separately from mandatory requirements", async () => {
@@ -327,6 +329,26 @@ describe("Service checks and readiness on the Care Team page", () => {
   });
 });
 
+describe("R7: standard CPR and TB setup", () => {
+  it("creates two document types named CPR and TB by name only, preselects them, invents no validity period, and saves nothing until the administrator confirms", async () => {
+    const { calls } = renderAt("/care-team", { role: "organization_owner" });
+    fireEvent.click(await screen.findByRole("button", { name: /Set up/ }, { timeout: COLD_RENDER_MS }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use standard CPR and TB" }));
+    expect(await screen.findByTestId("standard-note")).toHaveTextContent("Nothing is set until you save");
+    const created = posts(calls, "/v1/document-types");
+    expect(created.map((c) => c.body?.name).sort()).toEqual(["CPR", "TB"]);
+    expect(created.every((c) => c.body?.requiresExpiry === false)).toBe(true);
+    const form = screen.getByRole("form", { name: "Required documents" });
+    const selects = within(form).getAllByLabelText("Document type") as HTMLSelectElement[];
+    await waitFor(() => expect(selects.map((x) => x.value)).toEqual(["dt-cpr", "dt-tb"]));
+    // The validity rule is still blank (no invented period) and nothing has been saved.
+    expect((within(form).getAllByLabelText("Valid until") as HTMLSelectElement[]).map((x) => x.value)).toEqual(["", ""]);
+    expect(posts(calls, "/v1/document-requirements/type")).toHaveLength(0);
+    expect(posts(calls, "/v1/document-requirements/policy")).toHaveLength(0);
+    expect(within(form).getByRole("button", { name: "Save" })).toBeDisabled();   // a reason is still required
+  }, TEST_TIMEOUT_MS);
+});
+
 describe("Readiness table: issue, affected count, status, next action", () => {
   const rowOf = (issue: RegExp) => within(screen.getByRole("table", { name: /Readiness by issue/ })).getByRole("row", { name: issue });
 
@@ -459,7 +481,7 @@ describe("Assignment checks on the schedule", () => {
     const form = await screen.findByRole("group", { name: "Override availability" });
     expect(within(form).getByText(/One-time override of the availability check/)).toBeInTheDocument();
     expect(within(form).getByText(/this one shift/)).toBeInTheDocument();
-    expect(within(form).getByText(/does not change the caregiver's recorded availability/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/does not change the caregiver's recorded availability/)).toBeInTheDocument();
     const go = within(form).getByRole("button", { name: "Override availability" });
     expect(go).toBeDisabled();
     fireEvent.change(within(form).getByLabelText("Reason for the override"), { target: { value: "Caregiver agreed by phone" } });
@@ -513,7 +535,7 @@ describe("review follow-ups: report-only wording and My experience", () => {
   it("caregiver profile: My experience reports tags as a note until the agency confirms; no location data is read", async () => {
     const { calls } = renderAt("/profile", { role: "caregiver" });
     const card = await screen.findByRole("region", { name: "My experience" });
-    expect(within(card).getByText(/An administrator confirms it; until then it is only a note\./)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/An administrator confirms it; until then it is only a note\./)).toBeInTheDocument();
     fireEvent.click(await within(card).findByRole("checkbox", { name: /ABA experience/ }));
     fireEvent.click(within(card).getByRole("button", { name: "Save my experience" }));
     await waitFor(() => expect(posts(calls, "/v1/experience/me")).toHaveLength(1));

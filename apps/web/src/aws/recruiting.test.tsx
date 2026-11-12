@@ -98,7 +98,7 @@ describe("Recruiting board", () => {
     expect(within(screen.getByRole("region", { name: "Interview" })).getByText("None")).toBeInTheDocument();
   });
 
-  it("adds an applicant, moves a person to the next stage, and shows the server's reason when approval is refused", async () => {
+  it("adds an applicant, moves a person to the next stage, and leaves approval to Approve for work on the record", async () => {
     const api = renderAt("/care-team/recruiting");
     fireEvent.change(await screen.findByLabelText("First name"), { target: { value: "Synthetic" } });
     fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Newcomer" } });
@@ -110,31 +110,14 @@ describe("Recruiting board", () => {
     fireEvent.click(within(applicant).getByRole("button", { name: "Move to Interview" }));
     await vi.waitFor(() => expect(api.calls.some((c) => c.path === `/v1/caregivers/${AP}/status` && (c.body as { status: string }).status === "interview")).toBe(true));
 
+    // 0086: after Pending documents the last step is Approve for work on the caregiver's page, not a stage move
     const pending = screen.getByText("Synthetic Onboardee").closest("li")!;
-    fireEvent.click(within(pending).getByRole("button", { name: "Move to Approved" }));
-    expect(await within(pending).findByRole("alert")).toHaveTextContent("Onboarding is not complete: Compliance clearance");
+    expect(within(pending).queryByRole("button", { name: /Move to/ })).not.toBeInTheDocument();
+    expect(within(pending).getByRole("link", { name: "Open the record to approve" })).toHaveAttribute("href", `/care-team/${OB}`);
   });
 
   it("is not available to a caregiver", async () => {
     renderAt("/care-team/recruiting", "caregiver");
     expect(await screen.findByText("You do not have access to recruiting.")).toBeInTheDocument();
-  });
-});
-
-describe("Checklist on the caregiver page", () => {
-  it("shows progress and what blocks approval, records a completion with an expiry, and leaves documents to the Documents page", async () => {
-    const api = renderAt(`/care-team/${AP}`);
-    expect(await screen.findByText(/Cannot be Approved or assigned yet\. Still outstanding: Background check cleared, Required training completed, CPR certificate current, TB clearance current, Compliance clearance\./)).toBeInTheDocument();
-    const list = screen.getByRole("list", { name: "Onboarding checklist" });
-    const cpr = within(list).getByText("CPR certificate current").closest("li")!;
-    expect(cpr).toHaveTextContent("No document uploaded");
-    expect(within(cpr).queryByRole("button", { name: "Mark done" })).toBeNull();
-    expect(within(cpr).getByRole("link", { name: "Open Documents" })).toBeInTheDocument();
-    const training = within(list).getByText("Required training completed").closest("li")!;
-    fireEvent.click(within(training).getByRole("button", { name: "Mark done" }));
-    fireEvent.change(within(training).getByLabelText("Expires on (optional)"), { target: { value: "2027-10-15" } });
-    fireEvent.click(within(training).getByRole("button", { name: "Save" }));
-    expect(await within(list).findByText(/Recorded 10\/15\/2026/)).toBeInTheDocument();
-    expect(api.calls.find((c) => c.path === `/v1/caregivers/${AP}/onboarding/items`)!.body).toMatchObject({ organizationId: ORG, requirementKey: "training", action: "complete", expiresOn: "2027-10-15" });
   });
 });

@@ -7,10 +7,11 @@
 // or scheduler is NOT meant to use (explicit allow-lists) and must get 403/404.
 // A request body is built from the route's own validators, so the request passes validation and reaches the database check; a route whose probe still ends in a 400 is
 // counted separately ("validation first") and listed, never silently counted as covered. Public (token) routes have no agency identity at all: reason recorded below.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, asActor, createTestDb, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
+import { ageVisit, api, asActor, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
+import { createTestDbWithPending } from "../../../infra/aws/db/test/pending";
 import { MemoryEvidenceStore } from "../src/evidence";
 import { createHandler } from "../src/handler";
 import { MemoryIdentityAdmin } from "../src/identity";
@@ -47,7 +48,16 @@ function blocks(): Record<string, string> {
 const BLOCKS = blocks();
 
 beforeAll(async () => {
-  db = await createTestDb();
+  db = await createTestDbWithPending();   // includes the PENDING migration (infra/aws/db/pending) so the staff routes are swept too
+  // Every PENDING migration (infra/aws/db/pending/migrations: sign-in override, client labels, bulk import, duplicate staff) is applied too, so the routes that depend on them are
+  // swept against the real functions and tables, not against "function does not exist".
+  const pendingDir = new URL("../../../infra/aws/db/pending/migrations/", import.meta.url);
+  const adm = await db.admin.connect();
+  try {
+    for (const f of readdirSync(pendingDir).filter((x) => x.endsWith(".sql")).sort()) {
+      await adm.query("begin"); await adm.query("set local role ogevia_owner"); await adm.query(readFileSync(new URL(f, pendingDir), "utf8")); await adm.query("reset role"); await adm.query("commit");
+    }
+  } finally { adm.release(); }
   w = await seedWorld(db, 600);
   const evidence = new MemoryEvidenceStore();
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), log: () => {} });
@@ -123,6 +133,13 @@ beforeAll(async () => {
   real("pickupRequestId", firstId(pk.body, ["requestId", "id"]));
   const csa = await make(w.ownerA, "POST /v1/caregiver-services", { caregiverRecordId: rec, serviceId: f.service });
   real("caregiverServiceApprovalId", csa.body.approvalId ?? csa.body.id);
+  // staff management (pending migration 0086): a real staff type and a real staff profile of org A
+  const st = await make(w.ownerA, "POST /v1/staff-types", { name: "Synthetic Staff Type" });
+  real("staffTypeId", st.body.staffType?.id);
+  const sp = await make(w.ownerA, "POST /v1/staff", { displayName: "Synthetic Staff", staffTypeId: ids.staffTypeId });
+  real("profileId", sp.body.staff?.id);
+  const sp2 = await make(w.ownerA, "POST /v1/staff", { displayName: "Synthetic Staff Two", staffTypeId: ids.staffTypeId, contactEmail: "synthetic.two@example.test" });
+  real("duplicateProfileId", sp2.body.staff?.id);
   // a care request through the client's portal link, and an offer on it
   try {
     const portal = await make(w.managerA, "POST /v1/care-portals");
@@ -224,6 +241,7 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "versionId") return /client-document-versions/.test(fam) ? ids.clientVersionId : ids.versionId;
   if (name === "approvalId") return /billing-approvals/.test(fam) ? ids.billingApprovalId : ids.caregiverSvcApprovalId ?? ids.caregiverServiceApprovalId;
   if (name === "decisionId") return ids.decisionId;
+  if (route === "POST /v1/business-documents" && name === "id") return undefined;
   if (ids[name]) return ids[name];
   if (name === "status" && route === "GET /v1/availability/requests") return "pending";
   if (name === "kind") return route === "GET /v1/readiness/flags" ? "service" : "weekly";
@@ -292,7 +310,7 @@ const SWEEP_ROUTES = ORG_ID_ROUTES.filter(hasEntityOrOrg);
 // Routes about the caller alone (no organization and no id): nothing of org A can be named.
 const SELF_ONLY = ORG_ID_ROUTES.filter((k) => !hasEntityOrOrg(k));
 
-const norm = (x: string) => x.replace(/\d{4}-\d{2}-\d{2}T[\d:.]+(?:\+\d{2}:\d{2}|Z)/g, "<time>");
+const norm = (x: string) => x.replace(/\d{4}-\d{2}-\d{2}T[\d:.]+(?:[+-]\d{2}:\d{2}|Z)/g, "<time>");
 const STRANGER_MARKERS = ["CAREGIVER_A", "MANAGER_A", "OWNER_A", "SCHEDULER_A", "org-a", "Synthetic Pat"];
 /** The same request with every org A entity id replaced by a fresh random id (so "exists in another agency" cannot differ from "does not exist"). */
 function neutral<T>(value: T): T {

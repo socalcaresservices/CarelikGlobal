@@ -10,11 +10,13 @@ if (!url) {
   );
   process.exit(2);
 }
+const ux = process.env.OGEVIA_INCLUDE_PENDING_UX;
+if (ux && ux !== "test-only") throw new Error("OGEVIA_INCLUDE_PENDING_UX must be test-only or unset");
 assertSafeTarget(url);
 const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
-  const result = await migrate(client, (line) => console.log(line));
+  const result = await migrate(client, (line) => console.log(line), { includePendingUx: ux === "test-only" });
   console.log(
     `applied ${result.applied.length}, already applied ${result.alreadyApplied.length}`,
   );

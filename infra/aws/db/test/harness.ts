@@ -10,7 +10,7 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { expect } from "vitest";
-import { assertSafeTarget, migrate } from "../scripts/migrations.js";
+import { assertSafeTarget, migrate, type MigrationOptions } from "../scripts/migrations.js";
 
 export const ADMIN_URL = process.env.OGEVIA_TEST_DATABASE_URL ?? "";
 
@@ -20,7 +20,7 @@ export interface TestDb {
   drop(): Promise<void>;
 }
 
-export async function createTestDb(): Promise<TestDb> {
+export async function createTestDb(options: MigrationOptions = {}): Promise<TestDb> {
   if (!ADMIN_URL) throw new Error("OGEVIA_TEST_DATABASE_URL is not set");
   assertSafeTarget(ADMIN_URL);
   const name = `ogevia_test_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -39,7 +39,7 @@ export async function createTestDb(): Promise<TestDb> {
   });
   const client = await admin.connect();
   try {
-    await migrate(client);
+    await migrate(client, () => {}, { includeLiveTest: process.env.OGEVIA_TEST_LIVE_BASELINE === "0102", ...options });
   } finally {
     client.release();
   }
@@ -173,6 +173,21 @@ export async function orgToday(db: TestDb): Promise<string> {
     "select to_char((now() at time zone 'America/Los_Angeles')::date, 'YYYY-MM-DD') as d",
   );
   return rows[0]!.d;
+}
+
+/**
+ * A calendar-independent future day for tests that need several shifts in ONE month, ahead of today.
+ * It is the 15th of the month that contains (agency today + 40 days): always a future month's middle (at least about two weeks ahead and at most about
+ * two months ahead), so neither a month end nor the next day boundary can split a test's dates across two monthly authorization buckets.
+ * Use it with an authorization period that covers it (`freshClient(..., { before: 5, after: 100 })`).
+ */
+export async function midMonthAhead(db: TestDb): Promise<string> {
+  return (
+    await db.admin.query<{ d: string }>(
+      "select to_char((date_trunc('month', $1::date + 40) + interval '14 days')::date, 'YYYY-MM-DD') d",
+      [await orgToday(db)],
+    )
+  ).rows[0]!.d;
 }
 
 export async function seedWorld(
@@ -689,4 +704,22 @@ export async function asReplica(db: TestDb, sql: string, params: unknown[] = [])
   } finally {
     c.release();
   }
+}
+
+/**
+ * Test fixture (0086): satisfies the hard requirements the way the screens would (a verified approved background check and the required
+ * training), written directly so a test can exercise "Approve for work" itself. App sign-in is NOT touched: a fixture caregiver with a
+ * linked account and no invitation counts as signed in.
+ */
+export async function satisfyHardRequirements(db: TestDb, organizationId: string, caregiverRecordId: string, verifierUserId: string): Promise<void> {
+  await db.admin.query(
+    `insert into ogevia.caregiver_background_checks (caregiver_record_id, organization_id, status, result, evidence_note, verified_by, verified_at, updated_by)
+     values ($1, $2, 'completed', 'approved', 'Synthetic clearance', $3, now(), $3)
+     on conflict (caregiver_record_id) do update set status = 'completed', result = 'approved', evidence_note = 'Synthetic clearance', verified_by = $3, verified_at = now()`,
+    [caregiverRecordId, organizationId, verifierUserId]);
+  await db.admin.query(
+    `insert into ogevia.caregiver_onboarding_items (organization_id, caregiver_record_id, requirement_id, status, completed_on, recorded_by)
+     select $1, $2, r.id, 'completed', current_date, $3 from ogevia.onboarding_requirements r
+      where r.organization_id = $1 and r.requirement_key = 'training' and r.is_active on conflict do nothing`,
+    [organizationId, caregiverRecordId, verifierUserId]);
 }

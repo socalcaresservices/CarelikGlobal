@@ -200,7 +200,7 @@ export function OutageVisitsPage() {
       </Card>
       <Card className="p-3"><h2 className="mb-2 text-base font-semibold">Enter a record</h2><EntryForm onDone={setDone} /></Card>
       <details className="rounded-xl border border-slate-200 bg-og-card p-3">
-        <summary className="min-h-[32px] cursor-pointer text-base font-semibold">Close a number that was not used</summary>
+        <summary className="min-h-[44px] md:min-h-[32px] cursor-pointer text-base font-semibold">Close a number that was not used</summary>
         <div className="mt-2"><NotUsedForm onDone={setDone} /></div>
       </details>
     </div>

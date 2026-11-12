@@ -10,6 +10,10 @@
   "include": [
     "src",
     "src/vite-env.d.ts",
-    "vite.config.ts"
+    "vite.config.ts",
+    "vite.preview.config.ts",
+    "preview/main.tsx",
+    "preview/badge.tsx",
+    "preview/replay.ts"
   ]
 } 

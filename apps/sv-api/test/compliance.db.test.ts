@@ -34,6 +34,8 @@ beforeAll(async () => {
   rec1 = await rec(w.caregiverA1);
   rec2 = await rec(w.caregiverA2);
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence: new MemoryEvidenceStore(), identity: new MemoryIdentityAdmin(), log: () => {} });
+  // 0086: the CPR/TB period is an agency setting (default 30). This suite was written for 14 days, so it sets that on the agency.
+  await db.admin.query("insert into ogevia.organization_compliance_settings (organization_id, cpr_tb_due_days) values ($1, 14)", [w.orgA]);
 });
 afterAll(async () => db?.drop());
 
@@ -154,13 +156,10 @@ describe("direct API bypass attempts on a caregiver on hold", () => {
     expect(Number(after.s)).toBe(Number(before.s) + 1); // only the open shift made above
     expect(after.a).toBe(before.a);
     expect(after.v).toBe(before.v);
-    // 0081 (was: "the caregiver who is inside the period and cleared is not affected" -> 201): a caregiver inside the 14 days with approved background clearance but no
-    // VERIFIED CPR/TB is refused too; the period only delays the automatic hold, it no longer lets work go ahead
+    // 0086 (owner decision 2026-10-30, reversing 0081): a caregiver inside the CPR/TB period (here 14 days, the agency setting in this suite) with approved background
+    // clearance is NOT refused for missing CPR/TB; they show as pending with a due date
     const ok = await call("POST /v1/shifts", w.managerA, { body: { ...shiftBody, caregiverRecordId: rec2, date: await day(7) } });
-    expect(ok.status).toBe(422);
-    expect(ok.body.error).toMatchObject({ code: "not_ready" });
-    expect(ok.body.error.message).toMatch(/CPR missing\.\s+TB missing\./);
-    expect(ok.body.error.message).not.toMatch(/Background check/);
+    expect(ok.status).toBe(201);
   });
 
   it("the office sees the hold and the Action Needed numbers after the run; reasons are plain; no signature, name or payer data is returned", async () => {

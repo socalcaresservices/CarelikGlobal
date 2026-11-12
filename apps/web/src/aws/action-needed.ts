@@ -93,7 +93,7 @@ export type ActionNeededState =
  */
 export function actionNeededState(loading: boolean, failed: boolean, summary: AttentionSummary | null | undefined): ActionNeededState {
   if (loading) return { kind: "checking", label: "Checking…", icon: "…", count: null, aria: "Checking items that need action" };
-  if (failed || !summary) return { kind: "unknown", label: "Unable to check", icon: "?", count: null, aria: "Unable to check items that need action" };
+  if (failed || !summary) return { kind: "unknown", label: "Unavailable", icon: "!", count: null, aria: "Unavailable: items that need action could not be checked" };
   const count = actionNeededTotal(summary);
   if (count > 0) return { kind: "attention", label: "Action needed", icon: "⚠", count, aria: `Action needed: ${count}` };
   return { kind: "clear", label: "All clear", icon: "✓", count: 0, aria: "All clear: nothing needs action" };

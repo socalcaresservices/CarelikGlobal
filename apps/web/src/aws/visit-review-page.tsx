@@ -23,6 +23,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { AuthorizationReviewCard } from "./authorization-review-card";
 import { SignatureRecoveryCard } from "./signature-recovery";
+import { InfoTip } from "./ui/info-tip";
 
 interface VisitReview {
   visitId: string;
@@ -251,8 +252,8 @@ export function VisitReviewPage() {
           </ul>
           {v.reviewReasons.includes("no_client_signature") && !v.decision ? (
             <details className="text-xs text-slate-600">
-              <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">About the missing signature</summary>
-              <p>The original visit record and its confirmation are never changed. A signature obtained later is kept as a separate record and reviewed by a person (see “Get the missing signature” below).</p>
+              <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-og-accent underline">About the missing signature</summary>
+              <InfoTip label="Help">The original visit record and its confirmation are never changed. A signature obtained later is kept as a separate record and reviewed by a person (see “Get the missing signature” below).</InfoTip>
             </details>
           ) : null}
 
@@ -289,7 +290,7 @@ export function VisitReviewPage() {
                 ))}
               </fieldset>
               <details className="text-xs text-slate-600">
-                <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What each choice does</summary>
+                <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-og-accent underline">What each choice does</summary>
                 <ul className="mt-1 list-disc space-y-1 pl-5">
                   {v.allowedDecisions.map((d) => <li key={d}>{decisionExplain(d, v)}</li>)}
                 </ul>
@@ -333,8 +334,8 @@ export function VisitReviewPage() {
         <Link className="font-medium underline" to="/billing-review">Billing review</Link>
       </p>
       <details className="text-xs text-slate-600">
-        <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these links do</summary>
-        <p>Correct creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</p>
+        <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-og-accent underline">What these links do</summary>
+        <InfoTip label="Help">Correct creates a corrected record and keeps the original; it is separate from review. Billing review is where billable minutes are approved.</InfoTip>
       </details>
     </div>
   );

@@ -12,6 +12,7 @@ import type {
 } from "@/lib/service-verification";
 
 export interface AssignedClient {
+  client_name?: string | null;
   client_id: string;
   client_code: string;
   next_scheduled_starts_at: string | null;
@@ -19,6 +20,8 @@ export interface AssignedClient {
   active_service_count: number;
   /** Service of that same shift (AWS 0017). Absent on backends without it. */
   next_scheduled_service_id?: string | null;
+  /** First name + last initial for a client this caregiver is assigned to or scheduled with (AWS 0091; computed on the server). Absent before 0091. */
+  display_label?: string | null;
 }
 
 export interface AuthorizedService {
@@ -40,6 +43,7 @@ export interface AuthorizedService {
 }
 
 export interface ActiveVisit {
+  client_name?: string | null;
   visit_id: string;
   visit_number: string | null;
   client_code: string;
@@ -146,7 +150,7 @@ export interface VisitCorrectionRow {
   id: string;
   corrected_by_name: string;
   reason: string;
-  before_snapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
+  before_snapshot: { timeIn: string | null; timeOut: string | null; workedMinutes: number; billableMinutes: number };
   after_snapshot: { timeIn: string; timeOut: string; workedMinutes: number; billableMinutes: number };
   created_at: string;
 }
@@ -337,7 +341,15 @@ export interface ScheduledShift {
   ends_at: string;
 }
 
+export interface MissingScheduledVisit {
+  shiftId: string; clientId: string; clientCode: string; serviceName: string | null;
+  caregiverName: string; startsAt: string; endsAt: string; canRecord: boolean;
+}
+
 export interface ServiceVerificationBackend {
+  listMissingScheduledVisits?(organizationId: string, filters: VisitReportFilters): Promise<MissingScheduledVisit[]>;
+  listMissingVisitReasonLabels?(organizationId: string): Promise<{ label: string; visits: number }[]>;
+  recordMissingScheduledVisit?(input: { organizationId: string; shiftId: string; timeIn: string; timeOut: string; reason: string; reasonLabel?: string; idempotencyKey: string }): Promise<string>;
   /** True only on the AWS build with Wave 1 (unscheduled reason, verbal option, attestation, outcome screen). */
   wave1?: boolean;
   readonly kind: "supabase" | "aws";

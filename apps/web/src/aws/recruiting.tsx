@@ -4,13 +4,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, Card } from "@carelik/ui";
+import { Button } from "@carelik/ui";
 import { formatDateOnly } from "@/lib/service-verification";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { CAREGIVER_STATUS_LABEL, PIPELINE_STAGES, type CaregiverStatus } from "./care-team-admin";
-import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
 import { actionBtn } from "./ui-classes";
 
@@ -27,13 +26,8 @@ interface OverviewRow {
   outstanding: Array<{ label: string; state: string; detail: string | null; category: string }>; nextExpiry: string | null;
 }
 
-/** The stage a person moves to next; Pending documents leads to Approved, which the server only allows once the checklist is complete. */
-const NEXT_STAGE: Partial<Record<CaregiverStatus, CaregiverStatus>> = { applicant: "interview", interview: "offer", offer: "onboarding", onboarding: "pending_documents", pending_documents: "ready" };
-
-const STATE_STYLE: Record<OnboardingItem["state"], string> = {
-  done: "bg-emerald-100 text-emerald-900", waived: "bg-slate-200 text-slate-800", outstanding: "bg-amber-100 text-amber-900", expired: "bg-red-100 text-red-900",
-};
-const STATE_LABEL: Record<OnboardingItem["state"], string> = { done: "Done", waived: "Waived", outstanding: "Outstanding", expired: "Expired" };
+/** The stage a person moves to next. After Pending documents the one remaining step is Approve for work on the caregiver's page (0086); it is not a stage move. */
+const NEXT_STAGE: Partial<Record<CaregiverStatus, CaregiverStatus>> = { applicant: "interview", interview: "offer", offer: "onboarding", onboarding: "pending_documents" };
 
 export function ProgressBar({ done, total }: { done: number; total: number }) {
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -42,126 +36,6 @@ export function ProgressBar({ done, total }: { done: number; total: number }) {
       <div className="h-2 w-28 overflow-hidden rounded-full bg-slate-200"><div className={`h-full ${done === total && total > 0 ? "bg-emerald-600" : "bg-teal-700"}`} style={{ width: `${pct}%` }} /></div>
       <span className="text-xs tabular-nums text-slate-700">{done}/{total}</span>
     </div>
-  );
-}
-
-function useOnboarding(caregiverRecordId: string, enabled = true) {
-  const api = useAwsApi();
-  const { activeOrganizationId } = useOrganization();
-  return useQuery({
-    queryKey: ["aws-onboarding", activeOrganizationId, caregiverRecordId],
-    queryFn: async () => (await api.get<{ onboarding: Onboarding }>(`/v1/caregivers/${encodeURIComponent(caregiverRecordId)}/onboarding`, { organizationId: activeOrganizationId })).onboarding,
-    enabled: enabled && !!activeOrganizationId,
-  });
-}
-function useRefreshOnboarding() {
-  const queryClient = useQueryClient();
-  return async () => { for (const k of ["aws-onboarding", "aws-onboarding-overview", "aws-caregivers"]) await queryClient.invalidateQueries({ queryKey: [k] }); };
-}
-
-function ItemRow({ caregiverRecordId, item, canManage }: { caregiverRecordId: string; item: OnboardingItem; canManage: boolean }) {
-  const api = useAwsApi();
-  const refresh = useRefreshOnboarding();
-  const { activeOrganizationId } = useOrganization();
-  const [open, setOpen] = useState<"complete" | "waive" | "reopen" | null>(null);
-  const [form, setForm] = useState({ completedOn: "", expiresOn: "", note: "", reason: "" });
-  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
-  const key = useRef(newIdempotencyKey());
-  const id = `ob-${item.key}`;
-  async function submit(action: "complete" | "waive" | "reopen") {
-    if (action !== "complete" && form.reason.trim().length < 3) return setState({ busy: false, error: "Give the reason." });
-    setState({ busy: true, error: null });
-    try {
-      await api.post(`/v1/caregivers/${encodeURIComponent(caregiverRecordId)}/onboarding/items`, {
-        organizationId: activeOrganizationId, requirementKey: item.key, action, completedOn: form.completedOn || null, expiresOn: form.expiresOn || null,
-        note: form.note.trim() || null, reason: form.reason.trim() || null,
-      }, { idempotencyKey: key.current });
-      key.current = newIdempotencyKey();
-      await refresh();
-      setForm({ completedOn: "", expiresOn: "", note: "", reason: "" });
-      setOpen(null);
-      setState({ busy: false, error: null });
-    } catch (cause) {
-      setState({ busy: false, error: message(cause, "Not saved.") });
-    }
-  }
-  const satisfied = item.state === "done" || item.state === "waived";
-  return (
-    <li className="px-2 py-1 text-sm">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        <p className="font-medium text-slate-950 md:w-52">{item.label}{item.required ? "" : " (optional)"}</p>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_STYLE[item.state]}`}>{STATE_LABEL[item.state]}</span>
-        <p className="min-w-0 flex-1 text-xs text-slate-700">
-          {item.completedOn ? `Recorded ${formatDateOnly(item.completedOn)}` : item.detail ?? "Not recorded"}
-          {item.expiresOn ? ` · ${item.state === "expired" ? "expired" : "expires"} ${formatDateOnly(item.expiresOn)}${item.expiringSoon ? " — soon" : ""}` : ""}
-          {item.note ? ` · ${item.note}` : ""}
-          {item.category === "document" ? <> · Checked from approved documents. <Link className="inline-flex min-h-[44px] items-center underline md:min-h-[28px]" to="/documents">Open Documents</Link></> : null}
-        </p>
-        {item.category !== "document" && canManage ? (
-          <div className="flex flex-wrap gap-1.5">
-            {!satisfied ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => setOpen(open === "complete" ? null : "complete")}>{item.state === "expired" ? "Record renewal" : "Mark done"}</button> : null}
-            {!satisfied && item.category !== "clearance" ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => setOpen(open === "waive" ? null : "waive")}>Waive</button> : null}
-            {satisfied ? <button type="button" className={`${actionBtn} md:min-h-7 md:py-0`} onClick={() => setOpen(open === "reopen" ? null : "reopen")}>Reopen</button> : null}
-          </div>
-        ) : null}
-      </div>
-      {open ? (
-        <form onSubmit={(e) => { e.preventDefault(); void submit(open); }} className="mt-1 grid gap-2 rounded-md bg-slate-50 p-2 sm:grid-cols-2">
-          {open === "complete" ? (
-            <>
-              <div><label htmlFor={`${id}-on`} className="block text-xs font-medium text-slate-600">Date completed (today if blank)</label><input id={`${id}-on`} type="date" value={form.completedOn} onChange={(e) => setForm({ ...form, completedOn: e.target.value })} className={inputClass} /></div>
-              <div><label htmlFor={`${id}-exp`} className="block text-xs font-medium text-slate-600">Expires on (optional)</label><input id={`${id}-exp`} type="date" value={form.expiresOn} onChange={(e) => setForm({ ...form, expiresOn: e.target.value })} className={inputClass} /></div>
-              <div className="sm:col-span-2"><label htmlFor={`${id}-note`} className="block text-xs font-medium text-slate-600">Note (optional, no results or personal details)</label><input id={`${id}-note`} value={form.note} maxLength={200} onChange={(e) => setForm({ ...form, note: e.target.value })} className={inputClass} /></div>
-            </>
-          ) : (
-            <div className="sm:col-span-2"><label htmlFor={`${id}-reason`} className="block text-xs font-medium text-slate-600">Reason</label><input id={`${id}-reason`} value={form.reason} maxLength={500} onChange={(e) => setForm({ ...form, reason: e.target.value })} className={inputClass} /></div>
-          )}
-          {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
-          <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" disabled={state.busy}>{open === "complete" ? "Save" : open === "waive" ? "Waive" : "Reopen"}</Button>
-            <button type="button" className="text-sm underline" onClick={() => setOpen(null)}>Close</button>
-          </div>
-        </form>
-      ) : null}
-    </li>
-  );
-}
-
-/** Checklist and progress on the caregiver's page. */
-export function OnboardingCard({ caregiverRecordId, status, canManage }: { caregiverRecordId: string; status: CaregiverStatus; canManage: boolean }) {
-  const api = useAwsApi();
-  const refresh = useRefreshOnboarding();
-  const { activeOrganizationId } = useOrganization();
-  const onboarding = useOnboarding(caregiverRecordId);
-  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
-  if (onboarding.isLoading) return <Card className="p-4"><p className="text-sm text-slate-500">Loading…</p></Card>;
-  if (onboarding.isError) return <Card className="p-4"><p role="alert" className="text-sm text-red-700">{(onboarding.error as Error).message}</p></Card>;
-  const o = onboarding.data!;
-  const outstanding = o.items.filter((i) => i.required && (i.state === "outstanding" || i.state === "expired"));
-  async function start() {
-    setState({ busy: true, error: null });
-    try {
-      await api.post(`/v1/caregivers/${encodeURIComponent(caregiverRecordId)}/onboarding/start`, { organizationId: activeOrganizationId });
-      await refresh();
-      setState({ busy: false, error: null });
-    } catch (cause) {
-      setState({ busy: false, error: message(cause, "Not started.") });
-    }
-  }
-  return (
-    <SummarySection title="Onboarding" defaultOpen={o.onboardingRequired && !o.complete}
-      status={o.onboardingRequired ? <ProgressBar done={o.done} total={o.total} /> : undefined}
-      summary={o.onboardingRequired ? (o.complete ? "Every required item is satisfied." : `Cannot be Approved or assigned yet. Still outstanding: ${outstanding.map((i) => i.label).join(", ")}.`) : "Not required for this caregiver"}>
-      {!o.onboardingRequired ? (
-        <div className="text-sm text-slate-700">
-          <p className="flex items-center gap-1.5">Not required (added before the checklist).<InfoTip>Added before the onboarding checklist, so it is not required. Their scheduling is unchanged.</InfoTip></p>
-          {canManage && status !== "inactive" ? <Button className="mt-1" type="button" variant="secondary" disabled={state.busy} onClick={() => void start()}>Start the checklist</Button> : null}
-        </div>
-      ) : (
-        <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card" aria-label="Onboarding checklist">{o.items.map((i) => <ItemRow key={i.key} caregiverRecordId={caregiverRecordId} item={i} canManage={canManage} />)}</ul>
-      )}
-      {state.error ? <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p> : null}
-    </SummarySection>
   );
 }
 
@@ -227,6 +101,9 @@ function PersonCard({ r, canManage }: { r: OverviewRow; canManage: boolean }) {
         <p className="text-xs text-amber-900">Outstanding: {r.outstanding.map((o) => (o.state === "expired" ? `${o.label} (expired)` : o.label)).join(", ")}</p>
       ) : <p className="text-xs text-emerald-800">Every required item is satisfied.</p>}
       {r.nextExpiry ? <p className="text-xs text-slate-600">Next expiry {formatDateOnly(r.nextExpiry)}</p> : null}
+      {canManage && r.status === "pending_documents" ? (
+        <p className="mt-1"><Link className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline md:min-h-[32px]" to={`/care-team/${r.caregiverRecordId}`}>Open the record to approve</Link></p>
+      ) : null}
       {canManage && next ? (
         <div className="mt-1">
           <button type="button" disabled={state.busy} onClick={() => void move()} className={actionBtn}>

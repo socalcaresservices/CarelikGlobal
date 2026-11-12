@@ -102,6 +102,10 @@ describe("amendments report the reserved shifts", () => {
     const open = await call("GET /v1/authorization-impacts", w.managerA, { query: { organizationId: w.orgA } });
     const mine = open.body.impacts.find((i: any) => i.impactId === out.body.affectedShifts[0].impactId);
     expect(mine).toMatchObject({ impactKind: "reserved_shift_over_cap", stillApplicable: true, acknowledgedAt: null });
+    // Timestamps survive the name-adding walk: they are ISO strings, not `{}` (the Authorization changes page calls .slice on createdAt and crashed on `{}`)
+    expect(typeof mine.createdAt).toBe("string");
+    expect(Number.isNaN(Date.parse(mine.createdAt))).toBe(false);
+    expect(typeof mine.shiftStartsAt).toBe("string");
     expect((await call("GET /v1/authorization-impacts", w.caregiverA1, { query: { organizationId: w.orgA } })).status).toBe(403);
     const short = await call("POST /v1/authorization-impacts/{impactId}/acknowledge", w.managerA, { path: { impactId: mine.impactId }, body: { organizationId: w.orgA, note: "x" } });
     expect(short.status).toBe(422);

@@ -9,6 +9,7 @@ import { useGuardedMutate } from "./use-guarded";
 import { useAvailability } from "./queries";
 import { DAY_NAMES, REQUEST_STATUS_BADGE, REQUEST_STATUS_LABEL, actionError, rangeLabel, weeklySummary, type HoursRange } from "./format";
 import { AuditList } from "../ui/audit-list";
+import { InfoTip } from "../ui/info-tip";
 
 export interface AvailabilityRequestRow {
   requestId: string;
@@ -196,7 +197,7 @@ export function AvailabilityRequestForm({ state, mode = "caregiver" }: { state: 
       {kind === "weekly" ? (
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-slate-800">Days and times</legend>
-          <p className="text-xs text-slate-600">This sets your whole week from the start date. Days left unticked are days you are not available.</p>
+          <InfoTip label="Help">This sets your whole week from the start date. Days left unticked are days you are not available.</InfoTip>
           {DAY_NAMES.map((name, i) => (
             <div key={name} className="rounded-lg border border-slate-200 p-2">
               <label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-slate-900">
@@ -284,7 +285,7 @@ export function MyAvailability() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-950">Pending changes</h2>
-          <Button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? "Close" : "Request change"}</Button>
+          <Button type="button" className="min-h-11" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? "Close" : "Request change"}</Button>
         </div>
         {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
         <div className="mt-2"><RequestHistory rows={state.pending} canWithdraw onWithdraw={withdraw} busyId={busy} /></div>

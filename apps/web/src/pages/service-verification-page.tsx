@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@carelik/auth";
 import { Button, Card, StatusBadge, cn } from "@carelik/ui";
 import { caregiverDifferenceNote } from "@/lib/hours-accounting";
+import { CaregiverAccessHelp } from "@/components/caregiver-access-help";
 import { useOrganization } from "@/providers/organization-provider";
 import { SignaturePad } from "@/components/signature-pad";
 import {
@@ -51,6 +52,7 @@ interface EndedVisit {
   timeOut: string;
   workedMinutes: number;
   clientCode: string;
+  clientName?: string | null | undefined;
   serviceCode: string;
   serviceName: string;
   visitNumber: string | null;
@@ -136,7 +138,7 @@ function ClientChoiceList({
                 >
                   <span className="min-w-0">
                     <span className="block font-semibold text-slate-950">
-                      Client {client.client_code}
+                      {client.display_label ? `${client.display_label} · ` : "Client "}{client.client_code}
                     </span>
                     <span className="block text-sm text-slate-600">
                       {client.next_scheduled_starts_at
@@ -288,6 +290,8 @@ export function ServiceVerificationPage() {
   // Wave 1 (AWS only): reason for a visit with no scheduled shift, verbal confirmer's name, attestation tick.
   const [unscheduledReason, setUnscheduledReason] = useState("");
   const [serverWantsReason, setServerWantsReason] = useState(false);
+  // R8: the list of clients not scheduled today stays closed behind one labelled link; unscheduled visits are provisional.
+  const [showUnscheduled, setShowUnscheduled] = useState(false);
   const [verbalName, setVerbalName] = useState("");
   const [attested, setAttested] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -317,9 +321,8 @@ export function ServiceVerificationPage() {
 
   const scheduledToday = useMemo(
     () =>
-      (clientsQuery.data ?? []).filter(
-        (client) => !!client.next_scheduled_starts_at,
-      ),
+      (clientsQuery.data ?? []).filter((client) => !!client.next_scheduled_starts_at)
+        .sort((a, b) => Date.parse(a.next_scheduled_starts_at!) - Date.parse(b.next_scheduled_starts_at!)),
     [clientsQuery.data],
   );
   const notScheduledToday = useMemo(
@@ -328,6 +331,12 @@ export function ServiceVerificationPage() {
         (client) => !client.next_scheduled_starts_at,
       ),
     [clientsQuery.data],
+  );
+
+  // Only clients with an active service can be started at all; a client with none is never offered.
+  const unscheduledChoices = useMemo(
+    () => notScheduledToday.filter((client) => client.active_service_count > 0),
+    [notScheduledToday],
   );
 
   const selectedClient = useMemo(
@@ -443,6 +452,7 @@ export function ServiceVerificationPage() {
         timeOut: visit.time_out,
         workedMinutes: visit.worked_minutes,
         clientCode: visit.client_code,
+        clientName: visit.client_name,
         serviceCode: visit.service_code,
         serviceName: visit.service_name,
         visitNumber: visit.visit_number,
@@ -497,6 +507,12 @@ export function ServiceVerificationPage() {
     }
   }, [selectedShiftId, shiftsQuery.data]);
 
+  // With exactly one visit scheduled today there is nothing to choose: it is selected, so the Start button is ready.
+  useEffect(() => {
+    if (phase !== "select" || selectedClientId || scheduledToday.length !== 1) return;
+    setSelectedClientId(scheduledToday[0]!.client_id);
+  }, [phase, selectedClientId, scheduledToday]);
+
   function invalidateVisitData() {
     void queryClient.invalidateQueries({
       queryKey: ["active-service-visit-v3", activeOrganizationId],
@@ -519,6 +535,8 @@ export function ServiceVerificationPage() {
     wave1 && !selectedShiftId && (!selectedClient?.next_scheduled_starts_at || serverWantsReason);
 
   function chooseClient(clientId: string) {
+    // Tapping the card that is already selected (for example the one chosen for you when only one visit is scheduled) must not reset the service, shift or reason.
+    if (clientId === selectedClientId) return;
     setServerWantsReason(false);
     setUnscheduledReason("");
     scheduledServiceAppliedFor.current = null;
@@ -571,6 +589,7 @@ export function ServiceVerificationPage() {
         timeOut: ended.time_out,
         workedMinutes: ended.worked_minutes,
         clientCode: active.client_code,
+        clientName: active.client_name,
         serviceCode: active.service_code,
         serviceName: active.service_name,
         visitNumber: active.visit_number,
@@ -705,6 +724,7 @@ export function ServiceVerificationPage() {
 
   return (
     <div className="mx-auto max-w-md pb-20">
+
       <Card className="overflow-hidden rounded-3xl border-slate-200 p-3 shadow-sm sm:p-3">
         <div className="space-y-4">
           <BrandHeader
@@ -744,8 +764,8 @@ export function ServiceVerificationPage() {
                   Today's visits
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">
-                  {formatVisitDate(new Date(nowTick).toISOString())} · Only
-                  clients assigned to you are shown.
+                  {formatVisitDate(new Date(nowTick).toISOString())} · Only your
+                  visits for today are shown.
                 </p>
               </div>
 
@@ -782,13 +802,30 @@ export function ServiceVerificationPage() {
                     selectedClientId={selectedClientId}
                     onChoose={chooseClient}
                   />
-                  {notScheduledToday.length > 0 ? (
-                    <ClientChoiceList
-                      heading="Other assigned clients"
-                      clients={notScheduledToday}
-                      selectedClientId={selectedClientId}
-                      onChoose={chooseClient}
-                    />
+                  {unscheduledChoices.length > 0 ? (
+                    <div>
+                      <button
+                        type="button"
+                        aria-expanded={showUnscheduled}
+                        onClick={() => setShowUnscheduled((open) => !open)}
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-indigo-700 underline underline-offset-2"
+                      >
+                        Not your scheduled visit? Start an unscheduled visit
+                      </button>
+                      {showUnscheduled ? (
+                        <div className="mt-2 space-y-2" data-testid="unscheduled-path">
+                          <p className="rounded-2xl bg-amber-50 p-3 text-xs text-amber-900">
+                            <span className="font-semibold">Provisional.</span> A visit that is not on your schedule needs a reason and goes to your manager for review before it can count.
+                          </p>
+                          <ClientChoiceList
+                            heading="Unscheduled visit"
+                            clients={unscheduledChoices}
+                            selectedClientId={selectedClientId}
+                            onChoose={chooseClient}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               ) : null}
@@ -802,7 +839,7 @@ export function ServiceVerificationPage() {
                   <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                     <dt className="text-slate-500">Client</dt>
                     <dd className="font-semibold">
-                      {selectedClient.client_code}
+                      {selectedClient.display_label ? `${selectedClient.display_label} · ` : ""}{selectedClient.client_code}
                     </dd>
                     <dt className="text-slate-500">Service</dt>
                     <dd className="min-w-0 break-words font-semibold">
@@ -878,8 +915,9 @@ export function ServiceVerificationPage() {
                   ) : null}
 
                   {selectedService ? (
-                    <>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <details className="mt-3" data-testid="caregiver-hours-details">
+                    <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-indigo-700 underline underline-offset-2">Hours for this service</summary>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-2xl border border-indigo-100 bg-indigo-100/70 p-2 text-indigo-950">
                         <p className="text-base font-bold">
                           {formatDuration(
@@ -921,7 +959,7 @@ export function ServiceVerificationPage() {
                           })
                         : CAREGIVER_BALANCE_NOTE}
                     </p>
-                    </>
+                    </details>
                   ) : null}
                 </div>
               ) : null}
@@ -940,7 +978,7 @@ export function ServiceVerificationPage() {
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-semibold">
                     No active service authorization is available for Client{" "}
-                    {selectedClient.client_code}.
+                    {selectedClient.client_name ? `${selectedClient.client_name} · ` : ""}{selectedClient.client_code}.
                   </p>
                   <p className="mt-1">
                     A manager must add, renew, or assign the correct service
@@ -1080,7 +1118,7 @@ export function ServiceVerificationPage() {
                     Client
                   </p>
                   <p className="mt-1 text-lg font-bold text-slate-950">
-                    {active.client_code}
+                    {active.client_name ? `${active.client_name} · ` : ""}{active.client_code}
                   </p>
                 </div>
                 <div>
@@ -1132,7 +1170,7 @@ export function ServiceVerificationPage() {
                     Authorized time left to record this month
                   </p>
                   <details className="mt-1 text-xs text-emerald-900">
-                    <summary className="inline-flex min-h-[32px] cursor-pointer items-center underline">Details</summary>
+                    <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center underline">Details</summary>
                     <p>{CAREGIVER_BALANCE_NOTE}</p>
                   </details>
                 </div>
@@ -1162,10 +1200,10 @@ export function ServiceVerificationPage() {
                   id="confirm-visit-heading"
                   className="text-xl font-semibold text-slate-950"
                 >
-                  Verify visit details
+                  Confirm visit with client
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">
-                  Review before collecting client or guardian confirmation.
+                  Show the client or guardian the actual visit times before they sign.
                 </p>
               </div>
 
@@ -1184,7 +1222,7 @@ export function ServiceVerificationPage() {
                 className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-slate-200 bg-og-card p-3 text-sm"
               >
                 <dt className="text-slate-500">Client</dt>
-                <dd className="font-semibold text-slate-950">{endedVisit.clientCode}</dd>
+                <dd className="font-semibold text-slate-950">{endedVisit.clientName ? `${endedVisit.clientName} · ` : ""}{endedVisit.clientCode}</dd>
                 <dt className="text-slate-500">Service</dt>
                 <dd className="font-semibold text-slate-950">
                   {endedVisit.serviceCode} · {endedVisit.serviceName}
@@ -1441,7 +1479,7 @@ export function ServiceVerificationPage() {
                   {confirmationMode === "exception" ||
                   (wave1 && result.status === "administrator_review")
                     ? "Saved for manager review"
-                    : "Visit saved"}
+                    : signatureKind === "verbal" ? "Visit saved" : "Signature saved"}
                 </h1>
                 <p className="mt-2 text-sm text-slate-500">
                   {confirmationMode === "exception"
@@ -1455,7 +1493,7 @@ export function ServiceVerificationPage() {
               </div>
               <div className="rounded-2xl bg-slate-50 p-3 text-left text-sm">
                 <p className="font-semibold text-slate-950">
-                  Client {endedVisit.clientCode} · {endedVisit.serviceName}
+                  {endedVisit.clientName ? `${endedVisit.clientName} · ` : "Client "}{endedVisit.clientCode} · {endedVisit.serviceName}
                 </p>
                 <p className="mt-1 text-slate-600">
                   {formatClockTime(endedVisit.timeIn)}–
@@ -1570,6 +1608,7 @@ export function ServiceVerificationPage() {
           </footer>
         </div>
       </Card>
+      {backend.kind === "aws" && phase === "select" ? <CaregiverAccessHelp /> : null}
     </div>
   );
 }

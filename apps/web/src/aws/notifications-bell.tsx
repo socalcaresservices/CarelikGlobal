@@ -39,7 +39,7 @@ export function NotificationsBell() {
         onClick={() => setOpen((v) => !v)}
         className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-og-line px-3 text-sm font-semibold text-og-ink hover:bg-og-page md:min-h-[40px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-og-link"
       >
-        Notifications{q.isError ? " ?" : <span className="font-og-mono tabular-nums">{unread}</span>}
+        Notifications{q.isError ? " unavailable" : <span className="font-og-mono tabular-nums">{unread}</span>}
       </button>
       {open ? (
         <section id="notifications-panel" aria-label="Notifications" className="fixed left-3 right-3 z-30 mt-1 rounded-lg border border-og-line bg-og-card p-2 shadow-lg md:absolute md:left-0 md:right-auto md:w-[22rem]" data-testid="notifications-panel">

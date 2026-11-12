@@ -95,6 +95,17 @@ export interface OgeviaEnvironmentConfig {
   readonly terminationProtection: boolean;
   /** Finite retention for every log group CDK creates (CLAUDE.md section 11). */
   readonly logRetention: RetentionDays;
+  /**
+   * Release switches: a feature whose API routes are added to this environment's API Gateway only when the owner has approved its release there.
+   * staffDuplicates (pending migration 0093, infra/aws/db/pending): R6 duplicate-staff report and merge-review. OFF everywhere until the owner approves its release; adds
+   * GET /v1/staff/duplicates and POST /v1/staff/{profileId}/merge only.
+   * bulkImport (pending migration 0092, infra/aws/db/pending): R11 import of people and clients from a CSV file. OFF everywhere until the owner approves its release; turning it on
+   * without applying 0092 would make the route fail. Adds POST /v1/imports/{kind} only.
+   * signInOverride (pending migration 0090, infra/aws/db/pending): the administrator override for a caregiver who has not signed in yet. OFF everywhere until the owner approves its release in
+   * that environment (demo first); with it off the two routes are not in the API at all.
+   * staffManagement (pending migration 0086, infra/aws/db/pending): on for the pilot/test slice and, since the owner's approval of 2026-10-26, on for production (PRD below). An environment that has not applied 0086 must keep it false.
+   */
+  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean; readonly liveTestRepairs?: boolean };
   readonly auth: {
     /**
      * Existing Cognito app client the API's JWT authorizer accepts (audience).
@@ -130,6 +141,8 @@ export interface OgeviaEnvironmentConfig {
    */
   readonly database: {
     readonly purpose: "test-slice" | "production";
+    /** Explicit opt-in cutover to the separately hosted synthetic TEST database. */
+    readonly isolatedTest?: boolean;
     /** Database inside the existing RDS instance. */
     readonly name: string;
     /** Production only: the dedicated application login role. */
@@ -169,6 +182,70 @@ export interface OgeviaEnvironmentConfig {
 /** ACM certificate (us-east-1) for app/admin/demo.ogevia.com, issued 2026-10-23. */
 const WEB_CERTIFICATE_ARN = "arn:aws:acm:us-east-1:300094796789:certificate/bfc4e928-f387-4804-a8d6-6eb351cfb526";
 
+// Keep the verified production foundation independent of future TEST overrides.
+// Cloning copies nested database/security-group/subnet references too. No AWS target changes here.
+const PRODUCTION_FOUNDATION: ExistingFoundationIds = {
+  vpc: {
+    vpcId: "vpc-0ee9df0c38297cbc1",
+    cidr: "10.20.0.0/16",
+    availabilityZones: ["us-west-2a", "us-west-2b"],
+    publicSubnets: [
+      {
+        subnetId: "subnet-04eadfc8b60aa82a0",
+        availabilityZone: "us-west-2a",
+        routeTableId: "rtb-01743eaf415a10e5a",
+      },
+      {
+        subnetId: "subnet-0877a622ff17a7eda",
+        availabilityZone: "us-west-2b",
+        routeTableId: "rtb-01743eaf415a10e5a",
+      },
+    ],
+    privateSubnets: [
+      {
+        subnetId: "subnet-08d40e6ac210b09e5",
+        availabilityZone: "us-west-2a",
+        routeTableId: "rtb-0bb8bac7d607a3737",
+      },
+      {
+        subnetId: "subnet-02b96c15c06ac5010",
+        availabilityZone: "us-west-2b",
+        routeTableId: "rtb-049d4448ab6a01e48",
+      },
+    ],
+  },
+  dataLayerStackName: "ogevia-prod-data-layer",
+  securityGroups: {
+    prodApp: "sg-064ffce3bcbe8eb3b",
+    prodRds: "sg-00530a1f4f7648e65",
+    dbAdmin: "sg-00e01e2ca80442c1f",
+  },
+  ssmEndpoints: {
+    ssm: "vpce-09dff848221f90105",
+    ssmMessages: "vpce-0cfe984c8b634eb0d",
+  },
+  databases: {
+    prod: {
+      instanceIdentifier: "ogevia-prod-postgres",
+      endpointAddress:
+        "ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com",
+      port: 5432,
+      securityGroupIds: ["sg-00530a1f4f7648e65"],
+      owner: {
+        kind: "cloudformation",
+        stackName: "ogevia-prod-data-layer",
+        logicalId: "PostgreSQLDatabase",
+      },
+      masterSecretArn:
+        "arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-ceb5276c-c146-4b3d-9ce6-dab7b70e0cfa-PRte3a",
+    },
+  },
+  appDatabaseSecretArn:
+    "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ",
+  cognitoUserPoolId: "us-west-2_849AYz5J7",
+};
+const TEST_FOUNDATION: ExistingFoundationIds = structuredClone(PRODUCTION_FOUNDATION);
+
 const PROD: OgeviaEnvironmentConfig = {
     envName: "prod",
     customDomains: { hostnames: ["demo.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
@@ -176,71 +253,13 @@ const PROD: OgeviaEnvironmentConfig = {
     region: OGEVIA_REGION,
     terminationProtection: true,
     logRetention: RetentionDays.ONE_YEAR,
+    features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: false },
     auth: {
       appClientId: "1i27abbina08fvg1i9u8vprgo9",
       // VERIFIED in repo: README.md APP_URL and organization-provider.tsx.
       allowedOrigins: ["https://app.ogevia.com"],
     },
-    existing: {
-      vpc: {
-        vpcId: "vpc-0ee9df0c38297cbc1",
-        cidr: "10.20.0.0/16",
-        availabilityZones: ["us-west-2a", "us-west-2b"],
-        publicSubnets: [
-          {
-            subnetId: "subnet-04eadfc8b60aa82a0",
-            availabilityZone: "us-west-2a",
-            routeTableId: "rtb-01743eaf415a10e5a",
-          },
-          {
-            subnetId: "subnet-0877a622ff17a7eda",
-            availabilityZone: "us-west-2b",
-            routeTableId: "rtb-01743eaf415a10e5a",
-          },
-        ],
-        privateSubnets: [
-          {
-            subnetId: "subnet-08d40e6ac210b09e5",
-            availabilityZone: "us-west-2a",
-            routeTableId: "rtb-0bb8bac7d607a3737",
-          },
-          {
-            subnetId: "subnet-02b96c15c06ac5010",
-            availabilityZone: "us-west-2b",
-            routeTableId: "rtb-049d4448ab6a01e48",
-          },
-        ],
-      },
-      dataLayerStackName: "ogevia-prod-data-layer",
-      securityGroups: {
-        prodApp: "sg-064ffce3bcbe8eb3b",
-        prodRds: "sg-00530a1f4f7648e65",
-        dbAdmin: "sg-00e01e2ca80442c1f",
-      },
-      ssmEndpoints: {
-        ssm: "vpce-09dff848221f90105",
-        ssmMessages: "vpce-0cfe984c8b634eb0d",
-      },
-      databases: {
-        prod: {
-          instanceIdentifier: "ogevia-prod-postgres",
-          endpointAddress:
-            "ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com",
-          port: 5432,
-          securityGroupIds: ["sg-00530a1f4f7648e65"],
-          owner: {
-            kind: "cloudformation",
-            stackName: "ogevia-prod-data-layer",
-            logicalId: "PostgreSQLDatabase",
-          },
-          masterSecretArn:
-            "arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-ceb5276c-c146-4b3d-9ce6-dab7b70e0cfa-PRte3a",
-        },
-      },
-      appDatabaseSecretArn:
-        "arn:aws:secretsmanager:us-west-2:300094796789:secret:ogevia/database/app-JsOTVQ",
-      cognitoUserPoolId: "us-west-2_849AYz5J7",
-    },
+    existing: TEST_FOUNDATION,
     database: {
       purpose: "test-slice",
       // Single source: the Lambda's DB_NAME for env=prod is the test slice.
@@ -272,7 +291,9 @@ const PROD: OgeviaEnvironmentConfig = {
  */
 const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
+  existing: PRODUCTION_FOUNDATION,
   envName: "prd",
+  features: { staffManagement: true, signInOverride: false, bulkImport: false, staffDuplicates: false },   // production: the owner approved the staff-management release on 2026-10-25 (Pacific) together with migration 0086 (db/pending, applied outside the ledger like TEST); see docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md
   customDomains: { hostnames: ["app.ogevia.com", "admin.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
   // Separate sign-in from the pilot: a dedicated user pool and client (lib/auth-stack.ts). `existing.cognitoUserPoolId` and
   // `auth.appClientId` are inherited from PROD only so they can be NAMED as forbidden for production; its API never accepts them.
@@ -291,6 +312,45 @@ export const ENVIRONMENTS: Record<OgeviaEnvName, OgeviaEnvironmentConfig> = {
   prd: PRD,
 };
 
+/** Proposed isolated TEST target, verified by the owner via read-only AWS/catalog inventory. */
+export const ISOLATED_TEST_TARGET = {
+  instanceIdentifier: "ogevia-postgres",
+  endpointAddress: "ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com",
+  securityGroupId: "sg-0bc0f1315fd0feaf2",
+  appLogin: "ogevia_test_app",
+  appSecretName: "ogevia/test/database/app",
+} as const;
+
+/** Preserve the already accepted TEST 0102 features; never enables production routes. */
+export function resolveLiveTestBaseline(config: OgeviaEnvironmentConfig, value: unknown): OgeviaEnvironmentConfig {
+  if (value === undefined) return config;
+  if (value !== "0102" || config.envName !== "prod" || config.database.purpose !== "test-slice") throw new Error("liveTestBaseline=0102 is TEST-only");
+  return { ...structuredClone(config), features: { ...config.features, liveTestRepairs: true } };
+}
+
+/** No opt-in means no changes. Master ARN is metadata resolved by the operator, never a secret value. */
+export function resolveTestDatabase(config: OgeviaEnvironmentConfig, choice: unknown, masterSecretArn?: unknown): OgeviaEnvironmentConfig {
+  if (choice === undefined || choice === "shared") return config;
+  if (choice !== "isolated" || config.envName !== "prod" || config.database.purpose !== "test-slice") {
+    throw new Error("Isolated TEST database is available only for env=prod with testDatabase=isolated");
+  }
+  const prefix = `arn:aws:secretsmanager:${config.region}:${config.account}:secret:rds!db-`;
+  if (typeof masterSecretArn !== "string" || !masterSecretArn.startsWith(prefix) || !/rds!db-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[A-Za-z0-9]{6}$/.test(masterSecretArn) || masterSecretArn === PRODUCTION_FOUNDATION.databases.prod.masterSecretArn) {
+    throw new Error("Provide the candidate RDS managed master-secret ARN metadata as testMasterSecretArn (never production's)");
+  }
+  const next = structuredClone(config);
+  return {
+    ...next,
+    features: { ...next.features, liveTestRepairs: true },
+    existing: { ...next.existing,
+      securityGroups: { ...next.existing.securityGroups, prodRds: ISOLATED_TEST_TARGET.securityGroupId },
+      databases: { prod: { instanceIdentifier: ISOLATED_TEST_TARGET.instanceIdentifier, endpointAddress: ISOLATED_TEST_TARGET.endpointAddress, port: 5432,
+        securityGroupIds: [ISOLATED_TEST_TARGET.securityGroupId], owner: { kind: "unmanaged" }, masterSecretArn } },
+    },
+    database: { ...next.database, isolatedTest: true, appLogin: ISOLATED_TEST_TARGET.appLogin, appSecretName: ISOLATED_TEST_TARGET.appSecretName },
+  };
+}
+
 /** Secret ARN pattern (Secrets Manager appends "-" + 6 random characters). */
 export function secretArnPattern(config: OgeviaEnvironmentConfig): string {
   return `arn:aws:secretsmanager:${config.region}:${config.account}:secret:${config.database.appSecretName}-??????`;
@@ -306,6 +366,16 @@ export function assertDatabaseConfig(config: OgeviaEnvironmentConfig): void {
   const { database: db } = config;
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(db.name ?? "")) {
     throw new Error(`env "${config.envName}": database.name is missing or malformed`);
+  }
+  if (db.isolatedTest && (config.envName !== "prod" || db.purpose !== "test-slice" ||
+      config.existing.databases.prod.endpointAddress !== ISOLATED_TEST_TARGET.endpointAddress ||
+      config.existing.databases.prod.instanceIdentifier !== ISOLATED_TEST_TARGET.instanceIdentifier ||
+      config.existing.securityGroups.prodRds !== ISOLATED_TEST_TARGET.securityGroupId ||
+      config.existing.databases.prod.securityGroupIds.length !== 1 ||
+      config.existing.databases.prod.securityGroupIds[0] !== ISOLATED_TEST_TARGET.securityGroupId ||
+      config.existing.databases.prod.port !== 5432 ||
+      db.appLogin !== ISOLATED_TEST_TARGET.appLogin || db.appSecretName !== ISOLATED_TEST_TARGET.appSecretName)) {
+    throw new Error("Isolated TEST database configuration differs from the reviewed target");
   }
   if (db.purpose === "test-slice") {
     if (config.envName === "prd" || db.name !== config.testSlice.databaseName) {

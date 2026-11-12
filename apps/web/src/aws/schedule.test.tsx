@@ -156,6 +156,13 @@ describe("Schedule (staff)", () => {
 describe("My shifts (caregiver)", () => {
   it("lists upcoming shifts by client code and sends a call-out with a reason", async () => {
     const api = renderAt("/my-shifts", "caregiver");
+    const shiftDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date(later(26)));
+    const nextSunday = new Date(`${today}T12:00:00Z`);
+    nextSunday.setUTCDate(nextSunday.getUTCDate() + 7 - nextSunday.getUTCDay());
+    if (shiftDate >= nextSunday.toISOString().slice(0, 10)) {
+      fireEvent.click(await screen.findByRole("button", { name: "Next week" }));
+    }
+    fireEvent.click(await screen.findByRole("button", { name: /shifts available/ }));
     expect(await screen.findByText(/Client CL-1 · Personal care/)).toBeInTheDocument();
     expect(screen.queryByText(/Synthetic Client Alpha/)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Schedule" })).not.toBeInTheDocument();

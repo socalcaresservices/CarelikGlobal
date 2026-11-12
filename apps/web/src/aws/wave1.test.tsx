@@ -24,7 +24,7 @@ interface Opts { scheduled?: boolean; startNeedsReason?: boolean; pickup?: "ok" 
 function fakeApi(role: Role, opts: Opts = {}) {
   const calls: Call[] = [];
   let visit: Record<string, unknown> | null = null;
-  let openShifts: Array<Record<string, unknown>> = [{ shiftId: SHIFT, startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", minutes: 120, clientCode: "C-104", serviceName: "Respite Care", coverageState: "needs_coverage" }];
+  let openShifts: Array<Record<string, unknown>> = [{ shiftId: SHIFT, startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", minutes: 120, clientCode: "C-104", city: "Springfield", serviceName: "Respite Care", coverageState: "needs_coverage" }];
   let rules = [{ version: 0, minutes: 15, source: "system_default", effectiveFrom: null, changedByName: null, changedAt: null, reason: null, inEffect: true }] as Array<Record<string, unknown>>;
   const permissions = role === "organization_owner" ? ["organization.update", "visits.read", "visits.manage", "billing.visits.read"] : role === "manager" ? ["visits.read", "visits.manage", "billing.visits.read"] : ["availability.manage_own"];
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -127,13 +127,17 @@ const T = 30_000;
 const COLD = 15_000;
 
 async function startAndEnd(api: ReturnType<typeof fakeApi>, reason?: string) {
+  // An unscheduled client is behind one labelled link (R8); a client scheduled today is already listed.
+  await screen.findByRole("button", { name: /Client C-104|Start an unscheduled visit/ }, { timeout: COLD });
+  const unscheduled = screen.queryByRole("button", { name: /Start an unscheduled visit/ });
+  if (unscheduled) fireEvent.click(unscheduled);
   fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }, { timeout: COLD }));
   await screen.findByRole("group", { name: "Visit details" });
   if (reason !== undefined) fireEvent.change(await screen.findByLabelText(/Why is this visit not on your schedule/), { target: { value: reason } });
   await waitFor(() => expect(screen.getByRole("button", { name: /Start visit/ })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
   fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
-  await screen.findByRole("heading", { name: "Verify visit details" });
+  await screen.findByRole("heading", { name: "Confirm visit with client" });
   return api;
 }
 
@@ -216,7 +220,7 @@ describe("confirmation choices and attestation (G05, G06)", () => {
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 20, clientY: 20 });
     fireEvent.click(screen.getByRole("checkbox", { name: new RegExp(ATTESTATION_TEXT.slice(0, 30)) }));
     fireEvent.click(screen.getByRole("button", { name: /Confirm visit/ }));
-    expect(await screen.findByRole("heading", { name: "Visit saved" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Signature saved" })).toBeInTheDocument();
     const dl = within(document.querySelector('dl[aria-label="Visit result"]') as HTMLElement);
     expect(dl.getByText("Billing ready")).toBeInTheDocument();
     expect(screen.getByText(/Billing ready does not mean billed/)).toBeInTheDocument();
@@ -230,7 +234,7 @@ describe("open shifts (G09)", () => {
     const api = renderAws("/my-shifts", "caregiver", { pickup: "ok" });
     expect(await screen.findByText(/Open shifts you can ask for/, undefined, { timeout: COLD })).toBeInTheDocument();
     const region = screen.getByRole("heading", { name: /Open shifts you can ask for/ }).closest("section")!;
-    expect(within(region).getByText(/Client C-104 · Respite Care · 2 hr/)).toBeInTheDocument();
+    expect(within(region).getByText(/Client C-104 · Springfield · Respite Care · 2 hr/)).toBeInTheDocument();
     expect(within(region).getByText(/Asking does not give you the shift/)).toBeInTheDocument();
     expect(within(region).queryByText(/disappear/)).toBeNull();
     fireEvent.click(within(region).getByRole("button", { name: "Request this shift" }));

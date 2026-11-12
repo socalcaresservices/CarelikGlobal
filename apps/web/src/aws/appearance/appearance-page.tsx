@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { DashboardAppearanceControls } from "./dashboard-appearance";
 import { Button, Card } from "@carelik/ui";
 import { InfoTip } from "../ui/info-tip";
 import { SummarySection } from "../ui/summary-section";
 import { actionError } from "../readiness/format";
 import {
   ACCENTS, ACCENT_LABEL, ACCENT_RGB, BACKGROUNDS, BACKGROUND_LABEL, BACKGROUND_SWATCH, CHART_LABEL, CHART_TYPES, DENSITIES, DENSITY_LABEL, LAYOUT_LABEL, LAYOUTS, TEXT_LABEL, TEXT_SIZES, rgbCss,
-  type PartialAppearance,
+  SYSTEM_DEFAULTS, type PartialAppearance,
 } from "./appearance";
 import { useAppearanceState, useSaveAppearance } from "./appearance-hooks";
 
@@ -13,7 +14,7 @@ type Key = keyof PartialAppearance;
 interface Group { key: Key; legend: string; options: readonly string[]; label: (v: string) => string; swatch?: (v: string) => string; hint?: string }
 
 const GROUPS: Group[] = [
-  { key: "background", legend: "Background", options: BACKGROUNDS, label: (v) => BACKGROUND_LABEL[v as keyof typeof BACKGROUND_LABEL], swatch: (v) => BACKGROUND_SWATCH[v as keyof typeof BACKGROUND_SWATCH] },
+  { key: "background", legend: "Page background", options: BACKGROUNDS, label: (v) => BACKGROUND_LABEL[v as keyof typeof BACKGROUND_LABEL], swatch: (v) => BACKGROUND_SWATCH[v as keyof typeof BACKGROUND_SWATCH] },
   { key: "accent", legend: "Accent", options: ACCENTS, label: (v) => ACCENT_LABEL[v as keyof typeof ACCENT_LABEL], swatch: (v) => rgbCss(ACCENT_RGB[v as keyof typeof ACCENT_RGB].light) },
   { key: "density", legend: "Density", options: DENSITIES, label: (v) => DENSITY_LABEL[v as keyof typeof DENSITY_LABEL] },
   { key: "textSize", legend: "Text size", options: TEXT_SIZES, label: (v) => TEXT_LABEL[v as keyof typeof TEXT_LABEL] },
@@ -60,6 +61,7 @@ function ChoiceForm({ level, current, defaultLabel }: { level: "me" | "organizat
       {save.isError ? <p role="alert" className="text-sm text-red-700">{actionError(save.error, "The appearance could not be saved.")}</p> : null}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" className="min-h-[44px] md:min-h-[32px]" disabled={!dirty || save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
+        {level === "me" ? <Button type="button" variant="secondary" disabled={save.isPending} onClick={() => { setDraft(SYSTEM_DEFAULTS); save.mutate(SYSTEM_DEFAULTS); }}>Use standard appearance</Button> : null}
         {save.isSuccess && !dirty ? <p role="status" className="text-sm text-og-sub">Saved.</p> : null}
       </div>
     </form>
@@ -72,6 +74,7 @@ export function AppearancePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-3">
       <h1 className="text-xl font-bold tracking-tight text-og-ink">Appearance</h1>
+      <DashboardAppearanceControls />
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{actionError(q.error, "Appearance could not be loaded.")}</p> : null}
       {q.data ? (
@@ -79,7 +82,7 @@ export function AppearancePage() {
           <Card className="space-y-1.5">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <h2 className="text-sm font-semibold text-og-ink">My view</h2>
-              <p className="text-xs text-og-sub">Only you see these. “Agency default” follows your agency&apos;s setting.</p>
+              <InfoTip label="Help">Only you see these. “Agency default” follows your agency&apos;s setting.</InfoTip>
             </div>
             <ChoiceForm key={JSON.stringify(q.data.mine)} level="me" current={q.data.mine} defaultLabel="Agency default" />
           </Card>

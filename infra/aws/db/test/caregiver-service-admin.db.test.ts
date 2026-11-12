@@ -1,7 +1,7 @@
 // 0023 Care Team (caregiver records) and service administration. SYNTHETIC
 // data only. Every call runs as the application role through begin_request.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { api, asActor, createTestDb, expectPgError, orgToday, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { api, asActor, createTestDb, expectPgError, orgToday, satisfyHardRequirements, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -76,10 +76,12 @@ describe("Care Team records", () => {
     await expectPgError(api.start(db, cg, w.orgA, w.clientA1, w.serviceA), "OGA03");
     const [a] = await audit(cg.record, "caregiver.status_changed");
     expect(a).toMatchObject({ reason: "Left the agency (synthetic)", after_state: { status: "inactive", ended_assignments: 1, sign_in_status: "suspended" } });
-    const [back] = await q(w.managerA, "select * from ogevia_api.set_caregiver_status($1, $2, 'active', 'Rehired (synthetic)')", [w.orgA, cg.record]);
-    expect(back).toMatchObject({ ended_assignments: 0, sign_in_status: "active" });
+    // 0086: coming back is Approve for work (the picker no longer sets Approved/Active); the hard requirements must be met again
+    await expectPgError(q(w.managerA, "select * from ogevia_api.set_caregiver_status($1, $2, 'active', 'Rehired (synthetic)')", [w.orgA, cg.record]), "OGC09", /Use Approve for work/);
+    await satisfyHardRequirements(db, w.orgA, cg.record, w.ownerA.userId);
+    await q(w.managerA, "select ogevia_api.approve_caregiver_for_work($1, $2, null)", [w.orgA, cg.record]);
     const row = (await q(w.managerA, "select * from ogevia_api.list_caregivers($1)", [w.orgA])).find((x) => x.caregiver_record_id === cg.record);
-    expect(row).toMatchObject({ status: "active", sign_in_status: "active", active_assignments: 0 });
+    expect(row).toMatchObject({ status: "ready", work_status: "approved", sign_in_status: "active", active_assignments: 0 });
   });
 
   it("inactive is refused while the caregiver has a visit in progress", async () => {

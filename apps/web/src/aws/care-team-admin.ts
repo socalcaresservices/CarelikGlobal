@@ -37,7 +37,24 @@ export interface Caregiver {
   onboardingRequired?: boolean;
   onboardingDone?: number;
   onboardingTotal?: number;
+  /** 0086: the calculated status and readiness, identical on every screen (ogevia.caregiver_work_status / caregiver_readiness). */
+  workStatus: WorkStatus;
+  readinessMet?: number;
+  readinessTotal?: number;
+  waitingOn?: string[];
+  signedIn?: boolean;
+  hasContact?: boolean;
 }
+
+/** Not ready -> Approved -> Active, plus Inactive. Calculated by the server; never chosen by hand. */
+export type WorkStatus = "not_ready" | "approved" | "active" | "inactive";
+export const WORK_STATUS_LABEL: Record<WorkStatus, string> = { not_ready: "Not ready", approved: "Approved", active: "Active", inactive: "Inactive" };
+export const WORK_STATUS_BADGE: Record<WorkStatus, string> = {
+  not_ready: "bg-amber-100 text-amber-900",
+  approved: "bg-indigo-100 text-indigo-900",
+  active: "bg-emerald-100 text-emerald-900",
+  inactive: "bg-slate-200 text-slate-800",
+};
 
 export const CAREGIVER_STATUS_LABEL: Record<CaregiverStatus, string> = {
   applicant: "Applicant",

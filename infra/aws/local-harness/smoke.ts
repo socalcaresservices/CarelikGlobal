@@ -200,7 +200,7 @@ async function main() {
     check("a caregiver cannot list the agency's shifts", cg.status === 403 || ((json(cg).shifts ?? []) as unknown[]).length === 0, `status ${cg.status}`);
     const assigned = await api(`/v1/clients/assigned?organizationId=${org}`, alex);
     const keys = new Set(((json(assigned).clients ?? []) as Array<Record<string, unknown>>).flatMap((c) => Object.keys(c)));
-    check("a caregiver's client list has codes only (no names)", assigned.status === 200 && !keys.has("legalFirstName") && !keys.has("legalLastName") && !keys.has("firstName") && !keys.has("lastName"), `status ${assigned.status}`);
+    check("a caregiver's client list omits full legal-name fields", assigned.status === 200 && !keys.has("legalFirstName") && !keys.has("legalLastName") && !keys.has("firstName") && !keys.has("lastName"), `status ${assigned.status}`);
     const money = await api(`/v1/reports/utilisation?organizationId=${org}&monthStart=${monthStart}`, manager);
     const rows = (json(money).services ?? []) as Array<Record<string, unknown>>;
     check("the manager sees hours but no dollar values", money.status === 200 && rows.length >= 1 && rows.every((r) => r.billableValueCents == null && r.approvedValueCents == null && r.unusedValueCents == null), `status ${money.status}`);

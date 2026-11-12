@@ -32,6 +32,7 @@ export const KIND_LABEL: Record<string, string> = { authorization: "Over limit",
 
 /** Where the primary action goes, with the issue's context in the link. Permissions are still enforced by the server on every request. */
 export function issueDestination(i: ActionIssue): { to: string; label: string } {
+  if (i.kind === "business_document") return { to: "/business-compliance", label: "Review renewals" };
   const visit = i.visitId ?? i.entityId;
   switch (i.action) {
     case "assign_caregiver": return { to: `/schedule?coverage=1&shift=${i.shiftId ?? i.entityId}${i.deadline ? `&at=${encodeURIComponent(i.deadline)}` : ""}`, label: "Choose a caregiver" };
@@ -50,6 +51,7 @@ export function issueDestination(i: ActionIssue): { to: string; label: string } 
 
 /** The row's reason in a few words; the full recommended sentence stays in the row for screen readers and as the tooltip. */
 const REASON_PHRASE: Record<string, string> = {
+  business_document_renewal: "Renewal due",
   uncovered_open: "No caregiver", uncovered_called_out: "Called out", compliance_hold: "Caregiver on hold", documents_not_current: "Document not current", missing_clock_out: "Still open",
   in_progress_on_hold: "Visit on hold", pending_confirmation: "Awaiting confirmation", confirmation_overdue: "Confirmation overdue", needs_review: "Needs review", late_response: "Late response",
   ready_for_approval: "Ready to approve", authorization_decreased: "Authorization lowered", pending_pickup: "Pickup requested", expired: "Expired", overdue: "Overdue", review_overdue: "Review overdue",

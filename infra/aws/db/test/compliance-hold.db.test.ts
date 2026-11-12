@@ -48,6 +48,8 @@ beforeAll(async () => {
   cpr = (await call(w.managerA, "select ogevia_api.create_document_type($1,'CPR card',true,null) as id", [w.orgA]))[0].id;
   tb = (await call(w.managerA, "select ogevia_api.create_document_type($1,'TB result',false,null) as id", [w.orgA]))[0].id;
   await configureRules();
+  // 0086: the CPR/TB period is an agency setting (default 30). This suite was written for 14 days; it sets that on the agency so its dates keep their meaning.
+  await q("insert into ogevia.organization_compliance_settings (organization_id, cpr_tb_due_days) values ($1, 14)", [w.orgA]);
 });
 afterAll(async () => db?.drop());
 
@@ -231,7 +233,10 @@ describe("enforcement on the backend (after the owner activates it)", () => {
       await setBackground(recA1, s);
       await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /Background check/);
     }
-    await setBackground(recA1, "approved"); // 0081: approved clearance is necessary but no longer sufficient: CPR/TB are missing and the 14-day period does not allow work
+    await setBackground(recA1, "approved"); // 0086: approved clearance is enough inside the agency's CPR/TB period (3 days into 14); CPR/TB show as pending, not blocking
+    expect(await createShift(w.managerA, await add(3), "09:00", "11:00", recA1)).toHaveLength(1);
+    await wipeShifts();
+    await hireDaysAgo(recA1, 20); // past the due date: now a missing CPR/TB blocks
     await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /^CPR missing\.\s+TB missing\.$/);
     await deliverCpr(recA1);
     await deliverTb(recA1);
@@ -250,25 +255,27 @@ describe("enforcement on the backend (after the owner activates it)", () => {
     await expectPgError(call(w.managerA, "select ogevia_api.create_assignment($1,$2,$3,$4,$5::date,null)", [w.orgA, rec, fx.client, fx.service, today]), "OGR30", /Background check/);
   });
 
-  it("CPR/TB (0081 changed): a missing or only-uploaded document blocks assignment on EVERY day, including day 1 and the due date; the 14-day period no longer allows work, it only delays the automatic hold", async () => {
+  it("CPR/TB (0086 reverses 0081): a missing or only-uploaded document does not block inside the agency's period (the due date itself included); after it, and for a rejected document, it blocks", async () => {
+    await resetCaregiver(recA1);
     await setBackground(recA1, "approved");
     await clearDocs(recA1);
-    await hireDaysAgo(recA1, 14); // today IS the due date: before 0081 the shift was created; the period no longer lets work go ahead
-    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR missing\.\s+TB missing\./);
+    const day = await add(3);
+    await hireDaysAgo(recA1, 14); // today IS the due date (14-day agency setting): still inside the period
+    expect(await createShift(w.managerA, day, "09:00", "11:00", recA1)).toHaveLength(1);
+    await wipeShifts();
     await hireDaysAgo(recA1, 1);
-    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR missing\.\s+TB missing\./);
     await deliverCpr(recA1, null);
-    await deliverTb(recA1, null); // uploaded, not verified
-    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR needs review\.\s+TB needs review\./);
+    await deliverTb(recA1, null); // uploaded, not verified: pending inside the period
+    expect(await createShift(w.managerA, day, "09:00", "11:00", recA1)).toHaveLength(1);
+    await wipeShifts();
     await clearDocs(recA1);
-    await hireDaysAgo(recA1, 14);
     await hireDaysAgo(recA1, 15); // the period ended at 00:00 today
-    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR missing\.\s+TB missing\./);
-    await hireDaysAgo(recA1, null);
-    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR missing\./);
+    await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA1), "OGR30", /CPR missing\.\s+TB missing\./);
+    await hireDaysAgo(recA1, null); // no hire date: nothing to measure the period from, so nothing is assumed
+    await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA1), "OGR30", /CPR missing\./);
     await hireDaysAgo(recA1, 2);
-    await deliverCpr(recA1, "rejected");
-    await expectPgError(createShift(w.managerA, await add(3), "09:00", "11:00", recA1), "OGR30", /CPR rejected\./);
+    await deliverCpr(recA1, "rejected"); // strict states never relax
+    await expectPgError(createShift(w.managerA, day, "09:00", "11:00", recA1), "OGR30", /CPR rejected\./);
   });
 
   it("every path refuses a caregiver on hold: manual assignment, reassignment, open-shift pickup, standing assignment, series, visit start", async () => {
@@ -617,13 +624,16 @@ describe("0064: a hold is released only when verification resolves every blocker
     expect(await createShift(w.managerA, await add(9), "09:00", "11:00", recA3)).toHaveLength(1);
   });
 
-  it("a caregiver without a hold who is simply new (hire date entered first, inside the 14 days) is still allowed the 14 days WITHOUT A HOLD, but (0081) cannot be assigned until CPR and TB are verified", async () => {
+  it("a caregiver without a hold who is simply new (hire date entered first, inside the 14 days) is still allowed the 14 days WITHOUT A HOLD, but (0086) is assignable inside the period and blocked after it until CPR and TB are verified", async () => {
     await resetCaregiver(recA2);
     await baseline(recA2);
     await setBackground(recA2, "approved");
     await hireDaysAgo(recA2, 2);
     await sweep();
     expect(await openHold(recA2)).toBeUndefined();
+    expect(await createShift(w.managerA, await add(10), "09:00", "11:00", recA2)).toHaveLength(1); // 0086: inside the period CPR/TB are pending, not blocking
+    await wipeShifts();
+    await hireDaysAgo(recA2, 30);
     await expectPgError(createShift(w.managerA, await add(10), "09:00", "11:00", recA2), "OGR30", /CPR missing\.\s+TB missing\./);
     await deliverCpr(recA2);
     await deliverTb(recA2);

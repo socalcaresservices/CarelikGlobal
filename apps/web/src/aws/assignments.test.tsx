@@ -7,7 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "./aws-root";
-import { baseCompliance } from "./readiness/fake-api";
+
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
@@ -58,9 +58,10 @@ function fakeApi(opts: { covered: boolean }) {
         return json(201, { assignment: { assignmentId: "new", hasAuthorization: opts.covered, grantsAccess: body?.caregiverRecordId !== CG_NO_LOGIN } });
       case `POST /v1/assignments/${ASG}/end`:
         return json(200, { outcome: "ended" });
-      case `GET /v1/caregivers/${CG}/compliance`:
-      case `GET /v1/caregivers/${CG_NO_LOGIN}/compliance`:
-        return json(200, { compliance: baseCompliance() }); // 0053: the profile also shows compliance; this test is about assignments
+      case `GET /v1/caregivers/${CG}/readiness`:
+      case `GET /v1/caregivers/${CG_NO_LOGIN}/readiness`:
+        // 0086: the profile also shows the readiness checklist; this test is about assignments
+        return json(200, { readiness: { caregiverRecordId: CG, caregiverCode: "CG-1", status: "active", approved: true, approvedAt: "2026-10-01T18:00:00Z", approvedByName: "Olivia Owner", approvalSource: "approval", met: 5, total: 5, waitingOn: [], canApprove: false, hireDate: "2026-09-01", graceDays: 30, cprTbDueDate: "2026-10-01", enforcementActive: false, items: [] } });
       case "GET /v1/action-issues":
         return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] });
       case `GET /v1/clients/${CLIENT}/issue-history`:

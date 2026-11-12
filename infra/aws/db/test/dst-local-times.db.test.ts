@@ -1,7 +1,9 @@
 // 0035 Daylight-saving local times: a time that does not exist (spring
 // forward) or happens twice (fall back) is refused or flagged, never resolved
 // silently (owner direction 2026-10-05). Agency time zone America/Los_Angeles.
-// The next real transitions are found from today, so the tests stay valid.
+// The next real transitions are found from today + 9 days, so every test has at least a week of FUTURE lead before the transition (the weekly-series and
+// 'change this date only' tests start 7 and 2 days before it, and a shift or series cannot start in the past). Starting at today + 2 made them fail whenever a
+// transition fell within the following week (for example on 2026-10-30, with the fall-back on 2026-11-01).
 // SYNTHETIC data only.
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -20,7 +22,7 @@ beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 600);
   const find = async (time: string, issue: string) => (await db.admin.query(
-    `select min(d)::date::text d from generate_series(current_date + 2, current_date + 400, interval '1 day') d
+    `select min(d)::date::text d from generate_series(current_date + 9, current_date + 400, interval '1 day') d
      where ogevia.local_time_issue($1, d::date, $2::time) = $3`, [TZ, time, issue])).rows[0].d as string;
   fallBack = await find("01:30", "ambiguous");
   springForward = await find("02:30", "nonexistent");
@@ -79,11 +81,15 @@ describe("one-time shifts and one-date changes", () => {
 describe("weekly series", () => {
   it("flags the repeated-hour Sunday; creation is refused unless the scheduler explicitly skips it; the skip is recorded", async () => {
     const c = await freshClient(db, w, w.caregiverA1, 6000, w.orgA, { before: 5, after: 400 });
-    const from = addDays(fallBack, -7);
+    // The lead-in Sunday (fallBack - 7) is only a valid "ok" row while it is still in the future; in the week before the clock change the server correctly reports
+    // already_started for it. The test therefore starts the series on it only when it is safely ahead of today (UTC date + 1 covers the agency time zone), else the day after.
+    const today = (await db.admin.query("select current_date::text d")).rows[0].d as string;
+    const hasLead = addDays(fallBack, -7) > addDays(today, 1);
+    const from = hasLead ? addDays(fallBack, -7) : addDays(fallBack, -6);
     const preview = await q(w.managerA, "select local_date::text d, outcome, minutes from ogevia_api.preview_shift_series($1, $2, $3, $4, '{0}'::smallint[], '01:00', '03:00', $5::date, $6::date)",
       [w.orgA, c.client, c.service, rec, from, addDays(fallBack, 7)]);
     expect(preview).toEqual([
-      { d: from, outcome: "ok", minutes: 120 },
+      ...(hasLead ? [{ d: from, outcome: "ok", minutes: 120 }] : []),
       { d: fallBack, outcome: "time_occurs_twice", minutes: expect.any(Number) },
       { d: addDays(fallBack, 7), outcome: "ok", minutes: 120 },
     ]);
@@ -92,7 +98,7 @@ describe("weekly series", () => {
     await expectPgError(create("refuse"), "OGC09", /time occurs twice/);
     expect(Number((await db.admin.query("select count(*) n from ogevia.shifts where client_id = $1", [c.client])).rows[0].n)).toBe(0);
     const made = await create("skip_flagged");
-    expect(made).toMatchObject({ created: 2, skipped: 1 });
+    expect(made).toMatchObject({ created: hasLead ? 2 : 1, skipped: 1 });
     const skipped = (await db.admin.query("select local_date::text d, reason from ogevia.shift_series_skipped_dates where series_id = $1", [made.series_id])).rows;
     expect(skipped).toEqual([{ d: fallBack, reason: "time_occurs_twice" }]);
     // Rollback 0035 refuses while such a skip is recorded (it would not fit the 0034 constraint).

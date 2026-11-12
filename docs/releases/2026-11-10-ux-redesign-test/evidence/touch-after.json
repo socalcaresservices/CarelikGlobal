@@ -1,0 +1,122 @@
+{
+ "/": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/action-needed": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/clients": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/care-team": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/care-team/recruiting": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/staff": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/settings/staff-types": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/settings/roles": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/documents": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/schedule": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/schedule/shift-requests": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/service-verification/reports?view=overview": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/service-verification/reports?view=exceptions": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/reporting": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/billing-review": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/accounts": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/settings/branding": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/settings/services": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/continuity": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ },
+ "/profile": {
+  "overflow": false,
+  "scrollWidth": 390,
+  "smallCount": 0,
+  "small": []
+ }
+}

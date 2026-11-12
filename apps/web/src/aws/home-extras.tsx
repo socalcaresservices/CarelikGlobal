@@ -1,6 +1,7 @@
 // Home additions (Board 1): a compact Today's Visits list, three quick actions, and a "last updated / Refresh" status line.
 // Each reuses a query that already exists (the schedule's shifts, the attention overview); nothing here computes a count of its own.
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { formatClockTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
@@ -115,20 +116,40 @@ export function RefreshStatus({ overview, loading, failed, refreshing, onRefresh
  * A compact Critical-then-Urgent list: severity, what and why, when it is due, and ONE action link; View all opens the full list.
  * Rows line up as a table from 768px up and stack as two short lines on a phone. Routine queues are not listed here.
  */
+/** The filter chips of the work queue: each lists the issue categories (from the server) it covers. */
+const QUEUE_GROUPS = [
+  { key: "unfilled", label: "Unfilled", categories: ["coverage", "staffing"] },
+  { key: "visits", label: "Visits", categories: ["visits"] },
+  { key: "documents", label: "Documents", categories: ["documents", "compliance"] },
+  { key: "authorization", label: "Authorization", categories: ["authorization"] },
+];
+
 export function TopIssues() {
   const q = useHomeIssues();
+  const [chip, setChip] = useState("all");
   if (q.isLoading || (!q.data && !q.isError)) return null;
   if (q.isError) return <p role="alert" className="text-sm text-red-700" data-testid="top-issues-error">The list of items that need action could not be loaded. It is not shown as empty. Use Refresh to try again.</p>;
   const urgent = (q.data?.issues ?? []).filter((i) => i.severity !== "routine");
   const total = q.data?.counts?.actionNeeded ?? urgent.length;
-  const shown = urgent.slice(0, 5);
+  const inGroup = (i: (typeof urgent)[number]) => QUEUE_GROUPS.find((g) => g.key === chip)?.categories.includes(i.category) ?? true;
+  const matching = chip === "all" ? urgent : urgent.filter(inGroup);
+  // One queue, most urgent first. Five rows when everything is shown; a chosen group shows up to eight of its own rows.
+  const shown = matching.slice(0, chip === "all" ? 5 : 8);
   return (
     <section aria-labelledby="top-issues-heading" className="space-y-1" data-testid="top-issues">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="top-issues-heading" className="text-sm font-semibold text-og-ink">Needs action first</h2>
+        <h2 id="top-issues-heading" className="text-sm font-semibold text-og-ink">Needs action first <span className="font-og-mono tabular-nums" data-testid="headline-count">· {total}</span></h2>
         <Link className={linkClass} to="/action-needed">View all{total > shown.length ? ` (${total})` : ""}</Link>
       </div>
-      {shown.length === 0 ? <p className="text-sm text-og-sub">Nothing is critical or urgent right now.</p> : (
+      {urgent.length > 0 ? (
+        <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5">
+          {[{ key: "all", label: "All", categories: [] as string[] }, ...QUEUE_GROUPS].map((g) => (
+            <button key={g.key} type="button" aria-pressed={chip === g.key} onClick={() => setChip(g.key)}
+              className={`min-h-[44px] rounded-full border px-3 text-sm md:min-h-[32px] ${chip === g.key ? "border-og-ink bg-og-ink text-white" : "border-og-line bg-og-card text-og-ink"}`}>{g.label}</button>
+          ))}
+        </div>
+      ) : null}
+      {shown.length === 0 ? <p className="text-sm text-og-sub">{urgent.length > 0 ? "Nothing in this group is critical or urgent." : "Nothing is critical or urgent right now."}</p> : (
         <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">
                     {shown.map((i) => {
             const dest = issueDestination(i);
@@ -136,7 +157,7 @@ export function TopIssues() {
             return (
               <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-0.5 text-sm md:grid md:min-h-[32px] md:grid-cols-[5.5rem_minmax(0,1fr)_8rem_11rem]" data-testid="top-issue">
                 <span><StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip></span>
-                <span className="min-w-0 flex-1 basis-[10rem] truncate text-og-ink">
+                <span className="min-w-0 flex-1 basis-[10rem] break-words text-og-ink">
                   <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{issueClient(i) ? ` · ${issueClient(i)}` : ""}</span>
                   <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}</span>
                 </span>

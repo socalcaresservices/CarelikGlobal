@@ -42,7 +42,7 @@ function AddServiceForm() {
   return (
     <Card>
       <details open={state.done || undefined}>
-      <summary className="min-h-[32px] cursor-pointer text-base font-semibold text-slate-950">Add a service</summary>
+      <summary className="min-h-[44px] md:min-h-[32px] cursor-pointer text-base font-semibold text-slate-950">Add a service</summary>
       <p className="mt-1 text-xs text-slate-600">The code cannot be changed later. Use the code your payer uses.</p>
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 sm:grid-cols-3">
         <div><label htmlFor="svc-code" className="block text-sm font-medium text-slate-700">Code</label><input id="svc-code" value={code} maxLength={20} autoComplete="off" onChange={(e) => { setCode(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} /></div>

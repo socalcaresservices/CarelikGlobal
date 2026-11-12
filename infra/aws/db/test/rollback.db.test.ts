@@ -67,7 +67,7 @@ describe("ROLLBACK scripts", () => {
     ).toEqual(ups);
     for (const f of downs) {
       expect(readFileSync(new URL(f, DIR), "utf8")).toMatch(
-        /CLASS: (SAFE AUTOMATED|BACKUP REQUIRED|FORWARD FIX PREFERRED|IRREVERSIBLE WITHOUT DATA LOSS)/,
+        /CLASS: (SAFE AUTOMATED|ADDITIVE|BACKUP REQUIRED|FORWARD FIX PREFERRED|IRREVERSIBLE WITHOUT DATA LOSS)/,
       );
     }
   });

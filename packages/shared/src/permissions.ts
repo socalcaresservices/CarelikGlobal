@@ -76,7 +76,13 @@ export const permissionSchema = z.enum([
   // Caregiver compliance (infra/aws/db migration 0055): verify background-check clearance; change a recorded hire date. Administrator only.
   "caregivers.compliance.manage",
   // Report export (infra/aws/db migration 0069): download report data; every export is recorded. Organization owner and manager.
-  "reports.export"
+  "reports.export",
+  // Staff management (infra/aws/db migration 0086): the directory, staff types, supported system roles and staff history. Organization owner only.
+  "staff.read",
+  "staff.manage",
+  // Sign-in override (infra/aws/db pending migration 0090): approve a caregiver for work before their first app sign-in, with a reason. Never for the background check. Owner and administrator.
+  // This key must be known to the web build BEFORE migration 0090 is applied anywhere (an unknown permission from the server would not parse).
+  "caregivers.signin_override"
 ]);
 
 export type Permission = z.infer<typeof permissionSchema>;

@@ -26,6 +26,8 @@ case "$*" in
   *"to_regclass('ogevia.organization"*) echo "\${MOCK_HAS_ENF:-true}" ;;
   *enforcement_active_from*) echo "\${MOCK_ACT:-0}|2" ;;
   *"migrations applied, latest"*) echo "\${MOCK_SUMMARY:-38 migrations applied, latest 0038}" ;;
+  *"select count(*) as c from ogevia"*) printf '%s\\n' "organizations: \${MOCK_N_ORGS:-2}" "app_users: 5" "organization_memberships: 5" "audit_events: 41" "caregiver_records: 3" "clients: 4" "shifts: 9" "service_visits: 6" ;;
+  *"min(occurred_at)"*) echo "\${MOCK_AUDIT_SPAN:-2026-10-01 10:00:00+00 to 2026-10-10 05:00:00+00}" ;;
   *"limit 5"*) printf '%s\\n' "\${MOCK_ROWS:-0038  last_migration  applied 2026-10-10T05:00:00Z}" ;;
   *) echo "mock psql: unexpected: $*" >&2; exit 98 ;;
 esac
@@ -111,5 +113,31 @@ describe("the script is read-only toward the database and targets only productio
     expect(sql.length).toBeGreaterThan(5);
     for (const q of sql) expect(q).not.toMatch(/\b(insert|update|delete|drop|truncate|alter|create)\b/i);
     expect(code).not.toMatch(/(^|[\s(;&|])git\s/m);
+  });
+});
+
+describe("the opt-in counts read (OGEVIA_PRD_READ_COUNTS=1): counts only, read-only", () => {
+  it("is OFF by default: no counts query is issued and nothing about row counts is printed", async () => {
+    const r = await run(PRD);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).not.toContain("table row counts");
+    expect(readFileSync(join(dir, "psql-calls.log"), "utf8")).not.toContain("query_to_xml");
+  });
+  it("when set, prints each table's row count and the audit span, still read-only, and still restores the rule set", async () => {
+    const r = await run(PRD, { OGEVIA_PRD_READ_COUNTS: "1", MOCK_N_ORGS: "7" });
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("table row counts (counts only):");
+    for (const line of ["organizations: 7", "app_users: 5", "organization_memberships: 5", "audit_events: 41", "caregiver_records: 3", "clients: 4", "shifts: 9", "service_visits: 6"]) expect(r.out).toContain(line);
+    expect(r.out).toContain("audit events span: 2026-10-01 10:00:00+00 to 2026-10-10 05:00:00+00");
+    expect(r.out).toContain("RESTORED (verified)");
+    expect(sg()).toEqual(INITIAL_SG);
+    expect(existsSync(join(dir, "psql-violations.log"))).toBe(false);
+  });
+  it("the counts block selects only counts and a date range: no names, no identifiers, no write", () => {
+    const start = source.indexOf("OGEVIA_PRD_READ_COUNTS"); const block = source.slice(start, source.indexOf("LEDGER_TEXT=\"RESULT for $ARG", start));
+    expect(block.length).toBeGreaterThan(200);
+    expect(block).toMatch(/count\(\*\)/);
+    expect(block).not.toMatch(/\b(insert|update|delete|drop|truncate|alter|create)\b/i);
+    expect(block).not.toMatch(/display_name|first_name|last_name|email|preferred_name|cognito_sub/i);
   });
 });

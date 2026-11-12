@@ -95,3 +95,6 @@ Owner hours rule: pay all actual hours worked, warn about overages, never bill b
 | Tests | `infra/aws/db/test/over-limit-action-needed.db.test.ts` (item and numbers, boundary, per authorization, identity and reopening, counts equal the list, permissions, notifications), `attention-counts-one-definition.db.test.ts` (needsAction equals the list with the item present), `apps/web/src/aws/action-needed-page.test.tsx` (label, Urgent word, link, category filter). |
 Not done: names instead of codes on this row (the whole issue list is code-only today); an Over limit tile on the Visit review page (that page counts visits).
 
+
+## Update 2026-11-10 (owner decision R19: one headline number)
+The definitions above are unchanged and stay on the server. What changed is what the screens show: the header "Needs attention now" chip and the dashboard "Needs attention now" tile were removed. The one headline number is the issues needing action (Critical + Urgent): the bell in the header and "Needs action first · N" on the dashboard. The unique-items count remains on the Needs attention page. Source: `docs/ux/REQUIREMENTS-TRACKER.md` row R19.

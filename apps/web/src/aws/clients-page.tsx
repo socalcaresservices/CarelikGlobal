@@ -1,4 +1,6 @@
+import { ImportButton } from "./import-drawer";
 import { useQueryClient } from "@tanstack/react-query";
+import { InfoTip } from "./ui/info-tip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
@@ -153,8 +155,8 @@ export function ClientsPage() {
   return (
     <div className="max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-xl font-semibold text-slate-950">Clients</h1>
-        {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button> : null}
+        <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Clients</h1><InfoTip label="About Clients" title="Clients">Manage client profiles and care information.</InfoTip></div>
+        {canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="clients" /><Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button></div> : null}
       </div>
       {adding ? <AddClientForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
       {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.</p> : null}
@@ -225,6 +227,7 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
       <table className="w-full text-left text-sm" aria-label="Clients as a list">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
+            <th scope="col" className="w-10 px-3 py-1.5 text-right font-semibold">No.</th>
             <th scope="col" className="px-3 py-1.5 font-semibold">Client</th>
             <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
             <th scope="col" className="px-3 py-1.5 font-semibold">Authorization</th>
@@ -232,8 +235,9 @@ function ClientList({ clients }: { clients: AdminClient[] }) {
           </tr>
         </thead>
         <tbody>
-          {clients.map((c) => (
+          {clients.map((c, i) => (
             <tr key={c.clientId} className="border-b border-slate-100 last:border-0">
+              <td className="w-10 px-3 py-1 text-right tabular-nums text-slate-600" data-testid="row-no">{i + 1}</td>
               <th scope="row" className="px-3 py-1 font-medium text-slate-950">
                 {nameWithCode(clientName(c), c.clientCode, c.duplicateName)}
                 {c.openVisits > 0 ? <span className="ml-2 text-xs font-normal text-slate-600">visit in progress</span> : null}
