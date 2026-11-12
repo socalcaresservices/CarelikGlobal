@@ -1,4 +1,127 @@
 #!/usr/bin/env bash
+# Production preparation: no application/table data, migrations, seeds or deployments.
+# The existing app SG is attached to the admin host only for the metadata tunnel,
+# then restored. Sanitized metadata/code rollback are saved in the private asset bucket.
+if [[ "${1:-}" == production-capture ]]; then
+  set -euo pipefail
+  set +x +H
+  umask 077
+  export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER='' AWS_CLI_AUTO_PROMPT=off
+  A() { aws --cli-connect-timeout 5 --cli-read-timeout 60 "$@"; }
+  stop() { echo "STOP: $*"; exit 1; }
+  test "$(A sts get-caller-identity --query Account --output text)" = 300094796789 || stop 'wrong AWS account'
+  exec 9>/tmp/ogevia-production-capture.lock
+  flock -n 9 || stop 'another production capture is running'
+  D=$(mktemp -d /tmp/ogevia-production-capture.XXXXXX)
+  IID=i-0ce8db2d7e5839dd5; ADMIN=sg-00e01e2ca80442c1f; APP=sg-064ffce3bcbe8eb3b
+  ATTACHED=0; TUNNEL=''
+  finish_production_capture() {
+    rc=$?; trap - EXIT; unset PGPASSWORD SECRET U P
+    if [[ -n "$TUNNEL" ]]; then pkill -P "$TUNNEL" 2>/dev/null || true; kill "$TUNNEL" 2>/dev/null || true; wait "$TUNNEL" 2>/dev/null || true; fi
+    if [[ "$ATTACHED" == 1 ]]; then
+      current=$(A ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].SecurityGroups[].GroupId' --output text | tr '\t' '\n' | sort | xargs) || current=''
+      expected=$(printf '%s\n%s\n' "$ADMIN" "$APP" | sort | xargs)
+      if [[ "$current" == "$ADMIN" ]]; then
+        echo 'ADMIN HOST RESTORED: original security group only'
+      elif [[ "$current" == "$expected" ]] && A ec2 modify-instance-attribute --instance-id "$IID" --groups "$ADMIN" && [[ "$(A ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].SecurityGroups[].GroupId' --output text)" == "$ADMIN" ]]; then
+        echo 'ADMIN HOST RESTORED: original security group only'
+      else echo 'RESTORE FAILED: restore sg-00e01e2ca80442c1f ONLY on i-0ce8db2d7e5839dd5'; rc=1; fi
+    fi
+    [[ "$rc" == 0 ]] || echo "Capture incomplete; no production schema/application change. Private files: $D"
+    exit "$rc"
+  }
+  trap finish_production_capture EXIT
+  printf '\033[32m%s\033[0m\n' 'PRODUCTION METADATA CAPTURE — no database writes or deployment'
+  for stack in Ogevia-prd-ServiceVerificationApi Ogevia-prd-Auth Ogevia-prd-WebHosting Ogevia-prd-Observability Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceStorage Ogevia-prod-NetworkEgress; do
+    A cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].{Name:StackName,Status:StackStatus,Outputs:Outputs,ParameterNames:Parameters[].ParameterKey}' --output json > "$D/$stack.stack.json"
+    jq -e '.Status=="CREATE_COMPLETE" or .Status=="UPDATE_COMPLETE" or .Status=="UPDATE_ROLLBACK_COMPLETE"' "$D/$stack.stack.json" >/dev/null || stop "stack is not settled: $stack"
+    A cloudformation get-template --stack-name "$stack" --template-stage Original --query TemplateBody --output json | python3 -c '
+import json, pathlib, re, sys
+t=json.load(sys.stdin); t=t.get("TemplateBody",t); redacted=[]
+secret_name=re.compile(r"PASSWORD|SECRET|TOKEN|PRIVATE_KEY|ENCRYPTION_KEY|SIGNING_KEY|ACCESS_KEY|API_KEY|CREDENTIAL",re.I)
+for name,p in t.get("Parameters",{}).items():
+    value=p.get("Default")
+    if value and (p.get("NoEcho") or (secret_name.search(name) and isinstance(value,str) and not value.startswith("arn:"))):
+        p["Default"]="<REDACTED>"; redacted.append("Parameters."+name+".Default")
+for rid,r in t.get("Resources",{}).items():
+    env=r.get("Properties",{}).get("Environment",{}).get("Variables",{})
+    for key,value in env.items():
+        if isinstance(value,str) and not value.startswith("arn:") and secret_name.search(key):
+            env[key]="<REDACTED>"; redacted.append("Resources."+rid+".Environment."+key)
+pathlib.Path(sys.argv[1]).write_text(json.dumps(t,indent=2)+"\n")
+pathlib.Path(sys.argv[1]+".redactions.json").write_text(json.dumps(redacted)+"\n")
+' "$D/$stack.template.json"
+  done
+  FN=$(A cloudformation list-stack-resources --stack-name Ogevia-prd-ServiceVerificationApi --output json | jq -er '[.StackResourceSummaries[] | select(.ResourceType=="AWS::Lambda::Function" and (.LogicalResourceId|startswith("Handler")))] | if length==1 then .[0].PhysicalResourceId else error("Expected one production Handler") end')
+  A lambda get-function-configuration --function-name "$FN" --query '{Function:FunctionName,CodeSha256:CodeSha256,Runtime:Runtime,Database:{host:Environment.Variables.DB_HOST,name:Environment.Variables.DB_NAME,secretArn:Environment.Variables.DB_SECRET_ARN},Auth:{pool:Environment.Variables.COGNITO_USER_POOL_ID},Environment:Environment.Variables.OGEVIA_ENV}' --output json > "$D/production-lambda.json"
+  HOST=ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com
+  jq -e --arg host "$HOST" '.Database.host==$host and .Database.name=="ogevia_prd" and .Environment=="prd"' "$D/production-lambda.json" >/dev/null || stop 'production runtime target differs from the reviewed database'
+  LOCATION=$(A lambda get-function --function-name "$FN" --query Code.Location --output text)
+  curl -fsS --connect-timeout 10 --max-time 120 "$LOCATION" -o "$D/production-lambda.zip"
+  unset LOCATION
+  python3 - "$D" <<'PY_PRODUCTION_ZIP'
+import base64, hashlib, json, pathlib, sys, zipfile
+d=pathlib.Path(sys.argv[1]); data=(d/'production-lambda.zip').read_bytes()
+assert base64.b64encode(hashlib.sha256(data).digest()).decode()==json.loads((d/'production-lambda.json').read_text())['CodeSha256'], 'production rollback ZIP mismatch'
+with zipfile.ZipFile(d/'production-lambda.zip') as z:
+    assert z.getinfo('index.js').file_size<=10_000_000
+    (d/'production-handler-sha256.txt').write_text(hashlib.sha256(z.read('index.js')).hexdigest()+'\n')
+PY_PRODUCTION_ZIP
+  A rds describe-db-instances --db-instance-identifier ogevia-prod-postgres --query 'DBInstances[0].{host:Endpoint.Address,public:PubliclyAccessible,engine:EngineVersion,groups:VpcSecurityGroups[].VpcSecurityGroupId,masterSecretArn:MasterUserSecret.SecretArn}' --output json > "$D/rds-metadata.json"
+  jq -e --arg host "$HOST" '.host==$host and .public==false and .groups==["sg-00530a1f4f7648e65"]' "$D/rds-metadata.json" >/dev/null || stop 'production RDS target/security groups differ'
+  test "$(A ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].SecurityGroups[].GroupId' --output text)" = "$ADMIN" || stop 'admin host groups differ; no group change made'
+  command -v psql >/dev/null || stop 'psql is missing'
+  curl -fsS --connect-timeout 5 --max-time 30 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o "$D/ca.pem"
+  PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+  ATTACHED=1
+  A ec2 modify-instance-attribute --instance-id "$IID" --groups "$ADMIN" "$APP"
+  sleep 5
+  A ssm start-session --target "$IID" --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters "{\"host\":[\"$HOST\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"$PORT\"]}" > "$D/tunnel.log" 2>&1 &
+  TUNNEL=$!; UP=0
+  for n in $(seq 1 30); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then UP=1; break; fi
+    kill -0 "$TUNNEL" 2>/dev/null || break; sleep 1
+  done
+  [[ "$UP" == 1 ]] || stop 'production metadata tunnel did not start'
+  MASTER_ARN=$(jq -er '.masterSecretArn | select(startswith("arn:"))' "$D/rds-metadata.json")
+  SECRET=$(A secretsmanager get-secret-value --secret-id "$MASTER_ARN" --query SecretString --output text)
+  U=$(jq -er .username <<<"$SECRET"); P=$(jq -er .password <<<"$SECRET"); unset SECRET
+  unset PGSERVICE PGSERVICEFILE PGPASSFILE
+  export PGHOST="$HOST" PGHOSTADDR=127.0.0.1 PGPORT="$PORT" PGSSLMODE=verify-full PGSSLROOTCERT="$D/ca.pem" PGCONNECT_TIMEOUT=15 PGUSER="$U" PGPASSWORD="$P" PGOPTIONS='-c search_path=pg_catalog -c default_transaction_read_only=on -c statement_timeout=30000'
+  psql -X -qAt --no-password -v ON_ERROR_STOP=1 -d ogevia_prd > "$D/production-schema-metadata.json" <<'SQL_PRODUCTION_METADATA'
+begin read only;
+select jsonb_build_object(
+  'database',current_database(),
+  'ledger',coalesce((select jsonb_agg(jsonb_build_object('version',version,'name',name,'checksum',checksum) order by version) from ogevia_meta.schema_migrations),'[]'::jsonb),
+  'relations',coalesce((select jsonb_agg(jsonb_build_object('schema',n.nspname,'name',c.relname,'kind',c.relkind,'rls',c.relrowsecurity,'forceRls',c.relforcerowsecurity) order by n.nspname,c.relname) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('ogevia','ogevia_api') and c.relkind in ('r','v','m','p')),'[]'::jsonb),
+  'columns',coalesce((select jsonb_agg(jsonb_build_object('schema',n.nspname,'table',c.relname,'name',a.attname,'type',format_type(a.atttypid,a.atttypmod),'notNull',a.attnotnull) order by n.nspname,c.relname,a.attnum) from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('ogevia','ogevia_api') and c.relkind in ('r','v','m','p') and a.attnum>0 and not a.attisdropped),'[]'::jsonb),
+  'functions',coalesce((select jsonb_agg(jsonb_build_object('schema',n.nspname,'name',p.proname,'args',pg_get_function_identity_arguments(p.oid),'sourceMd5',md5(p.prosrc),'definitionMd5',md5(pg_get_functiondef(p.oid))) order by n.nspname,p.proname,p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('ogevia','ogevia_api') and p.prokind='f'),'[]'::jsonb),
+  'roles',coalesce((select jsonb_agg(jsonb_build_object('name',rolname,'login',rolcanlogin,'inherit',rolinherit,'super',rolsuper,'createDb',rolcreatedb,'createRole',rolcreaterole,'bypassRls',rolbypassrls) order by rolname) from pg_roles where rolname in ('ogevia_owner','ogevia_app','ogevia_readonly','ogevia_prd_app')),'[]'::jsonb)
+);
+rollback;
+SQL_PRODUCTION_METADATA
+  unset PGPASSWORD P
+  python3 - "$D" <<'PY_PRODUCTION_SUMMARY'
+import json,pathlib,sys
+d=pathlib.Path(sys.argv[1]); meta=json.loads((d/'production-schema-metadata.json').read_text())
+assert meta['database']=='ogevia_prd'
+t=json.loads((d/'Ogevia-prd-ServiceVerificationApi.template.json').read_text())
+routes=sorted((r['Properties']['RouteKey'] for r in t['Resources'].values() if r['Type']=='AWS::ApiGatewayV2::Route'),key=lambda k:json.dumps(k,sort_keys=True))
+summary={'database':meta['database'],'ledgerCount':len(meta['ledger']),'latestVersion':max((r['version'] for r in meta['ledger']),default=None),'ledger':meta['ledger'],'apiRouteCount':len(routes),'apiRoutes':routes,'runtime':json.loads((d/'production-lambda.json').read_text()),'handlerJsSha256':(d/'production-handler-sha256.txt').read_text().strip(),'relations':[r['name'] for r in meta['relations']],'redactions':{p.name:json.loads(p.read_text()) for p in d.glob('*.redactions.json') if json.loads(p.read_text())}}
+(d/'production-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+print(json.dumps(summary,indent=2))
+PY_PRODUCTION_SUMMARY
+  ASSETS=cdk-hnb659fds-assets-300094796789-us-west-2
+  A s3api get-public-access-block --bucket "$ASSETS" --query PublicAccessBlockConfiguration --output json | jq -e '.BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' >/dev/null || stop 'backup bucket is not confirmed private'
+  A s3api get-bucket-encryption --bucket "$ASSETS" --query 'ServerSideEncryptionConfiguration.Rules' --output json | jq -e 'length>0 and all(.[]; .ApplyServerSideEncryptionByDefault.SSEAlgorithm=="AES256" or .ApplyServerSideEncryptionByDefault.SSEAlgorithm=="aws:kms")' >/dev/null || stop 'backup bucket encryption is not confirmed'
+  tar -czf "$D.tgz" -C "$D" .
+  A s3 cp "$D.tgz" "s3://$ASSETS/ogevia-production-release/$(basename "$D")/metadata.tgz" --only-show-errors
+  echo "PRODUCTION METADATA CAPTURED: $D/production-summary.json"
+  echo "PRIVATE METADATA ARCHIVE: s3://$ASSETS/ogevia-production-release/$(basename "$D")/metadata.tgz"
+  echo 'No database rows/schema or production application changed. Admin host restoration follows.'
+  exit 0
+fi
+
 # Restore post-seed state from durable private rollback evidence, never from a guessed /tmp path.
 if [[ "${1:-}" == cloudshell-recover ]]; then
   set -euo pipefail

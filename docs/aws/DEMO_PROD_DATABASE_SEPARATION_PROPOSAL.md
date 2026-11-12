@@ -1,11 +1,11 @@
-# TEST deployed — authenticated acceptance pending
+# TEST deployed and accepted — production preparation
 
 Owner-reported CloudShell result: TEST DEPLOYED, database/API/web smoke checks passed, production API/Observability templates unchanged. Deployed application source is 6cbab00b2795d0cfe42bf644adc6a559adda7c76; isolated database ledger 107/0107 and every migration checksum verified; unprivileged login verified. The TEST API now targets ogevia-postgres / ogevia_sv_test. The reviewed additive shared endpoint grant was applied; this does not mean no shared infrastructure changed.
 
 Live TEST URL: https://d2xumch5w0izfg.cloudfront.net
 Private rollback archive: s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-test-rollback/ogevia-run.eWYNmc/verified-before-cutover-20261112T035847Z.tgz
 
-Independent public HTTP check: root returns 200, Content-Security-Policy is present, and the served index references the uploaded index-CDoFnwc5.js asset. This is public-page verification, not authenticated workflow acceptance. The owner has been asked to verify owner/caregiver sign-ins and a synthetic Start -> End -> Confirm visit. Those results remain pending. Production has NOT been deployed by this release.
+Independent public HTTP check: root returns 200, Content-Security-Policy is present, and the served index references the uploaded index-CDoFnwc5.js asset. This is public-page verification, not authenticated workflow acceptance. The owner confirmed both sign-ins and the synthetic Start -> End -> Confirm visit passed. TEST acceptance is complete. Production has NOT been deployed by this release.
 
 Verifier regression CI #448 passed all three jobs: full test:all 3,814 passed, zero failed/skipped; harness passed; lint/typecheck/build passed. https://github.com/socalcaresservices/CarelikGlobal/actions/runs/43148544387. The final CloudShell recovery helper publication is 28d41eb564c651f84402678235b3b44c6a7d328b; application source remains the reviewed 6cbab00, not the helper's commit. Earlier shared-release pins and preparation-only statements below are historical and do not describe current TEST deployment state.
 
