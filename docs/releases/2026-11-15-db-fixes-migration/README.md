@@ -37,6 +37,7 @@ It prints the table's owner, ACL and RLS flags; every policy with its exact defi
 The file is `infra/aws/db/pending/production-alignment/0108_production_database_alignment.sql`. It is outside `pending/migrations/` on purpose: the runner's pending set and the ledger tests (107 rows, the five production migrations 0103 to 0107) are untouched. It contains no data statement and no `drop`.
 
 ## 3. Tests: `infra/aws/db/test/production-alignment-0108.db.test.ts` (13, local PostgreSQL 16, all passing)
+**Full gate on this state** (`pnpm test:all`, commit `2daa7eee`, local PostgreSQL 16): PASS, "all suites ran, none skipped, all passed". Unit: shared 118, auth 150, sv-api 107, ui 73, web 1,314, infra-aws 784 (44 files). Database: 113 files / 1,197 tests (these 13 included). API: 29 files / 183 tests. `pnpm lint` and `pnpm typecheck` exit 0. CI on `2daa7eee`: `harness`, `validate`, `postgres` all green.
 | Test | What it proves |
 |---|---|
 | Fresh database (migrations 0001 to 0107): apply as `ogevia_owner`, twice | No privilege or ACL change; only the policy is added; second run changes nothing |
