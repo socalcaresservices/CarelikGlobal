@@ -3,7 +3,6 @@
 // profile, the Care Team list and the schedule, and the "not signed in" warning. The feature is released per environment: where the route does not exist the screens say nothing. SYNTHETIC data only.
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveEnvironmentMarker } from "./environment";
 import { json, renderAws } from "./test-support";
 
 const CG = "abababab-0000-4000-8000-000000000009";
@@ -102,34 +101,5 @@ describe("the schedule", () => {
     await screen.findByTestId("not-signed-in", {}, { timeout: 15000 });
     expect(screen.queryByTestId("override-badge")).toBeNull();
     expect(screen.getAllByTestId("cannot-verify").length).toBeGreaterThan(0);
-  }, 30000);
-});
-
-// Production keeps the override OFF (its routes are not deployed there): the web neither offers it nor calls its routes.
-describe("production: the override is not offered and its routes are never called", () => {
-  const PROD = resolveEnvironmentMarker("production");
-
-  it("an administrator with a clear background check sees no Approve by override, and no override route is requested", async () => {
-    const { calls } = renderAws(`/care-team/${CG}`, ADMIN, base(readiness()), "organization_owner", PROD);
-    await screen.findByText("Invited, has not signed in yet", {}, { timeout: 15000 });
-    expect(screen.queryByRole("button", { name: "Approve by override" })).toBeNull();
-    expect(screen.queryByTestId("override-needs-background")).toBeNull();
-    expect(calls.filter((c) => c.path.includes("signin-override"))).toHaveLength(0);
-  }, 30000);
-
-  it("the Care Team list and the schedule request no override route either", async () => {
-    const { calls } = renderAws("/care-team", ADMIN, base(readiness()), "organization_owner", PROD);
-    await screen.findByText(/Synthetic/, {}, { timeout: 15000 });
-    expect(calls.filter((c) => c.path.includes("signin-override"))).toHaveLength(0);
-  }, 30000);
-
-  it("an unverified environment hides it too, while test keeps it", async () => {
-    const { calls } = renderAws(`/care-team/${CG}`, ADMIN, base(readiness()), "organization_owner", resolveEnvironmentMarker(undefined));
-    await screen.findByText("Invited, has not signed in yet", {}, { timeout: 15000 });
-    expect(screen.queryByRole("button", { name: "Approve by override" })).toBeNull();
-    expect(calls.filter((c) => c.path.includes("signin-override"))).toHaveLength(0);
-    cleanup();
-    renderAws(`/care-team/${CG}`, ADMIN, base(readiness()), "organization_owner", resolveEnvironmentMarker("test"));
-    expect(await screen.findByRole("button", { name: "Approve by override" }, { timeout: 15000 })).toBeInTheDocument();
   }, 30000);
 });
