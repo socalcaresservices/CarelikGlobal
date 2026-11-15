@@ -2,14 +2,19 @@
 -- It writes nothing: every statement is a SELECT, and section 9 runs inside a transaction that is always rolled back.
 -- Run through the usual private path (SSM port-forward to the admin host, psql to ogevia_prd), then paste the whole output back for review:
 --   psql -X -d ogevia_prd -f VERIFY_PRODUCTION_DB.sql
+-- Section 10 is the verdict the deploy script reads. (psql variable expected_db defaults to ogevia_prd; only a local test changes it.)
 -- Section 9 needs two optional psql variables; skip it (it is skipped when they are unset) or set them first:
 --   \set org '<organization uuid>'      \set admin_sub '<the Cognito sub of an organization owner or administrator>'
 -- PASS lines say what each row must show. Anything else is a STOP: do not enable the routes.
 \pset pager off
 \pset null '(null)'
+\if :{?expected_db}
+\else
+\set expected_db ogevia_prd
+\endif
 
 \echo '== 1. Right database; ledger has all 107 rows and the exact 0103 checksum'
-select current_database() as db, current_database() = 'ogevia_prd' as pass_is_prd;
+select current_database() as db, current_database() = :'expected_db' as pass_is_prd;
 select count(*) as ledger_rows, count(*) = 107 as pass_107 from ogevia_meta.schema_migrations;
 select version, name, checksum,
        checksum = '963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54' as pass_0103_checksum
@@ -85,6 +90,43 @@ rollback;
 \endif
 \else
 \echo 'skipped: set org and admin_sub'
+\endif
+
+\echo '== 10. VERDICT (the deploy script requires the line "VERDICT: PASS" in this output)'
+with checks(name, ok) as (values
+  ('production database', current_database() = :'expected_db'),
+  ('ledger has 107 rows', (select count(*) = 107 from ogevia_meta.schema_migrations)),
+  ('0103 checksum', exists (select 1 from ogevia_meta.schema_migrations where version = '0103' and checksum = '963d8cf4e7c8bdfa7da38d2719d4a4be2f7dafd7ab50e371c4e2ae1a567dfe54')),
+  ('objects exist', to_regclass('ogevia.caregiver_signin_overrides') is not null
+     and to_regprocedure('ogevia_api.approve_signin_override(uuid,uuid,text)') is not null
+     and to_regprocedure('ogevia_api.list_signin_overrides(uuid)') is not null
+     and to_regprocedure('ogevia.caregiver_has_signin_override(uuid,uuid)') is not null),
+  ('readiness has the override branch', coalesce(pg_get_functiondef('ogevia.caregiver_readiness(uuid,uuid)'::regprocedure) like '%caregiver_has_signin_override%', false)),
+  ('table and functions owned by ogevia_owner', (select count(*) = 5 and bool_and(o = 'ogevia_owner') from (
+       select pg_get_userbyid(relowner) as o from pg_class where oid = 'ogevia.caregiver_signin_overrides'::regclass
+       union all select pg_get_userbyid(proowner) from pg_proc where oid in ('ogevia_api.approve_signin_override(uuid,uuid,text)'::regprocedure, 'ogevia_api.list_signin_overrides(uuid)'::regprocedure,
+            'ogevia.caregiver_has_signin_override(uuid,uuid)'::regprocedure, 'ogevia.caregiver_readiness(uuid,uuid)'::regprocedure)) x)),
+  ('RLS on, not forced', (select relrowsecurity and not relforcerowsecurity from pg_class where oid = 'ogevia.caregiver_signin_overrides'::regclass)),
+  ('ogevia_app may execute, PUBLIC may not', has_function_privilege('ogevia_app', 'ogevia_api.approve_signin_override(uuid,uuid,text)'::regprocedure, 'EXECUTE')
+     and has_function_privilege('ogevia_app', 'ogevia_api.list_signin_overrides(uuid)'::regprocedure, 'EXECUTE')
+     and not has_function_privilege('public', 'ogevia_api.approve_signin_override(uuid,uuid,text)'::regprocedure, 'EXECUTE')
+     and not has_function_privilege('public', 'ogevia_api.list_signin_overrides(uuid)'::regprocedure, 'EXECUTE')),
+  ('ogevia_owner may execute everything the path calls', (select count(distinct p.proname) = 11 and bool_and(has_function_privilege('ogevia_owner', p.oid, 'EXECUTE')) from pg_proc p
+     where p.pronamespace = 'ogevia'::regnamespace and p.proname in ('require_actor','is_active_member','has_permission','lock_caregiver','caregiver_has_signed_in','background_clearance_state',
+       'write_audit','caregiver_readiness_summary','caregiver_readiness','caregiver_has_signin_override','append_only_guard'))),
+  ('ogevia_owner may read and write what the path touches', (select count(*) = 7 and bool_and(has_table_privilege('ogevia_owner', c.oid, 'SELECT')) from pg_class c
+     where c.oid in ('ogevia.caregiver_signin_overrides'::regclass, 'ogevia.caregiver_records'::regclass, 'ogevia.caregiver_invitations'::regclass, 'ogevia.caregiver_background_checks'::regclass,
+                     'ogevia.app_users'::regclass, 'ogevia.audit_events'::regclass, 'ogevia.organizations'::regclass))
+     and has_table_privilege('ogevia_owner', 'ogevia.caregiver_signin_overrides'::regclass, 'INSERT') and has_table_privilege('ogevia_owner', 'ogevia.audit_events'::regclass, 'INSERT')),
+  ('only owner and admin roles hold the permission', coalesce((select string_agg(rp.role::text, ',' order by rp.role::text) from ogevia.role_permissions rp where rp.permission_key = 'caregivers.signin_override'), '') = 'organization_admin,organization_owner'),
+  ('append-only trigger enabled', exists (select 1 from pg_trigger where tgrelid = 'ogevia.caregiver_signin_overrides'::regclass and not tgisinternal and tgenabled = 'O'))
+)
+select string_agg(name, '; ') filter (where not coalesce(ok, false)) as failed, bool_and(coalesce(ok, false)) as all_ok from checks \gset
+\if :all_ok
+\echo 'VERDICT: PASS'
+\else
+\echo 'VERDICT: FAIL'
+\echo :failed
 \endif
 
 \echo '== done. Nothing was written.'

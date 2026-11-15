@@ -41,22 +41,19 @@ The change set is exactly two `AWS::ApiGatewayV2::Route` resources. `infra/aws/s
 ## 4. Tests run (this checkout, local PostgreSQL 16)
 See `CHECKLIST.md` for counts. New or changed: `signin-override-switch.test.ts` (production on, two JWT routes only), `staff-routes-switch.test.ts`, `production-ux-release.test.ts` (override routes accepted, import and duplicates still refused), `production-signin-override-release.test.ts` (26 tests, including real synthesized templates), `signin-override-0090.db.test.ts` (+1: no verification before sign-in), `signin-override.db.test.ts` (+1: HTTP 422). Existing override tests unchanged: reason, background hard block, other hard requirements, permissions, cross-tenant, idempotency and concurrency, append-only, badge list, rollback, web screens.
 
-## 5. Deployment plan (not executed; needs the owner's explicit GO on one commit SHA)
-Full commands: `RUNBOOK.md`. Summary, about 30 minutes, one operator:
-1. **Preconditions:** GO recorded; CI green on the SHA; clean checkout at the SHA; account `300094796789`, region `us-west-2`; no other production release running; window agreed.
-2. **Open the temporary read window** (same `/32` procedure as 2026-11-14, with a second CloudShell open for recovery) and run `VERIFY_PRODUCTION_DB.sql`. Every PASS line must pass. Close the window and confirm the RDS group is back to one rule. **Any failure: STOP.**
-3. **Capture rollback inputs** (read-only): the live template, stack parameters, route list, Handler `CodeSha256`.
-4. **Build the change:** synthesize the candidate to a scratch folder, run `production-signin-override-release.py patch` (live template + exactly the two routes), upload to the private assets bucket, create a change set.
-5. **Guard:** `production-signin-override-release.py changes` must pass (exactly two route additions, nothing else). Anything else: delete the change set, STOP.
-6. **Execute** the change set; wait for `UPDATE_COMPLETE`.
-7. **Verify:** routes present; unauthenticated call now 401 (was 404); forged token 401; owner opens a caregiver profile; log search for new 5xx; web console shows no CORS errors for these two routes.
-8. **Acceptance:** the owner approves one real caregiver (background check clear, not signed in) with a real reason, confirms the badge, the audit line and the Care Team and Schedule views. Do not create a throw-away record in production for testing.
+## 5. Deployment plan (not executed; needs the owner to run it in CloudShell with the typed approval)
+Full commands: `RUNBOOK.md`. Two scripts do the work and refuse to continue on anything unexpected; both are tested offline against a fake AWS. About 30 minutes, one operator:
+1. **Check the RDS security group** has only its original rule (a window from 2026-11-14 may still be open).
+2. **Verify the production database** (read-only, through the temporary window): `VERIFY_PRODUCTION_DB.sql` must print `VERDICT: PASS` (ledger, 0103 checksum, owners, grants, RLS, permission rows). Close the window.
+3. **`production-signin-override-deploy.sh plan`**: refuses unless the approval variable is set, the checkout is exactly the approved SHA and clean, and the verification passed within 2 hours. Builds the change from the captured live template plus exactly two routes, creates a change set, and deletes it unless it holds exactly those two routes. Nothing is changed.
+4. **`production-signin-override-deploy.sh apply <workspace>`**: re-checks, executes the change set, confirms the live template, checks that both routes answer 401 without a token (404 before) and use JWT. **Rolls itself back if a check fails.**
+5. **Owner acceptance**: one real approval in the app.
 
 ## 6. Rollback plan
 | Trigger | Action |
 |---|---|
 | Step 5 guard fails, or the change set errors | Delete the change set. Nothing was changed. |
-| After execute: smoke fails, a new 5xx appears on any route, or the owner calls it | Create a change set from the captured live template, guard it with `rollback-changes` (exactly two route removals), execute, verify routes absent and `equal` to the captured template. About 3 minutes. |
+| After execute: smoke fails, a new 5xx appears on any route, or the owner calls it | `production-signin-override-deploy.sh rollback <workspace>`: a change set from the captured live template, refused unless it is exactly two route removals, then executed and compared with the capture. About 3 minutes. The `apply` step already does this by itself when its own checks fail. |
 | Something wrong in the data written by an approval | Do not drop the table. Approvals are append-only history. Contact the owner; fix forward. |
 
 What rollback does **not** undo: override records already written (append-only, kept) and caregivers already approved for work. Their sign-in row still reads "Approved by override" because that comes from the database. After rollback the web action returns 404 (no worse than today). The database `down` script (`pending/rollback/0103…down.sql`) is **BACKUP REQUIRED**, drops the table with its rows and would send approved caregivers back to "not ready". It is not part of this release and is not recommended after real use.
