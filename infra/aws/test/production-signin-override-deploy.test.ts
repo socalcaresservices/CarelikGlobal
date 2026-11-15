@@ -222,11 +222,16 @@ describe("the script itself", () => {
     const code = text.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
     expect(code).not.toMatch(/cdk deploy|secretsmanager|delete-route|create-route|delete-stack|update-stack/);
     const used = new Set([...code.matchAll(/\bA ([a-z0-9]+) ([a-z-]+)/g)].map((m) => `${m[1]} ${m[2]}`));
-    const allowed = new Set(["sts get-caller-identity", "cloudformation get-template", "cloudformation describe-stacks", "cloudformation describe-stack-resources", "cloudformation create-change-set",
+    const allowed = new Set(["sts get-caller-identity", "cloudformation get-template", "cloudformation describe-stacks", "cloudformation list-stack-resources", "cloudformation create-change-set",
       "cloudformation wait", "cloudformation describe-change-set", "cloudformation delete-change-set", "cloudformation execute-change-set", "lambda get-function-configuration", "s3 cp",
       "apigatewayv2 get-routes", "logs filter-log-events"]);
     expect([...used].filter((x) => !allowed.has(x))).toEqual([]);
     for (const verb of ["cloudformation create-change-set", "cloudformation execute-change-set", "s3 cp"]) expect(used.has(verb), verb).toBe(true);
+  });
+  it("pages through the stack's resources: describe-stack-resources returns only the first 100 of ~270 and would miss the Handler (found on the first real run)", () => {
+    const code = text.split("\n").filter((l) => !l.trim().startsWith("#")).join("\n");
+    expect(code).not.toContain("describe-stack-resources");
+    expect(code).toContain("list-stack-resources");
   });
   it("is bash, executable and syntax-valid", () => {
     expect(spawnSync("bash", ["-n", join(scripts, DEPLOY)]).status).toBe(0);

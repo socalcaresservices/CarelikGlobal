@@ -21,6 +21,8 @@ elif svc == "cloudformation":
         out(os.environ.get("FAKE_STATUS", "UPDATE_COMPLETE") if "StackStatus" in q else ["QrEncryptionKey0102"])
     elif cmd == "get-template": out(live())
     elif cmd == "describe-stack-resources":
+        pass  # the real call returns only the first 100 of this stack's ~270 resources, so the Lambda and the API are NOT in it: it prints nothing here
+    elif cmd == "list-stack-resources":
         q = opt("--query") or ""
         out("Ogevia-prd-ServiceVerificationApi-Handler886CB40B-FAKE" if "Handler" in q else os.environ.get("FAKE_API_ID", "zk527zk4ua"))
     elif cmd == "create-change-set":

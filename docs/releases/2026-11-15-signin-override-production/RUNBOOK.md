@@ -16,16 +16,26 @@
 
 Work in `/tmp` (CloudShell's home volume is small). Do not use `set -e` in your own terminal.
 
-## 0. Set up
+## 0. Set up (CloudShell's home volume is small: everything goes in `/tmp`)
 ```bash
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER=''
 export OGEVIA_RELEASE_SHA=PASTE_THE_40_CHARACTER_SHA_THE_OWNER_APPROVED
-cd ~/CarelikGlobal
-git fetch origin claude/keen-hawking-e9o2jg
-git checkout --detach "$OGEVIA_RELEASE_SHA"
+mkdir -p /tmp/corepack /tmp/xdg-cache /tmp/xdg-data /tmp/npm-cache /tmp/pnpm-store
+export COREPACK_HOME=/tmp/corepack XDG_CACHE_HOME=/tmp/xdg-cache XDG_DATA_HOME=/tmp/xdg-data npm_config_cache=/tmp/npm-cache npm_config_store_dir=/tmp/pnpm-store TMPDIR=/tmp
+rm -rf ~/.cache/* 2>/dev/null
+```
+CloudShell has no checkout of the repository (its home volume resets). Clone the branch into `/tmp`; if Git asks for credentials, use a fine-grained read-only token (Contents: read, this repository only, 1 day) typed at the prompt, never in chat:
+```bash
+cd /tmp && git clone --branch claude/keen-hawking-e9o2jg --single-branch https://github.com/socalcaresservices/CarelikGlobal.git
+cd /tmp/CarelikGlobal && git checkout --detach "$OGEVIA_RELEASE_SHA"
 test "$(git rev-parse HEAD)" = "$OGEVIA_RELEASE_SHA" && test -z "$(git status --porcelain --untracked-files=no)" && echo CHECKOUT-CLEAN-AT-SHA
 ```
-CI must be green on that SHA and no other production release may be running.
+CloudShell ships Node 20; the build needs Node 22. Install it under `/tmp` and keep the same tab for every later step (the `PATH` change lasts only for the session):
+```bash
+cd /tmp && curl -fsSLO https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz && tar -xf node-v22.11.0-linux-x64.tar.xz && export PATH=/tmp/node-v22.11.0-linux-x64/bin:$PATH && node -v
+cd /tmp/CarelikGlobal
+```
+CI must be green on that SHA and no other production release may be running. Below, the repository is `/tmp/CarelikGlobal`.
 
 ## 1. The RDS security group must have only its original rule
 ```bash
