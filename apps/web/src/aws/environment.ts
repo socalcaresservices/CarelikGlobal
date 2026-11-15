@@ -36,3 +36,17 @@ export const EnvironmentContext = createContext<EnvironmentMarker | null>(null);
 export function useEnvironmentMarker(): EnvironmentMarker | null {
   return useContext(EnvironmentContext);
 }
+
+/**
+ * The administrator sign-in override (migration 0090) is released per environment and is OFF in production: its API routes are not deployed there
+ * (infra/aws/lib/config.ts, signInOverride). The web therefore offers it only where the environment is explicitly test, demo or development.
+ * Production and an unverified environment never show it and never call its routes (a missing route answers 404 without CORS headers, which a
+ * browser reports as a blocked request, not as a 404 the page could read). No environment context at all (older build, unit tests) leaves it available.
+ */
+export function signInOverrideAvailable(marker: EnvironmentMarker | null): boolean {
+  return marker === null || marker.kind === "test" || marker.kind === "demo" || marker.kind === "development";
+}
+
+export function useSignInOverrideAvailable(): boolean {
+  return signInOverrideAvailable(useEnvironmentMarker());
+}

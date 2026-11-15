@@ -7,13 +7,16 @@ import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "./aws-root";
+import type { EnvironmentMarker } from "./environment";
+import { EnvironmentProvider } from "./environment-marker";
 
 export const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 export type Call = { method: string; path: string; query: URLSearchParams; body: Record<string, any> | null; key: string | null };
 export type Handler = (ctx: { url: URL; body: Record<string, any> | null }) => Response | undefined;
 export const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
 
-export function renderAws(path: string, permissions: string[], handlers: Record<string, Handler> = {}, role = "manager") {
+/** `environment` is optional: most tests run with no environment context. Pass resolveEnvironmentMarker("production") to render as the production build. */
+export function renderAws(path: string, permissions: string[], handlers: Record<string, Handler> = {}, role = "manager", environment?: EnvironmentMarker) {
   const calls: Call[] = [];
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -41,6 +44,7 @@ export function renderAws(path: string, permissions: string[], handlers: Record<
   const auth = { subscribe: vi.fn(() => () => {}), getSession: vi.fn(async () => ({ user: { id: "11111111-2222-4333-8444-555555555555", email: "m@example.test", emailVerified: true }, access_token: "t", expires_at: 4_000_000_000 })), getAccessToken: vi.fn(async () => "t"), signIn: vi.fn(), handleCallback: vi.fn(), startPasswordReset: vi.fn(), signOut: vi.fn() };
   const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: fetchImpl as never });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<MemoryRouter initialEntries={[path]}><QueryClientProvider client={queryClient}><CognitoAuthProvider client={auth as unknown as CognitoAuthClient}><AwsRoutes api={client} publicApi={client} /></CognitoAuthProvider></QueryClientProvider></MemoryRouter>);
+  const app = <MemoryRouter initialEntries={[path]}><QueryClientProvider client={queryClient}><CognitoAuthProvider client={auth as unknown as CognitoAuthClient}><AwsRoutes api={client} publicApi={client} /></CognitoAuthProvider></QueryClientProvider></MemoryRouter>;
+  render(environment ? <EnvironmentProvider marker={environment}>{app}</EnvironmentProvider> : app);
   return { calls, queryClient };
 }

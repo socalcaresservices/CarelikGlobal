@@ -7,6 +7,7 @@ import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "../care-team-admin";
+import { useSignInOverrideAvailable } from "../environment";
 import { OVERRIDE_BADGE_TEXT, useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -194,6 +195,7 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
 /** The whole readiness story in one list: five requirements and the single Approve for work step. Replaces Onboarding, Compliance, Documents status and the status picker. */
 export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }: { caregiverRecordId: string; canManage: boolean; hasContact: boolean }) {
   const { hasPermission, activeOrganizationId } = useOrganization();
+  const overrideReleased = useSignInOverrideAvailable(); // the override is off in production: no action, no request
   const api = useAwsApi();
   const refresh = useRefreshReadiness();
   const canCompliance = hasPermission("caregivers.compliance.manage");
@@ -234,7 +236,7 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
       </div>
       <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card" aria-label="Requirements">
         {r.items.map((i) => <Row key={i.requirement} item={i} caregiverRecordId={caregiverRecordId} canManage={canManage} canCompliance={canCompliance} hasContact={hasContact}
-          canOverride={hasPermission("caregivers.signin_override")} canSetup={hasPermission("readiness.manage") || hasPermission("documents.requirements.manage")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
+          canOverride={overrideReleased && hasPermission("caregivers.signin_override")} canSetup={hasPermission("readiness.manage") || hasPermission("documents.requirements.manage")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
         <li className="px-3 py-2" data-requirement="approve">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-2">

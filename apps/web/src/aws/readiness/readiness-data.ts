@@ -3,6 +3,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { ApiRequestError } from "@/lib/aws-api";
 import type { WorkStatus } from "../care-team-admin";
+import { useSignInOverrideAvailable } from "../environment";
 
 /** One server-calculated requirement (0086 ogevia.caregiver_readiness). The browser never decides eligibility; it only shows this. */
 export interface ReadinessItem {
@@ -59,6 +60,7 @@ export interface SigninOverride { caregiverRecordId: string; approvedAt: string;
 export function useSigninOverrides(enabled = true) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
+  const released = useSignInOverrideAvailable(); // off in production: no request is sent to a route that is not deployed there
   return useQuery({
     queryKey: ["signin-overrides", activeOrganizationId],
     queryFn: async (): Promise<SigninOverride[]> => {
@@ -69,7 +71,7 @@ export function useSigninOverrides(enabled = true) {
         throw cause;
       }
     },
-    enabled: !!activeOrganizationId && enabled,
+    enabled: !!activeOrganizationId && enabled && released,
     retry: false,
     staleTime: 30_000,
   });
