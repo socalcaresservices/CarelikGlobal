@@ -1,6 +1,6 @@
 # Deployed record: sign-in override routes in production
 
-**Status: DEPLOYED, record built from the operator's pasted CloudShell output. Owner acceptance in the app is NOT yet recorded.**
+**Status: DEPLOYED and ACCEPTED by the owner (owner-reported, 2026-11-15): the admin approval for a caregiver with incomplete sign-in was tested in production and is a GO.** The record is built from the operator's pasted CloudShell output; the owner's acceptance statement was given in chat and no screenshots or caregiver details were supplied (none are required in the repository: no names or identifiers).
 Release `2026-11-15-signin-override-production`, commit `19605dbf1f391762f52d86d9fdd2c7de45f4bebe` (pull request socalcaresservices/CarelikGlobal#109, CI green on that commit: `harness`, `validate`, `postgres`, run 43679688930). Account `300094796789`, region `us-west-2`, stack `Ogevia-prd-ServiceVerificationApi`, API `zk527zk4ua`. Operator: the owner, in AWS CloudShell. Approval: the owner's typed `OGEVIA_DEPLOY_APPROVAL=owner-signin-override-go` for `plan` and `apply`, following the owner's instruction of 2026-11-15 to do what is needed to go live.
 
 ## What changed in AWS
@@ -19,11 +19,13 @@ Exactly two `AWS::ApiGatewayV2::Route` resources were added by a CloudFormation 
 
 The first plan (workspace `ndzDBw`, change set `ogevia-signin-override-20261115T050833Z`) was never executed. It is obsolete and may be deleted.
 
+## Owner acceptance
+**Accepted (owner-reported, 2026-11-15):** "tested and the admin approval for incomplete sign-in is a GO." The individual checks of `RUNBOOK.md` step 5 (action visible to owner/administrator and hidden from manager/scheduler; blank reason refused; badge after a real approval; hard block when the background check is not clear) were not itemised in the report and are not separately evidenced here.
+
 ## Not yet verified
-1. **Owner acceptance in the app** (`RUNBOOK.md` step 5): Approve by override shown for an owner or administrator and not for a manager or scheduler; a blank reason refused; a real approval records the badge; a caregiver without a clear background check shows the hard block. Not recorded.
-2. `notifications` and `attention` return 200 in the browser. The empty 5xx log check is supporting, not conclusive, evidence.
-3. The web console shows no CORS or 404 errors for the two routes.
-4. A monitoring period with no new 5xx.
+1. `notifications` and `attention` return 200 in the browser. The empty 5xx log check is supporting, not conclusive, evidence.
+2. The web console shows no CORS or 404 errors for the two routes.
+3. A monitoring period with no new 5xx.
 
 ## Rollback (not invoked)
 `OGEVIA_DEPLOY_APPROVAL=owner-signin-override-go bash /tmp/CarelikGlobal/infra/aws/scripts/production-signin-override-deploy.sh rollback /tmp/ogevia-signin-override.kcHHFG` (a change set that removes exactly the two routes; override records already written are kept). The workspace holds the captured live template; a copy is in the private assets bucket under `ogevia-production-release/signin-override-…/`.

@@ -1,6 +1,6 @@
 # Release checklist: 2026-11-15-signin-override-production
 
-Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Status words: proposed, implemented, tested, deployed, accepted. **This release is IMPLEMENTED, TESTED (Phase A) and DEPLOYED to production (2026-11-15, see `DEPLOYED_RECORD_PRD.md`). It is NOT yet accepted: the owner's acceptance in the app is pending.** Boxes that are not ticked are open on purpose; nothing is ticked that was not run.
+Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Status words: proposed, implemented, tested, deployed, accepted. **This release is IMPLEMENTED, TESTED (Phase A), DEPLOYED to production (2026-11-15, see `DEPLOYED_RECORD_PRD.md`) and ACCEPTED by the owner (owner-reported, 2026-11-15: "tested and the admin approval for incomplete sign-in is a GO"). The monitoring period and two browser checks remain open.** Boxes that are not ticked are open on purpose; nothing is ticked that was not run.
 
 ## 0. Release identity
 | Field | Value |
@@ -89,9 +89,9 @@ Change-specific:
 | F1 | Same SHA and script as validated | ☑ `19605dbf…`, `production-signin-override-deploy.sh` |
 | F2 | Ledger after | n/a (no migration; `VERDICT: PASS` before) |
 | F3 | Smoke | ☑ 401 / 401 / 401, 2 JWT routes, template identical, no 5xx printed |
-| F4 | Owner checks the changed workflow with their own account | ☐ **pending** |
+| F4 | Owner checks the changed workflow with their own account | ☑ owner-reported 2026-11-15: tested, GO (items not itemised) |
 | F5 | Monitoring period, no new 5xx | ☐ pending |
-| F6 | Released marked deployed and accepted | ☑ deployed, ☐ accepted |
+| F6 | Released marked deployed and accepted | ☑ deployed, ☑ accepted (owner-reported) |
 | F7 | Rollback invoked | ☑ no |
-| F8 | Deployed record | ☑ `DEPLOYED_RECORD_PRD.md` (record complete except F4, F5) |
+| F8 | Deployed record | ☑ `DEPLOYED_RECORD_PRD.md` (record complete except F5 and the two browser checks) |
 | F9 | Baseline pointer | ☑ this record |

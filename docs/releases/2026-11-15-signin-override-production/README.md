@@ -1,6 +1,6 @@
 # Release 2026-11-15: enable the administrator sign-in override in production
 
-**Status: DEPLOYED to production on 2026-11-15 (`DEPLOYED_RECORD_PRD.md`). Owner acceptance in the app is pending.**
+**Status: DEPLOYED to production on 2026-11-15 and ACCEPTED by the owner (owner-reported; `DEPLOYED_RECORD_PRD.md`). Monitoring period still open.**
 Owner request, 2026-11-15: let authorized administrators approve caregivers who have not signed in, with a required reason. Hiding the action does not meet that goal.
 
 ## 1. What this release changes (and what it does not)
