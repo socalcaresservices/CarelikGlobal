@@ -80,7 +80,11 @@ def patch(live, cand):
         assert rid in cand['Resources'], 'the candidate has no resource ' + rid
         res = cand['Resources'][rid]
         assert res['Type'] == ROUTE and res['Properties']['RouteKey'] == key
-        assert set(res) == {'Type', 'Properties'}, 'unexpected route attributes (DependsOn, conditions or metadata)'
+        assert set(res) <= {'Type', 'Properties', 'Metadata'}, 'unexpected route attributes (DependsOn, conditions or other keys)'
+        if 'Metadata' in res:  # the cdk CLI stamps every resource with its construct path; nothing else is accepted
+            m = res['Metadata']
+            assert isinstance(m, dict) and set(m) == {'aws:cdk:path'} and isinstance(m['aws:cdk:path'], str) \
+                and m['aws:cdk:path'].startswith('Ogevia-prd-ServiceVerificationApi/Api/'), 'unexpected route metadata'
         p = res['Properties']
         assert set(p) == PROPS, 'unexpected route properties'
         assert p['AuthorizationType'] == 'JWT' and p['AuthorizerId'] == sib['AuthorizerId'], 'the route must use the same JWT authorizer as every other protected route'

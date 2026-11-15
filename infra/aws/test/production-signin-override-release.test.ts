@@ -9,6 +9,9 @@ import { buildOgeviaApp } from "../lib/app.js";
 import { ENVIRONMENTS, type OgeviaEnvironmentConfig } from "../lib/config.js";
 import { newApp } from "./helpers.js";
 
+// `cdk synth` (the CLI) stamps every resource with Metadata "aws:cdk:path"; the context flag below is what turns that on. The production plan synthesizes with the CLI, so these tests must too.
+const cliApp = () => { const a = newApp(); a.node.setContext("aws:cdk:enable-path-metadata", true); return a; };
+
 // The production release that enables the sign-in override adds exactly two routes. This gate is what the operator runs before and after the change set.
 const helper = fileURLToPath(new URL("../scripts/production-signin-override-release.py", import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), "signin-override-release-"));
@@ -39,6 +42,15 @@ const candidate = (): any => {
 const patch = (l: unknown, c: unknown) => { const out = join(dir, `out${n++}.json`); return { r: run("patch", file(l), file(c), out), out }; };
 
 describe("production sign-in override release gate", () => {
+  it("accepts the construct-path metadata the real cdk CLI puts on every resource (found on the first real run)", () => {
+    const c = candidate(); const meta = (k: string) => ({ "aws:cdk:path": `Ogevia-prd-ServiceVerificationApi/Api/${k}/Resource` });
+    c.Resources[GET].Metadata = meta("GET--v1--signin-overrides"); c.Resources[POST].Metadata = meta("POST--v1--caregivers--signin-override");
+    const l = live(); for (const r of Object.values<any>(l.Resources)) if (r.Type === "AWS::ApiGatewayV2::Route") r.Metadata = meta("x");
+    const { r, out } = patch(l, c);
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(readFileSync(out, "utf8")).Resources[GET].Metadata).toEqual(meta("GET--v1--signin-overrides"));
+  });
+
   it("adds exactly the two routes to the live template and leaves the live Handler code and everything else untouched", () => {
     const { r, out } = patch(live(), candidate());
     expect(r.status, r.stderr).toBe(0);
@@ -69,6 +81,8 @@ describe("production sign-in override release gate", () => {
     ["a route to a different integration", (c: any) => { c.Resources[GET] = route(KEYS[GET], { Target: "integrations/abc" }); }],
     ["an extra route property", (c: any) => { c.Resources[GET].Properties.OperationName = "x"; }],
     ["a route with DependsOn", (c: any) => { c.Resources[GET].DependsOn = ["Handler886CB40B"]; }],
+    ["a route with metadata other than the cdk path", (c: any) => { c.Resources[GET].Metadata = { "aws:cdk:path": "Ogevia-prd-ServiceVerificationApi/Api/x/Resource", note: "x" }; }],
+    ["a route whose cdk path belongs to another stack", (c: any) => { c.Resources[GET].Metadata = { "aws:cdk:path": "Other-Stack/Api/x/Resource" }; }],
     ["a renamed logical id", (c: any) => { c.Resources.Renamed = c.Resources[GET]; delete c.Resources[GET]; }],
   ])("refuses %s", (_name, mutate) => {
     const c = candidate(); mutate(c);
@@ -112,7 +126,7 @@ describe("production sign-in override release gate", () => {
   it("works on the real synthesized production templates: the live template stands in as the switch-off synthesis plus the six accepted routes it carries outside CDK, and patching it gives the candidate plus those six", () => {
     const synth = (on: boolean) => {
       const cfg = { ...ENVIRONMENTS.prd, features: { ...ENVIRONMENTS.prd.features, signInOverride: on } } as OgeviaEnvironmentConfig;
-      const api = buildOgeviaApp(newApp(), cfg, "plan").find((p) => p.stack.stackName.endsWith("-ServiceVerificationApi"))!;
+      const api = buildOgeviaApp(cliApp(), cfg, "plan").find((p) => p.stack.stackName.endsWith("-ServiceVerificationApi"))!;
       return Template.fromStack(api.stack).toJSON() as any;
     };
     const off = synth(false), on = synth(true);

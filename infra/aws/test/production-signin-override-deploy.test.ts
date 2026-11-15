@@ -9,6 +9,9 @@ import { buildOgeviaApp } from "../lib/app.js";
 import { ENVIRONMENTS, type OgeviaEnvironmentConfig } from "../lib/config.js";
 import { newApp } from "./helpers.js";
 
+// `cdk synth` (the CLI) stamps every resource with Metadata "aws:cdk:path"; the context flag below is what turns that on. The production plan synthesizes with the CLI, so these tests must too.
+const cliApp = () => { const a = newApp(); a.node.setContext("aws:cdk:enable-path-metadata", true); return a; };
+
 // The production deploy script (plan / apply / rollback) run end to end against a FAKE aws, curl, npx and corepack, in a throw-away git checkout.
 // No network, no AWS. The "live" production template is the real synthesized prd template (switch off) plus the six accepted routes production carries outside CDK;
 // the candidate is the real synthesized template with the switch on.
@@ -25,7 +28,7 @@ const git = (...a: string[]) => spawnSync("git", a, { cwd: repo, encoding: "utf8
 beforeAll(() => {
   const synth = (on: boolean) => {
     const cfg = { ...ENVIRONMENTS.prd, features: { ...ENVIRONMENTS.prd.features, signInOverride: on } } as OgeviaEnvironmentConfig;
-    const api = buildOgeviaApp(newApp(), cfg, "plan").find((p) => p.stack.stackName.endsWith("-ServiceVerificationApi"))!;
+    const api = buildOgeviaApp(cliApp(), cfg, "plan").find((p) => p.stack.stackName.endsWith("-ServiceVerificationApi"))!;
     return Template.fromStack(api.stack).toJSON() as any;
   };
   live0 = synth(false); candidate = synth(true);
