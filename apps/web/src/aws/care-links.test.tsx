@@ -197,4 +197,14 @@ describe("staff care-request page link handling", () => {
     const revoke = h.calls.find((c) => c.url.pathname === "/v1/care-portals/revoke")!;
     expect(JSON.parse(String(revoke.init.body))).toEqual({ organizationId: "aaaaaaaa-0000-4000-8000-000000000001", clientId: "c1" });
   });
+  it("offers save-to-phone help, names the shortcut after the agency, and a nickname changes only the title", async () => {
+    const h = harness(() => json({ services: [{ organizationName: "Synthetic Care Co", clientCode: "TEST-C01", serviceId: "s1", serviceCode: "RSP", serviceName: "Respite", periodEnd: "2026-12-31" }] }));
+    renderAt("/care#" + TOKEN, <PublicCareRequestPage api={createAwsPublicApiClient("https://api.example.test", h.fetchImpl)} />, "/care");
+    expect(await screen.findByText(/Save this page to your phone/)).toBeInTheDocument();
+    expect(document.title).toBe("Synthetic Care Co");
+    fireEvent.change(screen.getByLabelText(/Name for the shortcut/), { target: { value: "William care" } });
+    expect(document.title).toBe("William care");
+    expect(h.calls.every((c) => !c.url.pathname.includes("William"))).toBe(true);
+    expect(document.querySelectorAll("[data-platform]").length).toBe(2);
+  });
 });

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@carelik/ui";
 import { useLocation } from "react-router-dom";
@@ -118,6 +118,8 @@ export function PublicCareRequestPage({ api }: { api: AwsApiClient }) {
           <Button disabled={!serviceId || !startsAt || !endsAt} loading={create.isPending} onClick={() => { setSubmitted(false); create.mutate(); }}>Request care</Button>
         </div>
       </Card>
+      <div className="h-4" />
+      <SaveToPhoneCard defaultName={orgName} />
     </PublicShell>
   );
 }
@@ -176,6 +178,46 @@ export function PublicCareOfferPage({ api }: { api: AwsApiClient }) {
 function ActionError({ error, fallback }: { error: unknown; fallback: string }) {
   if (!error) return null;
   return <p role="alert" className="mt-3 text-sm text-red-700">{error instanceof Error && error.message ? error.message : fallback}</p>;
+}
+
+/**
+ * Save-to-phone help. Nothing is stored: the home-screen name comes from the
+ * page title at the moment the parent taps "Add to Home Screen", so typing a
+ * nickname just sets document.title. The saved shortcut is this exact URL
+ * (token fragment included).
+ */
+function SaveToPhoneCard({ defaultName }: { defaultName: string }) {
+  const [nickname, setNickname] = useState("");
+  const [copied, setCopied] = useState<"idle" | "yes" | "no">("idle");
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  const platform = /iPhone|iPad|iPod/i.test(ua) ? "ios" : /Android/i.test(ua) ? "android" : "other";
+  useEffect(() => {
+    const previous = document.title;
+    document.title = nickname.trim() || defaultName;
+    return () => { document.title = previous; };
+  }, [nickname, defaultName]);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(window.location.href); setCopied("yes"); } catch { setCopied("no"); }
+  };
+  return (
+    <Card>
+      <h2 className="text-lg font-semibold text-slate-950">Save this page to your phone</h2>
+      <p className="mt-1 text-sm text-slate-600">Put a shortcut on your home screen so you can request care in one tap. Keep this link private: anyone who has it can make requests for this client.</p>
+      <label className="mt-3 block text-sm">Name for the shortcut (optional)
+        <input value={nickname} maxLength={24} onChange={(e) => setNickname(e.target.value)} placeholder={defaultName} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
+      </label>
+      <p className="mt-1 text-xs text-slate-500">Use a nickname if you have more than one link. Do this before you tap Add to Home Screen.</p>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-700">
+        {platform !== "android" ? <li data-platform="ios"><strong>iPhone:</strong> open this page in Safari, tap the Share button, then <strong>Add to Home Screen</strong>.</li> : null}
+        {platform !== "ios" ? <li data-platform="android"><strong>Android:</strong> in Chrome, tap the ⋮ menu, then <strong>Add to Home screen</strong>.</li> : null}
+      </ol>
+      <div className="mt-3">
+        <Button variant="secondary" onClick={() => void copy()}>Copy link</Button>
+        {copied === "yes" ? <p role="status" className="mt-2 text-sm text-emerald-700">Link copied.</p> : null}
+        {copied === "no" ? <p role="alert" className="mt-2 text-sm text-red-700">Could not copy. Press and hold the address bar to copy it.</p> : null}
+      </div>
+    </Card>
+  );
 }
 
 function PublicShell({ title = "Care request", children }: { title?: string; children: ReactNode }) {
