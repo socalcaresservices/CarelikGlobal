@@ -28,9 +28,10 @@ describe("staffManagement route switch", () => {
     expect(ENVIRONMENTS.prd.features.staffManagement).toBe(true);
     const have = routeKeys("prd");
     for (const k of STAFF) expect(have.find((r) => r.key === k), k).toMatchObject({ auth: "JWT" });
-    // The one allowed difference: routes behind the two RELEASE switches that are ON for TEST only in the UX redesign candidate (signInOverride, bulkImport). Production must not have them, and nothing else may differ between the two route tables.
-    const testOnly = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "signInOverride" || r.feature === "bulkImport").map((r) => `${r.method} ${r.path}`).sort();
-    expect(testOnly).toHaveLength(3);
+    // The one allowed difference: the route behind the release switch that is ON for TEST only (bulkImport). signInOverride is ON for production too since the owner's request of 2026-11-15;
+    // bulkImport and staffDuplicates stay off in production, and nothing else may differ between the two route tables.
+    const testOnly = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "bulkImport").map((r) => `${r.method} ${r.path}`).sort();
+    expect(testOnly).toEqual(["POST /v1/imports/{kind}"]);
     const prodKeys = have.map((r) => r.key).sort();
     for (const k of testOnly) expect(prodKeys.includes(k), `${k} must not be in production`).toBe(false);
     expect(routeKeys("prod").map((r) => r.key).filter((k) => !testOnly.includes(k)).sort()).toEqual(prodKeys);

@@ -160,6 +160,22 @@ describe("0090: administrator override for a caregiver who has not signed in", (
     expect(await overrideRows(rec)).toBe(1);   // the record stays as history
   });
 
+  it("an overridden caregiver still cannot verify a visit: they have no sign-in, nobody can start a visit on their behalf, and no visit is created", async () => {
+    const rec = await ready("NoVerify");
+    await override(w.ownerA, rec, "Starts Monday; not signed in yet (synthetic)");
+    expect((await db.admin.query("select ogevia.caregiver_has_signed_in($1,$2) as s", [w.orgA, rec])).rows[0].s).toBe(false);
+    const visits = async () => (await db.admin.query("select count(*)::int n from ogevia.service_visits where organization_id = $1", [w.orgA])).rows[0].n as number;
+    const before = await visits();
+    // Starting a visit takes no caregiver: the server uses the caller's OWN Care Team profile. An administrator or manager has none, so neither can start a visit for this caregiver.
+    const start = (a: Actor) => call(a, "select ogevia_api.start_ad_hoc_service_visit($1,$2,$3,'{}',null,null,'Synthetic unscheduled test visit')", [w.orgA, w.clientA1, w.serviceA]);
+    await expectPgError(start(w.ownerA), "OGR30", /Care Team profile/);
+    await expectPgError(start(w.managerA), "OGR30", /Care Team profile/);
+    expect(await visits()).toBe(before);
+    // The override approves the caregiver for work; it does not turn the sign-in requirement into a sign-in. The badge stays until a real first sign-in.
+    expect(item(await readiness(rec), "signin")).toMatchObject({ state: "met", detail: "Approved by override: not signed in", extra: { override: true } });
+    expect((await call(w.managerA, "select * from ogevia_api.list_signin_overrides($1)", [w.orgA])).map((r: any) => r.caregiver_record_id)).toContain(rec);
+  });
+
   it("rollback restores the 0088 rule and drops the table; re-applying is safe", async () => {
     const rec = await ready("Rollback");
     await override(w.ownerA, rec, "Before rollback (synthetic)");

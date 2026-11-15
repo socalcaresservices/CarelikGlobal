@@ -85,6 +85,20 @@ describe("POST /v1/caregivers/{id}/signin-override", () => {
     expect(r.status).toBe(404);
   });
 
+  it("an overridden caregiver who has not signed in still cannot verify a visit: starting a visit takes no caregiver, so an administrator is refused and no visit is created", async () => {
+    const id = await newCaregiver("NoVerifyHttp");
+    await clearBackground(id);
+    expect((await call(ROUTE, w.ownerA, { path: path(id), body: { organizationId: w.orgA, reason: "Starts Monday; not signed in yet (synthetic)" } })).status).toBe(201);
+    const visits = async () => (await db.admin.query("select count(*)::int n from ogevia.service_visits where organization_id = $1", [w.orgA])).rows[0].n as number;
+    const before = await visits();
+    for (const admin of [w.ownerA, w.managerA]) {
+      const r = await call("POST /v1/visits", admin, { body: { organizationId: w.orgA, clientId: w.clientA1, serviceId: w.serviceA, unscheduledReason: "Synthetic unscheduled test visit" } });
+      expect(r.status, JSON.stringify(r.body)).toBe(422);
+      expect(r.body.error?.code).toBe("not_ready");
+    }
+    expect(await visits()).toBe(before);
+  });
+
   it("no reason text or caregiver name is written to the logs", async () => {
     const id = await newCaregiver("LogCheck");
     await clearBackground(id);
