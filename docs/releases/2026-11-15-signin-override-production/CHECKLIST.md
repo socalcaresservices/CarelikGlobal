@@ -1,6 +1,6 @@
 # Release checklist: 2026-11-15-signin-override-production
 
-Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Status words: proposed, implemented, tested, deployed, accepted. **This release is IMPLEMENTED and TESTED (Phase A). It is NOT deployed and NOT accepted.** Boxes that are not ticked are open on purpose; nothing is ticked that was not run.
+Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Status words: proposed, implemented, tested, deployed, accepted. **This release is IMPLEMENTED, TESTED (Phase A) and DEPLOYED to production (2026-11-15, see `DEPLOYED_RECORD_PRD.md`). It is NOT yet accepted: the owner's acceptance in the app is pending.** Boxes that are not ticked are open on purpose; nothing is ticked that was not run.
 
 ## 0. Release identity
 | Field | Value |
@@ -74,14 +74,24 @@ Change-specific:
 ### Decision record
 | Field | Value |
 |---|---|
-| Decision | ☐ GO ☐ NO-GO |
-| Owner (name) | |
+| Decision | ☑ GO (typed approval at `plan` and `apply`) |
+| Owner (name) | the owner, in CloudShell |
 | Date and time | |
-| Commit SHA the decision covers | |
-| Approval reference | |
+| Commit SHA the decision covers | `19605dbf1f391762f52d86d9fdd2c7de45f4bebe` (CI green) |
+| Approval reference | `OGEVIA_DEPLOY_APPROVAL=owner-signin-override-go`; the owner's instruction of 2026-11-15 to do what is needed to go live |
 | Window | |
-| Operator | |
+| Operator | the owner |
 | Conditions or exceptions | |
 
 ## F. After deployment
-All open: F1–F9 are completed by the operator from pasted evidence (`RUNBOOK.md` sections 6, 7 and 9).
+| # | Step | Result |
+|---|---|---|
+| F1 | Same SHA and script as validated | ☑ `19605dbf…`, `production-signin-override-deploy.sh` |
+| F2 | Ledger after | n/a (no migration; `VERDICT: PASS` before) |
+| F3 | Smoke | ☑ 401 / 401 / 401, 2 JWT routes, template identical, no 5xx printed |
+| F4 | Owner checks the changed workflow with their own account | ☐ **pending** |
+| F5 | Monitoring period, no new 5xx | ☐ pending |
+| F6 | Released marked deployed and accepted | ☑ deployed, ☐ accepted |
+| F7 | Rollback invoked | ☑ no |
+| F8 | Deployed record | ☑ `DEPLOYED_RECORD_PRD.md` (record complete except F4, F5) |
+| F9 | Baseline pointer | ☑ this record |

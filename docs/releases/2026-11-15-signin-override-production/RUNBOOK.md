@@ -1,6 +1,6 @@
 # Runbook: enable the sign-in override routes in production
 
-**Status: PREPARED, NOT EXECUTED.** It needs the owner to run it in AWS CloudShell (us-west-2, account `300094796789`): this repository's tooling has no AWS access. The change is exactly two API Gateway routes. Everything that decides "go or stop" is in two scripts that are tested against a fake AWS (`infra/aws/test/production-signin-override-deploy.test.ts`, 29 tests, and `infra/aws/test/production-signin-override-release.test.ts`, 26 tests).
+**Status: EXECUTED 2026-11-15 (see `DEPLOYED_RECORD_PRD.md`).** Kept as the procedure and the rollback reference. It needs the owner to run it in AWS CloudShell (us-west-2, account `300094796789`): this repository's tooling has no AWS access. The change is exactly two API Gateway routes. Everything that decides "go or stop" is in two scripts that are tested against a fake AWS (`infra/aws/test/production-signin-override-deploy.test.ts`, 29 tests, and `infra/aws/test/production-signin-override-release.test.ts`, 26 tests).
 
 **Never run `cdk deploy` for this stack.** The CDK code does not synthesize six routes production serves today (business documents, missing visits, QR check-in); a `cdk deploy` would remove them. The script patches the captured **live** template and nothing else.
 
