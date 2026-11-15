@@ -30,12 +30,12 @@ Template: `docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`. Status words: pr
 | A1 | `pnpm install --frozen-lockfile` | ☑ ok | |
 | A2 | `pnpm lint` | ☑ exit 0 (6 tasks) | run 2026-11-15 on the working tree that became this commit |
 | A3 | `pnpm typecheck` | ☑ exit 0 (7 tasks) | same |
-| A4 | Unit and static tests | ☑ see A9 | shared 118, auth 150, sv-api 107, ui 73, web 1314 (142 files); infra-aws: see A9 |
+| A4 | Unit and static tests (`turbo test --force`, stage 1 of `pnpm test:all`) | ☑ exit 0, 0 skipped. shared 14 files / 118 tests, auth 9 / 150, sv-api 6 / 107, ui 20 / 73, web 142 / 1,314, infra-aws 42 / 746 | `test:all` log, 2026-11-15 |
 | A5 | `pnpm build` | ☑ exit 0 (6 tasks) | same |
-| A6 | Database tests | ☐ **PENDING at commit time**: the full `pnpm test:all` run (all 111 infra database files) had not finished. Passed so far, run individually: `signin-override-0090.db.test.ts` 13/13 | |
-| A7 | API tests | ☐ **PENDING at commit time** (same run). Passed so far, run individually: `signin-override.db.test.ts` 8/8 | |
-| A8 | CI on the pull request | ☐ not yet read for the final head | check before GO |
-| A9 | Counts did not drop | ☐ **PENDING**: baseline comparison is made when `test:all` finishes (the next commit records the counts) | |
+| A6 | Database tests (`@carelik/infra-aws test:db`) | ☑ **111 files / 1,174 tests passed, 0 skipped**, local PostgreSQL 16. Includes `signin-override-0090.db.test.ts` 13/13 | `test:all` log |
+| A7 | API tests (`@carelik/sv-api test:db`) | ☑ **29 files / 183 tests passed, 0 skipped**. Includes `signin-override.db.test.ts` 8/8 | `test:all` log |
+| A8 | CI on the pull request | ☐ head `5409d58f` (or later): `harness` passed; `validate` and `postgres` were still running when this was written. Re-read before GO | [Actions run 43675105059](https://github.com/socalcaresservices/CarelikGlobal/actions/runs/43675105059) |
+| A9 | Counts did not drop versus the baseline | ☑ **No test was removed.** Baseline = the working tree before my test additions: infra-aws unit run 718 tests (716 passed, 2 failed because they encoded the old "off in production" rule: rewritten, not deleted). Now 746 = 718 + 28 new (26 gate, 1 older-gate, 1 switch). Database +1 (no verification before sign-in; 1,173 to 1,174). API +1 (HTTP 422; 182 to 183). Web unchanged at 1,314 (the three tests added and then reverted with the web "hide" change net to zero). The 2026-11-10 record's counts came from a different (Windows) environment and are not comparable | `test:all` PASS line: "all suites ran, none skipped, all passed" |
 
 Change-specific:
 - ☑ Every changed rule has a test that fails without the change. Production switch: `signin-override-switch.test.ts` asserts the switch is on for production and that it adds exactly two JWT routes (the old assertions failed when the switch was turned on, as expected, and were rewritten). Release gate: 26 tests in `production-signin-override-release.test.ts`, including refusals of the TEST database, a live route already present, a public route, another authorizer, an extra route property, a third change in the change set, a modify, a replacement.
@@ -47,7 +47,7 @@ Change-specific:
 - ☑ No migration; applied migration bytes untouched (`0103` checksum verified by the SQL and by `production-ux-release.py`).
 - ☑ Security checklist: no definer function, grant or tenant rule is added or changed by this release.
 
-**Phase A signed:** ☐ owner/operator (to sign after A6–A9 are confirmed and CI is green on the final head)
+**Phase A signed:** ☐ owner/operator. A1–A7 and A9 are done; sign after CI (A8) is green on the final head.
 
 ## B. Local harness (Phase B)
 ☐ **Not run.** The local harness (`harness:setup/build/serve`, browser personas) was not run in this session. Recommended minimum before GO if the owner requires Phase B: harness run with the override persona script (owner approves, manager does not see the action, background-check hard block). B10 (what the harness cannot prove): Cognito production pool and authorizer on the new routes, API Gateway route table, CloudFront/CORS behaviour for the two routes. These are covered by `RUNBOOK.md` section 6.
