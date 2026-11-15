@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Fake npx: `cdk synth ... --output DIR` writes the candidate template the test prepared.
+out=""; for ((i=1;i<=$#;i++)); do [[ "${!i}" == --output ]] && { j=$((i+1)); out="${!j}"; }; done
+[[ -n "$out" ]] || exit 0
+mkdir -p "$out" && cp "$FAKE/candidate.json" "$out/Ogevia-prd-ServiceVerificationApi.template.json"

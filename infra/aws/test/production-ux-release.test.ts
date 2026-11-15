@@ -76,6 +76,15 @@ it.each(["test database", "test identity pool", "exposed QR key", "removed accep
   if (kind === "enabled import") t.Resources.Import = { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "POST /v1/imports/{kind}" } };
   expect(patch(t).result.status).not.toBe(0);
 });
+it("accepts the sign-in override routes in production (released 2026-11-15) while bulk import and duplicate-staff review stay refused", () => {
+  const t: any = fixture();
+  t.Resources.OverrideGet = { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/signin-overrides" } };
+  t.Resources.OverridePost = { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "POST /v1/caregivers/{caregiverRecordId}/signin-override" } };
+  const ok = patch(t);
+  expect(ok.result.status, ok.result.stderr).toBe(0);
+  t.Resources.Duplicates = { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/staff/duplicates" } };
+  expect(patch(t).result.status).not.toBe(0);
+});
 it("refuses a change set that replaces the Handler or changes permissions", () => {
   const dir = mkdtempSync(join(tmpdir(), "production-changes-")), path = join(dir, "changes.json");
   const d: any = { Status: "CREATE_COMPLETE", ExecutionStatus: "AVAILABLE", Changes: [{ ResourceChange: { LogicalResourceId: "Handler886CB40B", ResourceType: "AWS::Lambda::Function", Action: "Modify", Replacement: "False", Scope: ["Properties"], Details: [{ Target: { Attribute: "Properties", Name: "Code" } }] } }] };

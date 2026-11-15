@@ -98,9 +98,10 @@ def patch_template(t):
     routes = [r['Properties']['RouteKey'] for r in t['Resources'].values()
               if r['Type'] == 'AWS::ApiGatewayV2::Route']
     assert len(routes) == len(set(routes))
+    # The sign-in override routes are no longer in this list: the owner enabled them for production on 2026-11-15
+    # (production-signin-override-release.py adds exactly those two routes). Import and duplicate-staff review stay off.
     for disabled in ['POST /v1/imports/{kind}', 'GET /v1/staff/duplicates',
-                     'POST /v1/staff/{profileId}/merge', 'GET /v1/signin-overrides',
-                     'POST /v1/caregivers/{caregiverRecordId}/signin-override']:
+                     'POST /v1/staff/{profileId}/merge']:
         assert disabled not in routes, 'disabled production feature is enabled: '+disabled
     for retained in ['GET /v1/business-documents', 'POST /v1/business-documents',
                      'GET /v1/reports/missing-visits', 'POST /v1/shifts/{shiftId}/missing-visit',

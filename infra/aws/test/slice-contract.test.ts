@@ -26,7 +26,7 @@ describe("API routes == handler routes; JWT everywhere except the exact approved
 
   it("every synthesized route uses the JWT authorizer, except exactly the 10 approved token-link routes (8 care links + 2 visit-confirmation links, 0036)", () => {
     const routes = Object.values(api.findResources("AWS::ApiGatewayV2::Route"));
-    // A route behind a release switch is in the API only where its switch is on (signInOverride is off in every environment until the owner approves it).
+    // A route behind a release switch is in the API only where its switch is on (signInOverride is on for TEST and production since 2026-11-15; bulkImport and staffDuplicates are off in production).
     expect(routes).toHaveLength(SERVICE_VERIFICATION_ROUTES.filter((r) => !r.feature || prod.features[r.feature]).length);
     const anonymous: string[] = [];
     for (const r of routes) {
