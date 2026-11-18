@@ -17,6 +17,17 @@ export const issueClient = (i: Pick<ActionIssue, "clientName" | "clientCode" | "
   i.clientName ? nameWithCode(i.clientName, i.clientCode, i.duplicateName) : i.clientCode;
 export const issueCaregiver = (i: Pick<ActionIssue, "caregiverName" | "caregiverCode" | "caregiverDuplicateName">): string | null =>
   i.caregiverName ? nameWithCode(i.caregiverName, i.caregiverCode, i.caregiverDuplicateName) : i.caregiverCode;
+/** Reasons about the caregiver (their documents or a hold), not the client: the row names the caregiver first. */
+const CAREGIVER_REASONS = new Set(["documents_not_current", "compliance_hold", "in_progress_on_hold"]);
+/** Who a dashboard row is about: the caregiver for caregiver reasons and document/caregiver issues, otherwise the client. `other` is the client named beside a caregiver row. */
+export function issueSubject(i: Pick<ActionIssue, "reason" | "kind" | "clientName" | "clientCode" | "duplicateName" | "caregiverName" | "caregiverCode" | "caregiverDuplicateName">): { main: string | null; other: string | null } {
+  const caregiver = issueCaregiver(i);
+  if (caregiver && (CAREGIVER_REASONS.has(i.reason) || i.kind === "document" || i.kind === "caregiver")) {
+    const client = issueClient(i);
+    return { main: caregiver, other: client };
+  }
+  return { main: issueClient(i), other: null };
+}
 export interface IssueList {
   asOf: string; matching: number; limit: number; offset: number;
   counts: { total: number; critical: number; urgent: number; routine: number; actionNeeded: number; byQueue: Record<string, number> };

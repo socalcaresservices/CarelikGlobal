@@ -10,7 +10,7 @@ import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { REASON_SHORT, shiftIssueLabel, todaysVisits, useHomeIssues, useNow } from "./home-data";
 import type { Shift } from "./schedule-page";
-import { issueClient, issueDestination, KIND_LABEL, SEVERITY_TONE } from "./action-issues";
+import { issueDestination, issueSubject, KIND_LABEL, SEVERITY_TONE } from "./action-issues";
 import { StatusChip } from "./ui/status-chip";
 import { linkClass } from "./ui-classes";
 
@@ -154,12 +154,13 @@ export function TopIssues() {
                     {shown.map((i) => {
             const dest = issueDestination(i);
             const tone = SEVERITY_TONE[i.severity];
+            const who = issueSubject(i);
             return (
               <li key={i.issueKey} className="flex flex-wrap items-center gap-x-3 gap-y-0 px-3 py-0.5 text-sm md:grid md:min-h-[32px] md:grid-cols-[5.5rem_minmax(0,1fr)_8rem_11rem]" data-testid="top-issue">
                 <span><StatusChip tone={tone}>{tone === "red" ? "Critical" : "Urgent"}</StatusChip></span>
                 <span className="min-w-0 flex-1 basis-[10rem] break-words text-og-ink">
-                  <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{issueClient(i) ? ` · ${issueClient(i)}` : ""}</span>
-                  <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}</span>
+                  <span className="font-semibold">{KIND_LABEL[i.kind] ?? i.kind}{who.main ? ` · ${who.main}` : ""}</span>
+                  <span className="text-og-sub"> · {REASON_SHORT[i.reason] ?? i.recommendedAction}{who.other ? ` · for ${who.other}` : ""}</span>
                 </span>
                 <span className="basis-full text-xs text-og-sub md:basis-auto md:text-sm">{i.deadline ? `${i.severity === "critical" ? "Was due" : "Due"} ${formatClockTime(i.deadline)}` : "No deadline"}</span>
                 <Link className="inline-flex min-h-[44px] items-center whitespace-nowrap font-semibold text-og-link underline md:min-h-[28px] md:justify-self-end" to={dest.to}>{dest.label}</Link>
