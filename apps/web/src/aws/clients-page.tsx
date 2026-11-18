@@ -1,5 +1,7 @@
 import { ImportButton } from "./import-drawer";
 import { useQueryClient } from "@tanstack/react-query";
+import { SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { InfoTip } from "./ui/info-tip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -221,16 +223,21 @@ const authLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? `${c.current
 const actionLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? "View authorized hours →" : "Add authorized hours →");
 
 /** Compact rows: client, status, authorization, one action. The same rows and permissions as Cards. */
-function ClientList({ clients }: { clients: AdminClient[] }) {
+function ClientList({ clients: input }: { clients: AdminClient[] }) {
+  const { rows: clients, sort } = useSortedRows(input, {
+    client: { get: (c) => clientName(c) ?? c.clientCode },
+    status: { get: (c) => STATUS_LABEL[c.status] },
+    authorization: { get: (c) => c.currentAuthorizations, kind: "number" },
+  });
   return (
     <div className="rounded-xl border border-slate-200 bg-og-card">
       <table className="w-full text-left text-sm" aria-label="Clients as a list">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
             <th scope="col" className="w-10 px-3 py-1.5 text-right font-semibold">No.</th>
-            <th scope="col" className="px-3 py-1.5 font-semibold">Client</th>
-            <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
-            <th scope="col" className="px-3 py-1.5 font-semibold">Authorization</th>
+            <SortTh sort={sort} column="client" className="px-3 py-0.5">Client</SortTh>
+            <SortTh sort={sort} column="status" className="px-3 py-0.5">Status</SortTh>
+            <SortTh sort={sort} column="authorization" kind="number" className="px-3 py-0.5">Authorization</SortTh>
             <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Action</span></th>
           </tr>
         </thead>

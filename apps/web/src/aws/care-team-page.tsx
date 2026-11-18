@@ -1,5 +1,7 @@
 import { MatchingLocation } from "./readiness/matching-inputs";
 import { CaregiverServices } from "./readiness/service-approvals";
+import { SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -125,6 +127,10 @@ export function CareTeamPage() {
     return (caregivers.data ?? []).filter((c) => (status === "all" || (status === "current" ? c.workStatus !== "inactive" : c.workStatus === status))
       && (!s || [caregiverName(c), c.caregiverCode].some((x) => x.toLowerCase().includes(s))));
   }, [caregivers.data, search, status]);
+  const { rows: sortedCaregivers, sort: cgSort } = useSortedRows(shown, {
+    caregiver: { get: (c) => caregiverName(c) },
+    status: { get: (c) => WORK_STATUS_LABEL[c.workStatus] },
+  });
   if (!hasPermission("caregivers.manage") && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the Care Team.</p>;
   const counts = (caregivers.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.workStatus]: (acc[c.workStatus] ?? 0) + 1 }), {});
   return (
@@ -158,12 +164,12 @@ export function CareTeamPage() {
             <thead>
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
                 <th scope="col" className="w-10 px-3 py-1 text-right font-semibold">No.</th>
-                <th scope="col" className="px-3 py-1 font-semibold">Caregiver</th>
-                <th scope="col" className="px-3 py-1 font-semibold">Status</th>
+                <SortTh sort={cgSort} column="caregiver" className="px-3 py-0.5">Caregiver</SortTh>
+                <SortTh sort={cgSort} column="status" className="px-3 py-0.5">Status</SortTh>
               </tr>
             </thead>
             <tbody>
-              {shown.map((c, i) => (
+              {sortedCaregivers.map((c, i) => (
                 <tr key={c.caregiverRecordId} className="border-b border-slate-100 last:border-0">
                   <td className="w-10 px-3 py-1 text-right align-middle tabular-nums text-slate-600" data-testid="row-no">{i + 1}</td>
                   <th scope="row" className="px-3 py-1 font-normal">

@@ -15,9 +15,45 @@ import { formatDateTime } from "@/lib/service-verification";
 import { ShortHelp } from "./help-text";
 import { actionBtn, actionBtnPrimary, linkClass } from "./ui-classes";
 import { InfoTip } from "./ui/info-tip";
+import { ApiRequestError } from "@/lib/aws-api";
+import { SortButton, SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+/** 0109 routes are released behind a switch: until then the API answers 404, which is said plainly rather than as a failure. */
+const cleanupMessage = (cause: unknown, fallback: string) =>
+  cause instanceof ApiRequestError && cause.status === 404 && cause.code !== "not_found" ? "This is not available in this environment yet." : message(cause, fallback);
+
+/** Cancel a request that has no upload yet: a reason is required; the request is closed and kept for the record, never deleted. */
+function CancelRequestForm({ doc, onDone, onClose }: { doc: StaffDocument; onDone: (savedMessage: string) => void; onClose: () => void }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const [reason, setReason] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const key = useRef(newIdempotencyKey());
+  async function submit() {
+    if (reason.trim().length < 3) return setState({ busy: false, error: "Give a reason (at least 3 characters)." });
+    setState({ busy: true, error: null });
+    try {
+      await api.post(`/v1/documents/${encodeURIComponent(doc.documentId)}/cancel`, { organizationId: activeOrganizationId, reason: reason.trim() }, { idempotencyKey: key.current });
+      onDone(`Request cancelled. ${doc.documentTypeName} for ${doc.personName} is no longer requested; the record and your reason are kept.`);
+    } catch (cause) {
+      setState({ busy: false, error: cleanupMessage(cause, "The request was not cancelled. Try again.") });
+    }
+  }
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-1 flex flex-wrap items-end gap-2 rounded-md bg-slate-50 p-2" aria-label="Cancel this request">
+      <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
+        Reason for cancelling (required)
+        <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
+      </label>
+      <Button type="submit" className="min-h-[44px] md:min-h-[32px]" disabled={state.busy}>{state.busy ? "Saving…" : "Cancel request"}</Button>
+      <button type="button" className={actionBtn} onClick={onClose}>Keep request</button>
+      {state.error ? <p role="alert" className="basis-full text-sm text-red-700">{state.error}</p> : null}
+    </form>
+  );
+}
 
 /** Upload form: the file is stored and recorded by the server before success is shown. */
 function UploadForm({ doc, onDone }: { doc: StaffDocument; onDone: (savedMessage: string) => void }) {
@@ -132,7 +168,7 @@ function useReviewDecision(doc: StaffDocument, onSaved: (savedMessage: string) =
 }
 
 function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refresh }: { d: StaffDocument; canManage: boolean; canUpload: boolean; canReviewOwn: boolean; canReview: boolean; refresh: () => void }) {
-  const [mode, setMode] = useState<"upload" | null>(null);
+  const [mode, setMode] = useState<"upload" | "cancel" | null>(null);
   // Shown until the next action so a saved upload or decision is never silent (the status chip also changes on refresh).
   const [saved, setSaved] = useState<string | null>(null);
   const review = useReviewDecision(d, (m) => { setSaved(m); refresh(); });
@@ -171,6 +207,7 @@ function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refres
             {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); void review.approve(); }} className={actionBtnPrimary}>{review.busy ? "Saving…" : "Approve"}</button> : null}
             {reviewable && !review.rejecting ? <button type="button" disabled={review.busy} onClick={() => { setSaved(null); review.setRejecting(true); }} className={btn}>Reject</button> : null}
             {d.latestVersionId ? <OpenFileButton versionId={d.latestVersionId} /> : null}
+            {canManage && !d.latestVersionId ? <button type="button" aria-expanded={mode === "cancel"} onClick={() => { setSaved(null); setMode(mode === "cancel" ? null : "cancel"); }} className={btn}>Cancel request</button> : null}
             {canUpload ? <button type="button" aria-expanded={mode === "upload"} onClick={() => { setSaved(null); setMode(mode === "upload" ? null : "upload"); }} className={btn}>{mode === "upload" ? "Cancel" : uploadLabel}</button> : null}
           </div>
         </td>
@@ -182,6 +219,7 @@ function DocumentRows({ d, canManage, canUpload, canReviewOwn, canReview, refres
           {reviewable && d.latestUploadedByMe ? <p className="text-xs font-semibold text-amber-900">You uploaded this version. Your approval is recorded as an Administrator self-review.</p> : null}
           {awaiting && canReview && d.latestUploadedByMe && !canReviewOwn ? <p className="rounded-lg bg-og-page p-2 text-sm text-og-sub">You uploaded this version, so the Administrator or another manager must review it.</p> : null}
           {mode === "upload" ? <UploadForm doc={d} onDone={(m) => { setMode(null); setSaved(m); refresh(); }} /> : null}
+          {mode === "cancel" ? <CancelRequestForm doc={d} onClose={() => setMode(null)} onDone={(m) => { setMode(null); setSaved(m); refresh(); }} /> : null}
           {reviewable && review.rejecting ? (
             <form onSubmit={(e) => { e.preventDefault(); void review.reject(); }} className="mt-1 flex flex-wrap items-end gap-2 rounded-md bg-slate-50 p-2">
               <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
@@ -324,16 +362,50 @@ function TypesForm({ types, onDone }: { types: DocumentType[]; onDone: () => voi
       setState({ busy: false, error: message(cause, "The type was not saved.") });
     }
   }
+  const [retiring, setRetiring] = useState<DocumentType | null>(null);
+  const [retireReason, setRetireReason] = useState("");
+  const [retireState, setRetireState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
+  async function retire() {
+    if (!retiring) return;
+    if (retireReason.trim().length < 3) return setRetireState({ busy: false, error: "Give a reason (at least 3 characters).", done: null });
+    setRetireState({ busy: true, error: null, done: null });
+    try {
+      await api.post(`/v1/document-types/${encodeURIComponent(retiring.documentTypeId)}/retire`, { organizationId: activeOrganizationId, reason: retireReason.trim() });
+      setRetireState({ busy: false, error: null, done: `${retiring.name} is retired and can no longer be requested. Existing records are kept.` });
+      setRetiring(null);
+      setRetireReason("");
+      onDone();
+    } catch (cause) {
+      setRetireState({ busy: false, error: cleanupMessage(cause, "The type was not retired."), done: null });
+    }
+  }
+  const active = types.filter((t) => t.isActive);
+  const retired = types.filter((t) => !t.isActive);
   return (
     <div className="space-y-3">
-      <ul className="flex flex-wrap gap-2">
-        {types.map((t) => (
-          <li key={t.documentTypeId} className="rounded-full border border-slate-200 bg-og-card px-3 py-1 text-xs text-slate-700">
+      <ul className="flex flex-wrap gap-2" aria-label="Document types">
+        {active.map((t) => (
+          <li key={t.documentTypeId} className="flex items-center gap-1 rounded-full border border-slate-200 bg-og-card px-3 py-1 text-xs text-slate-700">
             {t.name}{t.requiresExpiry ? " · expiry required" : ""}
+            <button type="button" className="ml-1 font-semibold text-og-link underline" aria-label={`Retire ${t.name}`} onClick={() => { setRetiring(t); setRetireReason(""); setRetireState({ busy: false, error: null, done: null }); }}>Retire</button>
           </li>
         ))}
-        {types.length === 0 ? <li className="text-sm text-slate-500">No document types yet.</li> : null}
+        {active.length === 0 ? <li className="text-sm text-slate-500">No document types yet.</li> : null}
       </ul>
+      {retired.length > 0 ? <p className="text-xs text-og-sub">Retired (cannot be requested): {retired.map((t) => t.name).join(", ")}</p> : null}
+      {retiring ? (
+        <form onSubmit={(e) => { e.preventDefault(); void retire(); }} className="flex flex-wrap items-end gap-2 rounded-md bg-slate-50 p-2" aria-label={`Retire ${retiring.name}`}>
+          <p className="basis-full text-sm text-og-ink">Retire <strong>{retiring.name}</strong>? It can no longer be requested. Cancel its open requests first. The type used for CPR or TB cannot be retired.</p>
+          <label className="min-w-[12rem] flex-1 text-sm font-medium text-slate-700">
+            Reason (required)
+            <input value={retireReason} maxLength={500} onChange={(e) => setRetireReason(e.target.value)} className="mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" />
+          </label>
+          <Button type="submit" variant="secondary" disabled={retireState.busy}>{retireState.busy ? "Saving…" : "Retire type"}</Button>
+          <button type="button" className={actionBtn} onClick={() => setRetiring(null)}>Keep type</button>
+        </form>
+      ) : null}
+      {retireState.error ? <p role="alert" className="text-sm text-red-700">{retireState.error}</p> : null}
+      {retireState.done ? <p role="status" className="text-sm text-emerald-800">{retireState.done}</p> : null}
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="flex flex-wrap items-end gap-2">
         <label className="text-xs font-medium text-slate-700">
           New type
@@ -391,10 +463,18 @@ export function DocumentsPage() {
     void queryClient.invalidateQueries({ queryKey: ["attention-overview"] });
   };
 
+  const list = docs.data ?? [];
+  const filtered = canRead ? list.filter((d) => matchesFilter(d, filter)) : list;
+  const STATUS_RANK: Record<StaffDocument["displayStatus"], number> = { overdue: 0, expired: 1, rejected: 2, awaiting_review: 3, requested: 4, expiring: 5, verified: 6 };
+  const { rows: shown, sort: docSort } = useSortedRows(filtered, {
+    document: { get: (d) => d.documentTypeName },
+    caregiver: { get: (d) => d.personName },
+    status: { get: (d) => STATUS_RANK[d.displayStatus], kind: "number" },
+    updated: { get: (d) => d.latestUploadedAt ?? d.dueOn, kind: "date" },
+  });
+
   if (!canRead && !canOwn) return <p className="text-sm text-og-sub">You do not have access to documents.</p>;
 
-  const list = docs.data ?? [];
-  const shown = canRead ? list.filter((d) => matchesFilter(d, filter)) : list;
   const counts = { all: list.length, overdue: list.filter(isOverdue).length, due_soon: list.filter(isDueSoon).length, to_review: list.filter(isToReview).length };
   const FILTERS: { key: DocumentFilter; label: string }[] = [{ key: "all", label: "All" }, { key: "overdue", label: "Overdue" }, { key: "due_soon", label: "Due soon" }, ...(canManage ? [{ key: "to_review" as const, label: "To review" }] : [])];
   const holds = overview.data?.documents?.caregiversOnHold ?? 0;
@@ -439,8 +519,14 @@ export function DocumentsPage() {
       <table className="w-full text-sm" aria-label="Documents">
         <thead>
           <tr className="hidden text-left text-xs uppercase tracking-wide text-og-sub md:table-row">
-            <th scope="col" className="py-1 pr-2 font-semibold">Document</th>
-            <th scope="col" className="py-1 pr-2 font-semibold">Status</th>
+            <th scope="col" className="py-0.5 pr-2 font-semibold" aria-sort={docSort.key === "document" || docSort.key === "caregiver" ? (docSort.dir === "asc" ? "ascending" : "descending") : "none"}>
+              <span className="flex flex-wrap items-center gap-x-3">
+                <SortButton sort={docSort} column="document">Document</SortButton>
+                {canManage ? <SortButton sort={docSort} column="caregiver">Caregiver</SortButton> : null}
+                <SortButton sort={docSort} column="updated" kind="date">Last upload</SortButton>
+              </span>
+            </th>
+            <SortTh sort={docSort} column="status" kind="number" className="py-0.5 pr-2">Status</SortTh>
             <th scope="col" className="py-1 text-right font-semibold">Action</th>
           </tr>
         </thead>

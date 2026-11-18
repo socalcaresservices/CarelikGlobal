@@ -477,9 +477,10 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
 
   it("scheduler A: only scheduling, care-request and read-evaluation POSTs succeed; no billing, visit review, correction, authorization, client, caregiver, account, branding, service, readiness or approval write does", async () => {
     const got = (await ok2xx(w.schedulerA, POSTS)).sort();
-    // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only
+    // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only.
+    // 0109: care-notifications/read clears only the scheduler's OWN care-request alerts (care_requests.read), like notifications/read.
     expect(got).toEqual([
-      "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
+      "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-notifications/read", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
       "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
       "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel"]);
     // billing reads: the scheduler holds no billing permission, so they are the stranger's (empty) answer

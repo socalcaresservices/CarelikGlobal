@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { nameWithCode } from "./name-label";
+import { SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { RoundingSection } from "./billing-rounding";
@@ -211,10 +213,19 @@ export function BillingReviewPage() {
     );
   }
 
+  const loaded = query.data ?? [];
+  const { rows, sort } = useSortedRows(applyBillingFilters(loaded, filters, approvalStatus), {
+    client: { get: (r) => r.clientName ?? r.clientCode },
+    caregiver: { get: (r) => r.caregiverName },
+    when: { get: (r) => r.timeIn ?? r.serviceDate, kind: "date" },
+    worked: { get: (r) => r.workedMinutes, kind: "number" },
+    evidence: { get: (r) => (r.hasSignatureEvidence ? "Signed" : "No signature") },
+    approval: { get: (r) => APPROVAL_STATUS_LABEL[approvalStatus(r)] },
+    amount: { get: (r) => activeApproval.get(r.visitId)?.amountCents ?? null, kind: "number" },
+  });
+
   if (!canRead) return <p className="text-sm text-slate-600">You do not have access to billing review.</p>;
 
-  const loaded = query.data ?? [];
-  const rows = applyBillingFilters(loaded, filters, approvalStatus);
   const options = filterOptions(loaded, approvalStatus);
   const nFilters = activeFilterCount(filters);
   const setFilter = (key: keyof BillingFilters) => (e: React.ChangeEvent<HTMLSelectElement>) => setFilters((f) => ({ ...f, [key]: e.target.value }));
@@ -302,13 +313,13 @@ export function BillingReviewPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th scope="col" className="px-2 py-1">Client</th>
-                <th scope="col" className="px-2 py-1">Caregiver · service</th>
-                <th scope="col" className="px-2 py-1">Date and time</th>
-                <th scope="col" className="px-2 py-1">Worked / billable</th>
-                <th scope="col" className="px-2 py-1">Evidence</th>
-                <th scope="col" className="px-2 py-1">Approval</th>
-                {canSeeMoney ? <th scope="col" className="px-2 py-1">Amount</th> : null}
+                <SortTh sort={sort} column="client" className="px-2 py-0.5">Client</SortTh>
+                <SortTh sort={sort} column="caregiver" className="px-2 py-0.5">Caregiver · service</SortTh>
+                <SortTh sort={sort} column="when" kind="date" className="px-2 py-0.5">Date and time</SortTh>
+                <SortTh sort={sort} column="worked" kind="number" className="px-2 py-0.5">Worked / billable</SortTh>
+                <SortTh sort={sort} column="evidence" className="px-2 py-0.5">Evidence</SortTh>
+                <SortTh sort={sort} column="approval" className="px-2 py-0.5">Approval</SortTh>
+                {canSeeMoney ? <SortTh sort={sort} column="amount" kind="number" className="px-2 py-0.5">Amount</SortTh> : null}
               </tr>
             </thead>
             <tbody>
