@@ -8,14 +8,15 @@ Status: **implemented, not deployed.**
   emails tested on demo.ogevia.com before any production change.
 
 ## Decisions
-- No Ogevia logo file exists in the repository (see the comment in `apps/web/src/aws/aws-shell.tsx`). The icon reuses the
-  existing in-app mark: teal (`--og-accent`, #0B5E5B) rounded tile with a white "O". Replace the files in
-  `apps/web/public/` if a designed logo is supplied.
+- Owner supplied the Ogevia logo (512×512 PNG) on 2026-11-17. Icons use the logo's symbol only (no wordmark, which is
+  unreadable at 16–48 px); the link-preview image uses the full logo on white.
+- The in-app sidebar still shows the text "O" tile; replacing it with the logo is a separate, unrequested change.
+- A higher-resolution or vector (SVG) master would sharpen the preview image; the supplied 512 px file is adequate.
 - Browser tab and home-screen icon show **Ogevia** (shared product), not an agency name.
 - `og:image` uses the absolute URL `https://app.ogevia.com/og-image.png` because link-preview crawlers require one.
 
 ## Files
-- `apps/web/public/favicon.ico`, `favicon.svg`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
+- `apps/web/public/favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
   `site.webmanifest`, `og-image.png`
 - `apps/web/index.html`: icon, manifest and Open Graph tags.
 
