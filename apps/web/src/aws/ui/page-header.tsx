@@ -9,7 +9,7 @@ export function PageHeader({ title, lead, action }: { title: string; lead?: Reac
         <h1 className="text-xl font-bold tracking-tight text-og-ink">{title}</h1>
         {lead ? <InfoTip label={`About ${title}`} title={title}>{lead}</InfoTip> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="max-w-full shrink-0">{action}</div> : null}
     </header>
   );
 }

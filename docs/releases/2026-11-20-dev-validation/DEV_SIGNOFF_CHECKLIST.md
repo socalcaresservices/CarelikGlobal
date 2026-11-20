@@ -11,7 +11,8 @@ Environment: DEV = local harness (`docs/releases/2026-11-20-dev-validation/DEV_D
 | A4 | `pnpm lint`, `pnpm typecheck`, `pnpm build` | PASS (local, at `c19453d`) |
 | A5 | Unit suites and database suites (`pnpm test:all`) at `96dd96a` | NOT RUN at `96dd96a`; passed on `c19453d` and CI `4b004f9` |
 | A6 | Migration 0109: apply, rollback, reapply | PASS (rehearsal) |
-| A7 | CI green on `96dd96a` (harness, validate, postgres) | PENDING |
+| A7 | CI green on `96dd96a` (harness, validate, postgres) | PASS (all three green) |
+| A8 | Staff header at 390 px: no sideways scroll (defect found and fixed in the harness pass) | PASS (browser pass, desktop and phone) |
 
 ## B. Smoke and switch state
 | # | Check | Result |

@@ -81,6 +81,9 @@ See `DEV_SIGNOFF_CHECKLIST.md`, section C. Items 1 to 10 each have a manual chec
 - Remove 0109 only: the `.down.sql` in step 2. Rolling back leaves already-cancelled requests closed, as designed.
 - No AWS resource exists to roll back.
 
+## 4a. Browser pass on the harness (2026-11-20)
+A scripted browser pass (desktop 1280 px and phone 390 px, signed in as the synthetic owner, 0109 applied) found one real defect: the Staff header's button row (Import from a file, Add caregiver, Add office staff) made the page scroll sideways by 2 px at 390 px. Cause: the shared page header kept its action area from shrinking, so the wrapping button row never wrapped. Fixed by letting that area cap at the container width (`apps/web/src/aws/ui/page-header.tsx`, test `ui/page-header.test.tsx`). After the fix the browser pass reports 0 failures at both widths. Not covered by the pass: the cancel and retire flows (no suitable seeded request was found), and a real phone.
+
 ## 5. Limits of this rehearsal
 - Synthetic data only; local PostgreSQL 16.15; the stand-in sign-in is not Cognito.
 - No browser pass and no real-phone check were done.
