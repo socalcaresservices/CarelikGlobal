@@ -9,7 +9,7 @@ Environment: DEV = local harness (`docs/releases/2026-11-20-dev-validation/DEV_D
 | A2 | `harness:setup`: 107 migrations, seed | PASS (rehearsal) |
 | A3 | `harness:build` | PASS (rehearsal) |
 | A4 | `pnpm lint`, `pnpm typecheck`, `pnpm build` | PASS (local, at `c19453d`) |
-| A5 | Unit suites and database suites (`pnpm test:all`) at `96dd96a` | NOT RUN at `96dd96a`; passed on `c19453d` and CI `4b004f9` |
+| A5 | `pnpm test:all` (unit, database, API; fails on any skipped test) | PASS at `e18564f` (local, 2026-11-20): shared 118, auth 155, sv-api 110, ui 73, web 1369, infra-aws 718; database 1183; API 184 |
 | A6 | Migration 0109: apply, rollback, reapply | PASS (rehearsal) |
 | A7 | CI green on `96dd96a` (harness, validate, postgres) | PASS (all three green) |
 | A8 | Staff header at 390 px: no sideways scroll (defect found and fixed in the harness pass) | PASS (browser pass, desktop and phone) |

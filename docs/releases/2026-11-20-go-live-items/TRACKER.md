@@ -28,3 +28,6 @@ Branch `claude/sharp-mendel-sy1p24`, stacked on `claude/ops-fixes-requests-docum
 - Item meanings are the builder's reading (the owner's written list is not in the repository): confirm items 1, 2, 3, 4, 7, 8, 9 and 10.
 - Migration 0109 (PR #113) is applied nowhere and its `requestCleanup` switch is OFF everywhere.
 - No real-phone check; no demo or production verification; no deployment (needs the owner's GO, production credentials and the release checklist).
+
+## Full gate at e18564f (local, 2026-11-20)
+`pnpm lint`, `pnpm typecheck`, `pnpm build`: pass. `pnpm test:all` exit 0: unit and static (shared 118, auth 155, sv-api 110, ui 73, web 1369, infra-aws 718), database suite 1183 (112 files), API suite 184 (30 files); no test skipped. CI on `e18564f` (PR #115): harness, validate, postgres green. The Staff header fix (e18564f) and the DEV docs are in PR #115, which is not yet merged into PR #113's branch.
