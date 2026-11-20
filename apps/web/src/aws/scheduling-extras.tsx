@@ -12,6 +12,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { Hint } from "./hint";
+import { CaregiverPicker } from "./caregiver-picker";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -49,11 +50,8 @@ export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, o
       <Hint details="It uses the month's authorized hours like any other shift." className="sm:col-span-2">Same month as the missed visit, and no longer than the time still owed.</Hint>
       <div><label htmlFor={`${id}-d`} className="block text-xs font-medium text-slate-600">Date</label><input id={`${id}-d`} type="date" value={form.date} onChange={(e) => change({ date: e.target.value })} className={inputClass} /></div>
       <div>
-        <label htmlFor={`${id}-c`} className="block text-xs font-medium text-slate-600">Caregiver</label>
-        <select id={`${id}-c`} value={form.caregiverRecordId} onChange={(e) => change({ caregiverRecordId: e.target.value })} className={inputClass}>
-          <option value="">Open shift — fill later</option>
-          {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>)}
-        </select>
+        <CaregiverPicker id={`${id}-c`} label="Caregiver" labelClassName="block text-xs font-medium text-slate-600" className={inputClass} value={form.caregiverRecordId} placeholder="Open shift — fill later"
+          onChange={(v) => change({ caregiverRecordId: v })} caregivers={(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active")} />
       </div>
       <div><label htmlFor={`${id}-s`} className="block text-xs font-medium text-slate-600">Start time</label><input id={`${id}-s`} type="time" value={form.startTime} onChange={(e) => change({ startTime: e.target.value })} className={inputClass} /></div>
       <div><label htmlFor={`${id}-e`} className="block text-xs font-medium text-slate-600">End time</label><input id={`${id}-e`} type="time" value={form.endTime} onChange={(e) => change({ endTime: e.target.value })} className={inputClass} /></div>

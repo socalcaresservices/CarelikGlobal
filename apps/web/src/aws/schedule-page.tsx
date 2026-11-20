@@ -6,7 +6,7 @@ import { Button, Card, QuickActionMenu } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { caregiverName, useCaregivers } from "./care-team-admin";
+import { useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatDuration } from "@/lib/service-verification";
 import { agencyDateOffset, useAgencyClock } from "./agency-clock";
@@ -28,6 +28,7 @@ import { applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, NO_FILTERS, stateOfShift, s
 import { FilterBar, MonthGrid, ReplacementSuggestions, ViewTabs } from "./schedule-views";
 import { Drawer } from "./ui/drawer";
 import { InfoTip } from "./ui/info-tip";
+import { CaregiverPicker } from "./caregiver-picker";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -160,13 +161,9 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
         </select>
       </div>
       <div>
-        <label htmlFor="sh-caregiver" className="block text-sm font-medium text-slate-700">Caregiver (optional)</label>
-        <select id="sh-caregiver" value={form.caregiverRecordId} onChange={(e) => { setCaregiverChosen(true); set("caregiverRecordId", e.target.value); }} className={inputClass}>
-          <option value="">Open shift — fill later</option>
-          {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => (
-            <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)}{c.hasSignIn ? "" : " — no sign-in yet"}</option>
-          ))}
-        </select>
+        <CaregiverPicker id="sh-caregiver" label="Caregiver (optional)" className={inputClass} value={form.caregiverRecordId} placeholder="Open shift — fill later"
+          onChange={(v) => { setCaregiverChosen(true); set("caregiverRecordId", v); }} caregivers={(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active")}
+          suffix={(c) => (c.hasSignIn ? "" : " — no sign-in yet")} />
       </div>
       <div className="sm:col-span-2 grid grid-cols-3 gap-2">
         <div><label htmlFor="sh-date" className="block text-sm font-medium text-slate-700">Date</label><input id="sh-date" type="date" value={form.date} min={today} onChange={(e) => set("date", e.target.value)} className={inputClass} /></div>
@@ -255,13 +252,9 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
       {action === "assign" && s.serviceId ? <div className="sm:col-span-2"><ShiftAuthorizationContext clientId={s.clientId} serviceId={s.serviceId} date={s.localDate} /></div> : null}
       {action === "assign" ? (
         <div className="sm:col-span-2">
-          <label htmlFor={`${id}-cg`} className="block text-xs font-medium text-slate-600">Caregiver</label>
-          <select id={`${id}-cg`} value={pick} onChange={(e) => { setPick(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass}>
-            <option value="">Choose a caregiver</option>
-            {(caregivers.data ?? []).filter((c) => (c.status === "ready" || c.status === "active") && c.caregiverRecordId !== s.caregiverRecordId).map((c) => (
-              <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{caregiverName(c)}</option>
-            ))}
-          </select>
+          <CaregiverPicker id={`${id}-cg`} label="Caregiver" labelClassName="block text-xs font-medium text-slate-600" className={inputClass} value={pick} placeholder="Choose a caregiver"
+            onChange={(v) => { setPick(v); key.current = newIdempotencyKey(); }}
+            caregivers={(caregivers.data ?? []).filter((c) => (c.status === "ready" || c.status === "active") && c.caregiverRecordId !== s.caregiverRecordId)} />
         </div>
       ) : null}
       {action === "assign" && pick && s.serviceId ? (
