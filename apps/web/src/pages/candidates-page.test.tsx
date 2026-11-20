@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { CandidatesPage } from "./candidates-page";
+import { captureCsvDownload } from "@/test/csv-capture";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -385,4 +386,26 @@ describe("Manual candidate creation", () => {
 
     resolveCreate({ data: "new-candidate-id", error: null });
   });
+
+  it("exports the candidates in the order shown on screen, including a chosen sort", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const row = (n: number, first: string, last: string) => ({
+      id: `candidate-${n}`, candidate_code: `CA-00000${n}`, first_name: first, last_name: last, email: `c${n}@example.com`, phone: null,
+      pipeline_stage: "application_received", source: "indeed", position_applied_for: "Caregiver", applied_at: `2026-08-1${n}T12:00:00.000Z`,
+      desired_weekly_hours: 30, available_start_date: null, imported_at: null, created_at: `2026-08-1${n}T12:00:00.000Z`
+    });
+    mockedRpc.mockResolvedValue({ data: [row(1, "Mia", "Lopez"), row(2, "Zed", "Park"), row(3, "Amy", "Chen")], error: null } as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Zed Park")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Candidate" }));
+    const shown = screen.getAllByRole("row").slice(1).map((r) => r.textContent ?? "");
+    const cap = captureCsvDownload();
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+    const csv = (await cap.rows()).slice(1);
+    cap.restore();
+    expect(csv).toHaveLength(shown.length);
+    csv.forEach((r, i) => expect(shown[i]).toContain(`${r[1]} ${r[2]}`));
+    expect(csv.map((r) => r[1])).toEqual(["Amy", "Mia", "Zed"]);
+  });
+
 });

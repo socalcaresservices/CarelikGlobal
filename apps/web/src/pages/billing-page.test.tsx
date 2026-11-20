@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { BillingPage } from "./billing-page";
+import { captureCsvDownload } from "@/test/csv-capture";
 
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: vi.fn(),
@@ -341,4 +342,34 @@ describe("BillingPage", () => {
     expect(clickSpy).toHaveBeenCalledTimes(1);
     clickSpy.mockRestore();
   });
+
+  it("lists a submission's line items and exports them in the same documented order (client, service, date)", async () => {
+    mockedUseOrganization.mockReturnValue(baseOrganization());
+    const item = (n: number, client: string, service: string, date: string) => ({
+      item_id: `item-${n}`, visit_id: VISIT_ID, client_name: client, service_name: service, service_date: date,
+      submitted_minutes: 60, rate_cents: 4000, submitted_amount_cents: 4000, is_voided: false, void_reason: null,
+    });
+    mockRpc({
+      submissions: [{ submission_id: "sub-1", submitted_by_name: "Sam Manager", submitted_at: "2026-08-02T10:00:00Z", period_start: null, period_end: null, notes: null, item_count: 4, active_item_count: 4, total_submitted_minutes: 240, total_amount_cents: 16000 }],
+      items: [item(1, "Zed Park", "Respite", "2026-08-03"), item(2, "Amy Chen", "Respite", "2026-08-09"), item(3, "Amy Chen", "Attendant care", "2026-08-30"), item(4, "Amy Chen", "Respite", "2026-08-02")],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/by Sam Manager/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "View items" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Export CSV" })).not.toBeDisabled());
+    const cap = captureCsvDownload();
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    const csv = (await cap.rows()).slice(1);
+    cap.restore();
+    const expected = [["Amy Chen", "Attendant care", "2026-08-30"], ["Amy Chen", "Respite", "2026-08-02"], ["Amy Chen", "Respite", "2026-08-09"], ["Zed Park", "Respite", "2026-08-03"]];
+    expect(csv.map((r) => [r[0], r[1], r[2]])).toEqual(expected);
+    // The line items shown on screen appear in the same order.
+    const listed = screen.getAllByRole("listitem").map((el) => el.textContent ?? "").filter((t) => /Respite|Attendant care/.test(t) && !t.includes("by Sam"));
+    expect(listed).toHaveLength(4);
+    listed.forEach((line, i) => {
+      expect(line).toContain(expected[i]![0]!);
+      expect(line).toContain(expected[i]![1]!);
+    });
+  });
+
 });

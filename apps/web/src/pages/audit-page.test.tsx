@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { AuditPage } from "./audit-page";
+import { captureCsvDownload } from "@/test/csv-capture";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -183,4 +184,24 @@ describe("AuditPage", () => {
     // Second page has fewer than PAGE_SIZE rows, so there's nothing more.
     expect(screen.queryByText("Load older activity")).not.toBeInTheDocument();
   });
+
+  it("exports the activity in the order shown on screen", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    const row = (id: number, who: string, at: string) => ({
+      id, occurred_at: at, actor_user_id: "55a38d4c-375a-475a-9e90-a8b9f0c9acc3", actor_display_name: who,
+      action: "organizations.update", entity_type: "organizations", entity_id: `119c0cdb-fb7c-49aa-9dd3-35c04db71b${id}`
+    });
+    mockedRpc.mockResolvedValue({ data: [row(1, "Jamie", "2026-07-19T18:50:03.713Z"), row(2, "Riley", "2026-07-20T18:50:03.713Z"), row(3, "Casey", "2026-07-18T18:50:03.713Z")], error: null } as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Riley")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Who" }));
+    const shown = screen.getAllByRole("row").slice(1).map((r) => r.textContent ?? "");
+    const cap = captureCsvDownload();
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+    const csv = (await cap.rows()).slice(1);
+    cap.restore();
+    expect(csv.map((r) => r[1])).toEqual(["Casey", "Jamie", "Riley"]);
+    csv.forEach((r, i) => expect(shown[i]).toContain(r[1]));
+  });
+
 });

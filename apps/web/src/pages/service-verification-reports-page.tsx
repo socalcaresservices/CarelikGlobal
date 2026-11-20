@@ -61,7 +61,7 @@ import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
 import { SortTh } from "@/aws/ui/sort-th";
 import { useSortedRows } from "@/aws/ui/table-sort";
-import { sortMonthlyServiceRows } from "@/aws/ui/monthly-service-order";
+import { orderCorrectionRows, orderMonthlyServiceRows } from "@carelik/auth/export-order";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
 import {
   AUTHORIZATION_STATUS_LABEL,
@@ -817,7 +817,7 @@ export function ServiceVerificationReportsPage() {
 
   const monthlyServiceRows = useMemo(
     () =>
-      sortMonthlyServiceRows(
+      orderMonthlyServiceRows(
         (monthlyServiceSummaryQuery.data ?? []).filter(
           (row) => !serviceFilter || row.serviceId === serviceFilter,
         ),
@@ -826,7 +826,7 @@ export function ServiceVerificationReportsPage() {
   );
 
   const correctionRows = useMemo(
-    () => correctionHistoryReportQuery.data ?? [],
+    () => orderCorrectionRows(correctionHistoryReportQuery.data ?? []),
     [correctionHistoryReportQuery.data],
   );
   const correctedByOptions = useMemo(() => {
