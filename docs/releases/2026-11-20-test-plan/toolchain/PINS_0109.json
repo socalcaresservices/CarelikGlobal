@@ -1,0 +1,32 @@
+{
+  "apiRoutes": {
+    "switchOff": 259,
+    "switchOn": 262
+  },
+  "applicationCommit": "88426e8cc979e91c8fb36dd4843345a6b3cf6a23",
+  "expectedLedger": {
+    "after": "108/0109",
+    "before": "107/0107"
+  },
+  "migration0109": {
+    "downSha256": "6df70db755d29341e8960c998528c9108096a466e34d7316dc3b181e522355bb",
+    "upSha256": "2c0ebb9e91e5a88d52f4cd323a82c7b691fb85197c74f80ca98ee774642cd25b"
+  },
+  "pendingUx0103to0107": {
+    "count": 5,
+    "setSha256": "ef7535f15a5caf6d9f315b1d91f44f59d915e1155a0d276a67484d2a1df8ee1e"
+  },
+  "pnpmLockSha256": "8bcc5a445284d84ddef2885544c09d6219356f537e62468c9e40d931fcd8b267",
+  "releasedMigrations": {
+    "count": 88,
+    "setSha256": "e353d9225b4d0d428f28fd9907d64ac4072429ac8946351fe1ff8bb89f66923c"
+  },
+  "toolchainSha256": {
+    "TEST-requestCleanup-on.patch": "f39895c812c09325edf1182d67332c0b17ba24791dcfb850ae3db03d15c359c0",
+    "TEST_0109_LEDGER.sh": "bca46d9dee4e68cfd5febd79b7b610f8a16f215f2f22ec5c7676f2189e503756",
+    "TEST_INVENTORY.sh": "26d01b08303106f0ce5a2defc1b80188bb0d0ff1e6261d70ec530cd1d56f647c",
+    "VERIFY_0109.sql": "41ca6477b008b6c0cf3df01f3a32590a389873c44b08d018a2171936757fafdb",
+    "check_inventory.py": "525e51ebac59012e598e5f9df6880d509affb61e4bf9721c6edb38ea02b6101e",
+    "diff_gate_0109.py": "3baec37949ab20dd3497bcf282d202fda7c2211b6dea49403e9217bcb3dbb32b"
+  }
+}
