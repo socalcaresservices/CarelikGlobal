@@ -235,6 +235,7 @@ export function BillingReviewPage() {
     { key: "service", label: "Service", all: "All services", opts: options.services },
     { key: "visitStatus", label: "Visit status", all: "All visit statuses", opts: options.visitStatuses },
     { key: "approval", label: "Approval status", all: "All approval statuses", opts: options.approvals },
+    ...(options.reasons.length > 0 ? [{ key: "reason" as const, label: "Review reason", all: "All review reasons", opts: options.reasons }] : []),
   ];
   return (
     <div className="space-y-2">
