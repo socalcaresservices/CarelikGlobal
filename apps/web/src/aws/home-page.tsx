@@ -19,6 +19,7 @@ import { linkClass } from "./ui-classes";
 import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
 import { InfoTip } from "./ui/info-tip";
+import { refreshAfterShiftChange } from "./shift-refresh";
 
 const sum = (rows: UtilisationRow[], key: keyof UtilisationRow) => rows.reduce((t, r) => t + Number(r[key] ?? 0), 0);
 
@@ -180,12 +181,8 @@ export function AwsHomePage() {
   const [financeFolded, toggleFinance] = useCollapsed("finance", true);
   const utilisation = useUtilisation(`${month}-01`);
   const queryClient = useQueryClient();
-  const refresh = () => {
-    void overview.refetch();
-    void utilisation.refetch();
-    void queryClient.invalidateQueries({ queryKey: ["action-issues"] });
-    void queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
-  };
+  // Refresh is the same refresh a shift change triggers (shift-refresh.ts), so the dashboard, schedule lists and request lists never disagree.
+  const refresh = () => { void refreshAfterShiftChange(queryClient); }; // it covers the attention overview and utilisation too: one fetch each, not two
   const rows = utilisation.data ?? [];
   const isOwnerFinance = hasPermission("billing.read");
   const tiles = overview.data ? streams(overview.data) : [];

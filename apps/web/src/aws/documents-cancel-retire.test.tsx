@@ -53,6 +53,19 @@ function renderDocs(post: (path: string, body: unknown) => Response) {
 }
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
+describe("phone sorting on Documents", () => {
+  it("the Sort by control orders the same rows as the Document heading, and reverses them", async () => {
+    renderDocs(() => json(200, {}));
+    const table = await screen.findByRole("table", { name: "Documents" }, { timeout: 15000 });
+    const control = await screen.findByTestId("mobile-sort");
+    const first = () => within(table).getAllByRole("row")[1]!.textContent ?? "";
+    fireEvent.change(within(control).getByRole("combobox", { name: "Sort by" }), { target: { value: "document" } });
+    expect(first()).toContain("CPR");
+    fireEvent.click(within(control).getByRole("button", { name: /Tap to reverse/ }));
+    expect(first()).toContain("TB TEST");
+  });
+});
+
 describe("cancel a document request", () => {
   it("is offered only for a request with no upload, needs a reason, and posts it", async () => {
     const { posts } = renderDocs(() => json(200, { status: "cancelled" }));

@@ -202,6 +202,17 @@ describe("ServiceVerificationReportsPage", () => {
       reservedOk: true, visitsOk: true, balanceOk: true, differenceMinutes: 0, ...o,
     });
 
+    it("the full-chain report lists rows in the documented order (client code, service, period), the same order the server-made file uses", async () => {
+      const post = vi.fn() as unknown as AwsApiClient["post"];
+      const rows = [chainRow({ clientCode: "TEST-C10", serviceCode: "ATC", serviceName: "Attendant" }), chainRow({ clientCode: "TEST-C02", serviceCode: "RSP", serviceName: "Respite" }), chainRow({ clientCode: "TEST-C02", serviceCode: "ATC", serviceName: "Attendant" })];
+      const getRows = vi.fn(async () => ({ rows })) as unknown as AwsApiClient["get"];
+      renderAws(["visits.read", "billing.visits.read", "reports.export"], post, getRows);
+      const section = await screen.findByTestId("monthly-chain");
+      await within(section).findByText("Client TEST-C10 · Attendant");
+      const order = within(section).getAllByRole("row").map((r) => r.textContent ?? "").map((t) => /TEST-C(\d+)\D*(ATC|RSP|Attendant|Respite)/.exec(t)).filter(Boolean).map((m) => `${m![1]}`);
+      expect(order.slice(0, 3)).toEqual(["02", "02", "10"]);
+    });
+
     it("the full-chain report shows every stage and a passing check; Export CSV is the server's own recorded export", async () => {
       const createObjectURL = vi.fn(() => "blob:x");
       Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });

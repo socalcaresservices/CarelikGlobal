@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { CredentialsPage } from "./credentials-page";
+import { captureCsvDownload } from "@/test/csv-capture";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -233,4 +234,27 @@ describe("CredentialsPage", () => {
       })
     );
   });
+
+  it("exports the credentials in the order shown on screen, including a chosen sort", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn(() => true) });
+    const row = (n: number, name: string, expires: string) => ({
+      id: `55555555-5555-4555-8555-55555555555${n}`, caregiver_user_id: CAREGIVER_ID, caregiver_name: name,
+      credential_type: "CPR Certification", issued_date: "2026-01-01", expires_at: expires, notes: null
+    });
+    mockedRpc.mockImplementation((fn: string) => Promise.resolve({
+      data: fn === "list_caregiver_credentials" ? [row(1, "Mia Lopez", "2027-01-01"), row(2, "Zed Park", "2026-12-01"), row(3, "Amy Chen", "2028-01-01")] : [], error: null
+    }) as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Zed Park")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Caregiver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Caregiver" }));
+    const shown = screen.getAllByRole("row").slice(1).map((r) => r.textContent ?? "");
+    const cap = captureCsvDownload();
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+    const csv = (await cap.rows()).slice(1);
+    cap.restore();
+    expect(csv.map((r) => r[0])).toEqual(["Zed Park", "Mia Lopez", "Amy Chen"]);
+    csv.forEach((r, i) => expect(shown[i]).toContain(r[0]));
+  });
+
 });
