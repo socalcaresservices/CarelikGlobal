@@ -2,6 +2,31 @@
 
 **Status: PREPARED. NOT AUTHORIZED. NOT RUN.** Nothing here was run against AWS. No AWS credential was used. This document is not an approval; Phase C needs the owner's written statement (commit, TEST only, operator, window, reference) as described in `docs/TESTING_AND_RELEASE_PROCESS.md`. Status words are used exactly: proposed, implemented, tested (where), deployed (where), accepted (by whom).
 
+## Update 2026-11-20 (after the owner's instruction to resolve the three blockers)
+The pinned application commit is **`88426e8`** (PR #113 head; application files identical to `784c3b6`). Nothing was run against AWS: this session has no AWS CLI and no usable AWS credentials (the environment's AWS variables are proxy placeholders, and the TEST site is not reachable from here). What was prepared and tested locally, all in `toolchain/`:
+
+| Blocker | Prepared | Tested |
+|---|---|---|
+| 1. Operator toolchain re-pin | `release_pins.py` + `PINS_0109.json` (application commit, hashes of every toolchain file, migration sets, 0109 and its rollback, lockfile, route counts 259 off / 262 on, expected ledger 107/0107 then 108/0109); `diff_gate_0109.py` (API template gate: `off` = only the Handler code asset may change; `on` = plus exactly the three routes; `post` = no difference) | `infra/aws/test/release-pins.test.ts` (3), `diff-gate-0109.test.ts` (1, driven by the real synthesized isolated-TEST templates and damaged copies) |
+| 2. Migration 0109 ledger recording | `TEST_0109_LEDGER.sh` (`probe`, `apply`, `verify`, `rollback`): identity guards, pinned file hashes, verified backup required, owner approval reference required, SQL and ledger row in one transaction, rollback removes both together | `infra/aws/db/test/test-0109-ledger.db.test.ts` (10, against a local database holding the accepted 107/0107 ledger) |
+| 3. Live TEST inventory | `TEST_INVENTORY.sh` (read-only; describe/get/list calls and one public GET; sanitized output) + `check_inventory.py` (17 checks against what this release expects) | `infra/aws/test/test-inventory.test.ts` (3, with a stand-in `aws`: read-only calls only, secrets redacted, wrong account stops first) |
+
+**Not done, and why:** the live inventory itself (needs the operator's AWS session); and the API and web deploy wrapper. The older `OPERATOR_TEST_DEPLOY.sh` modes `deploy-api`, `web`, `post-api`, `web-verify` assert constants of the earlier release (commit `6cbab00`, the Handler asset hashes, the previous file hashes) and refuse anything else, so they cannot be reused unchanged for this commit. They have to be re-pinned in CloudShell against the live captured template, where they can be tested; that is the remaining part of blocker 1.
+
+Operator sequence with the new tools (CloudShell, after the owner's written Phase C statement):
+```bash
+python3 toolchain/release_pins.py check                 # the checkout equals the pins (strict: no uncommitted changes)
+OUT=$HOME/ogevia-inventory-$(date -u +%Y%m%dT%H%M%SZ) bash toolchain/TEST_INVENTORY.sh      # add the PG* variables of your tunnel to include the ledger
+# every line must PASS; any FAIL is a STOP
+bash toolchain/TEST_0109_LEDGER.sh probe
+# backup: the existing isolated-backup mode; keep the .dump, .dump.sha256 and .dump.meta together
+python3 toolchain/diff_gate_0109.py --live <live-template.json> --new <synthesized-template.json> --expect off    # then deploy the API and web (re-pinned wrappers)
+OGEVIA_DEPLOY_APPROVAL=<ref> OGEVIA_TEST_BACKUP=<dump> bash toolchain/TEST_0109_LEDGER.sh apply
+bash toolchain/TEST_0109_LEDGER.sh verify
+# switch ON: apply TEST-requestCleanup-on.patch as its own commit; gate with --expect on; deploy; validate the three behaviors; gate with --expect post
+```
+Rollback: `TEST_0109_LEDGER.sh rollback` (database), revert the patch and redeploy (switch), and the captured previous API asset and web files (existing `rollback-api` and `rollback-web` modes, subject to the same re-pin).
+
 ## 0. Decisions needed before this plan can start
 1. **Which commit to pin.** You asked for `96dd96a`. Two later commits exist on the same branch: `784c3b6` (PR #113 head, includes the Staff header 390 px fix, the DEV plan and checklist; CI green). `96dd96a` itself is CI green but still has the 2 px sideways scroll on Staff at 390 px. Recommendation: pin `784c3b6`. Everything below works for either; only the "commit" field changes. The switch-ON step adds one more commit on top (section 4).
 2. **DEV sign-off first** (`docs/releases/2026-11-20-dev-validation/DEV_SIGNOFF_CHECKLIST.md`). The owner said DEV before TEST. Sections B3 to D there are still NOT RUN.
@@ -47,7 +72,7 @@ Stop condition: any route change, any failed smoke, any error not explained. Rol
 ### Phase 2. Apply migration 0109 on the TEST database
 - **Gap:** no existing operator mode applies 0109. `OPERATOR_TEST_DB.sh` applies exactly 0103 to 0107 (and the isolated modes expect 107/0107). The owner's rule (2026-11-10) is that a pending migration is never applied as untracked SQL: the version, filename and SHA-256 go into the migration ledger in the same transaction. So a ledger-recording apply and rollback step for `0109_request_cleanup.sql` has to be added to the operator tool, modeled on its `guarded_psql`. It must be reviewed and tested against a throwaway database before use. **Not written here, and not run.**
 - Expected after: ledger **108 rows, highest version 0109** (0108 is not part of this release). Confirm that expectation in the re-pin review.
-- Verify with `VERIFY_0109.sql` (this folder; read-only; tested locally: 20 checks, passes only in the right state): `-v expect=absent -v ledger=absent` before; `-v expect=present -v ledger=present` after.
+- Verify with `toolchain/VERIFY_0109.sql` (read-only; tested locally: 20 checks, passes only in the right state): `-v expect=absent -v ledger=absent` before; `-v expect=present -v ledger=present` after.
 - Rollback: `infra/aws/db/pending/rollback/0109_request_cleanup.down.sql` inside the same guarded transaction, which also removes the ledger row. It drops the three functions and four columns. Requests already cancelled stay closed; the cancel reason and who cancelled are lost with the columns (back up first).
 
 ### Phase 3. Turn the switch ON
