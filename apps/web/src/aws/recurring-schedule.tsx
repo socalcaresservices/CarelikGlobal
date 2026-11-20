@@ -15,11 +15,12 @@ import { useAwsApi } from "./aws-workspace";
 import { buildPattern, describePattern, hhmm, monthLabel, OUTCOME_LABEL, patternText, PLAIN_PATTERN, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type PatternForm, type SeriesRow, type RejectedDate } from "./recurring-format";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+const message = schedulingRefusal;
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { ShortHelp } from "./help-text";
 import { refreshAfterShiftChange } from "./shift-refresh";
+import { schedulingRefusal } from "./scheduling-refusal";
 
 
 function PreviewTable({ rows }: { rows: Occurrence[] }) {

@@ -14,5 +14,5 @@ Branch `claude/sharp-mendel-sy1p24`, stacked on `claude/ops-fixes-requests-docum
 | 6 | Requests refresh after shift updates | COMPLETE | fea082a |
 | 7 | Office filtering (read as VIS-26: Billing review filter by review reason) | COMPLETE | 7bf0a4c |
 | 8 | Homepage updates (read as: Home Refresh uses the shared shift-change refresh) | COMPLETE | 369e988 |
-| 9 | Mobile view improvements (read as: phone sorting for Documents and Staff, the open gap in R38) | IN PROGRESS | (recorded in the next commit) |
-| 10 | Scheduling refusal message improvements | NOT STARTED | |
+| 9 | Mobile view improvements (read as: phone sorting for Documents and Staff, the open gap in R38) | COMPLETE | 914695f |
+| 10 | Scheduling refusal message improvements | IN PROGRESS | (recorded in the next commit) |

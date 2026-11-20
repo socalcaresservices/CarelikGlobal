@@ -31,6 +31,7 @@ function fakeApi(role: Role) {
   let covered = { ...base, shiftId: COVERED, startsAt: later(26), endsAt: later(27), coverageState: "covered", caregiverRecordId: CG1, caregiverCode: "CG-1", caregiverName: "Synthetic Caregiver One" };
   let open = { ...base, shiftId: OPEN, startsAt: later(25), endsAt: later(26), coverageState: "needs_coverage", caregiverRecordId: null as string | null, caregiverCode: null as string | null, caregiverName: null as string | null };
   let mine = { shiftId: COVERED, startsAt: later(26), endsAt: later(27), clientCode: "CL-1", serviceName: "Personal care", coverageState: "covered", canCallOut: true };
+  const state = { refuse: null as string | null }; // a test sets this to make the assign call refuse with a server sentence
   const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -51,6 +52,7 @@ function fakeApi(role: Role) {
         covered = { ...covered, coverageState: "needs_coverage", lastCalloutReason: String(body?.reason) };
         return json(200, { coverageState: "needs_coverage" });
       case `POST /v1/shifts/${OPEN}/caregiver`:
+        if (state.refuse) return json(409, { error: { code: "conflict", message: state.refuse } });
         open = { ...open, coverageState: "covered", caregiverRecordId: CG2, caregiverCode: "CG-2", caregiverName: "Synthetic Caregiver Two" };
         return json(200, { coverageState: "covered" });
       case `GET /v1/shifts/${COVERED}/coverage`:
@@ -75,7 +77,7 @@ function fakeApi(role: Role) {
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });
-  return { calls, fetchImpl };
+  return { calls, fetchImpl, state };
 }
 
 function renderAt(path: string, role: Role) {
@@ -170,6 +172,21 @@ describe("Schedule (staff)", () => {
     fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!); // the drawer's own close button comes first
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("a refused assignment shows the server's sentence with one plain next step, and nothing is changed", async () => {
+    const api = renderAt("/schedule", "manager");
+    api.state.refuse = "This caregiver already has a shift at that time";
+    await screen.findByText("Unfilled (1)");
+    const openRow = screen.getAllByTestId("shift-state").find((e) => e.textContent === "Unfilled")!.closest("tbody")!;
+    fireEvent.click(within(openRow).getByRole("button", { name: /^Assign caregiver to shift for / }));
+    const drawer = within(await screen.findByRole("dialog"));
+    await drawer.findByRole("option", { name: /Synthetic Caregiver Two/ }); // the list has loaded
+    fireEvent.change(drawer.getByLabelText("Caregiver"), { target: { value: CG2 } });
+    fireEvent.click(drawer.getByRole("button", { name: "Assign" }));
+    await waitFor(() => expect(drawer.getAllByRole("alert").map((a) => a.textContent).join(" | ")).toContain("This caregiver already has a shift at that time. What to do: Pick another time, or choose a different caregiver."));
+    expect(screen.queryByText("Caregiver assigned. The shift is covered.")).toBeNull();
+    expect(screen.getByText("Unfilled (1)")).toBeInTheDocument();
   });
 
   it("history lists call-outs with who recorded them; caregivers have no Schedule", async () => {

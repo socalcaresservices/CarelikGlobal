@@ -30,6 +30,7 @@ import { Drawer } from "./ui/drawer";
 import { InfoTip } from "./ui/info-tip";
 import { CaregiverPicker } from "./caregiver-picker";
 import { refreshAfterShiftChange } from "./shift-refresh";
+import { schedulingRefusal } from "./scheduling-refusal";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -84,7 +85,7 @@ const STATE_BADGE: Record<CoverageState, string> = {
   completed: "bg-slate-200 text-slate-800", cancelled: "bg-slate-200 text-slate-700", no_show: "bg-amber-100 text-amber-900",
 };
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+const message = schedulingRefusal;
 
 const hours = (minutes: number) => `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`;
 

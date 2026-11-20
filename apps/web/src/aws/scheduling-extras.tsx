@@ -14,9 +14,10 @@ import { caregiverName, useCaregivers } from "./care-team-admin";
 import { Hint } from "./hint";
 import { CaregiverPicker } from "./caregiver-picker";
 import { refreshAfterShiftChange } from "./shift-refresh";
+import { schedulingRefusal } from "./scheduling-refusal";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+const message = schedulingRefusal;
 
 /** Schedule time to replace a cancelled, called-out or short shift. */
 export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, onDone }: {
