@@ -12,7 +12,7 @@ Branch `claude/sharp-mendel-sy1p24`, stacked on `claude/ops-fixes-requests-docum
 | 4 | Shift drawer | COMPLETE | 4fc3859 |
 | 5 | Dashboard refresh after shift updates | COMPLETE | eef6b23 |
 | 6 | Requests refresh after shift updates | COMPLETE | fea082a |
-| 7 | Office filtering (read as VIS-26: Billing review filter by review reason) | IN PROGRESS | (recorded in the next commit) |
-| 8 | Homepage updates | NOT STARTED | |
+| 7 | Office filtering (read as VIS-26: Billing review filter by review reason) | COMPLETE | 7bf0a4c |
+| 8 | Homepage updates (read as: Home Refresh uses the shared shift-change refresh) | IN PROGRESS | (recorded in the next commit) |
 | 9 | Mobile view improvements | NOT STARTED | |
 | 10 | Scheduling refusal message improvements | NOT STARTED | |
