@@ -1,6 +1,6 @@
 import { Fragment, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SortTh } from "./ui/sort-th";
+import { MobileSortControl, SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
 import { Button, Card } from "@carelik/ui";
 import { Link, useSearchParams } from "react-router-dom";
@@ -184,6 +184,10 @@ export function StaffPage() {
       {rows.length > 0 ? (
         <div className="relative overflow-x-auto md:rounded-lg md:border md:border-slate-200 md:bg-og-card">
           {filtered ? <p className="px-1 pb-1 text-xs text-slate-600 md:px-3 md:pt-1" role="status">{rows.length} of {all.length}</p> : null}
+          <MobileSortControl sort={sort} className="px-1 pb-2" options={[
+            { column: "name", label: "Name" }, { column: "type", label: "Staff type" }, { column: "role", label: "Role" }, { column: "signin", label: "Sign-in status" },
+            { column: "record", label: "Staff record" }, { column: "email", label: "Contact email" }, { column: "phone", label: "Phone" },
+          ]} />
           <table className="block w-full text-left text-sm md:table" aria-label="Staff">
             <thead className="hidden md:table-header-group">
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">

@@ -42,3 +42,32 @@ export function SortButton<K extends string>({ sort, column, kind, children }: {
     </button>
   );
 }
+
+/**
+ * Phone sorting. Below the md breakpoint the lists are cards with no column headings, so the headings' sort buttons are not on screen. This control sorts the same
+ * list by the same columns (it drives the same useSortedRows state), so a phone sorts exactly as a desktop does. Hidden from md up, where the headings are.
+ */
+export function MobileSortControl<K extends string>({ sort, options, className }: { sort: Sorting<K>; options: Array<{ column: K; label: string; kind?: SortKind }>; className?: string }) {
+  const current = options.find((o) => o.column === sort.key);
+  const dirLabel = current ? describe(current.kind, sort.dir) : null;
+  return (
+    <div className={cn("flex items-center gap-2 md:hidden", className)} data-testid="mobile-sort">
+      <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-og-sub">
+        <span className="shrink-0">Sort by</span>
+        <select
+          value={sort.key ?? ""}
+          onChange={(e) => { const next = options.find((o) => o.column === e.target.value); if (next && next.column !== sort.key) sort.toggle(next.column); }}
+          className="min-h-[44px] min-w-0 flex-1 rounded-md border border-og-line bg-og-card px-2 text-sm text-og-ink"
+        >
+          {sort.key === null ? <option value="" disabled>Choose a column</option> : null}
+          {options.map((o) => <option key={o.column} value={o.column}>{o.label}</option>)}
+        </select>
+      </label>
+      {current ? (
+        <button type="button" onClick={() => sort.toggle(current.column)} className="min-h-[44px] shrink-0 rounded-md border border-og-line px-3 text-sm font-medium text-og-ink" aria-label={`Order: ${dirLabel}. Tap to reverse`}>
+          {sort.dir === "asc" ? "↑" : "↓"} {dirLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}

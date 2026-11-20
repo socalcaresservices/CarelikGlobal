@@ -16,7 +16,7 @@ import { ShortHelp } from "./help-text";
 import { actionBtn, actionBtnPrimary, linkClass } from "./ui-classes";
 import { InfoTip } from "./ui/info-tip";
 import { ApiRequestError } from "@/lib/aws-api";
-import { SortButton, SortTh } from "./ui/sort-th";
+import { MobileSortControl, SortButton, SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
 
 
@@ -516,6 +516,11 @@ export function DocumentsPage() {
         <p className="text-sm text-og-sub">{canRead ? (filter === "all" ? "No documents requested yet." : "No documents match this filter.") : "Your agency has not requested any documents."}</p>
       ) : null}
       {shown.length > 0 ? (
+      <>
+      <MobileSortControl sort={docSort} className="pb-2" options={[
+        { column: "document", label: "Document" }, ...(canManage ? [{ column: "caregiver" as const, label: "Caregiver" }] : []),
+        { column: "updated", label: "Last upload", kind: "date" as const }, { column: "status", label: "Status", kind: "number" as const },
+      ]} />
       <table className="w-full text-sm" aria-label="Documents">
         <thead>
           <tr className="hidden text-left text-xs uppercase tracking-wide text-og-sub md:table-row">
@@ -534,6 +539,7 @@ export function DocumentsPage() {
           <DocumentRows key={d.documentId} d={d} canManage={canManage} canUpload={canManage || canOwn} canReviewOwn={hasPermission("documents.review_own")} canReview={canVerifyRequired || (!!requirementRules.data && !requirementRules.data.some((r) => r.documentTypeId === d.documentTypeId))} refresh={refresh} />
         ))}
       </table>
+      </>
       ) : null}
 
       {canManage ? (
