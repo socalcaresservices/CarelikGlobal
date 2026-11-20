@@ -1,0 +1,9 @@
+diff --git a/infra/aws/lib/config.ts b/infra/aws/lib/config.ts
+index 26e1426..7d19a8d 100644
+--- a/infra/aws/lib/config.ts
++++ b/infra/aws/lib/config.ts
+@@ -255,3 +255,3 @@ const PROD: OgeviaEnvironmentConfig = {
+     logRetention: RetentionDays.ONE_YEAR,
+-    features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: false },
++    features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: false, requestCleanup: true },
+     auth: {
