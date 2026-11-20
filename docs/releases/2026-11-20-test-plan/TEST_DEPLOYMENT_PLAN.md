@@ -47,7 +47,7 @@ Stop condition: any route change, any failed smoke, any error not explained. Rol
 ### Phase 2. Apply migration 0109 on the TEST database
 - **Gap:** no existing operator mode applies 0109. `OPERATOR_TEST_DB.sh` applies exactly 0103 to 0107 (and the isolated modes expect 107/0107). The owner's rule (2026-11-10) is that a pending migration is never applied as untracked SQL: the version, filename and SHA-256 go into the migration ledger in the same transaction. So a ledger-recording apply and rollback step for `0109_request_cleanup.sql` has to be added to the operator tool, modeled on its `guarded_psql`. It must be reviewed and tested against a throwaway database before use. **Not written here, and not run.**
 - Expected after: ledger **108 rows, highest version 0109** (0108 is not part of this release). Confirm that expectation in the re-pin review.
-- Verify with `VERIFY_0109.sql` (this folder; read-only; tested locally: 20 checks, passes only in the right state): `-v expect=absent -v ledger=absent` before; `-v expect=present -v ledger=present` after.
+- Verify with `toolchain/VERIFY_0109.sql` (read-only; tested locally: 20 checks, passes only in the right state): `-v expect=absent -v ledger=absent` before; `-v expect=present -v ledger=present` after.
 - Rollback: `infra/aws/db/pending/rollback/0109_request_cleanup.down.sql` inside the same guarded transaction, which also removes the ledger row. It drops the three functions and four columns. Requests already cancelled stay closed; the cancel reason and who cancelled are lost with the columns (back up first).
 
 ### Phase 3. Turn the switch ON
