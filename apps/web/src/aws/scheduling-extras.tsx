@@ -13,6 +13,7 @@ import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { Hint } from "./hint";
 import { CaregiverPicker } from "./caregiver-picker";
+import { refreshAfterShiftChange } from "./shift-refresh";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -38,7 +39,7 @@ export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, o
         { organizationId: activeOrganizationId, localDate: form.date, startTime: form.startTime, endTime: form.endTime, caregiverRecordId: form.caregiverRecordId || null },
         { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
+      await refreshAfterShiftChange(queryClient);
       onDone(`Make-up scheduled: ${formatDuration(r.makeup.reservedMinutes)} reserved; ${formatDuration(Number(r.makeup.remainingMinutes))} of authorized time left that month. ${
         r.makeup.unmadeMinutesAfter > 0 ? `${formatDuration(r.makeup.unmadeMinutesAfter)} of the missed time is still not made up.` : "The missed time is fully made up."}`);
     } catch (cause) {

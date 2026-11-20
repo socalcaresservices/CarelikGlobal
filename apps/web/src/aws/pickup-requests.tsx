@@ -8,6 +8,7 @@ import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { Hint } from "./hint";
 import { clientLabel } from "./name-label";
+import { refreshAfterShiftChange } from "./shift-refresh";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -54,9 +55,7 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
       setBusy(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["aws-pickups"] }),
-        queryClient.invalidateQueries({ queryKey: ["aws-shifts"] }),
-        queryClient.invalidateQueries({ queryKey: ["attention-overview"] }),
-        queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] }),
+        refreshAfterShiftChange(queryClient),
       ]);
     }
   }

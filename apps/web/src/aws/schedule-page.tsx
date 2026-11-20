@@ -29,6 +29,7 @@ import { FilterBar, MonthGrid, ReplacementSuggestions, ViewTabs } from "./schedu
 import { Drawer } from "./ui/drawer";
 import { InfoTip } from "./ui/info-tip";
 import { CaregiverPicker } from "./caregiver-picker";
+import { refreshAfterShiftChange } from "./shift-refresh";
 
 /**
  * Schedule (0026): staff-scheduled shifts, call-outs, replacements and
@@ -89,7 +90,7 @@ const hours = (minutes: number) => `${Math.floor(minutes / 60)} h${minutes % 60 
 
 function useRefreshSchedule() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
+  return () => refreshAfterShiftChange(queryClient);
 }
 
 function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string) => void; initialClientId?: string }) {
@@ -601,10 +602,7 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
     } finally {
       setBusyId(null);
       // Whatever happened, show the true state: someone else may have been confirmed.
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] }),
-        queryClient.invalidateQueries({ queryKey: ["aws-my-shifts"] }),
-      ]);
+      await refreshAfterShiftChange(queryClient);
     }
   }
   async function withdraw(shiftId: string) {
@@ -618,7 +616,7 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
       setError({ shiftId, text: message(cause, "The request was not withdrawn. Try again.") });
     } finally {
       setBusyId(null);
-      await queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] });
+      await refreshAfterShiftChange(queryClient);
     }
   }
   if (open.isError) return <p role="alert" className="text-sm text-red-700">Open shifts could not be loaded. Refresh the page.</p>;
@@ -681,7 +679,7 @@ export function MyShiftsPage() {
     try {
       await api.post(`/v1/my-shifts/${encodeURIComponent(id)}/callout`, { organizationId: activeOrganizationId, reason: reason.trim() }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ["aws-my-shifts"] });
+      await refreshAfterShiftChange(queryClient);
       setOpen(null); setReason("");
       setState({ busy: false, error: null, done: "Sent. The office has been told you can't make this shift." });
     } catch (cause) {

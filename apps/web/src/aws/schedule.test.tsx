@@ -102,6 +102,7 @@ afterEach(() => vi.clearAllMocks());
 
 describe("Schedule (staff)", () => {
   it("shows what needs coverage, records a call-out with a reason, and fills the open shift", async () => {
+    const invalidate = vi.spyOn(QueryClient.prototype, "invalidateQueries");
     const api = renderAt("/schedule", "manager");
     expect(await screen.findByText("Unfilled (1)")).toBeInTheDocument();
     expect(screen.queryByText("Open: no caregiver")).toBeNull(); // one Unfilled badge, not a second line
@@ -117,6 +118,10 @@ describe("Schedule (staff)", () => {
     fireEvent.click(drawer.getByRole("button", { name: "Record call-out" }));
     expect(await screen.findByText(/Call-out recorded\. The shift now needs coverage/)).toBeInTheDocument();
     expect(await screen.findByText("Unfilled (2)")).toBeInTheDocument();
+    // A saved call-out refreshes the Home dashboard's figures as well as the schedule lists.
+    const refreshed = invalidate.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
+    for (const key of ["aws-shifts", "action-issues", "attention-overview", "aws-utilisation"]) expect(refreshed).toContain(key);
+    invalidate.mockRestore();
     const callout = api.calls.find((c) => c.path.endsWith("/callout"))!;
     expect(callout.body).toEqual({ organizationId: ORG, reason: "Sick (synthetic)" });
     expect(Object.keys(callout.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
