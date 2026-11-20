@@ -120,7 +120,7 @@ describe("Schedule (staff)", () => {
     expect(await screen.findByText("Unfilled (2)")).toBeInTheDocument();
     // A saved call-out refreshes the Home dashboard's figures as well as the schedule lists.
     const refreshed = invalidate.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
-    for (const key of ["aws-shifts", "action-issues", "attention-overview", "aws-utilisation"]) expect(refreshed).toContain(key);
+    for (const key of ["aws-shifts", "action-issues", "attention-overview", "aws-utilisation", "care-requests", "aws-pickups"]) expect(refreshed).toContain(key);
     invalidate.mockRestore();
     const callout = api.calls.find((c) => c.path.endsWith("/callout"))!;
     expect(callout.body).toEqual({ organizationId: ORG, reason: "Sick (synthetic)" });

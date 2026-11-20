@@ -10,8 +10,8 @@ Branch `claude/sharp-mendel-sy1p24`, stacked on `claude/ops-fixes-requests-docum
 | 2 | Export ordering (all exports) | COMPLETE | f88bdc4 |
 | 3 | Caregiver picker | COMPLETE | 494b3fd |
 | 4 | Shift drawer | COMPLETE | 4fc3859 |
-| 5 | Dashboard refresh after shift updates | IN PROGRESS | (recorded in the next commit) |
-| 6 | Requests refresh after shift updates | NOT STARTED | |
+| 5 | Dashboard refresh after shift updates | COMPLETE | eef6b23 |
+| 6 | Requests refresh after shift updates | IN PROGRESS | (recorded in the next commit) |
 | 7 | Office filtering | NOT STARTED | |
 | 8 | Homepage updates | NOT STARTED | |
 | 9 | Mobile view improvements | NOT STARTED | |
