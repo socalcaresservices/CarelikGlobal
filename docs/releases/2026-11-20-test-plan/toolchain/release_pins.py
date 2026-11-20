@@ -6,7 +6,7 @@ Local and read-only (git and file hashes only). No AWS.
   python3 release_pins.py check [--pins PINS_0109.json]                          verify the current checkout against the pins; exit 0 only if everything matches
 
 What is pinned: the application commit (full SHA); that no application path changed between that commit and the checked-out one (so a later docs-only commit, which is where
-this toolchain lives, is allowed); the sha256 of the lockfile, each migration set and 0109 and its rollback; the sha256 of every file in this toolchain; the route counts
+this toolchain lives, is allowed; test files, which are never deployed, are not counted); the sha256 of the lockfile, each migration set and 0109 and its rollback; the sha256 of every file in this toolchain; the route counts
 (switch OFF and ON) derived from the stack source. The Handler code asset hash is NOT pinned here: it is produced by the operator's own `cdk synth` in CloudShell and is
 checked by diff_gate_0109.py against the live template.
 """
@@ -15,6 +15,8 @@ import argparse, hashlib, json, pathlib, re, subprocess, sys
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = pathlib.Path(subprocess.run(["git", "-C", str(HERE), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip())
 APP_PATHS = ["apps", "packages", "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "infra/aws/lib", "infra/aws/bin", "infra/aws/package.json", "infra/aws/db/migrations", "infra/aws/db/pending", "infra/aws/db/scripts"]
+# Test files are not part of what is deployed (the Lambda bundle and the web bundle never include them), so a change to one is not an application change. Nothing else is excluded.
+APP_EXCLUDES = [":(glob,exclude)**/*.test.ts", ":(glob,exclude)**/*.test.tsx"]
 TOOLCHAIN = ["TEST_0109_LEDGER.sh", "TEST_DB_SESSION.sh", "VERIFY_0109.sql", "diff_gate_0109.py", "TEST_INVENTORY.sh", "check_inventory.py", "../TEST-requestCleanup-on.patch",
              "../../2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh"]   # the earlier release's isolated-verify and isolated-backup modes are reused as they are
 TEST_FEATURES_ON = {"staffManagement", "signInOverride", "bulkImport", "liveTestRepairs"}      # isolated TEST: infra/aws/lib/config.ts (+ liveTestRepairs from resolveTestDatabase); staffDuplicates is false
@@ -66,7 +68,7 @@ def check(pins_path, allow_dirty=False):
     if git("merge-base", "--is-ancestor", commit, "HEAD").returncode != 0:
         bad.append(f"HEAD does not contain the pinned application commit {commit[:12]}")
     else:
-        diff = git("diff", "--name-only", commit, "HEAD", "--", *APP_PATHS).stdout.split()
+        diff = git("diff", "--name-only", commit, "HEAD", "--", *APP_PATHS, *APP_EXCLUDES).stdout.split()
         if diff:
             bad.append(f"application files changed since the pinned commit {commit[:12]}: {', '.join(diff[:5])}{' ...' if len(diff) > 5 else ''}")
     now = compute(commit)

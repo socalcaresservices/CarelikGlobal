@@ -24,6 +24,13 @@ describe.skipIf(!present)("release_pins.py", () => {
     expect(pins.releasedMigrations.count).toBe(88);
   });
 
+  it("does not count a change to a test file as an application change, but still counts any other application change", () => {
+    const changed = spawnSync("git", ["diff", "--name-only", PINNED, "HEAD", "--", "apps", "packages"], { encoding: "utf8" }).stdout.split("\n").filter(Boolean);
+    expect(changed.every((f) => /\.test\.tsx?$/.test(f))).toBe(true);   // today every change under apps and packages since the pin is a test file
+    const r = run("check", "--allow-dirty");
+    expect(r.status, r.stdout).toBe(0);
+  });
+
   it("refuses a pin file whose hashes, counts or commit were altered", () => {
     const d = mkdtempSync(join(tmpdir(), "pins-"));
     try {

@@ -33,7 +33,7 @@ Run in order. Stop at the first STOP or FAIL and send what you have (section 5).
 ```bash
 python3 $TC/release_pins.py check
 ```
-Expect `PINS OK`. It proves: HEAD contains `88426e8`; no application file changed since; every hash in `PINS_0109.json` matches (lockfile, 88 released migrations, 0103 to 0107, 0109 and its rollback, every tool, the earlier release's `OPERATOR_TEST_DB.sh`); route counts 259 (switch off) and 262 (on); expected ledger 107/0107 then 108/0109.
+Expect `PINS OK`. It proves: HEAD contains `88426e8`; no application file changed since (test files, which are never deployed, are not counted: a test-only fix, `a1051ca`, is in this checkout); every hash in `PINS_0109.json` matches (lockfile, 88 released migrations, 0103 to 0107, 0109 and its rollback, every tool, the earlier release's `OPERATOR_TEST_DB.sh`); route counts 259 (switch off) and 262 (on); expected ledger 107/0107 then 108/0109.
 
 **H1.2 Live inventory** (read-only calls and one public GET; no secret value is shown; the output is sanitized)
 ```bash
