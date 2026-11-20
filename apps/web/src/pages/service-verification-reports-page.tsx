@@ -61,6 +61,7 @@ import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
 import { SortTh } from "@/aws/ui/sort-th";
 import { useSortedRows } from "@/aws/ui/table-sort";
+import { sortMonthlyServiceRows } from "@/aws/ui/monthly-service-order";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
 import {
   AUTHORIZATION_STATUS_LABEL,
@@ -816,8 +817,10 @@ export function ServiceVerificationReportsPage() {
 
   const monthlyServiceRows = useMemo(
     () =>
-      (monthlyServiceSummaryQuery.data ?? []).filter(
-        (row) => !serviceFilter || row.serviceId === serviceFilter,
+      sortMonthlyServiceRows(
+        (monthlyServiceSummaryQuery.data ?? []).filter(
+          (row) => !serviceFilter || row.serviceId === serviceFilter,
+        ),
       ),
     [monthlyServiceSummaryQuery.data, serviceFilter],
   );
