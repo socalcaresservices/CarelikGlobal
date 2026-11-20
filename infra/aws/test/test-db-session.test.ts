@@ -43,12 +43,13 @@ describe("TEST_DB_SESSION.sh guards", () => {
   });
 
   it("stops on a different host, a public instance, different security groups, or no managed secret, before any tunnel or credential", () => {
-    for (const [scenario, text] of [
+    const cases: Array<[Parameters<typeof run>[0], string]> = [
       [{ host: "ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com" }, "host or privacy mismatch"],
       [{ public: true }, "host or privacy mismatch"],
       [{ groups: ["sg-0bc0f1315fd0feaf2", "sg-extra"] }, "security groups differ"],
       [{ secret: null }, "no managed master secret"],
-    ] as const) {
+    ];
+    for (const [scenario, text] of cases) {
       const { r, log } = run({ ...scenario });
       expect(r.status, JSON.stringify(scenario)).toBe(2); expect(r.stderr).toContain(text);
       expect(log).not.toContain("ssm start-session"); neverReadSecret(log);
