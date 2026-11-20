@@ -15,7 +15,8 @@ import argparse, hashlib, json, pathlib, re, subprocess, sys
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = pathlib.Path(subprocess.run(["git", "-C", str(HERE), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip())
 APP_PATHS = ["apps", "packages", "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "infra/aws/lib", "infra/aws/bin", "infra/aws/package.json", "infra/aws/db/migrations", "infra/aws/db/pending", "infra/aws/db/scripts"]
-TOOLCHAIN = ["TEST_0109_LEDGER.sh", "VERIFY_0109.sql", "diff_gate_0109.py", "TEST_INVENTORY.sh", "check_inventory.py", "../TEST-requestCleanup-on.patch"]
+TOOLCHAIN = ["TEST_0109_LEDGER.sh", "TEST_DB_SESSION.sh", "VERIFY_0109.sql", "diff_gate_0109.py", "TEST_INVENTORY.sh", "check_inventory.py", "../TEST-requestCleanup-on.patch",
+             "../../2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh"]   # the earlier release's isolated-verify and isolated-backup modes are reused as they are
 TEST_FEATURES_ON = {"staffManagement", "signInOverride", "bulkImport", "liveTestRepairs"}      # isolated TEST: infra/aws/lib/config.ts (+ liveTestRepairs from resolveTestDatabase); staffDuplicates is false
 
 
