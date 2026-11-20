@@ -351,7 +351,8 @@ describe("contact and the sign-in link", () => {
     const log = await audits(rec, "caregiver.contact_set");
     expect(log).toHaveLength(1);
     expect(JSON.stringify(log)).not.toContain(email);
-    expect(JSON.stringify(log)).not.toContain("555");
+    // The phone number must not be in the audit row in any form. (A bare "555" also matches digits inside ids and timestamps: a flaky check, CI run 44708206898.)
+    for (const form of ["(555)", "555) 010", "010-0100", "5550100"]) expect(JSON.stringify(log)).not.toContain(form);
     const privs = (await db.admin.query("select has_table_privilege('ogevia_readonly','ogevia.caregiver_contacts','select') ro, has_table_privilege('ogevia_app','ogevia.caregiver_contacts','select') app")).rows[0];
     expect(privs).toEqual({ ro: false, app: false });
     await expectPgError(call(w.caregiverA1, "select * from ogevia_api.get_signin_contact($1,$2)", [w.orgA, rec]), "OGA03");
