@@ -1,7 +1,7 @@
 // Schedule and My shifts (0026) against an in-memory fake of the AWS API,
 // through the real API client and routes. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -108,10 +108,13 @@ describe("Schedule (staff)", () => {
     expect(screen.getAllByTestId("shift-state").map((e) => e.textContent)).toContain("Unfilled");
     const coveredRow = screen.getByText(/Synthetic Caregiver One/).closest("tbody")!;
     fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
-    fireEvent.click(within(coveredRow).getAllByRole("button", { name: "Record call-out" }).at(-1)!);
-    expect(await within(coveredRow).findByRole("alert")).toHaveTextContent("reason");
-    fireEvent.change(within(coveredRow).getByLabelText("Reason for the call-out"), { target: { value: "Sick (synthetic)" } });
-    fireEvent.click(within(coveredRow).getAllByRole("button", { name: "Record call-out" }).at(-1)!);
+    // The form opens in the shift drawer, not under the row, and the drawer says which shift it is for.
+    const drawer = within(await screen.findByRole("dialog"));
+    expect(drawer.getByTestId("shift-drawer-summary")).toHaveTextContent("Synthetic Caregiver One");
+    fireEvent.click(drawer.getByRole("button", { name: "Record call-out" }));
+    expect(await drawer.findByRole("alert")).toHaveTextContent("reason");
+    fireEvent.change(drawer.getByLabelText("Reason for the call-out"), { target: { value: "Sick (synthetic)" } });
+    fireEvent.click(drawer.getByRole("button", { name: "Record call-out" }));
     expect(await screen.findByText(/Call-out recorded\. The shift now needs coverage/)).toBeInTheDocument();
     expect(await screen.findByText("Unfilled (2)")).toBeInTheDocument();
     const callout = api.calls.find((c) => c.path.endsWith("/callout"))!;
@@ -120,8 +123,9 @@ describe("Schedule (staff)", () => {
 
     const openRow = screen.getAllByTestId("shift-state").find((e) => e.textContent === "Unfilled")!.closest("tbody")!;
     fireEvent.click(within(openRow).getByRole("button", { name: /^Assign caregiver to shift for / }));
-    fireEvent.change(within(openRow).getByLabelText("Caregiver"), { target: { value: CG2 } });
-    fireEvent.click(within(openRow).getByRole("button", { name: "Assign" }));
+    const assignDrawer = within(await screen.findByRole("dialog"));
+    fireEvent.change(assignDrawer.getByLabelText("Caregiver"), { target: { value: CG2 } });
+    fireEvent.click(assignDrawer.getByRole("button", { name: "Assign" }));
     expect(await screen.findByText("Caregiver assigned. The shift is covered.")).toBeInTheDocument();
     expect(api.calls.find((c) => c.path.endsWith("/caregiver"))!.body).toMatchObject({ caregiverRecordId: CG2, reason: null });
   });
@@ -144,12 +148,31 @@ describe("Schedule (staff)", () => {
     });
   });
 
+  it("opens a shift's change forms in a side drawer that names the shift, and closes with Escape or Close without moving the list", async () => {
+    renderAt("/schedule", "manager");
+    const coveredRow = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
+    const rowsBefore = screen.getAllByTestId("shift-state").length;
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName(/^Record call-out: /);
+    const summary = within(dialog).getByTestId("shift-drawer-summary");
+    for (const label of ["Client", "When", "Service", "Caregiver", "Status"]) expect(summary).toHaveTextContent(label);
+    expect(within(coveredRow).queryByLabelText("Reason for the call-out")).toBeNull(); // not under the row
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getAllByTestId("shift-state")).toHaveLength(rowsBefore);
+    fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!); // the drawer's own close button comes first
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("history lists call-outs with who recorded them; caregivers have no Schedule", async () => {
     renderAt("/schedule", "manager");
     const coveredRow = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
     fireEvent.click(within(coveredRow).getByRole("button", { name: "More actions" }));
     fireEvent.click(within(coveredRow).getByRole("button", { name: "History" }));
-    expect(await within(coveredRow).findByText(/Synthetic Caregiver One called out \(caregiver\) — Sick \(synthetic\)/)).toBeInTheDocument();
+    expect(await within(await screen.findByRole("dialog")).findByText(/Synthetic Caregiver One called out \(caregiver\) — Sick \(synthetic\)/)).toBeInTheDocument();
   });
 });
 

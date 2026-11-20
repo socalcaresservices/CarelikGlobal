@@ -283,6 +283,10 @@ type MenuItem = { label: string; action: Exclude<Action, null>; danger?: boolean
 const COLS = 6;
 
 /** One shift: desktop = a row of a compact table, phone = a compact row that opens. One primary action inline; the rest are in "More actions". */
+const ACTION_TITLE: Record<Exclude<Action, null>, string> = {
+  assign: "Assign caregiver", callout: "Record call-out", cancel: "Cancel shift", reschedule: "Change time", makeup: "Schedule make-up", history: "Shift history",
+};
+
 function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false, withDate = true }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean; withDate?: boolean }) {
   const [action, setAction] = useState<Action>(null);
   const overrides = useSigninOverrides(canManage);
@@ -341,6 +345,19 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
     <MakeupForm shiftId={s.shiftId} caregiverRecordId={s.caregiverRecordId} defaultDate={s.localDate} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
   ) : action ? <ShiftActions s={s} action={action} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} /> : null;
   const tone = highlight ? "bg-sky-50 outline outline-2 outline-slate-900" : "";
+  // The shift's change forms open in the side drawer (full screen on a phone) so the list does not move under the person's hands.
+  const formsDrawer = (
+    <Drawer open={action !== null && forms !== null} title={action ? `${ACTION_TITLE[action]}: ${shiftLabel}` : "Shift"} onClose={() => setAction(null)}>
+      <dl data-testid="shift-drawer-summary" className="mb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-slate-600">Client</dt><dd className="font-medium text-slate-950">{clientText}</dd>
+        <dt className="text-slate-600">When</dt><dd>{when(s.startsAt)}, {time(s.startsAt)}–{time(s.endsAt)}</dd>
+        <dt className="text-slate-600">Service</dt><dd>{s.serviceName ?? "Service"}</dd>
+        <dt className="text-slate-600">Caregiver</dt><dd>{s.caregiverRecordId ? nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName) : "No caregiver yet"}</dd>
+        <dt className="text-slate-600">Status</dt><dd>{DISPLAY_LABEL[stateKey] ?? STATE_LABEL[s.coverageState]}</dd>
+      </dl>
+      {forms}
+    </Drawer>
+  );
 
   if (narrow) {
     return (
@@ -356,9 +373,9 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
             {calledOut ? <p><strong>Call-out reason:</strong> {s.lastCalloutReason ?? "Not recorded"}</p> : null}
             {hasNotes ? <div className="space-y-0.5 text-xs">{notes}</div> : null}
             {rowActions}
-            {forms}
           </div>
         </details>
+        {formsDrawer}
       </li>
     );
   }
@@ -374,7 +391,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
         <td className="py-0.5 pr-2 text-right">{rowActions}</td>
       </tr>
       {hasNotes ? <tr><td colSpan={COLS + (withDate ? 1 : 0)} className="space-y-0 pb-0.5 pl-2 text-xs">{notes}</td></tr> : null}
-      {forms ? <tr><td colSpan={COLS + (withDate ? 1 : 0)} className="pb-2 pl-2 pr-2">{forms}</td></tr> : null}
+      {formsDrawer}
     </tbody>
   );
 }
