@@ -37,3 +37,11 @@ The earlier stage lines (ledger 108, 20 checks, change-set check, deployed Handl
 
 ## Open items
 Production is ahead of the production branch in one respect: the 2026-11-15 sign-in override change set exists only on `claude/keen-hawking-e9o2jg`. The CDK code at the production branch still does not synthesize those two routes for production; keep using the code-only change-set method until that branch is reconciled.
+
+## Web follow-up published to production (2026-11-21, owner GO "all now", operator: the owner, AWS CloudShell)
+Application commit `26f58384875d55b650b28554bdd5233ba3d3d3cc` (web only: the staff ID `CG-...` removed from the caregiver page header; Reports charts and the shared Chart follow the palette chosen in Settings > Appearance). Method: `infra/aws/scripts/production-web-release.sh` (typed `GO-PRODUCTION-WEB`), which uses the existing `deploy-production.sh web` mode. No database, API, IAM or security-group change.
+
+**Evidence (operator's pasted output):** "PASS the bundle carries the production sign-in pool, domain and client and nothing of the TEST pool"; the files uploaded to the production bucket; "PRODUCTION WEB PUBLISHED: https://d3l4psdkokkvnb.cloudfront.net serves commit 26f58384875d55b650b28554bdd5233ba3d3d3cc" (printed only after the served `index.html` equalled the build and the CSP header was present); "Release state: website-started=1".
+**Private recovery:** `s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-production-release/ogevia-production-web.acU1qb/web-before.tgz` (previous web files and the rollback script).
+
+Not yet recorded: the owner's check in the app (caregiver header, chart palette on Home and Reports). The request-cleanup switch is still OFF in production until the route change set (`production-request-cleanup-routes-deploy.sh`, owner approval `owner-production-request-cleanup-go`) is run and its output recorded.
