@@ -46,7 +46,7 @@ export function filterOptions(shifts: Shift[]) {
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   };
   return {
-    caregivers: pick((s) => s.caregiverRecordId, (s) => (s.caregiverName ? nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName) : s.caregiverCode ?? "")),
+    caregivers: pick((s) => s.caregiverRecordId, (s) => (s.caregiverName ?? "Caregiver")),
     clients: pick((s) => s.clientId, (s) => (s.clientName ? nameWithCode(s.clientName, s.clientCode, s.duplicateName) : s.clientCode)),
     services: pick((s) => s.serviceId, (s) => s.serviceName),
     states: [...new Set(shifts.map(stateOfShift))].map((k) => [k, DISPLAY_LABEL[k] ?? k] as [string, string]).sort((a, b) => a[1].localeCompare(b[1])),

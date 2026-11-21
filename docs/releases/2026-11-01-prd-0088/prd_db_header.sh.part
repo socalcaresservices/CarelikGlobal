@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# PRODUCTION database script for the release of migrations 0086, 0087 and 0088 on ogevia_prd (ledger 85/0085 -> 88/0088). DRAFT. NOT APPROVED. NOT RUN.
+# Operator: Stella Okereke only. Authority: the owner's written GO for ONE commit and ONE window, named in the pins below, AND the owner's explicit approval of the
+# temporary database-access rule and of reading the RDS master secret for each mutating or database step. Without them run only 'selftest' and '--restore-only'.
+# Every mutating mode refuses to run while a pin placeholder remains (they are filled by fill_pins_prd.py from the owner's GO).
+#
+#   bash STELLA_PRD_DB.sh selftest                                local only: pins, helper logic, security-group hash filter; no AWS, no database
+#   bash STELLA_PRD_DB.sh probe                                   P2: read-only database read (ledger 85/0085, staff and readiness objects absent, counts recorded)
+#   bash STELLA_PRD_DB.sh snapshot                                P3: ONE manual RDS snapshot; prints SNAPSHOT_ID (no database access, no security-group change)
+#   REPO=<checkout at the pinned SHA, deps installed> SNAPSHOT_ID=<id> bash STELLA_PRD_DB.sh migrate    P4: 0086+0087+0088, verify, fingerprint, marker
+#   bash STELLA_PRD_DB.sh final                                   P8: read-only closing read (ledger 88/0088)
+#   REPO=... SNAPSHOT_ID=<id> bash STELLA_PRD_DB.sh rollback-db   only after a stop condition; drops tables WITH their rows; two typed phrases
+#   bash STELLA_PRD_DB.sh --restore-only                          after an interrupted run: remove the temporary rule and verify (idempotent)
+# Database access: ONE temporary inbound rule on the RDS security group (tcp 5432 from the admin host's own /32), removed and proven identical by hash on every exit path.
+# The admin host's security groups are never modified. Connects to ogevia_prd only (hard-coded, checked: the production Lambda must serve it with OGEVIA_ENV=prd).
+# Never prints a secret. Exit codes: 0 done; 1 stopped (cleanup verified if a window opened); 2 expectation not met before any write; 3 the rule could NOT be verified removed,
+# or a post-migration check failed; 130 interrupted. The window-handling block below is copied verbatim from ledger-recheck-prd.sh (sha256 133ab6af0aeb4a4e0e17cc007046a57d7712b3f8ee166727be5dc25a3afa8c2c),
+# which the owner approved for one run against production on 2026-11-01 and which restored the security group identically.
+set +x +H
+umask 077
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODE="${1:-}"
+SQL="$HERE/STELLA_PRD_READONLY.sql"
+ACCOUNT=300094796789; REGION=us-west-2
+RDS_ID=ogevia-prod-postgres; ADMIN_TAG=ogevia-db-admin-temp
+EXPECT_RDS_SG=sg-00530a1f4f7648e65      # ogevia-prod-data-layer-RDSSecurityGroup
+ADMIN_SG=sg-00e01e2ca80442c1f           # ogevia-db-admin-sg
+IID_EXPECT=i-0ce8db2d7e5839dd5
+API_STACK=Ogevia-prd-ServiceVerificationApi; DB=ogevia_prd
+STATE_DIR="${OGEVIA_LEDGER_STATE_DIR:-$HOME/.ogevia-ledger-window}"   # the same marker location as ledger-recheck-prd.sh: one window at a time, restorable by either script
+OPEN="$STATE_DIR/OPEN"
+MARK_DIR="$HOME/.prd0088"; MARKER="$MARK_DIR/db-at-0088.ok"             # written only after migrate passed every check; the API deploy script requires it
+LOCAL_PORT=${OGEVIA_PRD_DB_PORT:-15440}
+AWS_TMO="${OGEVIA_AWS_TIMEOUT:-30}"; PSQL_TMO="${OGEVIA_PSQL_TIMEOUT:-45}"; CLEAN_TMO="${OGEVIA_CLEANUP_AWS_TIMEOUT:-20}"; KILL_AFTER=5
+export AWS_REGION=$REGION AWS_DEFAULT_REGION=$REGION AWS_PAGER=""
+if [[ "$MODE" =~ ^(migrate|rollback-db)$ ]]; then MAX_SECONDS="${OGEVIA_WINDOW_MAX_SECONDS:-900}"; else MAX_SECONDS="${OGEVIA_WINDOW_MAX_SECONDS:-300}"; fi
+# ---- pins: placeholders until the owner's GO (fill_pins_prd.py); the known values are the bytes already on TEST ----
+SHA=__SHA__                                                                                # the one approved release commit
+GO_REF=__GO_REF__                                                                          # the owner's approval reference
+WIN_START_TXT="__WIN_START_UTC__"; WIN_END_TXT="__WIN_END_UTC__"                           # UTC, "YYYY-MM-DD HH:MM:SS"
+MIG86_SHA=8eb7b4a353300ba78156bd58a0df6cbc9857b677cec0e8ec51233fcda5a16a4f                 # 0086_staff_management.sql (the bytes applied to TEST)
+MIG87_SHA=f9d75d8c776005873b6019ca2d76353d182772144b9946cadd3291cdbad4cf88                 # 0087_staff_invitation_acceptance.sql (the bytes applied to TEST)
+MIG88_SHA=__MIG88_SHA__                                                                    # 0088_caregiver_readiness_approve_for_work.sql
+SET85_SHA=de0c8abbe12023ba6b7291661f592c7636ef0912827fb5ca57ccf12dac5608ef                 # migrations 0001-0085 (what production already holds)
+SET88_SHA=__SET88_SHA__                                                                    # all 88 migration files
+ROLLSET3_SHA=__ROLLSET3_SHA__                                                              # the three down files 0086, 0087, 0088 (for rollback-db)
+WIN_START=$(date -u -d "$WIN_START_TXT" +%s 2>/dev/null); WIN_END=$(date -u -d "$WIN_END_TXT" +%s 2>/dev/null)
+need_window() { in_window || stop "outside the authorized window ($WIN_START_TXT to $WIN_END_TXT UTC). No new activity may begin."; }
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+OUT="${OGEVIA_PRD_DB_DIR:-$HOME/prd0088-${MODE#--}-$STAMP}"; mkdir -p "$OUT"; chmod 700 "$OUT"
+RESULT="$OUT/RESULT.txt"; : > "$RESULT"
+TUN=""; IID=""; CLOSED=0; OWNS=0; RC=0; START_EPOCH=$(date +%s); TLSDIR=""
+say() { printf '%s\n' "$*" | tee -a "$RESULT"; }
+

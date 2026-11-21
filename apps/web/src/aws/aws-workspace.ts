@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import { createContext, useContext } from "react";
 import type { AwsApiClient } from "@/lib/aws-api";
-import { fetchMe } from "@/lib/sv-backend-aws";
+import { fetchMe, type AwsPendingInvitation } from "@/lib/sv-backend-aws";
 import { useOrganization } from "@/providers/organization-provider";
 
 export const AwsApiContext = createContext<AwsApiClient | null>(null);
@@ -107,16 +107,17 @@ export interface UtilisationRow extends HoursFields {
   unusedValueCents: number | null;
 }
 
-export type ViewKind = "ADMINISTRATOR" | "MANAGER" | "SCHEDULER" | "CAREGIVER" | "STAFF";
+export type ViewKind = "OWNER" | "ADMINISTRATOR" | "MANAGER" | "SCHEDULER" | "CAREGIVER" | "STAFF";
 
 /** The view label comes from the server-provided role, never from the email. */
 export function viewKind(role: string | null): ViewKind {
   switch (role) {
-    // Internal role organization_owner is shown to people as Administrator.
+    // The view label uses the same names as Staff and Roles & Permissions: Owner, Administrator, Manager, ...
     case "organization_owner":
+      return "OWNER";
+    case "organization_admin":
       return "ADMINISTRATOR";
     case "manager":
-    case "organization_admin":
       return "MANAGER";
     case "scheduler":
     case "coordinator":
@@ -129,6 +130,7 @@ export function viewKind(role: string | null): ViewKind {
 }
 
 export const VIEW_TITLE: Record<ViewKind, string> = {
+  OWNER: "Owner",
   ADMINISTRATOR: "Administrator",
   MANAGER: "Manager",
   SCHEDULER: "Scheduler",
@@ -142,6 +144,13 @@ export function useMyDisplayName(): { displayName: string | null; loading: boole
   const api = useAwsApi();
   const me = useQuery({ queryKey: meQueryKey(user?.id), queryFn: () => fetchMe(api), enabled: !!user, staleTime: 60_000 });
   return { displayName: me.data?.displayName ?? null, loading: me.isLoading };
+}
+
+export function useMyPendingInvitations(): AwsPendingInvitation[] {
+  const { user } = useAuth();
+  const api = useAwsApi();
+  const me = useQuery({ queryKey: meQueryKey(user?.id), queryFn: () => fetchMe(api), enabled: !!user, staleTime: 60_000 });
+  return me.data?.pendingInvitations ?? [];
 }
 
 export function useSetMyDisplayName() {

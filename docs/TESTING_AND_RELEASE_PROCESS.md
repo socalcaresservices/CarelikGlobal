@@ -191,6 +191,17 @@ The package (all in `docs/releases/<release-id>/`):
 
 After a GO the Operator deploys the same SHA with the same script that ran on the pilot. Afterwards: run the read-only production smoke (`deploy-production.sh smoke`), the owner checks the changed workflows with the owner's own account, and the checklist's monitoring period is observed. Anything unexpected: stop and apply the rollback plan.
 
+### 8.1 Production release records and drift checks (added 2026-10-27 on the Owner's instruction)
+**Why.** The production deployments of 2026-10-21 to 2026-10-23 left no deployed record, so the running code could not be mapped to a commit afterwards (see `docs/aws/PRODUCTION_AS_FOUND_2026-10-26.md`). A site that worked does not prove which code was deployed.
+
+1. **Three status words, never interchangeable.** **DEPLOYED - RECORD COMPLETE** (every artifact maps to the approved commit and the record is committed to the repository); **DEPLOYED - RECORD INCOMPLETE** (the release took effect but a record check failed or the record is not yet committed); **NOT DEPLOYED OR NOT PROVABLE**. "Implemented", "tested", "deployed" and "accepted" keep their meanings above.
+2. **A production release is not closed until `DEPLOYED_RECORD_PRD.md` is committed** to its `docs/releases/<release-id>/` folder, written from pasted evidence only. The checklist rows F8 and F9 carry this.
+3. **If the deployment succeeds but recording fails, report "deployed - record incomplete".** Nothing is redeployed automatically: once the record state exists, the package's deploy, apply and publish steps refuse to run. Recording is read-only and is simply repeated after the cause is understood. A deliberate second deployment needs the Owner's new written instruction.
+4. **Drift check before every release.** Compare the live deployment-controlled resources with the last committed record (or, for the first release after this rule, the as-found baseline): CloudFormation stack templates and statuses, Lambda code hashes and environment, the web bundle version and CloudFront configuration, API routes, authorizer and CORS, Cognito app-client settings, IAM roles and policies, security-group rules, and the database ledger and schema fingerprint. **Stop for any unexplained change to code, configuration or infrastructure.** Expected data activity (client, caregiver, visit, shift or user records; log volume; snapshots taken by schedule) is out of scope and is never a reason to stop.
+5. **Baseline.** The latest committed record is the next release's baseline. The first baseline is the as-found document; its commit mappings that are unknown stay NOT VERIFIED until a later release proves them.
+6. **Version stamp.** The API will report its commit, build time and approval reference so that the running system can answer "what are you". It is planned for the release after the 2026-10-26 staff-management release and is not part of that candidate.
+7. **Ongoing drift monitoring** runs automatically, not from memory: see `docs/aws/DRIFT_MONITORING_PROPOSAL.md` (proposed; nothing is deployed).
+
 ## 9. Failure handling and exceptions
 - Any failed gate or step stops the release. Fix forward with a new commit, then restart at Phase A. Do not patch the pilot by hand.
 - **No bypass of G1 to G5.** If production is down, the emergency action is the rollback to the previous release (its plan is already approved). A forward hotfix still passes all six gates; only the owner may reduce Phase D to the roles the fix affects, in writing, for that fix only.
@@ -217,7 +228,7 @@ Each release gets `docs/releases/<release-id>/` containing `CHECKLIST.md` (the c
 | Phase C deploy scripts are per release (`pilot-*`, `increment-*`, `release-*`), and `pilot-e2e` browser scripts target older migrations (README: 0001-0018) | Deployment is still per-release scripted | **Regression part done 2026-10-13:** `pilot_regression.py` runs the automatable catalog cases (implemented and tested locally; not yet run on the pilot). Deployment scripts remain per release |
 | The harness was not run in CI | Harness breakage was found late | **Done 2026-10-13:** CI job `harness` runs setup, build and `harness:smoke` (41 checks; not rendering screens). CI not yet observed running |
 | No EVV/Sandata, GPS or SMS in the AWS build | Catalog sections for these are "not built" placeholders | Add cases when built |
-| The pilot's current migration ledger and deployed commit are not recorded in the repository | Phase C pre-flight must read them live | Record them in each checklist |
+| The pilot's current migration ledger and deployed commit are not recorded in the repository | Phase C pre-flight must read them live | Record them in each checklist. **Production: addressed 2026-10-27 by section 8.1 and `docs/aws/PRODUCTION_AS_FOUND_2026-10-26.md`** |
 | Seeded signature images do not exist in the harness | Signature viewing cannot be checked locally | Prove in Phase C against real S3 |
 
 ## 12. How Claude Code works under this process

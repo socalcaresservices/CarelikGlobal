@@ -45,6 +45,27 @@ function RequiredDocumentsSetup() {
   const [saved, setSaved] = useState(false);
   const key = useRef(newIdempotencyKey());
   const rows = setup.data ?? [];
+  const [standard, setStandard] = useState<{ busy: boolean; error: string | null; note: string | null }>({ busy: false, error: null, note: null });
+  const standardNeeded = rows.length > 0 && rows.some((r) => !r.documentTypeId);
+  // R7: creates (or finds) two document types named CPR and TB, by name only, and preselects them below. It invents no validity period: the administrator
+  // still chooses how long each stays valid and gives a reason before anything is saved. The types are created with no expiry requirement.
+  const createStandardTypes = async () => {
+    setStandard({ busy: true, error: null, note: null });
+    try {
+      const picked: Record<string, string> = {};
+      for (const r of rows) {
+        const name = r.requirement.toUpperCase();
+        const existing = (types.data ?? []).find((t) => t.name.trim().toLowerCase() === name.toLowerCase());
+        picked[r.requirement] = existing?.documentTypeId ?? (await api.post<{ documentTypeId: string }>("/v1/document-types", { organizationId: activeOrganizationId, name, requiresExpiry: false }, { idempotencyKey: newIdempotencyKey() })).documentTypeId;
+      }
+      await qc.invalidateQueries({ queryKey: ["aws-document-types"] });
+      setDraft((d) => Object.fromEntries(rows.map((r) => [r.requirement, { ...(d[r.requirement] ?? { basis: r.validityBasis ?? "", days: r.validityDays ? String(r.validityDays) : "" }), typeId: picked[r.requirement]! }])));
+      setSaved(false);
+      setStandard({ busy: false, error: null, note: "CPR and TB are ready to choose below. Now choose how long each stays valid, add a reason and Save. Nothing is set until you save." });
+    } catch (cause) {
+      setStandard({ busy: false, error: actionError(cause, "The document types could not be created."), note: null });
+    }
+  };
   const value = (r: SetupRow) => draft[r.requirement] ?? { typeId: r.documentTypeId ?? "", basis: r.validityBasis ?? "", days: r.validityDays ? String(r.validityDays) : "" };
   const patch = (r: SetupRow, p: Partial<{ typeId: string; basis: string; days: string }>) => { key.current = newIdempotencyKey(); setSaved(false); setDraft((d) => ({ ...d, [r.requirement]: { ...value(r), ...p } })); };
   const save = useMutation({
@@ -64,6 +85,13 @@ function RequiredDocumentsSetup() {
   return (
     <form className="space-y-2" aria-label="Required documents" onSubmit={(e) => { e.preventDefault(); if (reason.trim().length >= 3 && !save.isPending) save.mutate(); }}>
       <p className="flex items-center gap-1.5 text-xs text-slate-700">Choose which document type is the CPR record and which is TB, and how long each stays valid.<InfoTip>Ogevia does not assume a period; until both are set, the requirement is reported as setup incomplete.</InfoTip></p>
+      {standardNeeded ? (
+        <div className="space-y-1">
+          <Button type="button" variant="secondary" disabled={standard.busy} onClick={() => void createStandardTypes()}>{standard.busy ? "Creating…" : "Use standard CPR and TB"}</Button>
+          {standard.error ? <p role="alert" className="text-sm text-red-700">{standard.error}</p> : null}
+          {standard.note ? <p role="status" className="text-sm text-slate-800" data-testid="standard-note">{standard.note}</p> : null}
+        </div>
+      ) : null}
       {rows.map((r) => {
         const v = value(r);
         return (

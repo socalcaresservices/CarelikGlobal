@@ -45,6 +45,14 @@ describe("Needs action first", () => {
     expect(await screen.findByTestId("top-issues-error", {}, { timeout: 15000 })).toHaveTextContent("could not be loaded. It is not shown as empty");
     expect(screen.queryByText("Nothing is critical or urgent right now.")).not.toBeInTheDocument();
   }, 30000);
+
+  it("when the list fails, the failure message shows and the headline count is not shown as 0", async () => {
+    const calm = { overview: { asOf: new Date().toISOString(), urgentWindowHours: 48, urgent: { items: [], itemCount: 0, issueCount: 0, shifts: 0, visits: 0 }, upcoming: null, documents: null, visitReview: null } };
+    renderAws("/", PERMS, { "GET /v1/attention/overview": () => json(200, calm), "GET /v1/action-issues": () => json(500, { error: { code: "internal_error", message: "Something went wrong. Please try again." } }) });
+    expect(await screen.findByTestId("top-issues-error", {}, { timeout: 15000 })).toBeInTheDocument();
+    expect(screen.queryByTestId("headline-count")).toBeNull();
+    expect(screen.queryByTestId("stream-now")).toBeNull();
+  }, 30000);
 });
 
 describe("Today's visits marks a blocked caregiver, not only an uncovered shift", () => {

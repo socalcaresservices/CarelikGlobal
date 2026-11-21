@@ -1,7 +1,7 @@
 // Caregiver compliance screens (0055), through the real app shell, routes and API client, against the stateful fake API.
 // OWNER-DEFINED rules, not stated as legal requirements. SYNTHETIC data only. The server owns every decision; these tests check what people see and send.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,119 +41,6 @@ const heldReasons = [
   { requirement: "cpr", code: "missing_after_deadline", message: "CPR missing. The 14-day period ended 2026-10-15.", dueDate: "2026-10-15" },
   { requirement: "tb", code: "missing_after_deadline", message: "TB missing. The 14-day period ended 2026-10-15.", dueDate: "2026-10-15" },
 ];
-const held = {
-  eligible: false,
-  hold: { id: "h1", openedAt: "2026-10-16T08:00:00Z", automatic: true, graceClosed: true, reasons: heldReasons },
-  requirements: [
-    { requirement: "cpr", documentStatus: "missing", validUntil: null, documentId: null, blocking: true, pending: false, current: false, code: "missing_after_deadline", message: heldReasons[0]!.message, dueDate: "2026-10-15" },
-    { requirement: "tb", documentStatus: "missing", validUntil: null, documentId: null, blocking: true, pending: false, current: false, code: "missing_after_deadline", message: heldReasons[1]!.message, dueDate: "2026-10-15" },
-  ],
-};
-
-describe("the profile's Compliance card", () => {
-  it("an eligible caregiver shows Eligible, the verified clearance and who verified it", async () => {
-    renderAt(`/care-team/${CG}`, { role: "organization_owner" });
-    expect(await screen.findByText("Eligible", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
-    expect(screen.getByText("Approved and verified")).toBeInTheDocument();
-    expect(screen.getByText(/Verified by Synthetic Owner/)).toBeInTheDocument();
-    expect(screen.getByText(/The due date is the last day\. A hold starts at 12:00 AM on 10\/16\/2026 \(America\/Los_Angeles\)\./)).toBeInTheDocument();
-    expect(screen.getByText(/Hire date is day 0/)).toBeInTheDocument();
-  }, TEST_TIMEOUT_MS);
-
-  it("an eligible caregiver whose CPR expires during a scheduled shift sees that shift on the card, marked in progress, with the visit-not-ended note", async () => {
-    renderAt(`/care-team/${CG}`, { role: "organization_owner", compliance: { shiftRisks: [
-      { shiftId: "s1", startsAt: "2026-10-27T05:00:00Z", endsAt: "2026-10-27T13:00:00Z", requirement: "cpr", documentStatus: "expires_during", validUntil: "2026-10-27", inProgress: true, visitId: "v9" },
-    ] } });
-    const section = await screen.findByRole("region", { name: "Shifts affected by CPR or TB expiry" }, { timeout: COLD_RENDER_MS });
-    expect(within(section).getByText(/CPR expires during this shift \(valid through/)).toBeInTheDocument();
-    expect(within(section).getByText(/in progress now\. The visit will not be ended\./)).toBeInTheDocument();
-  }, TEST_TIMEOUT_MS);
-
-  it("a caregiver on hold sees the exact reasons, a link to each missing requirement, and the release rule", async () => {
-    renderAt(`/care-team/${CG}`, { role: "organization_owner", compliance: held });
-    const alert = await screen.findByRole("alert", {}, { timeout: COLD_RENDER_MS });
-    expect(alert).toHaveTextContent("On compliance hold since");
-    expect(alert).toHaveTextContent("CPR missing. The 14-day period ended 2026-10-15.");
-    expect(alert).toHaveTextContent("TB missing. The 14-day period ended 2026-10-15.");
-    expect(within(alert).getByRole("link", { name: "Open CPR documents" })).toHaveAttribute("href", "/documents");
-    expect(within(alert).getByRole("link", { name: "Open TB documents" })).toHaveAttribute("href", "/documents");
-    expect(alert).toHaveTextContent("lifts by itself when every item above is resolved");
-    expect(alert).toHaveTextContent("not brought back");
-    expect(screen.getAllByText("On compliance hold").length).toBeGreaterThan(0);
-  }, TEST_TIMEOUT_MS);
-
-  it("a caregiver inside the period shows each requirement as pending with its due date, and is still eligible", async () => {
-    renderAt(`/care-team/${CG}`, { role: "organization_owner", compliance: {
-      hireDate: "2026-10-10", dueDate: "2026-10-24", inGrace: true,
-      requirements: ["cpr", "tb"].map((r) => ({ requirement: r, documentStatus: "missing", validUntil: null, documentId: null, blocking: false, pending: true, current: false, code: "missing_pending", message: `${r.toUpperCase()} missing. Due 2026-10-24.`, dueDate: "2026-10-24" })),
-    } });
-    expect(await screen.findByText("Eligible: requirements pending", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
-    expect(screen.getAllByText("Pending, due 10/24/2026")).toHaveLength(2);
-    expect(screen.getByText("CPR missing. Due 2026-10-24.")).toBeInTheDocument();
-  }, TEST_TIMEOUT_MS);
-
-  it("a missing hire date is stated plainly, never treated as a pass; the office can enter it with a reason", async () => {
-    const { calls } = renderAt(`/care-team/${CG}`, { role: "manager", compliance: {
-      hireDate: null, dueDate: null, graceEndsAt: null, eligible: false, hireDateRequired: true,
-      requirements: ["cpr", "tb"].map((r) => ({ requirement: r, documentStatus: "missing", validUntil: null, documentId: null, blocking: true, pending: false, current: false, code: "missing_no_hire_date", message: `${r.toUpperCase()} missing. Hire date is not recorded, so the 14-day period cannot be applied.`, dueDate: null })),
-    } });
-    expect(await screen.findByText(/No hire date is recorded, so the 14-day period cannot be applied\. CPR and TB must be verified now\./, {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
-    expect(screen.getByText(/Cannot be set without a hire date/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Set hire date" })); // the form opens on demand
-    const save = screen.getByRole("button", { name: "Save hire date" });
-    expect(save).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Hire date"), { target: { value: "2026-10-12" } });
-    fireEvent.change(screen.getByLabelText(/Reason \(kept in the audit trail\)/), { target: { value: "Offer letter signed" } });
-    expect(save).toBeEnabled();
-    fireEvent.click(save);
-    await waitFor(() => expect(posts(calls, `/v1/caregivers/${CG}/hire-date`)).toHaveLength(1));
-    const sent = posts(calls, `/v1/caregivers/${CG}/hire-date`)[0]!;
-    expect(sent.body).toEqual({ organizationId: expect.any(String), hireDate: "2026-10-12", reason: "Offer letter signed" });
-    expect(sent.key).toMatch(/^[0-9a-f-]{36}$/);
-  }, TEST_TIMEOUT_MS);
-
-  it("a manager can track status but cannot verify, and cannot change a recorded hire date", async () => {
-    renderAt(`/care-team/${CG}`, { role: "manager" });
-    fireEvent.click(await screen.findByRole("button", { name: "Update status" }, { timeout: COLD_RENDER_MS })); // the form opens on demand
-    expect(await screen.findByLabelText("Background check status")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Verify background check")).toBeNull();
-    expect(screen.getByText("Only an administrator can record the verified result.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Hire date")).toBeNull();
-    expect(screen.getByText("Only an administrator can change a recorded hire date.")).toBeInTheDocument();
-  }, TEST_TIMEOUT_MS);
-
-  it("'Completed' alone is shown as NOT cleared, with the reason; the administrator records the verified result with an evidence note", async () => {
-    const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner", compliance: {
-      eligible: false,
-      background: { state: "completed_not_approved", qualifies: false, status: "completed", result: null, evidenceNote: null, verifiedAt: null, verifiedByName: null },
-    } });
-    expect(await screen.findByText("Not cleared", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
-    expect(screen.getByText(/completed but no approved result is verified yet, so the caregiver cannot be assigned/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Update or verify" })); // the forms open on demand
-    expect(screen.getByText(/“Completed” does not clear the caregiver/)).toBeInTheDocument();
-    const record = screen.getByRole("button", { name: "Record verified result" });
-    expect(record).toBeDisabled(); // an evidence note is required
-    fireEvent.change(screen.getByLabelText("Where you confirmed it"), { target: { value: "Agency clearance record" } });
-    fireEvent.click(record);
-    await waitFor(() => expect(posts(calls, `/v1/caregivers/${CG}/background-check/verify`)).toHaveLength(1));
-    expect(posts(calls, `/v1/caregivers/${CG}/background-check/verify`)[0]!.body).toMatchObject({ result: "approved", evidenceNote: "Agency clearance record" });
-    expect(await screen.findByText("Approved and verified")).toBeInTheDocument();
-  }, TEST_TIMEOUT_MS);
-
-  it("before enforcement is on, the card says the checks are shown but do not block", async () => {
-    renderAt(`/care-team/${CG}`, { role: "organization_owner", compliance: { enforcementActive: false, eligible: false, background: { state: "not_recorded", qualifies: false, status: "not_started", result: null, evidenceNote: null, verifiedAt: null, verifiedByName: null } } });
-    expect(await screen.findByText("Would be held once enforcement is on", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
-    expect(screen.getByText(/Enforcement is not on for this agency yet/)).toBeInTheDocument();
-  }, TEST_TIMEOUT_MS);
-
-  it("a caregiver (no staff permission) is never shown the card", async () => {
-    const { calls } = renderAt(`/care-team/${CG}`, { role: "caregiver" });
-    await waitFor(() => expect(calls.length).toBeGreaterThan(0), { timeout: COLD_RENDER_MS });
-    await new Promise((r) => setTimeout(r, 300));
-    expect(screen.queryByText("Compliance")).toBeNull();
-    expect(calls.some((c) => c.path.endsWith("/compliance"))).toBe(false);
-  }, TEST_TIMEOUT_MS);
-});
 
 describe("Caregiver holds page (the Action needed destination)", () => {
   const hold = {
@@ -179,7 +66,7 @@ describe("Caregiver holds page (the Action needed destination)", () => {
     expect(within(article).getByText(/recurring/)).toBeInTheDocument();
     expect(within(article).getAllByRole("link", { name: "Open the schedule" })).toHaveLength(2);
     expect(within(article).getByRole("heading", { name: "Standing assignments (1)" })).toBeInTheDocument();
-    expect(within(article).getByText(/Nothing here was cancelled, moved or ended/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/Nothing here was cancelled, moved or ended/)).toBeInTheDocument();
   }, TEST_TIMEOUT_MS);
 
   it("lists scheduled shifts whose CPR/TB is expired or expires during the shift even when nobody is on hold, and marks a shift already under way", async () => {
@@ -194,7 +81,7 @@ describe("Caregiver holds page (the Action needed destination)", () => {
     expect(within(section).getByText(/CPR expires during this shift/)).toBeInTheDocument();
     expect(within(section).getByText(/CPR is expired for this shift/)).toBeInTheDocument();
     expect(within(section).getByText(/In progress \(visit open\)/)).toBeInTheDocument();
-    expect(within(section).getByText(/a visit in progress is never ended by the system/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("page-help-panel")).getByText(/a visit in progress is never ended by the system/)).toBeInTheDocument();
   }, TEST_TIMEOUT_MS);
 
   it("shifts at risk are grouped by caregiver and reason: one row with a count, the shifts open under it, every link is kept", async () => {

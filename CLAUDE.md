@@ -12,6 +12,9 @@ financial, and execution direction for Ogevia.
 
 # 0. STANDING RULES (added 2026-10-09; take precedence over sections 14 and 17 as a starting instruction)
 
+## UX redesign
+- **Read `docs/ux/REQUIREMENTS-TRACKER.md` at the start of every session. It is the single source of truth for the UX redesign:** a row is DONE only with evidence, rows are never deleted (mark SUPERSEDED with a reason), and nothing is "verified on demo" until the owner confirms it.
+
 ## Current task first
 - Follow the owner's current explicit instructions. Historical migration phases (section 14) and the "start with Phase 0"
   instruction (section 17) do **not** restart automatically; they are history unless the owner reopens them.

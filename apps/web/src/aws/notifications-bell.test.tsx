@@ -27,8 +27,8 @@ describe("notifications bell", () => {
     expect(rows[2]!.textContent).toMatch(/Resolved/);
     expect(screen.getByRole("link", { name: "Open Action needed" }).getAttribute("href")).toBe("/action-needed");
     expect(screen.getAllByRole("button", { name: "Mark all read" })).toHaveLength(1); // one action, and the agency setting is one line with Details
-    expect(screen.getByTestId("notifications-panel")).toHaveTextContent("Urgent items follow your agency");
-    expect(within(screen.getByTestId("notifications-panel")).getByRole("button", { name: "More information" })).toBeInTheDocument(); // the agency setting is one line with an info icon
+    expect(screen.getByTestId("page-help-panel")).toHaveTextContent("Urgent items follow your agency"); // the setting's explanation is in the page help, not an icon inside the popover
+    expect(within(screen.getByTestId("notifications-panel")).queryByRole("button", { name: "More information" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Mark all read" }));
     await waitFor(() => expect(screen.getByTestId("notifications-button").getAttribute("aria-label")).toBe("Notifications: 0 unread"));
     const post = calls.find((c) => c.method === "POST" && c.path === "/v1/notifications/read")!;
@@ -41,7 +41,7 @@ describe("notifications bell", () => {
     const button = await screen.findByTestId("notifications-button");
     expect(button.getAttribute("aria-label")).toBe("Notifications unavailable");
     fireEvent.click(button);
-    expect((await screen.findByRole("alert")).textContent).toMatch(/could not be loaded/);
+    await waitFor(() => expect(screen.getAllByRole("alert").some((alert) => /Notifications could not be loaded/i.test(alert.textContent ?? ""))).toBe(true));
   });
 
   it("people who cannot see attention items get no bell", async () => {

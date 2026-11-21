@@ -126,8 +126,9 @@ afterEach(() => vi.clearAllMocks());
 describe("Scheduling page", () => {
   it("sends the chosen repeat rule with the preview and the saved series", async () => {
     const api = renderAt("/schedule");
-    expect(await screen.findByRole("heading", { name: "Scheduling" })).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Repeat visits" }));
+    expect(await screen.findByRole("heading", { name: "Schedule" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Add shift" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Repeating" }));
     await screen.findByRole("option", { name: /Synthetic Client Alpha/ });
     await screen.findByRole("option", { name: /Personal care/ });
     fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT } });
@@ -157,7 +158,7 @@ describe("Scheduling page", () => {
     const row = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
     fireEvent.click(within(row).getByRole("button", { name: "More actions" }));
     fireEvent.click(within(row).getByRole("button", { name: "Schedule make-up" }));
-    fireEvent.click(within(row).getAllByRole("button", { name: "Schedule make-up" }).at(-1)!);
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Schedule make-up" }));
     expect(await screen.findByText(/Make-up scheduled: 1 hr reserved.*1 hr of the missed time is still not made up/s)).toBeInTheDocument();
     expect(api.calls.find((c) => c.path === `/v1/shifts/${CANCELLED}/makeup`)!.body).toMatchObject({ organizationId: ORG, startTime: "09:00", endTime: "10:00", caregiverRecordId: CG1 });
   });
@@ -196,7 +197,8 @@ describe("Scheduling page", () => {
     partialPreview = true;
     try {
       const api = renderAt("/schedule");
-      fireEvent.click(await screen.findByRole("button", { name: "Repeat visits" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Add shift" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Repeating" }));
       await screen.findByRole("option", { name: /Synthetic Client Alpha/ });
       await screen.findByRole("option", { name: /Personal care/ });
       fireEvent.change(screen.getByLabelText("Client"), { target: { value: CLIENT } });

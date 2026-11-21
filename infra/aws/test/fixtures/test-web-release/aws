@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+# TEST DOUBLE for infra/aws/test/test-web-release.test.ts. Simulates a TEST and a PROD site bucket on local disk. Never talks to AWS.
+import os,sys,shutil,fnmatch,json
+a=sys.argv[1:]; T=os.environ["MOCK_T"]; m=os.environ.get("MOCK_MODE","ok")
+open(T+"/calls.log","a").write("aws "+" ".join(a)+"\n")
+def err(rc,msg): sys.stderr.write(msg+"\n"); sys.exit(rc)
+if m=="no_creds" and a[0]=="sts": err(255,"Unable to locate credentials 300094796789")
+if m=="wrong_account" and a[0]=="sts": print("111111111111"); sys.exit(0)
+if m=="sync_fails" and a[:2]==["s3","sync"] and a[2].startswith("/") : err(1,"upload failed arn:aws:iam::300094796789:user/x")
+def bucket_of(u): return u[5:].split("/")[0], "/".join(u[5:].split("/")[1:])
+if a[0]=="sts": print("300094796789"); sys.exit(0)
+if a[:2]==["cloudformation","describe-stacks"]:
+    stack=a[a.index("--stack-name")+1]; q=a[a.index("--query")+1]; prd="-prd-" in stack
+    web="d3l4psdkokkvnb.cloudfront.net" if prd else "d2xumch5w0izfg.cloudfront.net"
+    if m=="same_bucket" and prd: bucket="test-bucket"
+    else: bucket="prd-bucket" if prd else "test-bucket"
+    api="zk527zk4ua" if prd else "s0epy5rgzb"
+    if m=="wrong_web_host" and not prd: web="zzzzzzzzzzzz.cloudfront.net"
+    if m=="wrong_api" and not prd: api="qqqqqqqqqq"
+    if m=="missing_output" and not prd and "DistributionId" in q: print("None"); sys.exit(0)
+    if "WebOrigin" in q: print("https://"+web)
+    elif "SiteBucketName" in q: print(bucket)
+    elif "DistributionId" in q: print("EPRD1234567890" if prd else "ETEST1234567890")
+    elif "ApiUrl" in q: print(f"https://{api}.execute-api.us-west-2.amazonaws.com")
+    sys.exit(0)
+if a[:2]==["s3","sync"]:
+    src,dst=a[2],a[3]; ex=[a[i+1] for i,x in enumerate(a) if x=="--exclude"]
+    if "--delete" in a: err(9,"--delete is forbidden")
+    if src.startswith("s3://"):
+        b,_=bucket_of(src); shutil.copytree(f"{T}/s3/{b}",dst,dirs_exist_ok=True)
+    else:
+        b,pre=bucket_of(dst)
+        for root,_,fs in os.walk(src):
+            for f in fs:
+                p=os.path.join(root,f); rel=os.path.relpath(p,src)
+                if any(fnmatch.fnmatch(rel,e) for e in ex): continue
+                d=f"{T}/s3/{b}/{pre+'/' if pre else ''}{rel}"; os.makedirs(os.path.dirname(d),exist_ok=True); shutil.copy(p,d)
+    sys.exit(0)
+if a[:2]==["s3","cp"]:
+    src,dst=a[2],a[3]; b,key=bucket_of(dst); d=f"{T}/s3/{b}/{key}"; os.makedirs(os.path.dirname(d),exist_ok=True); shutil.copy(src,d); sys.exit(0)
+if a[:2]==["s3api","head-object"]: print(json.dumps({"LastModified":"2026-10-05T10:00:00+00:00","VersionId":"v1"})); sys.exit(0)
+if a[:2]==["s3api","get-bucket-versioning"]: print("Enabled"); sys.exit(0)
+if a[:2]==["cloudfront","create-invalidation"]: print("I123"); sys.exit(0)
+if a[:2]==["cloudfront","wait"]: sys.exit(0)
+err(99,"mock aws: unhandled "+" ".join(a))

@@ -33,7 +33,7 @@ async function main() {
 
   const c = new pg.Client({ connectionString: databaseUrl() });
   await c.connect();
-  const applied = await migrate(c);
+  const applied = await migrate(c, () => {}, { includePendingUx: true });
   console.log(`migrations applied: ${applied.applied.length}`);
 
   const q = async (sql: string, params: unknown[] = []): Promise<Row[]> => (await c.query(sql, params)).rows as Row[];
@@ -233,6 +233,9 @@ async function main() {
   const stage = (rec: string, status: string) => asActor(owner.sub, () => c.query("select * from ogevia_api.set_caregiver_status($1,$2,$3,'Moved on the Recruiting board (synthetic)',null)", [org, rec, status]));
   const item = (rec: string, key: string, expiresInDays: number | null = null) =>
     asActor(owner.sub, () => c.query("select ogevia_api.record_onboarding_item($1,$2,$3,'complete',null,(now() + make_interval(days => $4::int))::date,null,null)", [org, rec, key, expiresInDays]));
+  // 0086: the background check is verified through its own record (administrator only); onboarding keeps only the training item.
+  const verifyBackground = (rec: string) =>
+    asActor(owner.sub, () => c.query("select ogevia_api.verify_background_check($1,$2,'approved','Agency clearance record (synthetic)',null)", [org, rec]));
   async function document(rec: string, type: string) {
     const doc = String((await asActor(owner.sub, () => c.query("select ogevia_api.request_staff_document($1,$2,$3,null,null) as id", [org, rec, type]))).rows[0]?.id);
     const version = randomUUID();
@@ -242,9 +245,27 @@ async function main() {
   await person("Jordan", "Applicant");
   const riley = await person("Riley", "Interviewee"); await stage(riley, "interview");
   const taylor = await person("Taylor", "Onboarding"); await stage(taylor, "interview"); await stage(taylor, "offer"); await stage(taylor, "onboarding");
-  await item(taylor, "background_check"); await item(taylor, "training", 20);
+  await verifyBackground(taylor); await item(taylor, "training", 20);
   const avery = await person("Avery", "Paperwork"); for (const s of ["interview", "offer", "onboarding", "pending_documents"]) await stage(avery, s);
-  await item(avery, "background_check"); await item(avery, "training", 300); await document(avery, cprType); await document(avery, tbType);
+  await verifyBackground(avery); await item(avery, "training", 300); await document(avery, cprType); await document(avery, tbType);
+
+  // ---- Readiness (0086) -------------------------------------------------------------------------------------------
+  // The four caregivers inserted above as Active predate Approve for work: back-fill them exactly as migration 0086 does for existing Ready/Active records.
+  await q(`insert into ogevia.caregiver_work_approvals (organization_id, caregiver_record_id, approved_by, approved_at, source, snapshot)
+           select organization_id, id, null, updated_at, 'legacy_status', '[]'::jsonb from ogevia.caregiver_records where status in ('ready','active') and organization_id = $1
+           on conflict do nothing`, [org]);
+  // Three records that show the page's states. A linked account with no invitation counts as signed in (a person who signs in through other means).
+  const linked = async (rec: string, name: string) => {
+    const userId = await id("insert into ogevia.app_users (cognito_sub, display_name) values ($1,$2) returning id", [randomUUID(), name]);
+    await q("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1,$2,'caregiver','active')", [org, userId]);
+    await q("update ogevia.caregiver_records set linked_user_id = $2 where id = $1", [rec, userId]);
+  };
+  const reese = await person("Reese", "ReadyToApprove"); await linked(reese, "Reese ReadyToApprove"); await verifyBackground(reese); await item(reese, "training", 300);
+  await q("update ogevia.caregiver_records set hire_date = current_date - 3 where id = $1", [reese]);                      // CPR/TB pending, due in 27 days: approval allowed
+  const quinn = await person("Quinn", "WaitingOnSignIn"); await verifyBackground(quinn); await item(quinn, "training", 300);
+  await q("update ogevia.caregiver_records set hire_date = current_date - 10 where id = $1", [quinn]);                     // no email on file: Approve disabled, "Add email"
+  const dana = await person("Dana", "Overdue"); await linked(dana, "Dana Overdue"); await verifyBackground(dana); await item(dana, "training", 300);
+  await q("update ogevia.caregiver_records set hire_date = current_date - 40 where id = $1", [dana]);                      // CPR/TB overdue (30-day rule): Extend
 
   const [summary] = await q("select count(*)::int as clients, (select count(*)::int from ogevia.shifts) as shifts, (select count(*)::int from ogevia.service_visits) as visits from ogevia.clients");
   console.log(`seeded: ${summary?.clients} clients, ${summary?.shifts} shifts, ${summary?.visits} visits`);

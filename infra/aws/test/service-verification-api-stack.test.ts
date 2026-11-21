@@ -44,8 +44,9 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
     const keys = Object.values(routes).map(
       (r) => (r.Properties as { RouteKey: string }).RouteKey,
     );
+    // Routes behind a release switch (signInOverride, off until the owner approves it) are not in the API.
     expect(keys.sort()).toEqual(
-      SERVICE_VERIFICATION_ROUTES.map((r) => `${r.method} ${r.path}`).sort(),
+      SERVICE_VERIFICATION_ROUTES.filter((r) => !r.feature || ENVIRONMENTS.prod.features[r.feature]).map((r) => `${r.method} ${r.path}`).sort(),
     );
     const publicKeys = new Set(
       SERVICE_VERIFICATION_ROUTES.filter((r) => r.public).map((r) => `${r.method} ${r.path}`),

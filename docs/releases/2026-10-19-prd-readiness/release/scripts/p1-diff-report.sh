@@ -5,13 +5,13 @@
 #   bash p1-diff-report.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 need python3 jq
-STACKS=(Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceStorage Ogevia-prd-WebHosting Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability Ogevia-prod-NetworkEgress)
+STACKS=(Ogevia-prd-DatabaseSecret Ogevia-prd-EvidenceStorage Ogevia-prd-WebHosting Ogevia-prd-ServiceVerificationApi Ogevia-prd-Observability Ogevia-prod-NetworkEgress Ogevia-prd-Auth)
 say "== P1 diff report $(date -u +%FT%TZ): live ($B/live) vs release templates ($PKG_ROOT/release-templates) =="
 [[ -d "$B/live" ]] || stop "run p0-baseline-capture.sh first ($B/live is missing)"
 TOTAL=0
 for S in "${STACKS[@]}"; do
   L="$B/live/$S.json"; N="$PKG_ROOT/release-templates/$S.json"
-  [[ -s "$L" ]] || { nope "no captured live template for $S"; continue; }
+  [[ -s "$L" ]] || { if [[ "$S" == Ogevia-prd-Auth ]]; then info "$S: no live stack was captured (not deployed); the release would CREATE it"; else nope "no captured live template for $S"; fi; continue; }
   [[ -s "$N" ]] || { nope "the package has no release template for $S"; continue; }
   python3 -I -B "$PKG_ROOT/scripts/tpl_diff.py" "$L" "$N" > "$B/diff-$S.txt"; rc=$?
   case $rc in 0|1) ;; *) nope "$S: the comparison could not run: $(head -1 "$B/diff-$S.txt")"; continue ;; esac
