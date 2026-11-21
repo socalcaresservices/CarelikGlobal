@@ -17,7 +17,12 @@ Any other difference: exit 1 and the Operator STOPS.
 """
 import argparse, json, sys
 
-NEW_ROUTES = {
+CLEANUP_ROUTES = {
+    "POST /v1/care-notifications/read",
+    "POST /v1/documents/{documentId}/cancel",
+    "POST /v1/document-types/{documentTypeId}/retire",
+}
+OFFICE_ROUTES = {
     "GET /v1/offices",
     "GET /v1/client-offices",
     "POST /v1/offices",
@@ -25,6 +30,7 @@ NEW_ROUTES = {
     "POST /v1/offices/{officeId}/retire",
     "POST /v1/clients/{clientId}/office",
 }
+NEW_ROUTES = OFFICE_ROUTES   # default (the Offices release); `--set cleanup` selects the three request-cleanup routes
 ASSET_BUCKET = "cdk-hnb659fds-assets-300094796789-us-west-2"
 SECTIONS = ["AWSTemplateFormatVersion", "Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform"]
 
@@ -53,7 +59,8 @@ def load(path):
     return t
 
 
-def compare(live, new, expect):
+def compare(live, new, expect, routes=None):
+    NEW_ROUTES = routes or OFFICE_ROUTES
     bad = []
     for s in SECTIONS:
         if norm(live.get(s)) != norm(new.get(s)):
@@ -71,7 +78,7 @@ def compare(live, new, expect):
         else:
             bad.append("UNEXPECTED added resource %s (%s %s)" % (k, r.get("Type"), rk or ""))
     if expect == "on" and added_keys != NEW_ROUTES:
-        bad.append("expected the 6 office routes to be added; missing: %s" % sorted(NEW_ROUTES - added_keys))
+        bad.append("expected the %d routes of this release to be added; missing: %s" % (len(NEW_ROUTES), sorted(NEW_ROUTES - added_keys)))
     changed_handler = []
     for k in sorted(set(lr) & set(nr)):
         l, n = norm(lr[k]), norm(nr[k])
@@ -99,8 +106,9 @@ def main():
     ap.add_argument("--live", required=True)
     ap.add_argument("--new", required=True)
     ap.add_argument("--expect", choices=["off", "on", "post"], required=True)
+    ap.add_argument("--set", choices=["offices", "cleanup"], default="offices", help="which release's routes may be added with --expect on")
     a = ap.parse_args()
-    bad, added, changed = compare(load(a.live), load(a.new), a.expect)
+    bad, added, changed = compare(load(a.live), load(a.new), a.expect, CLEANUP_ROUTES if a.set == "cleanup" else OFFICE_ROUTES)
     print("routes added: %d %s" % (len(added), sorted(added) if added else ""))
     print("Handler code asset changed: %s" % (", ".join(changed) or "no"))
     if bad:
