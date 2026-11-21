@@ -9,7 +9,9 @@ import { describe, expect, it } from "vitest";
 const dir = fileURLToPath(new URL("../../../docs/releases/2026-11-20-test-plan/toolchain/", import.meta.url));
 const script = join(dir, "release_pins.py");
 const run = (...args: string[]) => spawnSync("python3", [script, ...args], { encoding: "utf8" });
-const PINNED = "88426e8cc979e91c8fb36dd4843345a6b3cf6a23";
+// The application commit the pins are validated against. Changed deliberately (2026-11-21) from 88426e8 (the release deployed to production as ef90a2a) to the web follow-up
+// 9ad0c2d (caregiver header without the staff ID; Reports charts follow the Dashboard palette). Any later application change must re-pin and update this line.
+const PINNED = "9ad0c2d029627817bfaa2253177dc94a5f4068f4";
 const present = spawnSync("git", ["cat-file", "-e", `${PINNED}^{commit}`]).status === 0;
 
 describe.skipIf(!present)("release_pins.py", () => {
