@@ -24,7 +24,7 @@ import { ShiftAuthorizationContext } from "./shift-authorization-context";
 import { HourLimitsPanel, MakeupForm } from "./scheduling-extras";
 import { useClientAuthorizations } from "./client-admin";
 import { useAssignments } from "./assignments-data";
-import { applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, NO_FILTERS, stateOfShift, stepAnchor, viewRange, type CalendarView, type ShiftFilters } from "./schedule-model";
+import { ACTIVE_FILTERS, applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, hasFilters, isHistoryShift, stateOfShift, stepAnchor, viewRange, type CalendarView, type ShiftFilters } from "./schedule-model";
 import { FilterBar, MonthGrid, ReplacementSuggestions, ViewTabs } from "./schedule-views";
 import { Drawer } from "./ui/drawer";
 import { InfoTip } from "./ui/info-tip";
@@ -426,7 +426,7 @@ export function SchedulePage() {
   const [view, setView] = useState<CalendarView>("week");
   const [from, setFrom] = useState(atDate ?? today);
   const [onlyOpen, setOnlyOpen] = useState(params.get("coverage") === "1");
-  const [filters, setFilters] = useState<ShiftFilters>({ ...NO_FILTERS, client: params.get("client") ?? "" });
+  const [filters, setFilters] = useState<ShiftFilters>({ ...ACTIVE_FILTERS, client: params.get("client") ?? "" });
   const [adding, setAdding] = useState(false);
   const [addMode, setAddMode] = useState<"one" | "repeat">("one");
   const canAdd = hasPermission("shifts.manage");
@@ -445,7 +445,8 @@ export function SchedulePage() {
     enabled: !!activeOrganizationId && (canManage || hasPermission("visits.manage")),
   });
   const past = useShiftsToReconcile();
-  const filtered = useMemo(() => applyFilters(shifts.data ?? [], filters), [shifts.data, filters]);
+  const filtered = useMemo(() => applyFilters(shifts.data ?? [], filters, today), [shifts.data, filters, today]);
+  const hiddenInHistory = useMemo(() => (filters.show === "active" ? (shifts.data ?? []).filter((s) => isHistoryShift(s, today)).length : 0), [shifts.data, filters.show, today]);
   // Upcoming shifts without a caregiver, by start time. They are listed once, in the first group; the day lists below hold everything else.
   // "Needs coverage" is the SERVER's decision (display state, 0075): a shift that has not ended and has nobody to work it. A running shift is included (it is Critical);
   // an ended shift is never included (it is a past shift to review). The browser clock is not used.
@@ -548,7 +549,7 @@ export function SchedulePage() {
           : <input id="sh-from" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="block min-h-11 rounded-lg border border-slate-200 px-2 text-base md:min-h-8 md:py-0 md:text-sm" />}</div>
         <Button type="button" variant="secondary" className="min-h-11 md:min-h-8 md:py-0" onClick={() => setFrom(stepAnchor(view, from, 1))}>Next {unit} →</Button>
         <label className="flex min-h-11 items-center gap-1.5 text-sm text-slate-800 md:min-h-8"><input type="checkbox" className="h-4 w-4" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Unfilled only</label>
-        <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} />
+        <FilterBar shifts={shifts.data ?? []} filters={filters} onChange={setFilters} hidden={hiddenInHistory} />
         {canManage ? (
           <details className="relative">
             <summary className="inline-flex min-h-11 cursor-pointer items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8">More</summary>
@@ -560,7 +561,7 @@ export function SchedulePage() {
         ) : null}
       </div>
       {!coverageOnly && view === "month" && shifts.data ? <MonthGrid anchor={from} shifts={filtered.filter((s) => !onlyOpen || stateOfShift(s) === "needs_coverage")} onPickDay={(d) => { setView("day"); setFrom(d); }} /> : null}
-      {!coverageOnly && view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{Object.values(filters).some(Boolean) ? "No other shifts match these filters." : uncovered.length > 0 ? `No other shifts this ${unit}.` : `No shifts this ${unit}.`}</p> : null}
+      {!coverageOnly && view !== "month" && shifts.data && byDay.size === 0 ? <p className="text-sm text-slate-600">{hasFilters(filters) ? "No other shifts match these filters." : uncovered.length > 0 ? `No other shifts this ${unit}.` : `No shifts this ${unit}.`}</p> : null}
       {!coverageOnly && view !== "month" ? [...byDay.entries()].map(([d, list], i) => (
         <section key={d} aria-label={dayLabel(d)}>
           <h2 className="mt-1 rounded-sm bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800">{dayLabel(d)}</h2>
