@@ -44,3 +44,4 @@ Unit tests: `apps/web/src/lib/aws-api-switched.test.ts` (15 tests, including the
 - Web-only publish of release commit `a6f7e3ccb990547820af8f3be4f47caad0f4bb9c` to the TEST site with `TEST_WEB_FIX.sh` (CI green: harness, validate, postgres). Operator output: "TEST WEB PUBLISHED ... serves a6f7e3cc". API, database and switches untouched; production untouched.
 - Rollback reference (CloudShell, ephemeral): `/tmp/ogevia-wf-11211250/webfix-20261121T125102Z`.
 - NOT yet verified: the owner's Retire check on TEST (expected: "This is not available in this environment yet."). The TEST `requestCleanup` switch is still OFF, so the action itself does not succeed there. Production: unchanged, pending approval.
+- TEST check (owner screenshot, 2026-11-21): Retire document type on TEST now shows "This is not available in this environment yet." (no longer "Could not reach Ogevia"). The action does not succeed on TEST because its `requestCleanup` switch is OFF.
