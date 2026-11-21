@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PRODUCTION: turn the request-cleanup switch ON by adding exactly three API Gateway routes to the LIVE Ogevia-prd-ServiceVerificationApi template.
 # Owner authorization: "Yes, prepare it" (2026-11-21) for the switch-ON change; the run itself needs the typed owner approval below.
-# Derived from production-request-cleanup-routes-deploy.sh (the 2026-11-15 production release): same plan / apply / rollback with a CloudFormation change set that is guarded to be exactly
+# Derived from production-signin-override-deploy.sh (the 2026-11-15 production release, branch claude/keen-hawking-e9o2jg): same plan / apply / rollback with a CloudFormation change set that is guarded to be exactly
 # the routes, a smoke check, and an automatic rollback. Differences: three routes, no cdk synth (the helper builds the routes from a live sibling route and was proven equal to the CDK
 # synthesis with the switch on), and a check that the deployed Handler is the release code. No Lambda code, IAM, permission, parameter, database or website change. Never runs `cdk deploy`.
 #   plan                    read-only checks, builds the change from the LIVE template, creates (does not execute) a change set and guards it
