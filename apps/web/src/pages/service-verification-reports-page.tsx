@@ -57,6 +57,7 @@ import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
 import { useDashboardAppearance } from "@/aws/appearance/appearance-hooks";
+import { officeMatches, useClientOffices, useOffices } from "@/aws/offices";
 import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
@@ -428,6 +429,9 @@ export function ServiceVerificationReportsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [correctedByFilter, setCorrectedByFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [officeFilter, setOfficeFilter] = useState("");   // 0110: an office id, "none" = clients with no office
+  const { offices: officeList, available: officesOn } = useOffices();
+  const { byClientId: officeByClient, ready: officeMapReady } = useClientOffices(officesOn);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
@@ -715,15 +719,11 @@ export function ServiceVerificationReportsPage() {
     return map;
   }, [clientLocationsQuery.data]);
 
-  const rows = useMemo(
-    () =>
-      locationFilter
-        ? rawRows.filter(
-            (row) => clientLocationMap.get(row.client_id) === locationFilter,
-          )
-        : rawRows,
-    [clientLocationMap, locationFilter, rawRows],
-  );
+  const rows = useMemo(() => {
+    const byLocation = locationFilter ? rawRows.filter((row) => clientLocationMap.get(row.client_id) === locationFilter) : rawRows;
+    if (!officeFilter || !officesOn || !officeMapReady) return byLocation;
+    return byLocation.filter((row) => officeMatches(officeFilter, officeByClient.get(row.client_id)));
+  }, [clientLocationMap, locationFilter, officeFilter, officesOn, officeMapReady, officeByClient, rawRows]);
 
   const locationOptions = useMemo(
     () => Array.from(new Set(clientLocationMap.values())).sort(),
@@ -1134,7 +1134,7 @@ export function ServiceVerificationReportsPage() {
     window.print();
   }
 
-  const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter]
+  const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter, officeFilter]
     .filter(Boolean).length;
 
   // Monthly reports are chosen by month; of the filters only the ones their data honours are shown.
@@ -1152,6 +1152,7 @@ export function ServiceVerificationReportsPage() {
     setStatusFilter("");
     setCorrectedByFilter("");
     setLocationFilter("");
+    setOfficeFilter("");
     if (caregiverFilter) selectCaregiverFolder("");
   }
 
@@ -1565,6 +1566,25 @@ export function ServiceVerificationReportsPage() {
                     {location}
                   </option>
                 ))}
+              </select>
+            </div>
+            ) : null}
+            {filterApplies("location") && officesOn && officeMapReady && officeList.length > 0 ? (
+            <div>
+              <label htmlFor="report-office" className="block text-xs font-medium text-slate-600">
+                Office
+              </label>
+              <select
+                id="report-office"
+                value={officeFilter}
+                onChange={(event) => setOfficeFilter(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All offices</option>
+                {officeList.map((o) => (
+                  <option key={o.officeId} value={o.officeId}>{o.isActive ? o.name : `${o.name} (retired)`}</option>
+                ))}
+                <option value="none">No office</option>
               </select>
             </div>
             ) : null}

@@ -3519,6 +3519,62 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0110 (pending, behind the offices release switch): offices and a client's responsible office. Administrators manage offices; managers assign clients; office roles read.
+  "GET /v1/offices": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      offices: await tx((db) => rows(db, "select * from ogevia_api.list_offices($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/client-offices": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      clientOffices: await tx((db) => rows(db, "select * from ogevia_api.list_client_offices($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/offices": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const name = text(body.name, "name", 80, { required: true })!;
+      const key = idempotencyKey(event.headers);
+      return { officeId: await tx(async (db) => (await first(db, "select ogevia_api.create_office($1,$2,$3) as id", [uuid(body.organizationId, "organizationId"), name, key])).id) };
+    },
+  },
+
+  "POST /v1/offices/{officeId}/rename": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const name = text(body.name, "name", 80, { required: true })!;
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.rename_office($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), name])).r) };
+    },
+  },
+
+  "POST /v1/offices/{officeId}/retire": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.retire_office($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), reason])).r) };
+    },
+  },
+
+  // The client's responsible office; officeId null clears it.
+  "POST /v1/clients/{clientId}/office": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const office = body.officeId === null || body.officeId === undefined ? null : uuid(body.officeId, "officeId");
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.set_client_office($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), office])).r) };
+    },
+  },
+
   // 0109: the caller marks their OWN care-request alerts read (all, or up to 100 listed ids).
   "POST /v1/care-notifications/read": {
     mutating: true,

@@ -27,6 +27,7 @@ import { CompactAlert } from "./ui/compact-alert";
 import { SummarySection } from "./ui/summary-section";
 import { actionBtn, actionBtnPrimary } from "./ui-classes";
 import { InfoTip } from "./ui/info-tip";
+import { ClientOfficeControl } from "./offices";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -79,6 +80,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
     return (
       <SummarySection title="Details" summary={`City: ${c.city ?? "—"} · Type: ${c.clientTypeName ?? "—"} · Code: ${c.clientCode} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
         <p className="text-sm text-slate-700">Name and contact changes are made by the office.</p>
+        <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>
       </SummarySection>
     );
   }
@@ -92,6 +94,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
           <div><dt className="text-xs text-slate-600">Client code</dt><dd>{c.clientCode}</dd></div>
           <div><dt className="text-xs text-slate-600">Caregivers see</dt><dd>{c.caregiverDisplayCode ?? c.clientCode}</dd></div>
         </dl>
+        <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>
         <button type="button" className={`mt-2 ${actionBtn}`} onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
         {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Saved. The change is in the client&apos;s history.</p> : null}
       </SummarySection>

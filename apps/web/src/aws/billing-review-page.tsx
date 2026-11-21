@@ -15,6 +15,7 @@ import { useIsNarrow } from "@/lib/use-is-narrow";
 import { newIdempotencyKey, type BillingApprovalRow, type BillingReviewRow } from "@/lib/sv-backend";
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { useOrganization } from "@/providers/organization-provider";
+import { useClientOffices, useOffices } from "./offices";
 
 function monthBounds(now = new Date()) {
   const y = now.getFullYear();
@@ -214,7 +215,10 @@ export function BillingReviewPage() {
   }
 
   const loaded = query.data ?? [];
-  const { rows, sort } = useSortedRows(applyBillingFilters(loaded, filters, approvalStatus), {
+  const { offices, available: officesOn } = useOffices(canRead);
+  const { byClientCode: officeByCode, ready: officeMapReady } = useClientOffices(officesOn);
+  const officeOf = officesOn && officeMapReady ? (r: BillingReviewRow) => officeByCode.get(r.clientCode ?? "") : undefined;
+  const { rows, sort } = useSortedRows(applyBillingFilters(loaded, filters, approvalStatus, officeOf), {
     client: { get: (r) => r.clientName ?? r.clientCode },
     caregiver: { get: (r) => r.caregiverName },
     when: { get: (r) => r.timeIn ?? r.serviceDate, kind: "date" },
@@ -236,6 +240,7 @@ export function BillingReviewPage() {
     { key: "visitStatus", label: "Visit status", all: "All visit statuses", opts: options.visitStatuses },
     { key: "approval", label: "Approval status", all: "All approval statuses", opts: options.approvals },
     ...(options.reasons.length > 0 ? [{ key: "reason" as const, label: "Review reason", all: "All review reasons", opts: options.reasons }] : []),
+    ...(officesOn && officeMapReady && offices.length > 0 ? [{ key: "office" as const, label: "Office", all: "All offices", opts: [...offices.map((o): [string, string] => [o.officeId, o.isActive ? o.name : `${o.name} (retired)`]), ["none", "No office"] as [string, string]] }] : []),
   ];
   return (
     <div className="space-y-2">

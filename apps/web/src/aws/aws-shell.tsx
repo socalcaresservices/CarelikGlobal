@@ -29,6 +29,7 @@ import { AppearanceApplier } from "./appearance/use-appearance";
 import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
 import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isSidebarCurrent, isVisitListView, landingOf, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, tabsOf, visibleGroups, type NavGroup, type NavLinkDef } from "./nav-model";
+import { useOffices } from "./offices";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
@@ -127,6 +128,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     if (drawerShown) closeButtonRef.current?.focus();
   }, [drawerShown]);
 
+  const { available: officesOn } = useOffices(!loading && !!activeOrganizationId && hasPermission("organization.update"));   // the Offices link appears only where the offices switch is on (hook order: before the early returns)
   if (loading) {
     return <div className="flex min-h-screen flex-col"><EnvironmentBanner /><div className="flex flex-1 items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div></div>;
   }
@@ -184,6 +186,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: agencyTo, label: "Agency Settings", group: "Settings", show: staff && (canSettings || canServices || canContinuity) },
     { to: "/business-compliance", label: "Business Compliance", group: "Settings", show: staff && hasPermission("accounts.manage") },
     { to: "/accounts", label: "Accounts", group: "Settings", show: staff && hasPermission("accounts.manage") },
+    { to: "/settings/offices", label: "Offices", group: "Settings", show: staff && canSettings && officesOn },
     { to: "/settings/branding", label: "Branding", group: "Settings", show: staff && canSettings && agencyTo !== "/settings/branding" },
     { to: SERVICES_PATH, label: "Services", group: "Settings", show: staff && canServices && agencyTo !== SERVICES_PATH },
     { to: "/continuity", label: "Continuity", group: "Settings", show: staff && canContinuity && agencyTo !== "/continuity" },
