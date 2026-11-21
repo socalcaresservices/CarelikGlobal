@@ -36,11 +36,14 @@ function treemap(data: DashboardDatum[], x = 0, y = 0, w = 100, h = 100): { row:
     ? [{ row: first, x, y, w: w * ratio, h }, ...treemap(rest, x + w * ratio, y, w * (1 - ratio), h)]
     : [{ row: first, x, y, w, h: h * ratio }, ...treemap(rest, x, y + h * ratio, w, h * (1 - ratio))];
 }
-function DashboardVisual({ title, data, style, current, colors }: {
+export function DashboardVisual({ title, data, style, current, colors }: {
   title: string; data: DashboardDatum[]; style: DashboardChartStyle; current: "segmented" | "bar"; colors: readonly string[];
 }) {
   const mode = style === "current" ? current : style;
   const total = data.reduce((acc, row) => acc + Math.max(0, row.value), 0);
+  // A picture needs something to compare. With one value a treemap, pie or segmented bar is one solid block that says nothing the line below it does not (and looks like a
+  // rendering fault), so the graphic is drawn only when two or more values are above zero. The list below always shows every label and amount.
+  const comparable = data.filter((row) => row.value > 0).length >= 2;
   const max = Math.max(1, ...data.map((row) => row.value));
   let angle = 0;
   const stops = data.map((row, index) => {
@@ -49,15 +52,15 @@ function DashboardVisual({ title, data, style, current, colors }: {
     return `${colors[index % colors.length]} ${start}deg ${angle}deg`;
   });
   return <figure aria-label={title} className="space-y-2">
-    {total > 0 && mode === "treemap" ? <div aria-hidden="true" className="relative h-24 overflow-hidden rounded-xl">
+    {comparable && mode === "treemap" ? <div aria-hidden="true" className="relative h-24 overflow-hidden rounded-xl">
       {treemap(data.filter((row) => row.value > 0)).map(({ row, x, y, w, h }) =>
         <div key={row.label} className="absolute rounded-md border-2 border-og-card" style={{
           left: `${x}%`, top: `${y}%`, width: `${w}%`, height: `${h}%`, backgroundColor: colors[data.indexOf(row) % colors.length],
         }} />)}
     </div> : null}
-    {total > 0 && mode === "pie" ? <div aria-hidden="true" className="mx-auto h-28 w-28 rounded-full ring-2 ring-og-card"
+    {comparable && mode === "pie" ? <div aria-hidden="true" className="mx-auto h-28 w-28 rounded-full ring-2 ring-og-card"
       style={{ background: `conic-gradient(${stops.join(", ")})` }} /> : null}
-    {total > 0 && mode === "segmented" ? <div aria-hidden="true" className="flex h-5 overflow-hidden rounded-full">
+    {comparable && mode === "segmented" ? <div aria-hidden="true" className="flex h-5 overflow-hidden rounded-full">
       {data.map((row, i) => <div key={row.label} style={{ width: `${Math.max(0, row.value) / total * 100}%`, backgroundColor: colors[i % colors.length] }} />)}
     </div> : null}
     <ul className="space-y-2 text-sm">

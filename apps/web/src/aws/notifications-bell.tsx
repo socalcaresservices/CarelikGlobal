@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { describeApiFailure } from "@/lib/aws-api";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
@@ -47,7 +48,7 @@ export function NotificationsBell() {
             <p className="text-sm font-semibold text-og-ink">{unread > 0 ? `${unread} unread` : "All read"}</p>
             {unread > 0 ? <button type="button" className="inline-flex min-h-[44px] items-center text-sm font-semibold underline md:min-h-[28px]" onClick={() => void markAll()}>Mark all read</button> : null}
           </div>
-          {q.isError ? <p role="alert" className="text-sm text-red-700">Notifications could not be loaded. Open Action needed to see everything.</p> : null}
+          {q.isError ? <p role="alert" className="text-sm text-red-700">Notifications could not be loaded. Open Action needed to see everything.{describeApiFailure(q.error) ? <span className="mt-0.5 block text-xs font-normal text-og-sub" data-testid="failure-detail">Details: {describeApiFailure(q.error)}</span> : null}</p> : null}
           {q.data && q.data.items.length === 0 ? <p className="text-sm text-og-sub">Nothing new.</p> : null}
           <ul className="max-h-80 divide-y divide-og-line overflow-y-auto">
             {q.data?.items.map((n) => {

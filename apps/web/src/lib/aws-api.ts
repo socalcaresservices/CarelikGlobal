@@ -1,15 +1,36 @@
 // Minimal client for the Ogevia AWS API (API Gateway + Cognito JWT authorizer).
 // The access token comes from the Cognito session in memory; it is never
 // logged or stored. Errors carry the server's safe message and code.
+/** Where and when a request failed, for a short "Details" line the person can read out to support. Never the query string, a token or a body. */
+export interface ApiFailureContext {
+  readonly path: string;
+  readonly at: string;
+}
+
 export class ApiRequestError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly context?: ApiFailureContext,
   ) {
     super(message);
     this.name = "ApiRequestError";
   }
+}
+
+/**
+ * One plain line about a failed request (status or "no answer", route, time) so a person can report it exactly. Null for anything that is not an API failure.
+ * Example: "HTTP 503, /v1/action-issues, 12:31:07 PM" or "No answer from the service, /v1/notifications, 12:31:07 PM".
+ */
+export function describeApiFailure(error: unknown): string | null {
+  if (!(error instanceof ApiRequestError) || !error.context) return null;
+  const when = new Date(error.context.at);
+  const time = Number.isNaN(when.getTime()) ? error.context.at : when.toLocaleTimeString("en-US");
+  const what = error.code === "server_no_response" ? "The service answered other requests but not this one"
+    : error.status === 0 ? "No answer from the service"
+    : `HTTP ${error.status}`;
+  return `${what}, ${error.context.path}, ${time}`;
 }
 
 /**
@@ -77,8 +98,13 @@ export function createAwsApiClient(options: {
         cache: "no-store",
       });
     } catch {
-      if (isSwitchedPath(path) && (await apiAnswers(token))) throw new ApiRequestError(404, "not_available", "This is not available in this environment yet.");
-      throw new ApiRequestError(0, "network_error", "Could not reach Ogevia. Check your connection and try again.");
+      const context: ApiFailureContext = { path, at: new Date().toISOString() };
+      // The browser reports every failed request the same way, whether there is no connection or API Gateway answered without the cross-origin headers (a missing route, a function
+      // that crashed or timed out). Check the one request that must work: if the API answers it, the connection is fine and this request is what failed.
+      const reached = await apiAnswers(token);
+      if (reached && isSwitchedPath(path)) throw new ApiRequestError(404, "not_available", "This is not available in this environment yet.", context);
+      if (reached) throw new ApiRequestError(502, "server_no_response", "Ogevia could not complete that request. Your connection is working. Try again in a moment; if it keeps happening, tell the office.", context);
+      throw new ApiRequestError(0, "network_error", "Could not reach Ogevia. Check your connection and try again.", context);
     }
     let payload: unknown = null;
     try {
@@ -89,7 +115,7 @@ export function createAwsApiClient(options: {
     if (!response.ok) {
       const err = (payload as { error?: { code?: string; message?: string } } | null)?.error;
       // The server's own safe message (business rules, permissions) always wins. API Gateway's own answers (expired token, throttling, a crashed function) carry no such message.
-      throw new ApiRequestError(response.status, err?.code ?? defaultCode(response.status), err?.message ?? defaultMessage(response.status));
+      throw new ApiRequestError(response.status, err?.code ?? defaultCode(response.status), err?.message ?? defaultMessage(response.status), { path, at: new Date().toISOString() });
     }
     return payload as T;
   }

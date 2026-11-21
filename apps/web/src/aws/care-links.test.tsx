@@ -77,7 +77,8 @@ describe("public link actions never fail silently", () => {
 
   it("a network failure on Not available shows a retry message, not nothing", async () => {
     const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") throw new TypeError("Failed to fetch");
+      // A real connection loss: the POST and the client's reachability check (GET /v1/me) both fail. (If only the POST failed, the API would be reachable and the message would say so.)
+      if (init?.method === "POST" || String(_input).endsWith("/v1/me")) throw new TypeError("Failed to fetch");
       return json(OFFER("sent"));
     }) as unknown as typeof fetch;
     renderAt("/care-offer#" + TOKEN, <PublicCareOfferPage api={createAwsPublicApiClient("https://api.example.test", fetchImpl)} />, "/care-offer");

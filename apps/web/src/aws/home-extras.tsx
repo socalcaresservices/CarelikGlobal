@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { describeApiFailure } from "@/lib/aws-api";
 import { formatClockTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { coverageTone, freshness, REFRESH_MS, type AttentionOverview } from "./attention";
@@ -124,11 +125,17 @@ const QUEUE_GROUPS = [
   { key: "authorization", label: "Authorization", categories: ["authorization"] },
 ];
 
+/** The reason a request failed (status or no answer, route, time), small and below the message, so it can be read out exactly. Nothing when it is not an API failure. */
+function failureNote(error: unknown) {
+  const detail = describeApiFailure(error);
+  return detail ? <span className="mt-0.5 block text-xs font-normal text-og-sub" data-testid="failure-detail">Details: {detail}</span> : null;
+}
+
 export function TopIssues() {
   const q = useHomeIssues();
   const [chip, setChip] = useState("all");
   if (q.isLoading || (!q.data && !q.isError)) return null;
-  if (q.isError) return <p role="alert" className="text-sm text-red-700" data-testid="top-issues-error">The list of items that need action could not be loaded. It is not shown as empty. Use Refresh to try again.</p>;
+  if (q.isError) return <p role="alert" className="text-sm text-red-700" data-testid="top-issues-error">The list of items that need action could not be loaded. It is not shown as empty. Use Refresh to try again.{failureNote(q.error)}</p>;
   const urgent = (q.data?.issues ?? []).filter((i) => i.severity !== "routine");
   const total = q.data?.counts?.actionNeeded ?? urgent.length;
   const inGroup = (i: (typeof urgent)[number]) => QUEUE_GROUPS.find((g) => g.key === chip)?.categories.includes(i.category) ?? true;

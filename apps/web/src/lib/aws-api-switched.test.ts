@@ -30,10 +30,17 @@ describe("switched routes", () => {
     const e = await caught(client.post("/v1/care-notifications/read", {}));
     expect(e.status).toBe(0); expect(e.code).toBe("network_error"); expect(e.message).toContain("Could not reach Ogevia");
   });
-  it("a path that is not switched keeps the connection message and makes no extra request", async () => {
+  it("a path that is not switched is also checked against the API: when the API answers, the request itself failed (not the connection)", async () => {
     const { client, calls } = make((u) => (u.endsWith("/v1/me") ? ok() : failed()));
     const e = await caught(client.post("/v1/visits/start", {}));
-    expect(e.code).toBe("network_error"); expect(calls).toHaveLength(1);
+    expect(e.status).toBe(502); expect(e.code).toBe("server_no_response");
+    expect(e.message).toContain("Your connection is working"); expect(e.message).not.toContain("Could not reach Ogevia");
+    expect(calls).toHaveLength(2); expect(calls[1]).toBe("https://api.example/v1/me");
+  });
+  it("a path that is not switched keeps the connection message when the API cannot be reached either", async () => {
+    const { client, calls } = make(failed);
+    const e = await caught(client.post("/v1/visits/start", {}));
+    expect(e.code).toBe("network_error"); expect(e.message).toContain("Could not reach Ogevia"); expect(calls).toHaveLength(2);
   });
   it("a real answer is never reclassified (a 404 not_found from the server stays as the server sent it)", async () => {
     const { client } = make(() => Promise.resolve(new Response(JSON.stringify({ error: { code: "not_found", message: "No such type." } }), { status: 404 })));
