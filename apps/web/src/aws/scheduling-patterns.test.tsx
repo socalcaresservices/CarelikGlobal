@@ -155,6 +155,10 @@ describe("Scheduling page", () => {
 
   it("offers a make-up on a cancelled shift and reports what is still owed", async () => {
     const api = renderAt("/schedule");
+    // the cancelled shift is not on the Active schedule; it is in History, one click away, and the make-up is offered there
+    expect(await screen.findByTestId("history-hint")).toHaveTextContent("kept in History");
+    expect(screen.queryByText(/Synthetic Caregiver One/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show History" }));
     const row = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
     fireEvent.click(within(row).getByRole("button", { name: "More actions" }));
     fireEvent.click(within(row).getByRole("button", { name: "Schedule make-up" }));

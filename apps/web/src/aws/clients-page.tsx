@@ -17,6 +17,7 @@ import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 import { actionBtn } from "./ui-classes";
+import { officeMatches, useClientOffices, useOffices } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -151,7 +152,10 @@ export function ClientsPage() {
     if (saved) setView(saved);
   }, [userId]);
   const chooseView = (next: ClientView) => { setView(next); writeViewPreference(userId, next, safeStorage()); };
-  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort), [clients.data, search, status, authorization, sort]);
+  const { offices, available: officesOn } = useOffices(hasPermission("clients.names.read"));
+  const { byClientId: officeOf } = useClientOffices(officesOn);
+  const [officeFilter, setOfficeFilter] = useState("");
+  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort).filter((c) => officeMatches(officeFilter, officeOf.get(c.clientId))), [clients.data, search, status, authorization, sort, officeFilter, officeOf]);
   if (!hasPermission("clients.names.read")) return <p className="text-sm text-slate-600">You do not have access to client records.</p>;
   const counts = (clients.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {});
   return (
@@ -182,6 +186,16 @@ export function ClientsPage() {
             <option value="none">None current</option>
           </select>
         </div>
+        {officesOn && offices.length > 0 ? (
+          <div>
+            <label htmlFor="client-office-filter" className="block text-sm font-medium text-slate-700">Office</label>
+            <select id="client-office-filter" value={officeFilter} onChange={(e) => setOfficeFilter(e.target.value)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
+              <option value="">All offices</option>
+              {offices.map((o) => <option key={o.officeId} value={o.officeId}>{o.name}{o.isActive ? "" : " (retired)"}</option>)}
+              <option value="none">No office</option>
+            </select>
+          </div>
+        ) : null}
         <div>
           <label htmlFor="client-sort" className="block text-sm font-medium text-slate-700">Sort by</label>
           <select id="client-sort" value={sort} onChange={(e) => setSort(e.target.value as ClientSort)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">

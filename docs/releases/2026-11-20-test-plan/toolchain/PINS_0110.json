@@ -1,0 +1,40 @@
+{
+  "apiRoutes": {
+    "officesRoutes": 6,
+    "switchOff": 259,
+    "switchOn": 262
+  },
+  "applicationCommit": "42eab1e23e27d34bddd555e90e152b5f95bc8377",
+  "expectedLedger": {
+    "after": "109/0110",
+    "before": "108/0109"
+  },
+  "migration0109": {
+    "downSha256": "6df70db755d29341e8960c998528c9108096a466e34d7316dc3b181e522355bb",
+    "upSha256": "2c0ebb9e91e5a88d52f4cd323a82c7b691fb85197c74f80ca98ee774642cd25b"
+  },
+  "migration0110": {
+    "downSha256": "db1c19d88a715752189bcb9dcbed2a96c304a409c0663bf61f6b11c291a3c15a",
+    "upSha256": "76dc0f2a8f8e5a080499f7c4514c718c40403ac6772eedbf841a7c22f3597951"
+  },
+  "pendingUx0103to0107": {
+    "count": 5,
+    "setSha256": "ef7535f15a5caf6d9f315b1d91f44f59d915e1155a0d276a67484d2a1df8ee1e"
+  },
+  "pnpmLockSha256": "8bcc5a445284d84ddef2885544c09d6219356f537e62468c9e40d931fcd8b267",
+  "release": "0110",
+  "releasedMigrations": {
+    "count": 88,
+    "setSha256": "e353d9225b4d0d428f28fd9907d64ac4072429ac8946351fe1ff8bb89f66923c"
+  },
+  "toolchainSha256": {
+    "TEST_0110_LEDGER.sh": "effe0f7baa0378ac2e3cf11b67848c6306f9eb516e49b476a31fef4f616019e5",
+    "TEST_DB_SESSION.sh": "7bc6c91e5f54cca3d559b5c8d716c16b40ffed95d44bc2f233a2bb69aa4ad585",
+    "TEST_H3_OFFICES.sh": "8f68b110039002be0427fad8a984982e627d49502d585fde7730fd6917bfde2e",
+    "TEST_H6_CLEANUP.sh": "155e593a4f0ab639fec485756b02c12e46f3843119ed4c64ffe9118d2d97d1b4",
+    "TEST_WEB_FIX.sh": "535522571926a81e7fce495539390ecdbdfb699512ffaebad03bd96799adb746",
+    "VERIFY_0110.sql": "54dbcc0c7998b311427412c128e869a8927023dc9dba96b111aabb17dc9fe859",
+    "diff_gate_0110.py": "2144db1cb94fb5b847b0d2246529d242be8fb49d4a2dca941a1f4f241d240e51",
+    "release_pins.py": "30ebe38ff891ddad18864b0cdef124fb50ea27a9f6246eaced45d08ad6fdbfdc"
+  }
+}

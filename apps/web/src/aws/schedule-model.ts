@@ -31,11 +31,20 @@ export const DISPLAY_BADGE: Record<string, string> = {
 /** What the server decided (0075), or the older coverage state when an older response has no decision. */
 export const stateOfShift = (s: Pick<Shift, "coverageState"> & { displayState?: string | null }) => s.displayState ?? s.coverageState;
 
-export interface ShiftFilters { caregiver: string; client: string; service: string; state: string }
-export const NO_FILTERS: ShiftFilters = { caregiver: "", client: "", service: "", state: "" };
-export const hasFilters = (f: ShiftFilters) => Object.values(f).some(Boolean);
-export function applyFilters(shifts: Shift[], f: ShiftFilters): Shift[] {
-  return shifts.filter((s) => (!f.caregiver || (f.caregiver === "open" ? !s.caregiverRecordId : s.caregiverRecordId === f.caregiver)) && (!f.client || s.clientId === f.client)
+/** Which shifts the schedule lists. Active schedule hides shifts that are finished and need nothing: cancelled shifts, and completed, partial, not-delivered and no-show shifts from before today. History shows only those. Nothing is deleted either way. */
+export type ShowMode = "active" | "history" | "all";
+export interface ShiftFilters { caregiver: string; client: string; service: string; state: string; show: ShowMode }
+export const NO_FILTERS: ShiftFilters = { caregiver: "", client: "", service: "", state: "", show: "all" };
+export const ACTIVE_FILTERS: ShiftFilters = { ...NO_FILTERS, show: "active" };
+export const hasFilters = (f: ShiftFilters) => Boolean(f.caregiver || f.client || f.service || f.state) || f.show !== "active";
+const CLOSED_STATES = new Set(["completed", "partial", "no_show", "not_delivered"]);
+/** A shift that is finished and needs nothing: cancelled (any date), or closed with a worked/decided outcome and dated before today. In-review, awaiting-decision, missed and not-verified shifts are never history: they still need someone. */
+export const isHistoryShift = (s: Pick<Shift, "coverageState" | "localDate"> & { displayState?: string | null }, today?: string) => {
+  const st = stateOfShift(s);
+  return st === "cancelled" || (CLOSED_STATES.has(st) && today !== undefined && s.localDate < today);
+};
+export function applyFilters(shifts: Shift[], f: ShiftFilters, today?: string): Shift[] {
+  return shifts.filter((s) => (f.show === "all" || (f.show === "history") === isHistoryShift(s, today)) && (!f.caregiver || (f.caregiver === "open" ? !s.caregiverRecordId : s.caregiverRecordId === f.caregiver)) && (!f.client || s.clientId === f.client)
     && (!f.service || s.serviceId === f.service) && (!f.state || stateOfShift(s) === f.state));
 }
 /** The choices a filter offers: only what is in the loaded shifts, so every choice matches something. */

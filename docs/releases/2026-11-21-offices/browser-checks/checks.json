@@ -1,0 +1,146 @@
+{
+ "owner: Offices link in the menu": {
+  "ok": true,
+  "detail": ""
+ },
+ "owner: three offices created": {
+  "ok": true,
+  "detail": "North Office0 clients Rename Retire South Office0 clients Rename Retire Temporary Office0 clients Rename Retire"
+ },
+ "owner: a duplicate name (any case) is refused": {
+  "ok": true,
+  "detail": ""
+ },
+ "owner: rename works": {
+  "ok": true,
+  "detail": ""
+ },
+ "manager: no Offices link in the menu": {
+  "ok": true,
+  "detail": ""
+ },
+ "manager: Offices page refuses (Administrator only)": {
+  "ok": true,
+  "detail": ""
+ },
+ "manager: assigns Demo Vega to North Office": {
+  "ok": true,
+  "detail": ""
+ },
+ "manager: assigns Demo Okafor to Temporary Office": {
+  "ok": true,
+  "detail": ""
+ },
+ "manager: the choice survives a reload": {
+  "ok": true,
+  "detail": ""
+ },
+ "owner: the office shows its client count": {
+  "ok": true,
+  "detail": ""
+ },
+ "owner: retiring needs a reason": {
+  "ok": true,
+  "detail": ""
+ },
+ "owner: retired office is marked, keeps its client, offers no more edits": {
+  "ok": true,
+  "detail": ""
+ },
+ "clients: Office filter lists the offices, the retired one marked, and No office": {
+  "ok": true,
+  "detail": "[\"All offices\",\"North Office\",\"South County Office\",\"Temporary Office (retired)\",\"No office\"]"
+ },
+ "clients: North Office shows only Vega": {
+  "ok": true,
+  "detail": ""
+ },
+ "clients: the retired office still shows its client (Okafor)": {
+  "ok": true,
+  "detail": ""
+ },
+ "clients: an office with no clients shows none": {
+  "ok": true,
+  "detail": ""
+ },
+ "clients: No office shows the five unassigned clients and neither assigned one": {
+  "ok": true,
+  "detail": "Lindqvist,Tanaka,Rivera,Brightwater,Nakamura"
+ },
+ "clients: All offices shows all seven": {
+  "ok": true,
+  "detail": ""
+ },
+ "billing review: rows are listed before filtering": {
+  "ok": true,
+  "detail": "11"
+ },
+ "billing review: an Office filter is offered": {
+  "ok": true,
+  "detail": ""
+ },
+ "billing review: its choices include the retired office and No office": {
+  "ok": true,
+  "detail": "[\"All offices\",\"North Office\",\"South County Office\",\"Temporary Office (retired)\",\"No office\"]"
+ },
+ "billing review: North Office shows only Vega's visits": {
+  "ok": true,
+  "detail": "Showing 5 of 11 visits in this date range"
+ },
+ "billing review: the retired office still filters its historical visits (Okafor)": {
+  "ok": true,
+  "detail": ""
+ },
+ "billing review: No office excludes both assigned clients": {
+  "ok": true,
+  "detail": ""
+ },
+ "reports: the Office dropdown is shown": {
+  "ok": true,
+  "detail": ""
+ },
+ "reports: Office dropdown choices": {
+  "ok": true,
+  "detail": "[\"All offices\",\"North Office\",\"South County Office\",\"Temporary Office (retired)\",\"No office\"]"
+ },
+ "reports: visits of several clients are listed before filtering": {
+  "ok": true,
+  "detail": "Vega,Okafor,Lindqvist,Tanaka,Rivera"
+ },
+ "reports: North Office shows only Vega": {
+  "ok": true,
+  "detail": "Vega"
+ },
+ "reports: the retired office still shows its historical visits (Okafor)": {
+  "ok": true,
+  "detail": "Okafor"
+ },
+ "reports: No office excludes both assigned clients": {
+  "ok": true,
+  "detail": "Lindqvist,Tanaka,Rivera"
+ },
+ "reports: clearing filters resets the Office dropdown": {
+  "ok": true,
+  "detail": ""
+ },
+ "caregiver: no Offices link": {
+  "ok": true,
+  "detail": ""
+ },
+ "caregiver: the Offices page refuses and shows no controls": {
+  "ok": true,
+  "detail": ""
+ },
+ "caregiver: no Office filter on /clients": {
+  "ok": true,
+  "detail": ""
+ },
+ "caregiver: no Office filter on /billing-review": {
+  "ok": true,
+  "detail": ""
+ },
+ "caregiver: no Office filter on /service-verification/reports": {
+  "ok": true,
+  "detail": ""
+ }
+}

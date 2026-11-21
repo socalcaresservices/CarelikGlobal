@@ -96,7 +96,7 @@ beforeAll(async () => {
   ids = {
     organizationId: A, clientId: f.client, serviceId: f.service, authorizationId: f.auth, caregiverRecordId: rec, userId: w.caregiverA1.userId, caregiverUserId: w.caregiverA1.userId,
     f2ClientId, visitId: signed, reviewVisitId: review, decisionId: decision, shiftId: shift, seriesId: series ?? rnd(), assignmentId: assignment, billingApprovalId: billingApproval ?? rnd(),
-    confirmationRequestId: confirmationRequest?.request_id ?? rnd(), documentTypeId: docType ?? rnd(), clientTypeId: clientType ?? rnd(), lateVisitId: lateVisit,
+    confirmationRequestId: confirmationRequest?.request_id ?? rnd(), documentTypeId: docType ?? rnd(), officeId: rnd(), clientTypeId: clientType ?? rnd(), lateVisitId: lateVisit,
     // kinds with no cheap real row here: well-formed unknown ids (the 404 then proves "not found", not "other agency"); counted and listed separately
     careRequestId: rnd(), offerId: rnd(), impactId: rnd(), holdId: rnd(), versionId: rnd(), documentId: rnd(), lateConfirmationId: rnd(), adjustmentId: rnd(),
     pickupRequestId: rnd(), openShiftId: shift, availabilityRequestId: rnd(), caregiverServiceApprovalId: rnd(), excludeShiftId: shift, excludeClientId: f.client, authorizationLineageId: rnd(), correctedByUserId: w.managerA.userId,
@@ -114,6 +114,8 @@ beforeAll(async () => {
   real("authorizationLineageId", (await db.admin.query("select lineage_id from ogevia.client_authorizations where id = $1", [f.auth])).rows[0].lineage_id);
   const dt = await make(w.ownerA, "POST /v1/document-types", { name: "Synthetic Doc Type" });
   real("documentTypeId", dt.body.documentTypeId ?? dt.body.id);
+  const office = await make(w.ownerA, "POST /v1/offices", { name: "Synthetic Office" });   // 0110: a real org A office, so the office routes reach the database check
+  real("officeId", office.body.officeId);
   const docReq = await make(w.managerA, "POST /v1/documents/requests", { documentTypeId: ids.documentTypeId, caregiverRecordId: rec });
   real("documentId", docReq.body.documentId);
   const up = await make(w.caregiverA1, "POST /v1/documents/{documentId}/versions", {}, { documentId: ids.documentId! });
