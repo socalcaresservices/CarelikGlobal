@@ -48,6 +48,19 @@ it("refuses when the switch is already on (any of the three routes present), the
     expect(patch(t).result.status, kind).not.toBe(0);
   }
 });
+it("accepts the two sign-in override routes that are live in production since 2026-11-15, and still refuses import and duplicate-staff routes", () => {
+  const live: any = fixture();
+  live.Resources.O1 = { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "GET /v1/signin-overrides" } };
+  live.Resources.O2 = { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: "POST /v1/caregivers/{caregiverRecordId}/signin-override" } };
+  const { result, output } = patch(live);
+  expect(result.status, result.stderr).toBe(0);
+  const after = JSON.parse(readFileSync(output, "utf8")); after.Resources.Handler886CB40B.Properties.Code = live.Resources.Handler886CB40B.Properties.Code;
+  expect(after).toEqual(live);
+  for (const route of ["POST /v1/imports/{kind}", "GET /v1/staff/duplicates", "POST /v1/staff/{profileId}/merge"]) {
+    const t: any = fixture(); t.Resources.X = { Type: "AWS::ApiGatewayV2::Route", Properties: { RouteKey: route } };
+    expect(patch(t).result.status, route).not.toBe(0);
+  }
+});
 it("refuses when production is already on this code", () => {
   const t: any = fixture(); t.Resources.Handler886CB40B.Properties.Code.S3Key = KEY;
   expect(patch(t).result.status).not.toBe(0);

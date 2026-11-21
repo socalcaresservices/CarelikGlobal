@@ -92,8 +92,7 @@ def patch_template(t):
     assert len(routes) == len(set(routes))
     for disabled in ['POST /v1/care-notifications/read', 'POST /v1/documents/{documentId}/cancel', 'POST /v1/document-types/{documentTypeId}/retire',
                      'POST /v1/imports/{kind}', 'GET /v1/staff/duplicates',
-                     'POST /v1/staff/{profileId}/merge', 'GET /v1/signin-overrides',
-                     'POST /v1/caregivers/{caregiverRecordId}/signin-override']:
+                     'POST /v1/staff/{profileId}/merge']:   # the two sign-in override routes are LIVE in production since 2026-11-15 (change set, no code change) and are allowed
         assert disabled not in routes, 'disabled production feature is enabled: '+disabled
     for retained in ['GET /v1/business-documents', 'POST /v1/business-documents',
                      'GET /v1/reports/missing-visits', 'POST /v1/shifts/{shiftId}/missing-visit',
