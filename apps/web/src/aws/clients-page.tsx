@@ -17,7 +17,7 @@ import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 import { actionBtn } from "./ui-classes";
-import { officeMatches, useClientOffices, useOffices } from "./offices";
+import { officeMatches, useClientOffices, useOffices } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";

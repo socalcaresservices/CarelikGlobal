@@ -15,7 +15,7 @@ import { useIsNarrow } from "@/lib/use-is-narrow";
 import { newIdempotencyKey, type BillingApprovalRow, type BillingReviewRow } from "@/lib/sv-backend";
 import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { useOrganization } from "@/providers/organization-provider";
-import { useClientOffices, useOffices } from "./offices";
+import { useClientOffices, useOffices } from "./offices-data";
 
 function monthBounds(now = new Date()) {
   const y = now.getFullYear();

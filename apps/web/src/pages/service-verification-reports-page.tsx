@@ -57,7 +57,7 @@ import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
 import { useDashboardAppearance } from "@/aws/appearance/appearance-hooks";
-import { officeMatches, useClientOffices, useOffices } from "@/aws/offices";
+import { officeMatches, useClientOffices, useOffices } from "@/aws/offices-data";
 import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";

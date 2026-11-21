@@ -1,6 +1,6 @@
 import type { BillingReviewRow } from "@/lib/sv-backend";
 import { nameWithCode } from "./name-label";
-import { officeMatches } from "./offices";
+import { officeMatches } from "./offices-data";
 import { VISIT_STATUS_LABEL } from "@/lib/service-verification";
 import { APPROVAL_STATUS_LABEL, type ApprovalStatus } from "./billing-format";
 

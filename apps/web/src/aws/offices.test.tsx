@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAwsApiClient } from "@/lib/aws-api";
 import { AwsRoutes } from "./aws-root";
 import { applyBillingFilters, NO_FILTERS } from "./billing-filters";
-import { officeMatches } from "./offices";
+import { officeMatches } from "./offices-data";
 import type { BillingReviewRow } from "@/lib/sv-backend";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";

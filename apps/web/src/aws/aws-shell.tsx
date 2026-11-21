@@ -29,7 +29,7 @@ import { AppearanceApplier } from "./appearance/use-appearance";
 import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } from "./aws-workspace";
 import { EnvironmentBanner } from "./environment-marker";
 import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isSidebarCurrent, isVisitListView, landingOf, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, tabsOf, visibleGroups, type NavGroup, type NavLinkDef } from "./nav-model";
-import { useOffices } from "./offices";
+import { useOffices } from "./offices-data";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
