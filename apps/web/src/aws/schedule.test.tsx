@@ -1,7 +1,7 @@
 // Schedule and My shifts (0026) against an in-memory fake of the AWS API,
 // through the real API client and routes. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -31,6 +31,7 @@ function fakeApi(role: Role) {
   let covered = { ...base, shiftId: COVERED, startsAt: later(26), endsAt: later(27), coverageState: "covered", caregiverRecordId: CG1, caregiverCode: "CG-1", caregiverName: "Synthetic Caregiver One" };
   let open = { ...base, shiftId: OPEN, startsAt: later(25), endsAt: later(26), coverageState: "needs_coverage", caregiverRecordId: null as string | null, caregiverCode: null as string | null, caregiverName: null as string | null };
   let mine = { shiftId: COVERED, startsAt: later(26), endsAt: later(27), clientCode: "CL-1", serviceName: "Personal care", coverageState: "covered", canCallOut: true };
+  const state = { refuse: null as string | null }; // a test sets this to make the assign call refuse with a server sentence
   const json = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { "content-type": "application/json" } });
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -51,6 +52,7 @@ function fakeApi(role: Role) {
         covered = { ...covered, coverageState: "needs_coverage", lastCalloutReason: String(body?.reason) };
         return json(200, { coverageState: "needs_coverage" });
       case `POST /v1/shifts/${OPEN}/caregiver`:
+        if (state.refuse) return json(409, { error: { code: "conflict", message: state.refuse } });
         open = { ...open, coverageState: "covered", caregiverRecordId: CG2, caregiverCode: "CG-2", caregiverName: "Synthetic Caregiver Two" };
         return json(200, { coverageState: "covered" });
       case `GET /v1/shifts/${COVERED}/coverage`:
@@ -75,7 +77,7 @@ function fakeApi(role: Role) {
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });
-  return { calls, fetchImpl };
+  return { calls, fetchImpl, state };
 }
 
 function renderAt(path: string, role: Role) {
@@ -102,26 +104,35 @@ afterEach(() => vi.clearAllMocks());
 
 describe("Schedule (staff)", () => {
   it("shows what needs coverage, records a call-out with a reason, and fills the open shift", async () => {
+    const invalidate = vi.spyOn(QueryClient.prototype, "invalidateQueries");
     const api = renderAt("/schedule", "manager");
     expect(await screen.findByText("Unfilled (1)")).toBeInTheDocument();
     expect(screen.queryByText("Open: no caregiver")).toBeNull(); // one Unfilled badge, not a second line
     expect(screen.getAllByTestId("shift-state").map((e) => e.textContent)).toContain("Unfilled");
     const coveredRow = screen.getByText(/Synthetic Caregiver One/).closest("tbody")!;
     fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
-    fireEvent.click(within(coveredRow).getAllByRole("button", { name: "Record call-out" }).at(-1)!);
-    expect(await within(coveredRow).findByRole("alert")).toHaveTextContent("reason");
-    fireEvent.change(within(coveredRow).getByLabelText("Reason for the call-out"), { target: { value: "Sick (synthetic)" } });
-    fireEvent.click(within(coveredRow).getAllByRole("button", { name: "Record call-out" }).at(-1)!);
+    // The form opens in the shift drawer, not under the row, and the drawer says which shift it is for.
+    const drawer = within(await screen.findByRole("dialog"));
+    expect(drawer.getByTestId("shift-drawer-summary")).toHaveTextContent("Synthetic Caregiver One");
+    fireEvent.click(drawer.getByRole("button", { name: "Record call-out" }));
+    expect(await drawer.findByRole("alert")).toHaveTextContent("reason");
+    fireEvent.change(drawer.getByLabelText("Reason for the call-out"), { target: { value: "Sick (synthetic)" } });
+    fireEvent.click(drawer.getByRole("button", { name: "Record call-out" }));
     expect(await screen.findByText(/Call-out recorded\. The shift now needs coverage/)).toBeInTheDocument();
     expect(await screen.findByText("Unfilled (2)")).toBeInTheDocument();
+    // A saved call-out refreshes the Home dashboard's figures as well as the schedule lists.
+    const refreshed = invalidate.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
+    for (const key of ["aws-shifts", "action-issues", "attention-overview", "aws-utilisation", "care-requests", "aws-pickups"]) expect(refreshed).toContain(key);
+    invalidate.mockRestore();
     const callout = api.calls.find((c) => c.path.endsWith("/callout"))!;
     expect(callout.body).toEqual({ organizationId: ORG, reason: "Sick (synthetic)" });
     expect(Object.keys(callout.headers).map((h) => h.toLowerCase())).toContain("idempotency-key");
 
     const openRow = screen.getAllByTestId("shift-state").find((e) => e.textContent === "Unfilled")!.closest("tbody")!;
     fireEvent.click(within(openRow).getByRole("button", { name: /^Assign caregiver to shift for / }));
-    fireEvent.change(within(openRow).getByLabelText("Caregiver"), { target: { value: CG2 } });
-    fireEvent.click(within(openRow).getByRole("button", { name: "Assign" }));
+    const assignDrawer = within(await screen.findByRole("dialog"));
+    fireEvent.change(assignDrawer.getByLabelText("Caregiver"), { target: { value: CG2 } });
+    fireEvent.click(assignDrawer.getByRole("button", { name: "Assign" }));
     expect(await screen.findByText("Caregiver assigned. The shift is covered.")).toBeInTheDocument();
     expect(api.calls.find((c) => c.path.endsWith("/caregiver"))!.body).toMatchObject({ caregiverRecordId: CG2, reason: null });
   });
@@ -144,12 +155,46 @@ describe("Schedule (staff)", () => {
     });
   });
 
+  it("opens a shift's change forms in a side drawer that names the shift, and closes with Escape or Close without moving the list", async () => {
+    renderAt("/schedule", "manager");
+    const coveredRow = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
+    const rowsBefore = screen.getAllByTestId("shift-state").length;
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName(/^Record call-out: /);
+    const summary = within(dialog).getByTestId("shift-drawer-summary");
+    for (const label of ["Client", "When", "Service", "Caregiver", "Status"]) expect(summary).toHaveTextContent(label);
+    expect(within(coveredRow).queryByLabelText("Reason for the call-out")).toBeNull(); // not under the row
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getAllByTestId("shift-state")).toHaveLength(rowsBefore);
+    fireEvent.click(within(coveredRow).getByRole("button", { name: "Record call-out" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!); // the drawer's own close button comes first
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("a refused assignment shows the server's sentence with one plain next step, and nothing is changed", async () => {
+    const api = renderAt("/schedule", "manager");
+    api.state.refuse = "This caregiver already has a shift at that time";
+    await screen.findByText("Unfilled (1)");
+    const openRow = screen.getAllByTestId("shift-state").find((e) => e.textContent === "Unfilled")!.closest("tbody")!;
+    fireEvent.click(within(openRow).getByRole("button", { name: /^Assign caregiver to shift for / }));
+    const drawer = within(await screen.findByRole("dialog"));
+    await drawer.findByRole("option", { name: /Synthetic Caregiver Two/ }); // the list has loaded
+    fireEvent.change(drawer.getByLabelText("Caregiver"), { target: { value: CG2 } });
+    fireEvent.click(drawer.getByRole("button", { name: "Assign" }));
+    await waitFor(() => expect(drawer.getAllByRole("alert").map((a) => a.textContent).join(" | ")).toContain("This caregiver already has a shift at that time. What to do: Pick another time, or choose a different caregiver."));
+    expect(screen.queryByText("Caregiver assigned. The shift is covered.")).toBeNull();
+    expect(screen.getByText("Unfilled (1)")).toBeInTheDocument();
+  });
+
   it("history lists call-outs with who recorded them; caregivers have no Schedule", async () => {
     renderAt("/schedule", "manager");
     const coveredRow = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
     fireEvent.click(within(coveredRow).getByRole("button", { name: "More actions" }));
     fireEvent.click(within(coveredRow).getByRole("button", { name: "History" }));
-    expect(await within(coveredRow).findByText(/Synthetic Caregiver One called out \(caregiver\) — Sick \(synthetic\)/)).toBeInTheDocument();
+    expect(await within(await screen.findByRole("dialog")).findByText(/Synthetic Caregiver One called out \(caregiver\) — Sick \(synthetic\)/)).toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,7 @@
 import { Fragment, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MobileSortControl, SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { Button, Card } from "@carelik/ui";
 import { Link, useSearchParams } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
@@ -99,7 +101,6 @@ export function StaffPage() {
     enabled: !!activeOrganizationId && canRead,
   });
   const types = useStaffTypes(canRead);
-  if (!canRead) return <NotAllowed />;
 
   const finish = async (text: string) => {
     setDone(text);
@@ -110,13 +111,23 @@ export function StaffPage() {
   const all = staff.data?.staff ?? [];
   const activeTypes = (types.data?.staffTypes ?? []).filter((t) => t.isActive);
   const needle = search.trim().toLowerCase();
-  const rows = all.filter((r) =>
+  const matching = all.filter((r) =>
     (!person || r.userId === person)
     && (!needle || [r.displayName, r.staffTypeName, r.contactEmail, r.phone].some((v) => v?.toLowerCase().includes(needle)))
     && (typeFilter === ALL || (typeFilter === "none" ? r.staffTypeId === null : r.staffTypeId === typeFilter))
     && (roleFilter === ALL || (r.systemRole ?? "none") === roleFilter)
     && (statusFilter === ALL || ACCESS_LABEL[r.accessStatus] === statusFilter)
     && (recordFilter === ALL || r.status === recordFilter));
+  const { rows, sort } = useSortedRows(matching, {
+    name: { get: (r) => r.displayName },
+    type: { get: (r) => r.staffTypeName },
+    role: { get: (r) => (r.systemRole ? roleName(r.systemRole) : null) },
+    signin: { get: (r) => ACCESS_LABEL[r.accessStatus] },
+    record: { get: (r) => r.status },
+    email: { get: (r) => r.contactEmail },
+    phone: { get: (r) => r.phone },
+  });
+  if (!canRead) return <NotAllowed />;
   const filtered = !!person || needle !== "" || typeFilter !== ALL || roleFilter !== ALL || statusFilter !== ALL || recordFilter !== ALL;
   const clear = () => { if (person) setParams({}); setSearch(""); setTypeFilter(ALL); setRoleFilter(ALL); setStatusFilter(ALL); setRecordFilter(ALL); };
   const rolesPresent = [...new Set(all.map((r) => r.systemRole ?? "none"))].sort((x, y) => roleName(x === "none" ? null : x).localeCompare(roleName(y === "none" ? null : y)));
@@ -173,16 +184,20 @@ export function StaffPage() {
       {rows.length > 0 ? (
         <div className="relative overflow-x-auto md:rounded-lg md:border md:border-slate-200 md:bg-og-card">
           {filtered ? <p className="px-1 pb-1 text-xs text-slate-600 md:px-3 md:pt-1" role="status">{rows.length} of {all.length}</p> : null}
+          <MobileSortControl sort={sort} className="px-1 pb-2" options={[
+            { column: "name", label: "Name" }, { column: "type", label: "Staff type" }, { column: "role", label: "Role" }, { column: "signin", label: "Sign-in status" },
+            { column: "record", label: "Staff record" }, { column: "email", label: "Contact email" }, { column: "phone", label: "Phone" },
+          ]} />
           <table className="block w-full text-left text-sm md:table" aria-label="Staff">
             <thead className="hidden md:table-header-group">
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
                 <th scope="col" className="w-10 px-3 py-1.5 text-right font-semibold">No.</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Name</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Staff Type</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Role</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Sign-in status</th><th scope="col" className="px-3 py-1.5 font-semibold">Staff record</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Contact email</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Phone</th>
+                <SortTh sort={sort} column="name" className="px-3 py-0.5">Name</SortTh>
+                <SortTh sort={sort} column="type" className="px-3 py-0.5">Staff Type</SortTh>
+                <SortTh sort={sort} column="role" className="px-3 py-0.5">Role</SortTh>
+                <SortTh sort={sort} column="signin" className="px-3 py-0.5">Sign-in status</SortTh><SortTh sort={sort} column="record" className="px-3 py-0.5">Staff record</SortTh>
+                <SortTh sort={sort} column="email" className="px-3 py-0.5">Contact email</SortTh>
+                <SortTh sort={sort} column="phone" className="px-3 py-0.5">Phone</SortTh>
                 <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>

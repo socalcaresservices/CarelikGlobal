@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { IncidentsPage } from "./incidents-page";
+import { captureCsvDownload } from "@/test/csv-capture";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({
@@ -284,4 +285,26 @@ describe("IncidentsPage", () => {
     // Second page has fewer than PAGE_SIZE rows, so there's nothing more.
     expect(screen.queryByText("Load older incidents")).not.toBeInTheDocument();
   });
+
+  it("exports the incidents in the order shown on screen, including a chosen sort", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn((permission: string) => permission === "incidents.read") });
+    const row = (n: number, category: string) => ({
+      id: `66666666-6666-4666-8666-66666666666${n}`, client_id: null, client_name: null, caregiver_user_id: null, caregiver_name: null,
+      occurred_at: `2026-07-1${n}T09:00:00.000Z`, category, severity: "high", status: "open", description: `Report ${n} ${category}`,
+      reported_by: USER_ID, reported_by_name: "Sam Caregiver", resolution_notes: null, resolved_at: null
+    });
+    mockedRpc.mockResolvedValue({ data: [row(1, "Fall"), row(2, "Elopement"), row(3, "Medication")], error: null } as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Fall")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Category" }));
+    const shown = screen.getAllByRole("row").slice(1).map((r) => r.textContent ?? "");
+    const cap = captureCsvDownload();
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+    const csv = (await cap.rows()).slice(1);
+    cap.restore();
+    expect(csv.map((r) => r[1])).toEqual(["Elopement", "Fall", "Medication"]);
+    expect(csv).toHaveLength(shown.length);
+    csv.forEach((r, i) => expect(shown[i]).toContain(r[1]));
+  });
+
 });

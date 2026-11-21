@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { orderChainRows } from "@carelik/auth/export-order";
 import { Button, Card } from "@carelik/ui";
 import { formatDuration } from "@/lib/service-verification";
 import { hoursLeftText, type HoursFields } from "@/lib/hours-accounting";
@@ -92,7 +93,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
       setBusy(false);
     }
   }
-  const rows = q.data ?? [];
+  const rows = useMemo(() => orderChainRows(q.data ?? []), [q.data]);
   const failing = rows.filter((r) => !r.reservedOk || r.visitsOk === false || !r.balanceOk);
   return (
     <Card className="mt-2 space-y-2 print:border-none print:p-0" data-testid="monthly-chain">

@@ -7,11 +7,12 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useAssignments } from "./assignments-data";
-import { caregiverName, useCaregivers } from "./care-team-admin";
+import { useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { formatDateOnly } from "@/lib/service-verification";
 import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
+import { CaregiverPicker } from "./caregiver-picker";
 
 /**
  * Assignments (0024): which caregiver may serve which client for which
@@ -138,15 +139,9 @@ function AddAssignmentForm({ clientId, caregiverRecordId, onDone }: { clientId?:
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
       {pickingCaregiver ? (
         <div className="sm:col-span-2">
-          <label htmlFor="asg-caregiver" className="block text-sm font-medium text-slate-700">Caregiver</label>
-          <select id="asg-caregiver" value={pick} onChange={(e) => { setPick(e.target.value); touch(); }} className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
-            <option value="">Choose a caregiver</option>
-            {eligibleCaregivers.map((c) => (
-              <option key={c.caregiverRecordId} value={c.caregiverRecordId}>
-                {nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}{!c.hasSignIn ? " — planned: no sign-in yet" : c.status === "onboarding" ? " — planned: still onboarding" : ""}
-              </option>
-            ))}
-          </select>
+          <CaregiverPicker id="asg-caregiver" label="Caregiver" className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm" value={pick} placeholder="Choose a caregiver"
+            onChange={(v) => { setPick(v); touch(); }} caregivers={eligibleCaregivers}
+            suffix={(c) => (!c.hasSignIn ? " — planned: no sign-in yet" : c.status === "onboarding" ? " — planned: still onboarding" : "")} />
         </div>
       ) : (
         <div className="sm:col-span-2">

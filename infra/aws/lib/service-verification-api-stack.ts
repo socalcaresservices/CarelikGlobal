@@ -84,7 +84,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -319,6 +319,10 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/care-alert-staff" },
   { method: apigw.HttpMethod.POST, path: "/v1/care-alert-staff" },
   { method: apigw.HttpMethod.GET, path: "/v1/care-notifications" },
+  // 0109 (pending): cancel a document request, retire a document type, clear care-request alerts. OFF until the owner releases 0109.
+  { method: apigw.HttpMethod.POST, path: "/v1/care-notifications/read", feature: "requestCleanup" },
+  { method: apigw.HttpMethod.POST, path: "/v1/documents/{documentId}/cancel", feature: "requestCleanup" },
+  { method: apigw.HttpMethod.POST, path: "/v1/document-types/{documentTypeId}/retire", feature: "requestCleanup" },
   { method: apigw.HttpMethod.GET, path: "/v1/availability/me" },
   { method: apigw.HttpMethod.POST, path: "/v1/availability/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/care-opportunities" },

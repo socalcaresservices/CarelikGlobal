@@ -135,6 +135,21 @@ describe("Staff", () => {
     expect(document.body.textContent).not.toMatch(/cognito|password/i);
   });
 
+  it("phone: a Sort by control sorts the same list by the same columns as the headings, and reverses it", async () => {
+    renderAt("/staff", "organization_owner");
+    const table = await screen.findByRole("table", { name: "Staff" });
+    const control = screen.getByTestId("mobile-sort");
+    const select = within(control).getByRole("combobox", { name: "Sort by" });
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Choose a column", "Name", "Staff type", "Role", "Sign-in status", "Staff record", "Contact email", "Phone"]);
+    fireEvent.change(select, { target: { value: "name" } });
+    expect(within(table).getAllByTestId("row-no")).toHaveLength(7);
+    expect(within(table).getByRole("columnheader", { name: /Name/ })).toHaveAttribute("aria-sort", "ascending");
+    expect(await rowOf("Abe Active")).toBe(within(table).getAllByRole("row")[1]);
+    fireEvent.click(within(control).getByRole("button", { name: /Tap to reverse/ }));
+    expect(within(table).getByRole("columnheader", { name: /Name/ })).toHaveAttribute("aria-sort", "descending");
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent("Synthetic Manager");
+  });
+
   it("an administrator adds staff with a contact email that is separate from the sign-in email", async () => {
     const api = renderAt("/staff", "organization_owner");
     fireEvent.click(await screen.findByRole("button", { name: "Add office staff" }));

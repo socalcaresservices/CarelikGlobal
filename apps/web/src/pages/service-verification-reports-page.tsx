@@ -59,6 +59,9 @@ import { PageHeader } from "@/aws/ui/page-header";
 import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
+import { orderCorrectionRows, orderMonthlyServiceRows } from "@carelik/auth/export-order";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
 import {
   AUTHORIZATION_STATUS_LABEL,
@@ -692,6 +695,17 @@ export function ServiceVerificationReportsPage() {
     }
   }
 
+  // The client pickers list every client in the agency, not only those with visits already loaded on this page (owner, 2026-11-17: the
+  // monthly calendar's client list was empty when no visits were loaded). AWS only: the server returns names to roles allowed to see them.
+  const clientDirectoryQuery = useQuery({
+    queryKey: ["service-report-client-directory", activeOrganizationId],
+    queryFn: async () =>
+      (await awsApi!.get<{ clients: Array<{ clientId: string; clientCode: string; status: string; legalFirstName: string | null; legalLastName: string | null; duplicateName?: boolean }> }>(
+        "/v1/clients", { organizationId: activeOrganizationId! })).clients,
+    enabled: !!activeOrganizationId && !!awsApi && canRead,
+    retry: false,
+  });
+
   const rawRows = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data]);
 
   const clientLocationMap = useMemo(() => {
@@ -722,11 +736,17 @@ export function ServiceVerificationReportsPage() {
 
   const clientOptions = useMemo(() => {
     const map = new Map<string, string>();
-    rows.forEach((row) =>
-      map.set(row.client_id, visitClientLabel(row)),
-    );
-    return Array.from(map.entries());
-  }, [rows]);
+    for (const c of clientDirectoryQuery.data ?? []) {
+      if (c.status !== "active") continue;
+      const name = [c.legalFirstName, c.legalLastName].filter(Boolean).join(" ");
+      map.set(c.clientId, visitClientLabel({ client_legal_name: name || null, client_code: c.clientCode, client_name_duplicate: c.duplicateName }));
+    }
+    // Clients with visits on this page stay listed even if inactive now, so a past month can still be reported.
+    rows.forEach((row) => {
+      if (!map.has(row.client_id)) map.set(row.client_id, visitClientLabel(row));
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows, clientDirectoryQuery.data]);
 
   const caregiverOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -772,24 +792,41 @@ export function ServiceVerificationReportsPage() {
   const showBalanceDetails = BALANCE_COLUMNS.every((key) => !visitColumns.has(key));
   const visibleVisitColumnCount = visitColumns.size + (showBalanceDetails ? 1 : 0) + (canManage ? 1 : 0);
 
-  const visibleVisitRows = useMemo(
+  const unsortedVisitRows = useMemo(
     () =>
       showSuperseded
         ? rows
         : rows.filter((row) => row.status !== "corrected"),
     [rows, showSuperseded],
   );
+  // Every column of the visit table sorts (owner, 2026-11-17). Time sorts by the actual start; Date by the service day.
+  const { rows: visibleVisitRows, sort: visitSort } = useSortedRows(unsortedVisitRows, {
+    visitRef: { get: (r) => r.visit_number },
+    client: { get: (r) => visitClientLabel(r) },
+    caregiver: { get: (r) => r.caregiver_name },
+    service: { get: (r) => r.service_name },
+    date: { get: (r) => r.time_in, kind: "date" },
+    time: { get: (r) => (r.time_in ? new Date(r.time_in).toTimeString().slice(0, 5) : null) },
+    worked: { get: (r) => r.worked_minutes, kind: "number" },
+    billable: { get: (r) => r.billable_minutes, kind: "number" },
+    authorized: { get: (r) => (r.month_to_date_after_minutes !== null && r.remaining_minutes !== null ? r.month_to_date_after_minutes + r.remaining_minutes : null), kind: "number" },
+    usedMtd: { get: (r) => r.month_to_date_after_minutes, kind: "number" },
+    remaining: { get: (r) => r.remaining_minutes, kind: "number" },
+    status: { get: (r) => r.status },
+  });
 
   const monthlyServiceRows = useMemo(
     () =>
-      (monthlyServiceSummaryQuery.data ?? []).filter(
-        (row) => !serviceFilter || row.serviceId === serviceFilter,
+      orderMonthlyServiceRows(
+        (monthlyServiceSummaryQuery.data ?? []).filter(
+          (row) => !serviceFilter || row.serviceId === serviceFilter,
+        ),
       ),
     [monthlyServiceSummaryQuery.data, serviceFilter],
   );
 
   const correctionRows = useMemo(
-    () => correctionHistoryReportQuery.data ?? [],
+    () => orderCorrectionRows(correctionHistoryReportQuery.data ?? []),
     [correctionHistoryReportQuery.data],
   );
   const correctedByOptions = useMemo(() => {
@@ -2546,19 +2583,19 @@ export function ServiceVerificationReportsPage() {
                 >
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      {visitColumns.has("visitRef") ? <th className="pb-2 pr-2 font-medium">Visit ref</th> : null}
-                      {visitColumns.has("client") ? <th className="pb-2 pr-2 font-medium">Client</th> : null}
-                      {visitColumns.has("caregiver") ? <th className="pb-2 pr-2 font-medium">Caregiver</th> : null}
-                      {visitColumns.has("service") ? <th className="pb-2 pr-2 font-medium">Service</th> : null}
-                      {visitColumns.has("date") ? <th className="pb-2 pr-2 font-medium">Date</th> : null}
-                      {visitColumns.has("time") ? <th className="pb-2 pr-2 font-medium">Time</th> : null}
-                      {visitColumns.has("worked") ? <th className="pb-2 pr-2 font-medium">Worked</th> : null}
-                      {visitColumns.has("billable") ? <th className="pb-2 pr-2 font-medium">Billable</th> : null}
-                      {visitColumns.has("authorized") ? <th className="pb-2 pr-2 font-medium">Authorized</th> : null}
-                      {visitColumns.has("usedMtd") ? <th className="pb-2 pr-2 font-medium">Billable this month</th> : null}
-                      {visitColumns.has("remaining") ? <th className="pb-2 pr-2 font-medium">Hours left</th> : null}
+                      {visitColumns.has("visitRef") ? <SortTh sort={visitSort} column="visitRef" className="pb-1 pr-2 font-medium">Visit ref</SortTh> : null}
+                      {visitColumns.has("client") ? <SortTh sort={visitSort} column="client" className="pb-1 pr-2 font-medium">Client</SortTh> : null}
+                      {visitColumns.has("caregiver") ? <SortTh sort={visitSort} column="caregiver" className="pb-1 pr-2 font-medium">Caregiver</SortTh> : null}
+                      {visitColumns.has("service") ? <SortTh sort={visitSort} column="service" className="pb-1 pr-2 font-medium">Service</SortTh> : null}
+                      {visitColumns.has("date") ? <SortTh sort={visitSort} column="date" kind="date" className="pb-1 pr-2 font-medium">Date</SortTh> : null}
+                      {visitColumns.has("time") ? <SortTh sort={visitSort} column="time" className="pb-1 pr-2 font-medium">Time</SortTh> : null}
+                      {visitColumns.has("worked") ? <SortTh sort={visitSort} column="worked" kind="number" className="pb-1 pr-2 font-medium">Worked</SortTh> : null}
+                      {visitColumns.has("billable") ? <SortTh sort={visitSort} column="billable" kind="number" className="pb-1 pr-2 font-medium">Billable</SortTh> : null}
+                      {visitColumns.has("authorized") ? <SortTh sort={visitSort} column="authorized" kind="number" className="pb-1 pr-2 font-medium">Authorized</SortTh> : null}
+                      {visitColumns.has("usedMtd") ? <SortTh sort={visitSort} column="usedMtd" kind="number" className="pb-1 pr-2 font-medium">Billable this month</SortTh> : null}
+                      {visitColumns.has("remaining") ? <SortTh sort={visitSort} column="remaining" kind="number" className="pb-1 pr-2 font-medium">Hours left</SortTh> : null}
                       {showBalanceDetails ? <th className="pb-2 pr-2 font-medium">Hours left</th> : null}
-                      {visitColumns.has("status") ? <th className="pb-2 pr-2 font-medium">Status</th> : null}
+                      {visitColumns.has("status") ? <SortTh sort={visitSort} column="status" className="pb-1 pr-2 font-medium">Status</SortTh> : null}
                       {canManage ? <th className="pb-2 font-medium print:hidden">Actions</th> : null}
                     </tr>
                   </thead>

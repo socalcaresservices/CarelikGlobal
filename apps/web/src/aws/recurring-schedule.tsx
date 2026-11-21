@@ -15,10 +15,12 @@ import { useAwsApi } from "./aws-workspace";
 import { buildPattern, describePattern, hhmm, monthLabel, OUTCOME_LABEL, patternText, PLAIN_PATTERN, summarizeOccurrences, WEEKDAY_SHORT, type Occurrence, type PatternForm, type SeriesRow, type RejectedDate } from "./recurring-format";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+const message = schedulingRefusal;
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { ShortHelp } from "./help-text";
+import { refreshAfterShiftChange } from "./shift-refresh";
+import { schedulingRefusal } from "./scheduling-refusal";
 
 
 function PreviewTable({ rows }: { rows: Occurrence[] }) {
@@ -121,8 +123,7 @@ export function RecurringSeriesForm({ today, series, onDone }: { today: string; 
           : `Series created: ${r.series.created} shifts scheduled through ${formatDateOnly(r.series.generatedThrough)} (${formatDuration(r.series.reservedMinutes)} reserved)${r.series.skipped ? `; ${r.series.skipped} dates were not saved (listed below)` : ""}.`, r.series.rejected);
       }
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
-      await queryClient.invalidateQueries({ queryKey: ["aws-shift-series"] });
+      await refreshAfterShiftChange(queryClient);
       setState({ busy: false, error: null });
     } catch (cause) {
       setState({ busy: false, error: message(cause, "Not saved.") });
@@ -276,8 +277,7 @@ function SeriesItem({ s, today, onDone }: { s: SeriesRow; today: string; onDone:
     try {
       const r = await api.post<{ result: never }>(path, { organizationId: activeOrganizationId, ...body }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
-      await queryClient.invalidateQueries({ queryKey: ["aws-shift-series"] });
+      await refreshAfterShiftChange(queryClient);
       setState({ busy: false, error: null });
       setMode(null);
       onDone(done(r.result), (r.result as { rejected?: RejectedDate[] }).rejected);
@@ -365,7 +365,7 @@ export function RescheduleForm({ shiftId, localDate, startsAt, endsAt, onClose, 
       const r = await api.post<{ shift: { reservedMinutes: number; remainingMinutes: number | string } }>(`/v1/shifts/${encodeURIComponent(shiftId)}/reschedule`,
         { organizationId: activeOrganizationId, date: form.date, startTime: form.startTime, endTime: form.endTime, reason: form.reason.trim() }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
+      await refreshAfterShiftChange(queryClient);
       onDone(`This date only was changed: ${formatDuration(r.shift.reservedMinutes)} reserved; ${formatDuration(Number(r.shift.remainingMinutes))} of authorized time left that month. The rest of the series is unchanged.`);
     } catch (cause) {
       setState({ busy: false, error: message(cause, "Not saved.") });

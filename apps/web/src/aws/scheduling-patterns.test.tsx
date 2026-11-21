@@ -158,7 +158,7 @@ describe("Scheduling page", () => {
     const row = (await screen.findByText(/Synthetic Caregiver One/)).closest("tbody")!;
     fireEvent.click(within(row).getByRole("button", { name: "More actions" }));
     fireEvent.click(within(row).getByRole("button", { name: "Schedule make-up" }));
-    fireEvent.click(within(row).getAllByRole("button", { name: "Schedule make-up" }).at(-1)!);
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Schedule make-up" }));
     expect(await screen.findByText(/Make-up scheduled: 1 hr reserved.*1 hr of the missed time is still not made up/s)).toBeInTheDocument();
     expect(api.calls.find((c) => c.path === `/v1/shifts/${CANCELLED}/makeup`)!.body).toMatchObject({ organizationId: ORG, startTime: "09:00", endTime: "10:00", caregiverRecordId: CG1 });
   });

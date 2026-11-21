@@ -148,6 +148,16 @@ describe("Refresh and data status", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(overviewCalls(calls)).toBe(2));
   });
+  it("Refresh uses the same refresh as a shift change: shift lists, dashboard figures and request lists are all marked stale", async () => {
+    const { calls } = renderAt("/", FULL);
+    await waitFor(() => expect(overviewCalls(calls)).toBe(1));
+    const spy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(overviewCalls(calls)).toBe(2));
+    const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
+    spy.mockRestore();
+    for (const key of ["aws-shifts", "action-issues", "attention-overview", "aws-utilisation", "care-requests", "aws-pickups"]) expect(keys).toContain(key);
+  });
   it("figures older than ten minutes carry a plain warning with the time", async () => {
     renderAt("/", FULL, { overview: () => json(200, emptyOverview(new Date(Date.now() - 30 * MIN).toISOString())) });
     expect(await screen.findByRole("status")).toHaveTextContent(/may be out of date/);

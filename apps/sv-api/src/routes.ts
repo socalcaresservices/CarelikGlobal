@@ -3127,6 +3127,29 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0109 (pending, behind the requestCleanup release switch): cancel a document request that has no upload yet (reason required, audited, nothing deleted).
+  "POST /v1/documents/{documentId}/cancel": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      const key = idempotencyKey(event.headers);
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.cancel_staff_document_request($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).documentId, "documentId"), reason, key])).r) };
+    },
+  },
+
+  // 0109: retire a document type (no longer requestable). Refused for the CPR/TB requirement type and while it has open requests.
+  "POST /v1/document-types/{documentTypeId}/retire": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.retire_document_type($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).documentTypeId, "documentTypeId"), reason])).r) };
+    },
+  },
+
   "POST /v1/documents/{documentId}/versions": {
     status: 201,
     mutating: true,
@@ -3493,6 +3516,17 @@ export const ROUTES: Record<string, Route> = {
         uuid(body.organizationId, "organizationId"), userIds,
       ]));
       return { saved: true };
+    },
+  },
+
+  // 0109: the caller marks their OWN care-request alerts read (all, or up to 100 listed ids).
+  "POST /v1/care-notifications/read": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const ids = body.ids === undefined || body.ids === null ? null : Array.isArray(body.ids) && body.ids.length <= 100 ? body.ids.map((id) => uuid(id, "ids")) : (() => { throw new ApiError(400, "bad_request", "ids must be a list of up to 100 alert ids."); })();
+      return { marked: await tx(async (db) => (await first(db, "select ogevia_api.mark_staff_care_notifications_read($1,$2::uuid[]) as n", [org, ids])).n) };
     },
   },
 
