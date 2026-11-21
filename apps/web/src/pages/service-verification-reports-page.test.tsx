@@ -18,6 +18,16 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import { resolveEnvironmentMarker } from "@/aws/environment";
 import { formatClockTime, formatVisitDate, toPacificWallTime } from "@/lib/service-verification";
 
+// jsdom has no layout, so ResponsiveContainer would render nothing: give the chart a fixed size so the series colours can be read.
+vi.mock("recharts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("recharts")>();
+  const React = await import("react");
+  return {
+    ...real,
+    ResponsiveContainer: ({ children }: { children: React.ReactElement }) =>
+      React.createElement("div", { style: { width: 600, height: 300 } }, React.cloneElement(children, { width: 600, height: 300 } as never)),
+  };
+});
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: vi.fn(),
 }));
@@ -823,6 +833,25 @@ describe("ServiceVerificationReportsPage", () => {
     expect(screen.queryByText("Replaced by a correction")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Replaced"));
     expect(await screen.findByText("Replaced by a correction")).toBeInTheDocument();
+  });
+
+  it("the Reports chart follows the palette chosen on the Dashboard (Primary colors here), not fixed colours", async () => {
+    localStorage.setItem("ogevia.dashboard.palette", "primary");
+    try {
+      mockedUseOrganization.mockReturnValue({
+        activeOrganizationId: ORG_ID,
+        activeOrganization: { displayName: "Acme Care" },
+        hasPermission: vi.fn(() => true),
+      } as never);
+      mockOrgLetterhead();
+      mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+      const { container } = renderPage();
+      expect(await screen.findByLabelText("Filtered hours chart")).toBeInTheDocument();
+      await waitFor(() => expect(container.querySelectorAll(".recharts-legend-icon").length).toBeGreaterThan(1));
+      const swatches = Array.from(container.querySelectorAll(".recharts-legend-icon")).map((n) => n.getAttribute("fill"));
+      expect(swatches).toEqual(["#1D4ED8", "#DC2626"]);   // Primary colors: worked hours use the first colour, billable hours the second
+      expect(swatches).not.toContain("#4f46e5");            // the old fixed colour
+    } finally { localStorage.removeItem("ogevia.dashboard.palette"); }
   });
 
   it("shows manager filters, charts, and a caregiver-hours sheet", async () => {

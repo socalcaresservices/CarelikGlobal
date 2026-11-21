@@ -437,7 +437,6 @@ export function CaregiverDetailPage() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Link to="/care-team" className="inline-flex min-h-[44px] items-center text-sm text-slate-700 underline md:min-h-0">← Care Team</Link>
         <h1 className="text-xl font-bold tracking-tight text-slate-950">{caregiverName(c)}</h1>
-        <span className="text-xs text-slate-500">{c.caregiverCode}</span>
         {!c.hasSignIn && (overrides.data ?? []).some((o) => o.caregiverRecordId === c.caregiverRecordId) ? <OverrideBadge /> : null}
       </div>
       <section className="space-y-2" aria-label="Contact and employment">

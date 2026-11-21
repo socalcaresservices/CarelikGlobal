@@ -200,6 +200,12 @@ describe("Care Team", () => {
     expect(within(list).getByText(/Verified .* by ogeviamanager/)).toBeInTheDocument();
   });
 
+  it("the caregiver page header shows the name only: the staff ID code (CG-...) is not repeated next to it", async () => {
+    renderAt(`/care-team/${CG}`, "manager");
+    expect(await screen.findByRole("heading", { name: "Synthetic Caregiver One" })).toBeInTheDocument();
+    expect(screen.queryByText("CG-1A2B3C4D")).not.toBeInTheDocument();
+  });
+
   it("deactivating a caregiver (the one manual status) needs a reason and reports ended assignments and the suspended sign-in", async () => {
     renderAt(`/care-team/${CG}`, "manager");
     expect(await screen.findByRole("heading", { name: "Synthetic Caregiver One" })).toBeInTheDocument();

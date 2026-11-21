@@ -56,6 +56,7 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
+import { useDashboardAppearance } from "@/aws/appearance/appearance-hooks";
 import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
@@ -156,14 +157,8 @@ const ALL_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
 // beside the expanded sidebar at 1440px; it is still a column in Columns.
 const DEFAULT_VISIT_COLUMNS = ALL_VISIT_COLUMNS.filter((key) => !BALANCE_COLUMNS.includes(key) && key !== "visitRef");
 
-const CHART_COLORS = [
-  "#4f46e5",
-  "#059669",
-  "#0284c7",
-  "#7c3aed",
-  "#e11d48",
-  "#d97706",
-];
+// The chart colours follow the palette chosen on the Dashboard (Settings > Appearance): Care blue, Blue shades, Primary colors or Ogevia.
+// Worked hours use the palette's first colour and billable hours its second; pie slices cycle through all of them.
 
 const STATUS_TONE: Record<ServiceVisitStatus, StatusTone> = {
   draft: "info",
@@ -441,6 +436,7 @@ export function ServiceVerificationReportsPage() {
   const inActions = (node: ReactNode) => (exportSlot ? createPortal(node, exportSlot) : node);
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
+  const { colors: paletteColors } = useDashboardAppearance();
   const location = useLocation();
   const navigate = useNavigate();
   // A printout from a test or unverified environment says so on every page, so it cannot pass for a real record.
@@ -1773,7 +1769,7 @@ export function ServiceVerificationReportsPage() {
                         {chartData.map((entry, index) => (
                           <Cell
                             key={entry.name}
-                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            fill={paletteColors[index % paletteColors.length]}
                           />
                         ))}
                       </Pie>
@@ -1791,14 +1787,14 @@ export function ServiceVerificationReportsPage() {
                         type="monotone"
                         dataKey="workedMinutes"
                         name="Worked hours"
-                        stroke="#4f46e5"
+                        stroke={paletteColors[0]}
                         strokeWidth={3}
                       />
                       <Line
                         type="monotone"
                         dataKey="billableMinutes"
                         name="Billable hours"
-                        stroke="#059669"
+                        stroke={paletteColors[1]}
                         strokeWidth={3}
                       />
                     </LineChart>
@@ -1812,13 +1808,13 @@ export function ServiceVerificationReportsPage() {
                       <Bar
                         dataKey="workedMinutes"
                         name="Worked hours"
-                        fill="#4f46e5"
+                        fill={paletteColors[0]}
                         radius={[6, 6, 0, 0]}
                       />
                       <Bar
                         dataKey="billableMinutes"
                         name="Billable hours"
-                        fill="#059669"
+                        fill={paletteColors[1]}
                         radius={[6, 6, 0, 0]}
                       />
                     </BarChart>
