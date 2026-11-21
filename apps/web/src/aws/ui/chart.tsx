@@ -1,9 +1,9 @@
 import { resolveChart, type ChartType, type DataShape } from "../appearance/appearance";
-import { useEffectiveAppearance } from "../appearance/appearance-hooks";
+import { useDashboardAppearance, useEffectiveAppearance } from "../appearance/appearance-hooks";
 
 export interface ChartDatum { label: string; value: number; display: string }
 
-const PALETTE = ["rgb(var(--og-accent))", "rgb(var(--og-chart-2))", "rgb(var(--og-chart-3))", "rgb(var(--og-chart-4))", "rgb(var(--og-chart-5))"];
+// Chart colours come from the palette chosen in Settings > Appearance > Dashboard charts (Care blue, Blue shades, Primary colors, Ogevia).
 
 /**
  * A chart that follows the person's chart preference only where that type is honest for the data (resolveChart). It always
@@ -11,12 +11,13 @@ const PALETTE = ["rgb(var(--og-accent))", "rgb(var(--og-chart-2))", "rgb(var(--o
  */
 export function Chart({ title, data, shape, unit, total }: { title: string; data: ChartDatum[]; shape: DataShape; unit: string; total: string }) {
   const { chartType } = useEffectiveAppearance();
+  const { colors } = useDashboardAppearance();
   const { kind, note } = resolveChart(chartType as ChartType, shape);
   const max = Math.max(1, ...data.map((d) => d.value));
   const sum = data.reduce((t, d) => t + d.value, 0);
   return (
     <figure className="space-y-2" aria-label={title} data-chart-kind={kind}>
-      {kind === "donut" ? <Donut data={data} sum={sum} /> : <Bars data={data} max={max} />}
+      {kind === "donut" ? <Donut data={data} sum={sum} colors={colors} /> : <Bars data={data} max={max} color={colors[0]!} />}
       <figcaption className="text-xs text-og-sub">
         Total {total} {unit}
         {note ? <span className="ml-2" data-testid="chart-note">{note}</span> : null}
@@ -31,14 +32,14 @@ export function Chart({ title, data, shape, unit, total }: { title: string; data
 }
 
 /** Bars are categories, not statuses: one calm accent colour, so colour never suggests a warning. */
-function Bars({ data, max }: { data: ChartDatum[]; max: number }) {
+function Bars({ data, max, color }: { data: ChartDatum[]; max: number; color: string }) {
   return (
     <ul className="space-y-2" aria-hidden="true">
       {data.map((d) => (
         <li key={d.label} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-2 text-sm sm:grid-cols-[minmax(0,12rem)_1fr_auto]">
           <span className="truncate text-og-ink">{d.label}</span>
           <span className="h-3 overflow-hidden rounded-full bg-og-line">
-            <span className="block h-full rounded-full" style={{ width: `${(d.value / max) * 100}%`, background: PALETTE[0] }} />
+            <span className="block h-full rounded-full" style={{ width: `${(d.value / max) * 100}%`, background: color }} />
           </span>
           <span className="font-og-mono text-xs tabular-nums text-og-ink">{d.display}</span>
         </li>
@@ -47,7 +48,7 @@ function Bars({ data, max }: { data: ChartDatum[]; max: number }) {
   );
 }
 
-function Donut({ data, sum }: { data: ChartDatum[]; sum: number }) {
+function Donut({ data, sum, colors }: { data: ChartDatum[]; sum: number; colors: readonly string[] }) {
   const r = 40;
   const c = 2 * Math.PI * r;
   let offset = 0;
@@ -57,7 +58,7 @@ function Donut({ data, sum }: { data: ChartDatum[]; sum: number }) {
         <circle cx="50" cy="50" r={r} fill="none" stroke="rgb(var(--og-line))" strokeWidth="14" />
         {sum > 0 ? data.map((d, i) => {
           const len = (d.value / sum) * c;
-          const el = <circle key={d.label} cx="50" cy="50" r={r} fill="none" stroke={PALETTE[i % PALETTE.length]} strokeWidth="14" strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-offset} />;
+          const el = <circle key={d.label} cx="50" cy="50" r={r} fill="none" stroke={colors[i % colors.length]} strokeWidth="14" strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-offset} />;
           offset += len;
           return el;
         }) : null}
@@ -65,7 +66,7 @@ function Donut({ data, sum }: { data: ChartDatum[]; sum: number }) {
       <ul className="space-y-1 text-sm">
         {data.map((d, i) => (
           <li key={d.label} className="flex items-center gap-2">
-            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: PALETTE[i % PALETTE.length] }} />
+            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: colors[i % colors.length] }} />
             <span className="text-og-ink">{d.label}</span>
             <span className="font-og-mono text-xs tabular-nums text-og-sub">{d.display}{sum > 0 ? ` · ${Math.round((d.value / sum) * 100)}%` : ""}</span>
           </li>
