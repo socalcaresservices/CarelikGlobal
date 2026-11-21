@@ -19,6 +19,8 @@ APP_PATHS = ["apps", "packages", "pnpm-lock.yaml", "pnpm-workspace.yaml", "packa
 APP_EXCLUDES = [":(glob,exclude)**/*.test.ts", ":(glob,exclude)**/*.test.tsx"]
 TOOLCHAIN = ["TEST_0109_LEDGER.sh", "TEST_DB_SESSION.sh", "TEST_H2A_COMPARE.sh", "TEST_H2B_DEPLOY.sh", "TEST_H2C_ENABLE.sh", "PRD_0109_RELEASE.sh", "../../../../infra/aws/scripts/production-web-release.sh", "../../../../infra/aws/scripts/production-request-cleanup-routes-release.py", "../../../../infra/aws/scripts/production-request-cleanup-routes-deploy.sh", "../../../../infra/aws/scripts/production-0109-release.py", "VERIFY_0109.sql", "diff_gate_0109.py", "TEST_INVENTORY.sh", "check_inventory.py", "../TEST-requestCleanup-on.patch",
              "../../2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh"]   # the earlier release's isolated-verify and isolated-backup modes are reused as they are
+TOOLCHAIN_0110 = ["TEST_0110_LEDGER.sh", "TEST_H3_OFFICES.sh", "VERIFY_0110.sql", "diff_gate_0110.py", "TEST_DB_SESSION.sh", "release_pins.py",
+                  "../../2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh"]   # the Offices (0110) TEST release's own tool set; PINS_0109.json keeps covering the earlier release
 TEST_FEATURES_ON = {"staffManagement", "signInOverride", "bulkImport", "liveTestRepairs"}      # isolated TEST: infra/aws/lib/config.ts (+ liveTestRepairs from resolveTestDatabase); staffDuplicates is false
 
 
@@ -44,9 +46,27 @@ def route_counts():
     return {"switchOff": off, "switchOn": on}
 
 
-def compute(app_commit):
+def office_routes():
+    src = (REPO / "infra/aws/lib/service-verification-api-stack.ts").read_text()
+    return len(re.findall(r'\{ method: apigw\.HttpMethod\.\w+, path: "[^"]+", feature: "offices"', src))
+
+
+def compute(app_commit, release="0109"):
     mig = REPO / "infra/aws/db/migrations"; pend = REPO / "infra/aws/db/pending"
     full = git("rev-parse", "--verify", app_commit + "^{commit}").stdout.strip()
+    if release == "0110":
+        return {
+            "release": "0110",
+            "applicationCommit": full,
+            "pnpmLockSha256": sha(REPO / "pnpm-lock.yaml"),
+            "releasedMigrations": {"count": len(list(mig.glob("*.sql"))), "setSha256": set_sha(sorted(mig.glob("*.sql")))},
+            "pendingUx0103to0107": {"count": 5, "setSha256": set_sha(sorted(pend.glob("migrations/010[3-7]_*.sql")))},
+            "migration0109": {"upSha256": sha(pend / "migrations/0109_request_cleanup.sql"), "downSha256": sha(pend / "rollback/0109_request_cleanup.down.sql")},
+            "migration0110": {"upSha256": sha(pend / "migrations/0110_offices.sql"), "downSha256": sha(pend / "rollback/0110_offices.down.sql")},
+            "toolchainSha256": {n.replace("../", ""): sha(HERE / n) for n in TOOLCHAIN_0110},
+            "apiRoutes": {**route_counts(), "officesRoutes": office_routes()},
+            "expectedLedger": {"before": "108/0109", "after": "109/0110"},
+        }
     return {
         "applicationCommit": full,
         "pnpmLockSha256": sha(REPO / "pnpm-lock.yaml"),
@@ -71,8 +91,8 @@ def check(pins_path, allow_dirty=False):
         diff = git("diff", "--name-only", commit, "HEAD", "--", *APP_PATHS, *APP_EXCLUDES).stdout.split()
         if diff:
             bad.append(f"application files changed since the pinned commit {commit[:12]}: {', '.join(diff[:5])}{' ...' if len(diff) > 5 else ''}")
-    now = compute(commit)
-    for key in ("pnpmLockSha256", "releasedMigrations", "pendingUx0103to0107", "migration0109", "toolchainSha256", "apiRoutes", "expectedLedger"):
+    now = compute(commit, pins.get("release", "0109"))
+    for key in ("pnpmLockSha256", "releasedMigrations", "pendingUx0103to0107", "migration0109", "toolchainSha256", "apiRoutes", "expectedLedger") + (("migration0110",) if "migration0110" in pins else ()):
         if now[key] != pins[key]:
             bad.append(f"{key} differs from the pins")
     if not allow_dirty and git("status", "--porcelain", "--", *APP_PATHS, str(HERE.relative_to(REPO))).stdout.strip():
@@ -83,12 +103,13 @@ def check(pins_path, allow_dirty=False):
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    g = sub.add_parser("generate"); g.add_argument("--app-commit", required=True); g.add_argument("--out", default=str(HERE / "PINS_0109.json"))
+    g = sub.add_parser("generate"); g.add_argument("--app-commit", required=True); g.add_argument("--out", default=None); g.add_argument("--release", default="0109", choices=["0109", "0110"])
     c = sub.add_parser("check"); c.add_argument("--pins", default=str(HERE / "PINS_0109.json")); c.add_argument("--allow-dirty", action="store_true", help="for development only; the operator never uses it")
     a = ap.parse_args()
     if a.cmd == "generate":
-        pathlib.Path(a.out).write_text(json.dumps(compute(a.app_commit), indent=2, sort_keys=True) + "\n")
-        print("wrote", a.out)
+        out = a.out or str(HERE / ("PINS_0110.json" if a.release == "0110" else "PINS_0109.json"))
+        pathlib.Path(out).write_text(json.dumps(compute(a.app_commit, a.release), indent=2, sort_keys=True) + "\n")
+        print("wrote", out)
         return 0
     bad = check(a.pins, a.allow_dirty)
     for b in bad:

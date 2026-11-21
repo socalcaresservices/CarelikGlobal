@@ -52,6 +52,27 @@ describe.skipIf(!present)("release_pins.py", () => {
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
 
+  it("PINS_0110.json (the Offices TEST release) matches this checkout and refuses altered hashes", () => {
+    const r = run("check", "--allow-dirty", "--pins", join(dir, "PINS_0110.json"));
+    expect(r.status, r.stdout + r.stderr).toBe(0); expect(r.stdout).toContain("PINS OK");
+    const pins = JSON.parse(readFileSync(join(dir, "PINS_0110.json"), "utf8"));
+    expect(pins.applicationCommit).toBe(PINNED);
+    expect(pins.expectedLedger).toEqual({ before: "108/0109", after: "109/0110" });
+    expect(pins.apiRoutes).toEqual({ switchOff: 259, switchOn: 262, officesRoutes: 6 });
+    const d = mkdtempSync(join(tmpdir(), "pins0110-"));
+    try {
+      for (const [edit, re] of [
+        [(q: any) => { q.migration0110.upSha256 = "0".repeat(64); }, /migration0110 differs/],
+        [(q: any) => { q.toolchainSha256["TEST_H3_OFFICES.sh"] = "0".repeat(64); }, /toolchainSha256 differs/],
+        [(q: any) => { q.apiRoutes.officesRoutes = 7; }, /apiRoutes differs/],
+        [(q: any) => { q.expectedLedger.after = "108/0109"; }, /expectedLedger differs/],
+      ] as const) {
+        const copy = structuredClone(pins); edit(copy); const f = join(d, "p.json"); writeFileSync(f, JSON.stringify(copy));
+        const x = run("check", "--allow-dirty", "--pins", f); expect(x.status).toBe(1); expect(x.stdout).toMatch(re);
+      }
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
   it("refuses when application files changed since the pinned commit (the older accepted TEST source)", () => {
     const d = mkdtempSync(join(tmpdir(), "pins-old-"));
     try {
