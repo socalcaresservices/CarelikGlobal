@@ -24,3 +24,10 @@ Database `offices-0110.db.test.ts` (9: rules, idempotency, permissions, tenant i
 - No release tooling yet for 0110 (TEST ledger tool, production SQL helper, route change set): to be built on the owner's GO for a TEST release, like 0109.
 - Not covered by a page-level automated test: the Office select on the Reports page (the filter rule itself is tested once and shared by all three screens).
 - Out of scope, still open from the 2026-11-18 checklist: office-based permissions, caregivers shared across offices, per-office finance totals, payer and service-location fields.
+
+## TEST deployment record (2026-11-21, owner GO for Offices TEST only)
+- Release commit `9f21c499fe4fa06937d29d1d59c4ddbe6aad5bb5` (CI green: harness, validate, postgres). Run with `TEST_H3_OFFICES.sh` from CloudShell; operator output: `H3 COMPLETE (TEST)`.
+- Starting point: ledger 108/0109, 259 routes (request cleanup OFF on TEST). After: ledger 109/0110, 265 routes (six office routes), web serves the release commit.
+- First attempts stopped safely before any change: the confirmation prompt was answered by pasted input; then the reused `OPERATOR_TEST_DB.sh isolated-backup` refused (it hard-codes ledger 107/0107). The release script now takes the backup itself.
+- Capture and rollback reference (CloudShell, ephemeral): `/tmp/ogevia-h3-11211126/h3-20261121T114802Z`.
+- NOT yet done: the human checks on the TEST site (Administrator, manager, caregiver, filters, Reports dropdown). Production: not deployed; needs its own owner GO after TEST.
