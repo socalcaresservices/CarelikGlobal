@@ -30,4 +30,11 @@ Database `offices-0110.db.test.ts` (9: rules, idempotency, permissions, tenant i
 - Starting point: ledger 108/0109, 259 routes (request cleanup OFF on TEST). After: ledger 109/0110, 265 routes (six office routes), web serves the release commit.
 - First attempts stopped safely before any change: the confirmation prompt was answered by pasted input; then the reused `OPERATOR_TEST_DB.sh isolated-backup` refused (it hard-codes ledger 107/0107). The release script now takes the backup itself.
 - Capture and rollback reference (CloudShell, ephemeral): `/tmp/ogevia-h3-11211126/h3-20261121T114802Z`.
-- NOT yet done: the human checks on the TEST site (Administrator, manager, caregiver, filters, Reports dropdown). Production: not deployed; needs its own owner GO after TEST.
+- TEST human checks (owner report, 2026-11-21): steps 1 to 5 all PASS on https://d2xumch5w0izfg.cloudfront.net:
+  1. Administrator: create two offices, rename, duplicate name in a different case refused ("already exists"), retire without a reason refused, both offices show 0 clients. PASS
+  2. Manager: no Offices link, Offices page refuses; Responsible office set under Details and kept after reload; test clients with visits assigned. PASS
+  3. Retire North: shows Retired with its client count, no Rename/Retire; the North client shows "North (retired)"; North not offered to other clients. PASS
+  4. Filters (Clients, Billing Review, Reports): South shows its client's records; North (retired) still shows historical visits; No office excludes both assigned clients; clearing Reports filters resets the dropdown. PASS
+  5. Caregiver: no Offices link, no Office filter on the three pages, Offices page denies access. PASS
+  Evidence is the owner's statement; no screenshots were attached. The sign-ins used were the owner's existing TEST accounts (the account listing was never sent).
+- Production: NOT deployed. Needs its own owner GO; the production request-cleanup switch-on is a separate, still-unconfirmed step.
