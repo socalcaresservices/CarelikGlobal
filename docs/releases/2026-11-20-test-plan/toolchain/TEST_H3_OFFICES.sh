@@ -183,8 +183,10 @@ confirm "DEPLOY-TEST-OFFICES" "ABOUT TO CHANGE TEST ONLY (owner authorization $O
 
 echo; echo "=== 3. verified TEST backup ==="
 export OGEVIA_TEST_BACKUP="$WORK/backup/ogevia_sv_test-pre-0110-$(date -u +%Y%m%dT%H%M%SZ).dump"; mkdir -p "$WORK/backup"
-bash "$REPO/docs/releases/2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh" isolated-backup || stop "the TEST backup failed. Nothing was changed."
-[[ -f "$OGEVIA_TEST_BACKUP" && -f "$OGEVIA_TEST_BACKUP.sha256" ]] || stop "the backup or its checksum file is missing"
+command -v pg_dump >/dev/null && [[ "$(pg_dump --version | sed -E 's/^[^0-9]*([0-9]+)\..*/\1/')" -ge 18 ]] || stop "the PostgreSQL 18 client (pg_dump) is required"
+# the ledger was verified as 108/0109 in the probe above; this dumps the isolated TEST database only (TEST_DB_SESSION.sh pins PGDATABASE=ogevia_sv_test and the TEST host)
+bash "$TC/TEST_DB_SESSION.sh" bash -c 'set -euo pipefail; [[ "$PGDATABASE" == ogevia_sv_test ]]; SZ=$(psql -X -At -c "select pg_database_size(current_database())"); FREE=$(df -Pk "$(dirname "$1")" | awk "NR==2{print \$4*1024}"); [[ "$FREE" -gt $((SZ + 20*1024*1024)) ]] || { echo "not enough free space for the backup"; exit 2; }; pg_dump --no-password --format=custom --dbname=ogevia_sv_test --file="$1"; (cd "$(dirname "$1")" && sha256sum "$(basename "$1")" > "$(basename "$1").sha256"); printf "ogevia-postgres|ogevia_sv_test|%s\n" "$(date -u +%FT%TZ)" > "$1.meta"; echo "TEST-only logical backup: $1"' _ "$OGEVIA_TEST_BACKUP" || stop "the TEST backup failed. Nothing was changed."
+[[ -s "$OGEVIA_TEST_BACKUP" && -f "$OGEVIA_TEST_BACKUP.sha256" ]] || stop "the backup or its checksum file is missing"
 (cd "$(dirname "$OGEVIA_TEST_BACKUP")" && sha256sum --check --quiet "$(basename "$OGEVIA_TEST_BACKUP").sha256") || stop "the backup does not match its checksum"
 echo "backup verified: $OGEVIA_TEST_BACKUP"
 

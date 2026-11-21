@@ -19,8 +19,7 @@ APP_PATHS = ["apps", "packages", "pnpm-lock.yaml", "pnpm-workspace.yaml", "packa
 APP_EXCLUDES = [":(glob,exclude)**/*.test.ts", ":(glob,exclude)**/*.test.tsx"]
 TOOLCHAIN = ["TEST_0109_LEDGER.sh", "TEST_DB_SESSION.sh", "TEST_H2A_COMPARE.sh", "TEST_H2B_DEPLOY.sh", "TEST_H2C_ENABLE.sh", "PRD_0109_RELEASE.sh", "../../../../infra/aws/scripts/production-web-release.sh", "../../../../infra/aws/scripts/production-request-cleanup-routes-release.py", "../../../../infra/aws/scripts/production-request-cleanup-routes-deploy.sh", "../../../../infra/aws/scripts/production-0109-release.py", "VERIFY_0109.sql", "diff_gate_0109.py", "TEST_INVENTORY.sh", "check_inventory.py", "../TEST-requestCleanup-on.patch",
              "../../2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh"]   # the earlier release's isolated-verify and isolated-backup modes are reused as they are
-TOOLCHAIN_0110 = ["TEST_0110_LEDGER.sh", "TEST_H3_OFFICES.sh", "VERIFY_0110.sql", "diff_gate_0110.py", "TEST_DB_SESSION.sh", "release_pins.py",
-                  "../../2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh"]   # the Offices (0110) TEST release's own tool set; PINS_0109.json keeps covering the earlier release
+TOOLCHAIN_0110 = ["TEST_0110_LEDGER.sh", "TEST_H3_OFFICES.sh", "VERIFY_0110.sql", "diff_gate_0110.py", "TEST_DB_SESSION.sh", "release_pins.py"]   # the Offices (0110) TEST release's own tool set (it no longer reuses the earlier release's OPERATOR_TEST_DB.sh, which hard-codes ledger 107/0107); PINS_0109.json keeps covering the earlier release
 TEST_FEATURES_ON = {"staffManagement", "signInOverride", "bulkImport", "liveTestRepairs"}      # isolated TEST: infra/aws/lib/config.ts (+ liveTestRepairs from resolveTestDatabase); staffDuplicates is false
 
 

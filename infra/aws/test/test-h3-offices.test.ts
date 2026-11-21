@@ -25,7 +25,6 @@ function setup(over: { liveRoutes?: number } = {}) {
   writeFileSync(join(tc, "VERIFY_0110.sql"), "select 1;\n");
   writeFileSync(join(tc, "TEST_DB_SESSION.sh"), `#!/usr/bin/env bash\n"$@"\n`);
   writeFileSync(join(tc, "TEST_0110_LEDGER.sh"), `#!/usr/bin/env bash\necho "ledger $1 backup=\${OGEVIA_TEST_BACKUP:-none}" >> ${JSON.stringify(calls)}\nif [[ -f ${JSON.stringify(join(st, "fail-"))}$1 ]]; then exit 2; fi\n`);
-  writeFileSync(join(repo, "docs/releases/2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh"), `#!/usr/bin/env bash\necho "backup $1" >> ${JSON.stringify(calls)}\nprintf dump > "$OGEVIA_TEST_BACKUP"; (cd "$(dirname "$OGEVIA_TEST_BACKUP")" && sha256sum "$(basename "$OGEVIA_TEST_BACKUP")" > "$OGEVIA_TEST_BACKUP.sha256")\n`);
   writeFileSync(join(repo, "infra/aws/scripts/deploy-test-slice.sh"), `#!/usr/bin/env bash\necho "web version=\${VITE_APP_VERSION:-none}" >> ${JSON.stringify(calls)}\nmkdir -p "$(dirname "$0")/../../../apps/web/dist-aws/assets"\ncp ${JSON.stringify(join(dir, "built-index.html"))} "$(dirname "$0")/../../../apps/web/dist-aws/index.html"\n`);
   const git = (...a: string[]) => spawnSync("git", ["-C", repo, ...a], { encoding: "utf8" });
   git("init", "-q"); git("-c", "user.email=t@t", "-c", "user.name=t", "add", "-A"); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "x");
@@ -92,6 +91,8 @@ case "$url" in
   *) echo "UNEXPECTED CURL: $args" >&2; exit 9;;
 esac
 `);
+  writeFileSync(join(bin, "pg_dump"), `#!/usr/bin/env bash\n[[ "$1" == "--version" ]] && { echo "pg_dump (PostgreSQL) 18.7"; exit 0; }\necho "backup pg_dump $*" >> ${JSON.stringify(calls)}\nf=""; for a in "$@"; do [[ "$a" == --file=* ]] && f="\${a#--file=}"; done; printf dump > "$f"\n`);
+  writeFileSync(join(bin, "psql"), "#!/usr/bin/env bash\necho 1000\n");
   writeFileSync(join(bin, "corepack"), "#!/usr/bin/env bash\nexit 0\n");
   writeFileSync(join(bin, "pnpm"), `#!/usr/bin/env bash
 [[ "$1" == "--version" ]] && { echo 9.15.4; exit 0; }
@@ -103,12 +104,12 @@ if [[ "$*" == *"cdk deploy"* ]]; then app=""; prev=""; for x in "$@"; do [[ "$pr
   echo "deploy $app" >> ${JSON.stringify(calls)}; cp "$app/${STACK}.template.json" ${JSON.stringify(join(st, "live.json"))}; printf NEWSHA > ${JSON.stringify(join(st, "sha"))}; exit 0; fi
 exit 9
 `);
-  for (const f of ["aws", "curl", "pnpm", "corepack"]) chmodSync(join(bin, f), 0o755);
+  for (const f of ["aws", "curl", "pnpm", "corepack", "pg_dump", "psql"]) chmodSync(join(bin, f), 0o755);
   return { dir, repo, work, bin, calls, head, st };
 }
 type S = ReturnType<typeof setup>;
 function run(s: S, env: Record<string, string> = {}, mode?: string) {
-  return spawnSync("bash", [script, ...(mode ? [mode] : [])], { encoding: "utf8", env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, REPO: s.repo, WORK: s.work, OGEVIA_RELEASE_COMMIT: s.head, OGEVIA_DEPLOY_APPROVAL: "TEST-OFFICES-0001", OGEVIA_NO_CONFIRM: "1", OGEVIA_CF_WAIT: "0", ...env }, timeout: 90000 });
+  return spawnSync("bash", [script, ...(mode ? [mode] : [])], { encoding: "utf8", env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, PGDATABASE: "ogevia_sv_test", REPO: s.repo, WORK: s.work, OGEVIA_RELEASE_COMMIT: s.head, OGEVIA_DEPLOY_APPROVAL: "TEST-OFFICES-0001", OGEVIA_NO_CONFIRM: "1", OGEVIA_CF_WAIT: "0", ...env }, timeout: 90000 });
 }
 const done = (s: { dir: string }) => rmSync(s.dir, { recursive: true, force: true });
 const calls = (s: S) => readFileSync(s.calls, "utf8");
@@ -150,7 +151,7 @@ describe("TEST_H3_OFFICES.sh", () => {
         expect(r.stdout).toContain("EXPECTED-ONLY: YES (off)"); expect(r.stdout).toContain("EXPECTED-ONLY: YES (on)"); expect(r.stdout).toContain(`PASS ${after} routes live`);
         expect(r.stdout).toContain("PASS Handler still targets ogevia_sv_test"); expect(r.stdout).toContain("PASS the bundle carries commit " + s.head); expect(r.stdout).toContain("H3 COMPLETE (TEST)");
         const c = calls(s).split("\n"); const idx = (re: RegExp) => c.findIndex((l) => re.test(l));
-        const order = [idx(/^synth offices=0 rc=/), idx(/^synth offices=1 rc=/), idx(/^backup isolated-backup/), idx(/^ledger apply backup=.*ogevia_sv_test-pre-0110-/), idx(/^ledger verify/), idx(/^deploy .*deploy-on/), idx(/^web version=/)];
+        const order = [idx(/^synth offices=0 rc=/), idx(/^synth offices=1 rc=/), idx(/^backup pg_dump .*--dbname=ogevia_sv_test/), idx(/^ledger apply backup=.*ogevia_sv_test-pre-0110-/), idx(/^ledger verify/), idx(/^deploy .*deploy-on/), idx(/^web version=/)];
         expect(order.every((i) => i >= 0), JSON.stringify(order)).toBe(true);
         expect([...order].sort((a, b) => a - b)).toEqual(order);
         expect(calls(s)).toContain(`synth offices=0 rc=${rc}`); expect(calls(s)).toContain(`synth offices=1 rc=${rc}`);
