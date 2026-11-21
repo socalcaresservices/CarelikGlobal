@@ -10,8 +10,8 @@ const dir = fileURLToPath(new URL("../../../docs/releases/2026-11-20-test-plan/t
 const script = join(dir, "release_pins.py");
 const run = (...args: string[]) => spawnSync("python3", [script, ...args], { encoding: "utf8" });
 // The application commit the pins are validated against. Changed deliberately (2026-11-21) from 88426e8 (the release deployed to production as ef90a2a) to the web follow-up
-// the web follow-ups (caregiver header without the staff ID; Reports and the shared Chart follow the Dashboard palette). Any later application change must re-pin and update this line.
-const PINNED = "26f58384875d55b650b28554bdd5233ba3d3d3cc";
+// the web follow-ups and minimal Offices (caregiver header without the staff ID; charts follow the Dashboard palette; offices, migration 0110, switch off). Any later application change must re-pin and update this line.
+const PINNED = "cac98cfda2ca13a708ecf6d756be93719bad1846";
 const present = spawnSync("git", ["cat-file", "-e", `${PINNED}^{commit}`]).status === 0;
 
 describe.skipIf(!present)("release_pins.py", () => {
