@@ -53,3 +53,31 @@ Recorded 2026-10-11 from the owner's written answers in the Claude session. Stat
 4. Caregiver contact email and phone table, with the Admin edit screen.
 5. Staff invitations (manager and other roles) with role-limit checks.
 6. Scheduling work from the audit: minimum shift, commit-time enforcement, client overlap check, recurrence patterns, series summary.
+
+## 2026-11-10: Admin override for a caregiver who has not signed in (owner decision)
+
+Recorded from the owner's instruction "ogevia update 1111". Status: **approved rule; not implemented; not deployed.** Build is gated on the owner's approval of `docs/ux/ogevia-redesign-spec.md`.
+
+**Supersedes** the October rule that a caregiver must sign in before approval (migration 0088, "App sign-in" as a hard requirement). Also **conflicts with** the unreleased pending migration 0089 (`infra/aws/db/pending/`, 2026-11-09), which removes sign-in as a requirement for everyone without a reason, approver record or badge. 0089 is applied nowhere. Recommended resolution (owner to confirm): withdraw 0089 and implement the override below. Until the owner confirms, 0089 stays unreleased.
+
+Rule, as specified by the owner:
+1. An administrator can schedule and assign a caregiver to a client, and approve the caregiver for work, even if the caregiver has not signed in to the app.
+2. The override requires a **reason** and records the **approver**, the **timestamp** and an **audit entry**.
+3. **Background check remains a hard block; no override exists for it.**
+4. CPR/TB continue to follow the existing 30-day grace period plus recorded per-caregiver extensions.
+5. The profile and schedule show the badge **"Approved by override — not signed in"** until first sign-in.
+6. A caregiver who has not signed in cannot verify a visit in Ogevia; the schedule shows a warning on their shifts.
+
+## 2026-11-10: Caregiver-facing client label (owner decision, R23)
+
+Status: **approved rule; not implemented; not deployed.** Held with the visual caregiver rows until the owner approves the redesign mockup.
+
+- On visits **assigned to that caregiver**: show **first name + last initial + client code** (for example "Maria G., CL-3711AABD17").
+- On **open shifts not yet assigned** to the caregiver: show **client code + city only**. No name.
+- Today a caregiver sees only the client code (the caregiver role does not hold `clients.names.read`).
+
+Implementation notes recorded with the decision (not changes to it): this widens what the caregiver API returns, so it must be enforced **server-side** (the response for an assigned visit may carry the name; the open-shift response must never carry a name or street address), tenant-scoped, with a negative test that an unassigned caregiver cannot obtain a name. The city on open shifts is a new field for that audience; the owner may want a privacy review before it ships.
+
+## 2026-11-10: Where the UX work is proposed (owner decision, R15)
+
+The UX branch `claude/ogevia-ux-audit-redesign-w36cov` is opened as a **draft** pull request to **`main`**; it is not merged. PR #106's head commit is an ancestor of the branch, so #106 is closed as superseded by the new PR (comment links the new PR). PR #107's code is also already in this branch's history (`fb491a5`).

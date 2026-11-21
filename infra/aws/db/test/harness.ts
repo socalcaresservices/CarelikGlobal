@@ -10,7 +10,7 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { expect } from "vitest";
-import { assertSafeTarget, migrate } from "../scripts/migrations.js";
+import { assertSafeTarget, migrate, type MigrationOptions } from "../scripts/migrations.js";
 
 export const ADMIN_URL = process.env.OGEVIA_TEST_DATABASE_URL ?? "";
 
@@ -20,7 +20,7 @@ export interface TestDb {
   drop(): Promise<void>;
 }
 
-export async function createTestDb(): Promise<TestDb> {
+export async function createTestDb(options: MigrationOptions = {}): Promise<TestDb> {
   if (!ADMIN_URL) throw new Error("OGEVIA_TEST_DATABASE_URL is not set");
   assertSafeTarget(ADMIN_URL);
   const name = `ogevia_test_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -39,7 +39,7 @@ export async function createTestDb(): Promise<TestDb> {
   });
   const client = await admin.connect();
   try {
-    await migrate(client);
+    await migrate(client, () => {}, { includeLiveTest: process.env.OGEVIA_TEST_LIVE_BASELINE === "0102", ...options });
   } finally {
     client.release();
   }

@@ -117,7 +117,7 @@ describe("Staff", () => {
   it("lists every kind of staff once, numbered 1..n in list order, with type, role and access in plain words", async () => {
     renderAt("/staff", "organization_owner");
     const table = await screen.findByRole("table", { name: "Staff" });
-    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["No.", "Name", "Staff Type", "Role", "Status", "Email", "Phone", "Actions"]);
+    expect(within(table).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["No.", "Name", "Staff Type", "Role", "Sign-in status", "Staff record", "Contact email", "Phone", "Actions"]);
     expect(within(table).getAllByTestId("row-no").map((c) => c.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
     expect(await rowOf("Nia NoAccess")).toHaveTextContent("Office Assistant");
     expect(await rowOf("Nia NoAccess")).toHaveTextContent("No sign-in");
@@ -130,21 +130,36 @@ describe("Staff", () => {
     expect(await rowOf("Synthetic Admin")).toHaveTextContent("you");
     // a caregiver is read from the Care Team: a link there, no second profile to edit
     const cara = await rowOf("Cara Caregiver");
-    expect(within(cara).getByRole("link", { name: "Open caregiver" }).getAttribute("href")).toBe("/care-team/eeeeeeee-0000-4000-8000-000000000001");
+    expect(within(cara).getByRole("link", { name: "Cara Caregiver" }).getAttribute("href")).toBe("/care-team/eeeeeeee-0000-4000-8000-000000000001");
     expect(within(cara).queryByRole("button", { name: /^Edit/ })).toBeNull();
     expect(document.body.textContent).not.toMatch(/cognito|password/i);
   });
 
+  it("phone: a Sort by control sorts the same list by the same columns as the headings, and reverses it", async () => {
+    renderAt("/staff", "organization_owner");
+    const table = await screen.findByRole("table", { name: "Staff" });
+    const control = screen.getByTestId("mobile-sort");
+    const select = within(control).getByRole("combobox", { name: "Sort by" });
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Choose a column", "Name", "Staff type", "Role", "Sign-in status", "Staff record", "Contact email", "Phone"]);
+    fireEvent.change(select, { target: { value: "name" } });
+    expect(within(table).getAllByTestId("row-no")).toHaveLength(7);
+    expect(within(table).getByRole("columnheader", { name: /Name/ })).toHaveAttribute("aria-sort", "ascending");
+    expect(await rowOf("Abe Active")).toBe(within(table).getAllByRole("row")[1]);
+    fireEvent.click(within(control).getByRole("button", { name: /Tap to reverse/ }));
+    expect(within(table).getByRole("columnheader", { name: /Name/ })).toHaveAttribute("aria-sort", "descending");
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent("Synthetic Manager");
+  });
+
   it("an administrator adds staff with a contact email that is separate from the sign-in email", async () => {
     const api = renderAt("/staff", "organization_owner");
-    fireEvent.click(await screen.findByRole("button", { name: "Add staff" }));
-    const form = await screen.findByRole("form", { name: "Add staff" });
+    fireEvent.click(await screen.findByRole("button", { name: "Add office staff" }));
+    const form = await screen.findByRole("form", { name: "Add office staff" });
     expect(within(form).getAllByRole("option").map((o) => o.textContent)).toEqual(["Manager", "Office Assistant"]);   // inactive types cannot be chosen for someone new
     fireEvent.change(within(form).getByLabelText("Name"), { target: { value: "  Quinn Newhire " } });
     fireEvent.change(within(form).getByLabelText("Staff type"), { target: { value: T_OFFICE } });
     fireEvent.change(within(form).getByLabelText("Contact email"), { target: { value: "quinn.contact@example.test" } });
     fireEvent.change(within(form).getByLabelText("Phone"), { target: { value: "555 0102" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Add staff" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Add office staff" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Staff added.");
     expect(lastPost(api, "/v1/staff")?.body).toEqual({ organizationId: ORG, displayName: "Quinn Newhire", staffTypeId: T_OFFICE, contactEmail: "quinn.contact@example.test", phone: "555 0102" });
   });
@@ -247,8 +262,9 @@ describe("Staff", () => {
     expect(within(nav).getByRole("link", { name: "Agency Settings" }).getAttribute("href")).toBe("/settings/branding");
     cleanup();
     renderAt("/settings/roles", "organization_owner");
-    const strip = await screen.findByRole("navigation", { name: "Section tabs" });
-    expect(within(strip).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
+    const settingsNav = await screen.findByRole("navigation", { name: "Main" });
+    expect(screen.queryByRole("navigation", { name: "Section tabs" })).toBeNull();
+    expect(within(settingsNav).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
   });
 
   it("search and the Staff Type, Role and Status filters narrow the list; the numbers follow the filter; Clear Filters brings everyone back", async () => {
@@ -265,7 +281,7 @@ describe("Staff", () => {
     fireEvent.change(screen.getByLabelText("Staff type"), { target: { value: T_OFFICE } });
     expect(names()).toEqual(["Nia NoAccess", "Pia Pending", "Dee Disabled"]);
     expect(numbers()).toEqual(["1", "2", "3"]);
-    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "Invited" } });
+    fireEvent.change(screen.getByLabelText("Sign-in status"), { target: { value: "Invited" } });
     expect(names()).toEqual(["Pia Pending"]);
     fireEvent.click(screen.getByRole("button", { name: "Clear Filters" }));
     fireEvent.change(screen.getByLabelText("Role"), { target: { value: "manager" } });
@@ -308,7 +324,7 @@ describe("Staff Types", () => {
 
   it("states that a type grants nothing, and is refused to someone without staff.read", async () => {
     renderAt("/settings/staff-types", "organization_owner");
-    expect(await screen.findByRole("button", { name: "About Staff Types" })).toHaveAccessibleDescription(/never gives access/);
+    await waitFor(() => expect(screen.getByTestId("page-help-panel")).toHaveTextContent(/never gives access/));
     cleanup();
     renderAt("/settings/staff-types", "manager");
     expect(await screen.findByText("Only an administrator can manage staff.")).toBeInTheDocument();

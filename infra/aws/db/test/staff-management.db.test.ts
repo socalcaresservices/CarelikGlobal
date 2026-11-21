@@ -29,7 +29,7 @@ const userOf = async (sub: string) => (await db.admin.query("select id from ogev
 const READS = ["select * from ogevia_api.list_staff_types($1)", "select * from ogevia_api.list_staff($1)", "select * from ogevia_api.list_role_permissions($1)", "select * from ogevia_api.list_staff_audit($1)"];
 
 beforeAll(async () => {
-  db = await createTestDbWithPending();
+  db = await createTestDbWithPending({ includeLiveTest: true });
   w = await seedWorld(db);
 });
 afterAll(async () => db.drop());
@@ -411,7 +411,7 @@ describe("system role assignment", () => {
     const o2 = (await db.admin.query("insert into ogevia.app_users (cognito_sub, display_name) values ($1,'Second Owner') returning id", [sub2])).rows[0].id as string;
     await db.admin.query("insert into ogevia.organization_memberships (organization_id, user_id, role, status) values ($1,$2,'organization_owner','active')", [w.orgA, o2]);
     await expectPgError(setRole(w.ownerA, o2, "manager"), "OGC09", /Owner role is protected/);
-    await expectPgError(setRole(w.ownerA, w.caregiverA1.userId, "manager"), "OGC09", /staff roles/);
+
     for (const bad of ["organization_owner", "platform_owner", "caregiver", "client"]) await expectPgError(setRole(w.ownerA, w.managerA.userId, bad), "OGV22", /supported role/);
     await expectPgError(setRole(w.ownerA, randomUUID(), "staff"), "OGN04");
     expect((await db.admin.query("select role::text r from ogevia.organization_memberships where user_id = $1 and organization_id = $2", [w.ownerA.userId, w.orgA])).rows[0].r).toBe("organization_owner");
@@ -534,4 +534,23 @@ describe("0087 rolls back on its own to the 0086 behaviour and applies again", (
       } finally { client.release(); }
     } finally { await own.drop(); }
   });
+});
+
+it("adds and removes an office role on the existing caregiver membership", async () => {
+  const target = w.caregiverA1;
+  const snapshot = async () => (await db.admin.query(
+    "select id, role, caregiver_office_role from ogevia.organization_memberships where organization_id=$1 and user_id=$2",
+    [w.orgA, target.userId],
+  )).rows[0];
+  const before = await snapshot();
+  const repeats = await Promise.all([setRole(w.ownerA, target.userId, "scheduler"), setRole(w.ownerA, target.userId, "scheduler")]);
+  expect(repeats.map((rows) => rows[0].r)).toEqual(["scheduler", "scheduler"]);
+  expect(await snapshot()).toEqual({ ...before, caregiver_office_role: "scheduler" });
+  const [context] = await call(target, "select role, permissions from ogevia_api.get_my_context() where organization_id=$1", [w.orgA]);
+  expect(context.role).toBe("scheduler");
+  expect(context.permissions).toEqual(expect.arrayContaining(["shifts.manage", "availability.manage_own"]));
+  await expect(call(target, "select * from ogevia_api.list_my_shifts($1)", [w.orgA])).resolves.toEqual(expect.any(Array));
+  expect((await db.admin.query("select count(*)::int as count from ogevia.audit_events where entity_id=$1 and action='staff.role_changed'", [before.id])).rows[0].count).toBe(1);
+  expect((await setRole(w.ownerA, target.userId, "caregiver"))[0].r).toBe("caregiver");
+  expect(await snapshot()).toEqual(before);
 });

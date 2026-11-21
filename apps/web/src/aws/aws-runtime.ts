@@ -40,7 +40,7 @@ const RUNTIME_KEYS = [
   "VITE_COGNITO_SCOPES",
   "VITE_COGNITO_REFRESH_PERSISTENCE",
   "VITE_SV_API_BASE_URL",
-  "VITE_APP_ENV", // a label (test | development | production), not an identifier or a secret
+  "VITE_APP_ENV", // a label (test | demo | development | production), not an identifier or a secret
 ] as const;
 
 /**

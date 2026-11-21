@@ -1,4 +1,5 @@
 import { HoursBreakdown } from "@/components/hours-breakdown";
+import { MissingScheduledVisits } from "@/components/missing-scheduled-visits";
 import { ShortHelp } from "@/aws/help-text";
 import { hoursLeftText } from "@/lib/hours-accounting";
 import { Fragment, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -55,9 +56,14 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
+import { useDashboardAppearance } from "@/aws/appearance/appearance-hooks";
+import { officeMatches, useClientOffices, useOffices } from "@/aws/offices-data";
 import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
+import { orderCorrectionRows, orderMonthlyServiceRows } from "@carelik/auth/export-order";
 import { MonthlyChainReport } from "@/aws/monthly-chain-report";
 import {
   AUTHORIZATION_STATUS_LABEL,
@@ -152,14 +158,8 @@ const ALL_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
 // beside the expanded sidebar at 1440px; it is still a column in Columns.
 const DEFAULT_VISIT_COLUMNS = ALL_VISIT_COLUMNS.filter((key) => !BALANCE_COLUMNS.includes(key) && key !== "visitRef");
 
-const CHART_COLORS = [
-  "#4f46e5",
-  "#059669",
-  "#0284c7",
-  "#7c3aed",
-  "#e11d48",
-  "#d97706",
-];
+// The chart colours follow the palette chosen on the Dashboard (Settings > Appearance): Care blue, Blue shades, Primary colors or Ogevia.
+// Worked hours use the palette's first colour and billable hours its second; pie slices cycle through all of them.
 
 const STATUS_TONE: Record<ServiceVisitStatus, StatusTone> = {
   draft: "info",
@@ -421,7 +421,7 @@ export function ServiceVerificationReportsPage() {
   const [closeError, setCloseError] = useState<string | null>(null);
   const closeKey = useRef(newIdempotencyKey());
 
-  const [clientFilter, setClientFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState(() => new URLSearchParams(window.location.search).get("client") ?? "");
   const [caregiverFilter, setCaregiverFilter] = useState(
     () => new URLSearchParams(window.location.search).get("caregiver") ?? "",
   );
@@ -429,6 +429,9 @@ export function ServiceVerificationReportsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [correctedByFilter, setCorrectedByFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [officeFilter, setOfficeFilter] = useState("");   // 0110: an office id, "none" = clients with no office
+  const { offices: officeList, available: officesOn } = useOffices();
+  const { byClientId: officeByClient, ready: officeMapReady } = useClientOffices(officesOn);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
@@ -437,6 +440,7 @@ export function ServiceVerificationReportsPage() {
   const inActions = (node: ReactNode) => (exportSlot ? createPortal(node, exportSlot) : node);
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
+  const { colors: paletteColors } = useDashboardAppearance();
   const location = useLocation();
   const navigate = useNavigate();
   // A printout from a test or unverified environment says so on every page, so it cannot pass for a real record.
@@ -463,7 +467,10 @@ export function ServiceVerificationReportsPage() {
   }, [viewFromUrl, defaultView]);
   const narrow = useIsNarrow();
   const [linkCopied, setLinkCopied] = useState(false);
-  const [reportMonth, setReportMonth] = useState(currentPacificMonth);
+  const [reportMonth, setReportMonth] = useState(() => {
+    const month = new URLSearchParams(window.location.search).get("month");
+    return month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : currentPacificMonth();
+  });
   const [showSuperseded, setShowSuperseded] = useState(false);
   const [visitColumns, setVisitColumns] = useState<Set<VisitColumn>>(() => {
     try {
@@ -688,6 +695,17 @@ export function ServiceVerificationReportsPage() {
     }
   }
 
+  // The client pickers list every client in the agency, not only those with visits already loaded on this page (owner, 2026-11-17: the
+  // monthly calendar's client list was empty when no visits were loaded). AWS only: the server returns names to roles allowed to see them.
+  const clientDirectoryQuery = useQuery({
+    queryKey: ["service-report-client-directory", activeOrganizationId],
+    queryFn: async () =>
+      (await awsApi!.get<{ clients: Array<{ clientId: string; clientCode: string; status: string; legalFirstName: string | null; legalLastName: string | null; duplicateName?: boolean }> }>(
+        "/v1/clients", { organizationId: activeOrganizationId! })).clients,
+    enabled: !!activeOrganizationId && !!awsApi && canRead,
+    retry: false,
+  });
+
   const rawRows = useMemo(() => visitsQuery.data ?? [], [visitsQuery.data]);
 
   const clientLocationMap = useMemo(() => {
@@ -701,15 +719,11 @@ export function ServiceVerificationReportsPage() {
     return map;
   }, [clientLocationsQuery.data]);
 
-  const rows = useMemo(
-    () =>
-      locationFilter
-        ? rawRows.filter(
-            (row) => clientLocationMap.get(row.client_id) === locationFilter,
-          )
-        : rawRows,
-    [clientLocationMap, locationFilter, rawRows],
-  );
+  const rows = useMemo(() => {
+    const byLocation = locationFilter ? rawRows.filter((row) => clientLocationMap.get(row.client_id) === locationFilter) : rawRows;
+    if (!officeFilter || !officesOn || !officeMapReady) return byLocation;
+    return byLocation.filter((row) => officeMatches(officeFilter, officeByClient.get(row.client_id)));
+  }, [clientLocationMap, locationFilter, officeFilter, officesOn, officeMapReady, officeByClient, rawRows]);
 
   const locationOptions = useMemo(
     () => Array.from(new Set(clientLocationMap.values())).sort(),
@@ -718,11 +732,17 @@ export function ServiceVerificationReportsPage() {
 
   const clientOptions = useMemo(() => {
     const map = new Map<string, string>();
-    rows.forEach((row) =>
-      map.set(row.client_id, visitClientLabel(row)),
-    );
-    return Array.from(map.entries());
-  }, [rows]);
+    for (const c of clientDirectoryQuery.data ?? []) {
+      if (c.status !== "active") continue;
+      const name = [c.legalFirstName, c.legalLastName].filter(Boolean).join(" ");
+      map.set(c.clientId, visitClientLabel({ client_legal_name: name || null, client_code: c.clientCode, client_name_duplicate: c.duplicateName }));
+    }
+    // Clients with visits on this page stay listed even if inactive now, so a past month can still be reported.
+    rows.forEach((row) => {
+      if (!map.has(row.client_id)) map.set(row.client_id, visitClientLabel(row));
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows, clientDirectoryQuery.data]);
 
   const caregiverOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -768,24 +788,41 @@ export function ServiceVerificationReportsPage() {
   const showBalanceDetails = BALANCE_COLUMNS.every((key) => !visitColumns.has(key));
   const visibleVisitColumnCount = visitColumns.size + (showBalanceDetails ? 1 : 0) + (canManage ? 1 : 0);
 
-  const visibleVisitRows = useMemo(
+  const unsortedVisitRows = useMemo(
     () =>
       showSuperseded
         ? rows
         : rows.filter((row) => row.status !== "corrected"),
     [rows, showSuperseded],
   );
+  // Every column of the visit table sorts (owner, 2026-11-17). Time sorts by the actual start; Date by the service day.
+  const { rows: visibleVisitRows, sort: visitSort } = useSortedRows(unsortedVisitRows, {
+    visitRef: { get: (r) => r.visit_number },
+    client: { get: (r) => visitClientLabel(r) },
+    caregiver: { get: (r) => r.caregiver_name },
+    service: { get: (r) => r.service_name },
+    date: { get: (r) => r.time_in, kind: "date" },
+    time: { get: (r) => (r.time_in ? new Date(r.time_in).toTimeString().slice(0, 5) : null) },
+    worked: { get: (r) => r.worked_minutes, kind: "number" },
+    billable: { get: (r) => r.billable_minutes, kind: "number" },
+    authorized: { get: (r) => (r.month_to_date_after_minutes !== null && r.remaining_minutes !== null ? r.month_to_date_after_minutes + r.remaining_minutes : null), kind: "number" },
+    usedMtd: { get: (r) => r.month_to_date_after_minutes, kind: "number" },
+    remaining: { get: (r) => r.remaining_minutes, kind: "number" },
+    status: { get: (r) => r.status },
+  });
 
   const monthlyServiceRows = useMemo(
     () =>
-      (monthlyServiceSummaryQuery.data ?? []).filter(
-        (row) => !serviceFilter || row.serviceId === serviceFilter,
+      orderMonthlyServiceRows(
+        (monthlyServiceSummaryQuery.data ?? []).filter(
+          (row) => !serviceFilter || row.serviceId === serviceFilter,
+        ),
       ),
     [monthlyServiceSummaryQuery.data, serviceFilter],
   );
 
   const correctionRows = useMemo(
-    () => correctionHistoryReportQuery.data ?? [],
+    () => orderCorrectionRows(correctionHistoryReportQuery.data ?? []),
     [correctionHistoryReportQuery.data],
   );
   const correctedByOptions = useMemo(() => {
@@ -1097,7 +1134,7 @@ export function ServiceVerificationReportsPage() {
     window.print();
   }
 
-  const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter]
+  const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter, officeFilter]
     .filter(Boolean).length;
 
   // Monthly reports are chosen by month; of the filters only the ones their data honours are shown.
@@ -1115,6 +1152,7 @@ export function ServiceVerificationReportsPage() {
     setStatusFilter("");
     setCorrectedByFilter("");
     setLocationFilter("");
+    setOfficeFilter("");
     if (caregiverFilter) selectCaregiverFolder("");
   }
 
@@ -1253,13 +1291,13 @@ export function ServiceVerificationReportsPage() {
                                       <li key={entry.id} className="rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                           <p className="font-medium text-slate-900">
-                                            Revision {index + 1} · {entry.corrected_by_name}
+                                              {entry.before_snapshot.timeIn ? `Revision ${index + 1}` : "Missing punches recorded"} · {entry.corrected_by_name}
                                           </p>
                                           <p className="text-xs text-slate-500">{formatDateTime(entry.created_at)}</p>
                                         </div>
                                         <p className="mt-1 text-slate-600">Reason: {entry.reason}</p>
                                         <p className="mt-1 text-xs text-slate-500">
-                                          {formatTimeRange(entry.before_snapshot.timeIn, entry.before_snapshot.timeOut)}
+                                            {entry.before_snapshot.timeIn ? formatTimeRange(entry.before_snapshot.timeIn, entry.before_snapshot.timeOut) : "No recorded punches"}
                                           {" "}({formatDuration(entry.before_snapshot.workedMinutes)})
                                           {" "}→{" "}
                                           {formatTimeRange(entry.after_snapshot.timeIn, entry.after_snapshot.timeOut)}
@@ -1408,7 +1446,7 @@ export function ServiceVerificationReportsPage() {
                 navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: true });
                 closeExpanded();
               }}
-              className="min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
+              className="min-h-[44px] md:min-h-[32px] w-full rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm font-semibold text-slate-950 [@media(pointer:coarse)]:min-h-[44px]"
             >
               <option value="visits">Visit records</option>
               <option value="exceptions">Visits to review</option>
@@ -1426,7 +1464,7 @@ export function ServiceVerificationReportsPage() {
                 <select
                   value={clientFilter}
                   onChange={(event) => setClientFilter(event.target.value)}
-                  className="mt-0.5 block max-w-56 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                  className="mt-0.5 block max-w-56 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                 >
                   <option value="">Choose a client…</option>
                   {clientOptions.map(([id, label]) => (
@@ -1443,7 +1481,7 @@ export function ServiceVerificationReportsPage() {
                   {...(reportView === "calendar" ? { "aria-label": "Calendar month" } : {})}
                   value={reportMonth}
                   onChange={(event) => setReportMonth(event.target.value)}
-                  className="mt-0.5 block min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                  className="mt-0.5 block min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                 />
               </label>
             ) : rangeView ? (
@@ -1454,23 +1492,23 @@ export function ServiceVerificationReportsPage() {
                     id="report-date-range"
                     value={datePreset}
                     onChange={(event) => applyDatePreset(event.target.value as DatePreset)}
-                    className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
+                    className="mt-0.5 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]"
                   >
                     {DATE_PRESETS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label htmlFor="report-from" className="block text-xs font-medium text-slate-600">Start date</label>
-                  <input id="report-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDatePreset("custom"); setDateFrom(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
+                  <input id="report-from" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDatePreset("custom"); setDateFrom(event.target.value); }} className="mt-0.5 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
                 </div>
                 <div>
                   <label htmlFor="report-to" className="block text-xs font-medium text-slate-600">End date</label>
-                  <input id="report-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDatePreset("custom"); setDateTo(event.target.value); }} className="mt-0.5 min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
+                  <input id="report-to" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDatePreset("custom"); setDateTo(event.target.value); }} className="mt-0.5 min-h-[44px] md:min-h-[32px] rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 [@media(pointer:coarse)]:min-h-[44px]" />
                 </div>
               </>
             ) : null}
             {activeFilterCount > 0 || (rangeView && datePreset !== "all") ? (
-              <button type="button" onClick={clearAllFilters} className="min-h-[32px] text-sm font-medium text-og-link underline [@media(pointer:coarse)]:min-h-[44px]">
+              <button type="button" onClick={clearAllFilters} className="min-h-[44px] md:min-h-[32px] text-sm font-medium text-og-link underline [@media(pointer:coarse)]:min-h-[44px]">
                 Clear Filters
               </button>
             ) : null}
@@ -1528,6 +1566,25 @@ export function ServiceVerificationReportsPage() {
                     {location}
                   </option>
                 ))}
+              </select>
+            </div>
+            ) : null}
+            {filterApplies("location") && officesOn && officeMapReady && officeList.length > 0 ? (
+            <div>
+              <label htmlFor="report-office" className="block text-xs font-medium text-slate-600">
+                Office
+              </label>
+              <select
+                id="report-office"
+                value={officeFilter}
+                onChange={(event) => setOfficeFilter(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All offices</option>
+                {officeList.map((o) => (
+                  <option key={o.officeId} value={o.officeId}>{o.isActive ? o.name : `${o.name} (retired)`}</option>
+                ))}
+                <option value="none">No office</option>
               </select>
             </div>
             ) : null}
@@ -1631,7 +1688,7 @@ export function ServiceVerificationReportsPage() {
 
       {reportView === "overview" ? (
         <>
-          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="inline-flex min-h-[32px] items-center font-semibold underline [@media(pointer:coarse)]:min-h-[44px]" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
+          {awsApi ? <p className="text-sm text-slate-700" data-testid="reporting-hub-link">More reports: <Link className="inline-flex min-h-[44px] md:min-h-[32px] items-center font-semibold underline [@media(pointer:coarse)]:min-h-[44px]" to="/reporting">Reporting &amp; billing</Link>.</p> : null}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
@@ -1732,7 +1789,7 @@ export function ServiceVerificationReportsPage() {
                         {chartData.map((entry, index) => (
                           <Cell
                             key={entry.name}
-                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            fill={paletteColors[index % paletteColors.length]}
                           />
                         ))}
                       </Pie>
@@ -1750,14 +1807,14 @@ export function ServiceVerificationReportsPage() {
                         type="monotone"
                         dataKey="workedMinutes"
                         name="Worked hours"
-                        stroke="#4f46e5"
+                        stroke={paletteColors[0]}
                         strokeWidth={3}
                       />
                       <Line
                         type="monotone"
                         dataKey="billableMinutes"
                         name="Billable hours"
-                        stroke="#059669"
+                        stroke={paletteColors[1]}
                         strokeWidth={3}
                       />
                     </LineChart>
@@ -1771,13 +1828,13 @@ export function ServiceVerificationReportsPage() {
                       <Bar
                         dataKey="workedMinutes"
                         name="Worked hours"
-                        fill="#4f46e5"
+                        fill={paletteColors[0]}
                         radius={[6, 6, 0, 0]}
                       />
                       <Bar
                         dataKey="billableMinutes"
                         name="Billable hours"
-                        fill="#059669"
+                        fill={paletteColors[1]}
                         radius={[6, 6, 0, 0]}
                       />
                     </BarChart>
@@ -2091,28 +2148,11 @@ export function ServiceVerificationReportsPage() {
               <h3 className="font-semibold text-slate-950">
                 Monthly hours & billing
               </h3>
-              <InfoTip label="Help">
-                Each row is one client + service + authorization lineage.
-                Services are never combined. Worked and billable time remain
-                separate so documentation or authorization differences cannot
-                be hidden by a client-level total.
-              </InfoTip>
-              <p className="mt-1 max-w-3xl text-xs text-slate-500">
-                <strong>Billable (eligible)</strong> is confirmed time within the
-                authorization; <strong>Approved</strong> is what a person approved
-                for billing. Approval is not submission: Ogevia does not submit to
-                payers or track submissions.{" "}
-                <strong>Reserved</strong> is scheduled time not yet delivered (ahead, underway, or ended with no visit record and awaiting a person's decision); nothing is released automatically.
-                <strong> Pending</strong> is worked time not yet billable (awaiting confirmation or in review) and the shift time held for it. Open Details on a row for the full equation:
-                Authorized = Billable + Rounding + Pending + Reserved + Hours left, where Hours left below zero is shown as Over limit and is never offset against another authorization.
-              </p>
-              {backend.kind === "aws" ? (
-                <p className="mt-1 text-xs print:hidden">
-                  <Link className="font-medium text-slate-800 underline" to="/">
-                    Agency-wide utilization by service is on Home
-                  </Link>
-                </p>
-              ) : null}
+              <div className="flex flex-wrap gap-2 print:hidden">
+                <InfoTip label="About monthly hours">Each row is one client + service + authorization lineage. Authorized = Billable + Rounding + Pending + Reserved + Hours left. Over-limit hours are never offset against another authorization.</InfoTip>
+                <InfoTip label="About billing and reservations">Billable is confirmed time within the authorization. Approved means cleared for billing. Approval is not submission or payment. Pending work awaits confirmation or review. Reserved time is scheduled and still held.</InfoTip>
+                {backend.kind === "aws" ? <InfoTip label="About agency totals" more={{ to: "/", label: "See totals on Dashboard" }}>The Dashboard shows agency-wide hours by service.</InfoTip> : null}
+              </div>
             </div>
             <div className="flex items-end gap-2 print:hidden">
               {canExport && monthlyServiceRows.length > 0 ? (
@@ -2559,19 +2599,19 @@ export function ServiceVerificationReportsPage() {
                 >
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                      {visitColumns.has("visitRef") ? <th className="pb-2 pr-2 font-medium">Visit ref</th> : null}
-                      {visitColumns.has("client") ? <th className="pb-2 pr-2 font-medium">Client</th> : null}
-                      {visitColumns.has("caregiver") ? <th className="pb-2 pr-2 font-medium">Caregiver</th> : null}
-                      {visitColumns.has("service") ? <th className="pb-2 pr-2 font-medium">Service</th> : null}
-                      {visitColumns.has("date") ? <th className="pb-2 pr-2 font-medium">Date</th> : null}
-                      {visitColumns.has("time") ? <th className="pb-2 pr-2 font-medium">Time</th> : null}
-                      {visitColumns.has("worked") ? <th className="pb-2 pr-2 font-medium">Worked</th> : null}
-                      {visitColumns.has("billable") ? <th className="pb-2 pr-2 font-medium">Billable</th> : null}
-                      {visitColumns.has("authorized") ? <th className="pb-2 pr-2 font-medium">Authorized</th> : null}
-                      {visitColumns.has("usedMtd") ? <th className="pb-2 pr-2 font-medium">Billable this month</th> : null}
-                      {visitColumns.has("remaining") ? <th className="pb-2 pr-2 font-medium">Hours left</th> : null}
+                      {visitColumns.has("visitRef") ? <SortTh sort={visitSort} column="visitRef" className="pb-1 pr-2 font-medium">Visit ref</SortTh> : null}
+                      {visitColumns.has("client") ? <SortTh sort={visitSort} column="client" className="pb-1 pr-2 font-medium">Client</SortTh> : null}
+                      {visitColumns.has("caregiver") ? <SortTh sort={visitSort} column="caregiver" className="pb-1 pr-2 font-medium">Caregiver</SortTh> : null}
+                      {visitColumns.has("service") ? <SortTh sort={visitSort} column="service" className="pb-1 pr-2 font-medium">Service</SortTh> : null}
+                      {visitColumns.has("date") ? <SortTh sort={visitSort} column="date" kind="date" className="pb-1 pr-2 font-medium">Date</SortTh> : null}
+                      {visitColumns.has("time") ? <SortTh sort={visitSort} column="time" className="pb-1 pr-2 font-medium">Time</SortTh> : null}
+                      {visitColumns.has("worked") ? <SortTh sort={visitSort} column="worked" kind="number" className="pb-1 pr-2 font-medium">Worked</SortTh> : null}
+                      {visitColumns.has("billable") ? <SortTh sort={visitSort} column="billable" kind="number" className="pb-1 pr-2 font-medium">Billable</SortTh> : null}
+                      {visitColumns.has("authorized") ? <SortTh sort={visitSort} column="authorized" kind="number" className="pb-1 pr-2 font-medium">Authorized</SortTh> : null}
+                      {visitColumns.has("usedMtd") ? <SortTh sort={visitSort} column="usedMtd" kind="number" className="pb-1 pr-2 font-medium">Billable this month</SortTh> : null}
+                      {visitColumns.has("remaining") ? <SortTh sort={visitSort} column="remaining" kind="number" className="pb-1 pr-2 font-medium">Hours left</SortTh> : null}
                       {showBalanceDetails ? <th className="pb-2 pr-2 font-medium">Hours left</th> : null}
-                      {visitColumns.has("status") ? <th className="pb-2 pr-2 font-medium">Status</th> : null}
+                      {visitColumns.has("status") ? <SortTh sort={visitSort} column="status" className="pb-1 pr-2 font-medium">Status</SortTh> : null}
                       {canManage ? <th className="pb-2 font-medium print:hidden">Actions</th> : null}
                     </tr>
                   </thead>
@@ -2769,13 +2809,14 @@ export function ServiceVerificationReportsPage() {
         </>
       ) : null}
 
+      {reportView === "exceptions" ? <MissingScheduledVisits filters={{ clientId: clientFilter || null, serviceId: serviceFilter || null, caregiverUserId: caregiverFilter || null, dateFrom: dateFrom || null, dateTo: dateTo || null, status: null }} /> : null}
       {reportView === "exceptions" && incompleteVisits.length > 0 ? (
         <Card>
           <h3 className="font-semibold text-slate-950">
             Incomplete visits ({incompleteVisits.length})
           </h3>
           <details className="mt-1 text-xs text-slate-500">
-          <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
+          <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-og-accent underline">What these mean</summary>
           <InfoTip label="Help">
             Missing Time Out: still open past the shift end (or {UNSCHEDULED_OPEN_VISIT_ALERT_HOURS}+ hours
             with no shift). Not confirmed: signed out over an hour ago with no client confirmation or no-signer reason.
@@ -2881,7 +2922,7 @@ export function ServiceVerificationReportsPage() {
         <Card>
           <h3 className="font-semibold text-slate-950">Exception visits</h3>
           <details className="mt-1 text-xs text-slate-500">
-            <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
+            <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-og-accent underline">What counts as an exception</summary>
             <InfoTip label="Help">Visits that needed a human to look at them: flagged for administrator review, an authorization status other than within-authorization, or already corrected.</InfoTip>
           </details>
           <ul className="mt-2 divide-y divide-slate-100">
@@ -2929,7 +2970,7 @@ export function ServiceVerificationReportsPage() {
         <Card>
           <h3 className="font-semibold text-slate-950">Exceptions</h3>
           <p className="mt-2 text-sm text-emerald-700">
-            No visits currently need manager attention for these filters.
+            No existing visit records currently need manager attention for these filters. Missing scheduled records are listed separately above.
           </p>
         </Card>
       ) : null}

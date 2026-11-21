@@ -247,9 +247,10 @@ describe("CandidateDetailPage", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Pat WalkIn")).toBeInTheDocument());
 
-    expect(screen.getByLabelText("Monday window 1 start")).toHaveValue("08:00");
-    expect(screen.getByLabelText("Monday window 2 start")).toHaveValue("16:00");
-    expect(screen.getByLabelText("Monday window 2 preference")).toHaveValue("preferred");
+    // The availability windows load in a separate request from the candidate; wait for them instead of reading them the moment the name appears (CI run 44820562390 failed on this race).
+    expect(await screen.findByLabelText("Monday window 1 start")).toHaveValue("08:00");
+    expect(await screen.findByLabelText("Monday window 2 start")).toHaveValue("16:00");
+    expect(await screen.findByLabelText("Monday window 2 preference")).toHaveValue("preferred");
   });
 
   it("adds, edits, and removes availability windows, then saves via replace_candidate_availability", async () => {

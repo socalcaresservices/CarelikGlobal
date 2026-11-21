@@ -3,6 +3,7 @@
 // re-apply them. Staff is rolled back TOGETHER WITH 0088 (the readiness migration re-creates list_accounts on top of 0087), newest first, and re-applied oldest first.
 import { readdirSync, readFileSync } from "node:fs";
 import type { ClientBase } from "pg";
+import type { MigrationOptions } from "../scripts/migrations.js";
 import { createTestDb, type TestDb } from "./harness.js";
 
 const UP = new URL("../migrations/", import.meta.url);
@@ -38,6 +39,6 @@ export async function rollBackPendingMigrations(client: ClientBase): Promise<str
 }
 
 /** Kept for the staff tests: createTestDb() already includes 0086 and 0087 (and 0088). */
-export async function createTestDbWithPending(): Promise<TestDb> {
-  return createTestDb();
+export async function createTestDbWithPending(options: MigrationOptions = {}): Promise<TestDb> {
+  return createTestDb(options);
 }

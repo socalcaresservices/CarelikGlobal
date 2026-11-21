@@ -285,7 +285,7 @@ export function MyAvailability() {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-950">Pending changes</h2>
-          <Button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? "Close" : "Request change"}</Button>
+          <Button type="button" className="min-h-11" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{open ? "Close" : "Request change"}</Button>
         </div>
         {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
         <div className="mt-2"><RequestHistory rows={state.pending} canWithdraw onWithdraw={withdraw} busyId={busy} /></div>

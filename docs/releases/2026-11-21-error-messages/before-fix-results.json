@@ -1,0 +1,37 @@
+[
+ {
+  "n": "route works: type is retired",
+  "ok": true,
+  "d": "\"synthetic cpp is retired and can no longer be requested. Existing records are kept.\""
+ },
+ {
+  "n": "switch off (route missing, browser sees a failed request)",
+  "ok": false,
+  "d": "\"Could not reach Ogevia. Check your connection and try again.\""
+ },
+ {
+  "n": "expired sign-in (401 from the gateway)",
+  "ok": false,
+  "d": "\"The request failed. Please try again.\""
+ },
+ {
+  "n": "no permission (403)",
+  "ok": false,
+  "d": "\"The request failed. Please try again.\""
+ },
+ {
+  "n": "business rule (409 with the server's own message)",
+  "ok": true,
+  "d": "\"Cancel its open requests first.\""
+ },
+ {
+  "n": "server failure (500)",
+  "ok": false,
+  "d": "\"The request failed. Please try again.\""
+ },
+ {
+  "n": "genuine connection problem keeps 'Could not reach Ogevia'",
+  "ok": true,
+  "d": "\"Could not reach Ogevia. Check your connection and try again.\""
+ }
+]

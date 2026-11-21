@@ -1,3 +1,4 @@
+import { InfoTip } from "./ui/info-tip";
 // Scheduling (0053): make-up visits for lost time, and caregiver hour limits with the week's load. Every rule is enforced
 // again by the server (same month as the missed visit, never more than the time still owed, the same authorization,
 // readiness and conflict checks as any other shift); these forms only make the result clear.
@@ -11,9 +12,12 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { Hint } from "./hint";
+import { CaregiverPicker } from "./caregiver-picker";
+import { refreshAfterShiftChange } from "./shift-refresh";
+import { schedulingRefusal } from "./scheduling-refusal";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
-const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+const message = schedulingRefusal;
 
 /** Schedule time to replace a cancelled, called-out or short shift. */
 export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, onDone }: {
@@ -36,7 +40,7 @@ export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, o
         { organizationId: activeOrganizationId, localDate: form.date, startTime: form.startTime, endTime: form.endTime, caregiverRecordId: form.caregiverRecordId || null },
         { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ["aws-shifts"] });
+      await refreshAfterShiftChange(queryClient);
       onDone(`Make-up scheduled: ${formatDuration(r.makeup.reservedMinutes)} reserved; ${formatDuration(Number(r.makeup.remainingMinutes))} of authorized time left that month. ${
         r.makeup.unmadeMinutesAfter > 0 ? `${formatDuration(r.makeup.unmadeMinutesAfter)} of the missed time is still not made up.` : "The missed time is fully made up."}`);
     } catch (cause) {
@@ -48,11 +52,8 @@ export function MakeupForm({ shiftId, caregiverRecordId, defaultDate, onClose, o
       <Hint details="It uses the month's authorized hours like any other shift." className="sm:col-span-2">Same month as the missed visit, and no longer than the time still owed.</Hint>
       <div><label htmlFor={`${id}-d`} className="block text-xs font-medium text-slate-600">Date</label><input id={`${id}-d`} type="date" value={form.date} onChange={(e) => change({ date: e.target.value })} className={inputClass} /></div>
       <div>
-        <label htmlFor={`${id}-c`} className="block text-xs font-medium text-slate-600">Caregiver</label>
-        <select id={`${id}-c`} value={form.caregiverRecordId} onChange={(e) => change({ caregiverRecordId: e.target.value })} className={inputClass}>
-          <option value="">Open shift — fill later</option>
-          {(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active").map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>)}
-        </select>
+        <CaregiverPicker id={`${id}-c`} label="Caregiver" labelClassName="block text-xs font-medium text-slate-600" className={inputClass} value={form.caregiverRecordId} placeholder="Open shift — fill later"
+          onChange={(v) => change({ caregiverRecordId: v })} caregivers={(caregivers.data ?? []).filter((c) => c.status === "ready" || c.status === "active")} />
       </div>
       <div><label htmlFor={`${id}-s`} className="block text-xs font-medium text-slate-600">Start time</label><input id={`${id}-s`} type="time" value={form.startTime} onChange={(e) => change({ startTime: e.target.value })} className={inputClass} /></div>
       <div><label htmlFor={`${id}-e`} className="block text-xs font-medium text-slate-600">End time</label><input id={`${id}-e`} type="time" value={form.endTime} onChange={(e) => change({ endTime: e.target.value })} className={inputClass} /></div>
@@ -113,10 +114,11 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
   return (
     <div className="space-y-3">
       <section aria-label="Hours scheduled this week">
-        <h3 className="text-sm font-semibold text-slate-900">Scheduled this week</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Scheduled hours by week</h3><InfoTip label="About scheduled hours">These totals use planned shifts. Clocked hours are in visit reports.</InfoTip>
         {load.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
         {load.isError ? <p role="alert" className="text-sm text-red-700">{(load.error as Error).message}</p> : null}
         {load.data && load.data.length === 0 ? <p className="text-sm text-slate-600">No caregiver is scheduled this week.</p> : null}
+        {load.data?.some((row) => row.overDaily || row.overWeekly) ? <p className="text-sm text-amber-900">Review existing overages in Shifts and reassign or reschedule as needed. Changing a limit does not move shifts already scheduled.</p> : null}
         <ul className="space-y-1">
           {(load.data ?? []).map((r) => (
             <li key={`${r.caregiverRecordId}-${r.weekStart}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-slate-200 bg-og-card px-3 py-2 text-sm">
@@ -124,6 +126,7 @@ export function HourLimitsPanel({ from, to, canManage }: { from: string; to: str
               <span className="tabular-nums text-slate-800">
                 {formatDuration(Number(r.scheduledMinutes))} this week{r.maxWeeklyMinutes ? ` of ${formatDuration(r.maxWeeklyMinutes)}` : ""} · busiest day {formatWeekdayDate(r.busiestDay, "short")} {formatDuration(Number(r.busiestDayMinutes))}{r.maxDailyMinutes ? ` of ${formatDuration(r.maxDailyMinutes)}` : ""}
               </span>
+              <span className="w-full text-xs text-slate-600">Daily limit {r.maxDailyMinutes ? formatDuration(r.maxDailyMinutes) : "none"} · Weekly limit {r.maxWeeklyMinutes ? formatDuration(r.maxWeeklyMinutes) : "none"} · {r.mode === "block" ? "Stops scheduling" : r.mode === "report" ? "Warns only" : "No limit set"}</span>
               {r.overDaily || r.overWeekly ? (
                 <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${r.mode === "block" ? "bg-red-100 text-red-900" : "bg-amber-100 text-amber-900"}`}>
                   Over the {r.overDaily && r.overWeekly ? "daily and weekly" : r.overDaily ? "daily" : "weekly"} limit{r.mode === "report" ? " (warning only)" : ""}

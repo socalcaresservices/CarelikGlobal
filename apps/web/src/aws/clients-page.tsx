@@ -1,4 +1,7 @@
+import { ImportButton } from "./import-drawer";
 import { useQueryClient } from "@tanstack/react-query";
+import { SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { InfoTip } from "./ui/info-tip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -14,6 +17,7 @@ import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 import { actionBtn } from "./ui-classes";
+import { officeMatches, useClientOffices, useOffices } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -148,14 +152,17 @@ export function ClientsPage() {
     if (saved) setView(saved);
   }, [userId]);
   const chooseView = (next: ClientView) => { setView(next); writeViewPreference(userId, next, safeStorage()); };
-  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort), [clients.data, search, status, authorization, sort]);
+  const { offices, available: officesOn } = useOffices(hasPermission("clients.names.read"));
+  const { byClientId: officeOf } = useClientOffices(officesOn);
+  const [officeFilter, setOfficeFilter] = useState("");
+  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort).filter((c) => officeMatches(officeFilter, officeOf.get(c.clientId))), [clients.data, search, status, authorization, sort, officeFilter, officeOf]);
   if (!hasPermission("clients.names.read")) return <p className="text-sm text-slate-600">You do not have access to client records.</p>;
   const counts = (clients.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {});
   return (
     <div className="max-w-5xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Clients</h1><InfoTip label="About Clients" title="Clients">Manage client profiles and care information.</InfoTip></div>
-        {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button> : null}
+        {canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="clients" /><Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button></div> : null}
       </div>
       {adding ? <AddClientForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
       {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.</p> : null}
@@ -179,6 +186,16 @@ export function ClientsPage() {
             <option value="none">None current</option>
           </select>
         </div>
+        {officesOn && offices.length > 0 ? (
+          <div>
+            <label htmlFor="client-office-filter" className="block text-sm font-medium text-slate-700">Office</label>
+            <select id="client-office-filter" value={officeFilter} onChange={(e) => setOfficeFilter(e.target.value)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
+              <option value="">All offices</option>
+              {offices.map((o) => <option key={o.officeId} value={o.officeId}>{o.name}{o.isActive ? "" : " (retired)"}</option>)}
+              <option value="none">No office</option>
+            </select>
+          </div>
+        ) : null}
         <div>
           <label htmlFor="client-sort" className="block text-sm font-medium text-slate-700">Sort by</label>
           <select id="client-sort" value={sort} onChange={(e) => setSort(e.target.value as ClientSort)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
@@ -220,16 +237,21 @@ const authLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? `${c.current
 const actionLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? "View authorized hours →" : "Add authorized hours →");
 
 /** Compact rows: client, status, authorization, one action. The same rows and permissions as Cards. */
-function ClientList({ clients }: { clients: AdminClient[] }) {
+function ClientList({ clients: input }: { clients: AdminClient[] }) {
+  const { rows: clients, sort } = useSortedRows(input, {
+    client: { get: (c) => clientName(c) ?? c.clientCode },
+    status: { get: (c) => STATUS_LABEL[c.status] },
+    authorization: { get: (c) => c.currentAuthorizations, kind: "number" },
+  });
   return (
     <div className="rounded-xl border border-slate-200 bg-og-card">
       <table className="w-full text-left text-sm" aria-label="Clients as a list">
         <thead>
           <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
             <th scope="col" className="w-10 px-3 py-1.5 text-right font-semibold">No.</th>
-            <th scope="col" className="px-3 py-1.5 font-semibold">Client</th>
-            <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
-            <th scope="col" className="px-3 py-1.5 font-semibold">Authorization</th>
+            <SortTh sort={sort} column="client" className="px-3 py-0.5">Client</SortTh>
+            <SortTh sort={sort} column="status" className="px-3 py-0.5">Status</SortTh>
+            <SortTh sort={sort} column="authorization" kind="number" className="px-3 py-0.5">Authorization</SortTh>
             <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Action</span></th>
           </tr>
         </thead>

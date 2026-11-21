@@ -41,7 +41,7 @@ function IssueCard({ issue }: { issue: ActionIssue }) {
     <li data-testid="issue-card" data-issue-key={issue.issueKey} title={issue.recommendedAction} className={`border-l-4 px-2 py-0 ${tone === "red" ? "border-l-red-700" : tone === "amber" ? "border-l-amber-600" : "border-l-slate-400"}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0 md:grid md:min-h-[32px] md:grid-cols-[5.5rem_minmax(0,1fr)_9.5rem_auto]">
         <span><StatusChip tone={tone}>{TONE[tone].word}</StatusChip></span>
-        <p className="min-w-0 flex-1 basis-[10rem] truncate text-sm font-semibold text-og-ink">
+        <p className="min-w-0 flex-1 basis-[10rem] break-words text-sm font-semibold text-og-ink">
           {KIND_LABEL[issue.kind] ?? issue.kind}{who ? ` · ${who}` : ""}{phrase ? <span className="font-normal text-og-sub"> · {phrase}</span> : null}
           <span className="sr-only"> {issue.recommendedAction}</span>
         </p>
@@ -236,7 +236,7 @@ export function ActionNeededPage() {
             return g.routine ? (
               <section key={g.queue} aria-label={QUEUE_LABEL[g.queue] ?? g.queue}>
                 <details data-testid={`routine-group-${g.queue}`}>
-                  <summary className="flex min-h-[32px] cursor-pointer items-center gap-1.5 [@media(pointer:coarse)]:min-h-[44px]">{head}<span className="text-xs text-og-link underline">Show</span></summary>
+                  <summary className="flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center gap-1.5 [@media(pointer:coarse)]:min-h-[44px]">{head}<span className="text-xs text-og-link underline">Show</span></summary>
                   <div className="pt-0.5">{list}</div>
                 </details>
               </section>

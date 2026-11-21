@@ -1,5 +1,5 @@
 import { SummarySection } from "../ui/summary-section";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
@@ -110,17 +110,29 @@ export function ClientExperience({ clientId }: { clientId: string }) {
   </div></SummarySection>;
 }
 
-function LocationForm({ path, current, onDone }: { path: string; current: string | null; onDone: () => void }) {
+function LocationForm({ path, current, currentCity, onDone }: { path: string; current: string | null; currentCity?: string | null; onDone: () => void }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
+  const cityListId = useId();
   const [zip, setZip] = useState(current ?? "");
-  const save = useMutation({ mutationFn: () => api.post(path, { organizationId: activeOrganizationId, zip }), onSuccess: onDone });
+  const [city, setCity] = useState(currentCity ?? "");
+  const [cityEdited, setCityEdited] = useState(false);
+  const suggestion = useQuery({
+    queryKey: ["matching-city-suggestion", activeOrganizationId, zip],
+    enabled: !!activeOrganizationId && /^\d{5}$/.test(zip) && zip !== current && !cityEdited,
+    queryFn: () => api.get<{ city: string | null; candidates?: string[] }>("/v1/location-data", { organizationId: activeOrganizationId, suggestZip: zip }),
+    retry: false,
+  });
+  const displayedCity = cityEdited || zip === current ? city : suggestion.data?.city ?? "";
+  const save = useMutation({ mutationFn: () => api.post(path, { organizationId: activeOrganizationId, zip, city: displayedCity.trim() || null }), onSuccess: onDone });
   const send = useGuardedMutate(save);
-  return <form className="space-y-2" aria-label="Location input" onSubmit={(e) => { e.preventDefault(); if (/^\d{5}$/.test(zip)) send(); }}>
-    <label className="block text-sm">ZIP code<input inputMode="numeric" autoComplete="off" pattern="[0-9]{5}" maxLength={5} value={zip} onChange={(e) => setZip(e.target.value)} className={inputClass} /></label>
-    <p className="text-xs text-slate-600">Enter a ZIP only. No street address is needed.</p>
+  return <form className="grid items-end gap-2 sm:grid-cols-[7rem_1fr_auto]" aria-label="Location input" onSubmit={(e) => { e.preventDefault(); if (/^\d{5}$/.test(zip) && !suggestion.isFetching) send(); }}>
+    <label className="block text-sm">ZIP code<input inputMode="numeric" autoComplete="off" pattern="[0-9]{5}" maxLength={5} value={zip} onChange={(e) => { setZip(e.target.value); setCityEdited(false); setCity(e.target.value === current ? currentCity ?? "" : ""); }} className={inputClass} /></label>
+    <label className="block text-sm">City (optional)<input list={cityListId} value={displayedCity} maxLength={100} onChange={(e) => { setCityEdited(true); setCity(e.target.value); }} className={inputClass} /><datalist id={cityListId}>{suggestion.data?.candidates?.map((candidate) => <option key={candidate} value={candidate} />)}</datalist></label>
+    <Button type="submit" disabled={save.isPending || suggestion.isFetching || !/^\d{5}$/.test(zip)}>Save location</Button>
+    <p className="text-xs text-slate-600 sm:col-span-3">{suggestion.isFetching ? "Looking up the city…" : suggestion.isError ? "City lookup is unavailable. Enter the city manually." : "Select a suggested city or enter it manually."}</p>
     {save.isError ? <p role="alert">{actionError(save.error, "Location could not be saved.")}</p> : null}
-    <Button type="submit" disabled={save.isPending || !/^\d{5}$/.test(zip)}>Save location</Button>
+
   </form>;
 }
 
@@ -131,13 +143,13 @@ export function MatchingLocation({ caregiverRecordId, clientId }: { caregiverRec
   const path = caregiverRecordId ? `/v1/caregivers/${caregiverRecordId}/zip` : `/v1/clients/${clientId}/zip`;
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
-  const q = useQuery({ queryKey: ["matching-location", activeOrganizationId, path], queryFn: async () => (await api.get<{ location: { zip: string | null } }>(path, { organizationId: activeOrganizationId })).location, enabled: !!activeOrganizationId });
+  const q = useQuery({ queryKey: ["matching-location", activeOrganizationId, path], queryFn: async () => (await api.get<{ location: { zip: string | null; city?: string | null } }>(path, { organizationId: activeOrganizationId })).location, enabled: !!activeOrganizationId });
   const status = useQuery({ queryKey: ["location-data", activeOrganizationId], queryFn: async () => (await api.get<{ status: { distanceDataLoaded: boolean } }>("/v1/location-data", { organizationId: activeOrganizationId })).status, enabled: !!activeOrganizationId });
-  return <SummarySection title="Location" summary={q.data ? `ZIP: ${q.data.zip ?? "Not provided"}` : undefined}><div className="space-y-2">
+  return <SummarySection title="Location" summary={q.data ? `ZIP: ${q.data.zip ?? "Not provided"}${q.data.city ? ` · ${q.data.city}` : ""}` : undefined}><div className="space-y-2">
     {q.isLoading ? <p role="status">Loading…</p> : null}
     {q.isError || status.isError ? <p role="alert">{actionError(q.error ?? status.error, "Location could not be loaded.")}</p> : null}
     {q.data ? <><Button type="button" variant="secondary" aria-expanded={editing} onClick={() => { setEditing((v) => !v); setSaved(false); }}>{editing ? "Close location" : "Edit location"}</Button>
-      {editing ? <LocationForm path={path} current={q.data.zip} onDone={() => { setEditing(false); setSaved(true); void qc.invalidateQueries({ queryKey: ["matching-location"] }); void qc.invalidateQueries({ queryKey: ["location-data"] }); void qc.invalidateQueries({ queryKey: ["care-matches"] }); }} /> : null}</> : null}
+      {editing ? <LocationForm path={path} current={q.data.zip} currentCity={q.data.city ?? null} onDone={() => { setEditing(false); setSaved(true); void qc.invalidateQueries({ queryKey: ["matching-location"] }); void qc.invalidateQueries({ queryKey: ["location-data"] }); void qc.invalidateQueries({ queryKey: ["care-matches"] }); }} /> : null}</> : null}
     <p className="text-xs text-slate-600">{status.data ? status.data.distanceDataLoaded ? "Approx. distance uses ZIP centres and is not a travel limit." : "Approx. distance unavailable. No distance dataset is loaded; a ZIP alone does not provide distance." : "Distance data has not been verified."}</p>
     {saved ? <p role="status">Location saved.</p> : null}
   </div></SummarySection>;

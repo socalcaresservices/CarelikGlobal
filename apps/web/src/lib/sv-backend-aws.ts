@@ -11,6 +11,7 @@ import type {
   CorrectionHistoryReportRow,
   MonthlyApprovalSummaryRow,
   MonthlyServiceSummaryRow,
+  MissingScheduledVisit,
   ServiceVerificationBackend,
   VisitCorrectionRow,
   VisitReportRow,
@@ -186,6 +187,20 @@ export function createAwsServiceVerificationBackend(
     },
     async correctVisit({ visitId, timeIn, timeOut, reason, idempotencyKey }) {
       await api.post(`/v1/visits/${enc(visitId)}/corrections`, { timeIn, timeOut, reason }, { idempotencyKey });
+    },
+    async listMissingScheduledVisits(organizationId, filters) {
+      const result = await api.get<{ missingVisits: MissingScheduledVisit[] }>("/v1/reports/missing-visits", {
+        organizationId, from: filters.dateFrom, to: filters.dateTo, clientId: filters.clientId,
+        serviceId: filters.serviceId, caregiverUserId: filters.caregiverUserId,
+      });
+      return result.missingVisits;
+    },
+    async listMissingVisitReasonLabels(organizationId) {
+      return (await api.get<{ reasonLabels: { label: string; visits: number }[] }>("/v1/reports/missing-visits", { organizationId, reasonLabels: "true" })).reasonLabels;
+    },
+    async recordMissingScheduledVisit({ organizationId, shiftId, timeIn, timeOut, reason, reasonLabel, idempotencyKey }) {
+      const result = await api.post<{ visitId: string }>(`/v1/shifts/${enc(shiftId)}/missing-visit`, { organizationId, timeIn, timeOut, reason, reasonLabel }, { idempotencyKey });
+      return result.visitId;
     },
     async closeMissedVisit({ visitId, timeOut, reason, idempotencyKey }) {
       await api.post(`/v1/visits/${enc(visitId)}/close`, { timeOut, reason }, { idempotencyKey });

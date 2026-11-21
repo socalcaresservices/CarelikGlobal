@@ -19,7 +19,7 @@ describe("Reporting & billing", () => {
     expect(bill).toHaveTextContent("Needs correction3");
     expect(bill).toHaveTextContent("Ready for review7");
     expect(bill).toHaveTextContent("Approved for billing14");
-    expect(bill).toHaveTextContent("There is no submitted or billed state");
+    expect(screen.getByTestId("page-help-panel")).toHaveTextContent("There is no submitted or billed state");
     const hours = screen.getByTestId("authorized-delivered");
     expect(hours).toHaveTextContent("Authorized200 h"); // 2 x 6000 min
     const p = await screen.findByTestId("agency-performance");

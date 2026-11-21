@@ -7,7 +7,7 @@ import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "../care-team-admin";
-import { useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
+import { OVERRIDE_BADGE_TEXT, useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm";
@@ -16,7 +16,7 @@ const btn = "inline-flex min-h-[44px] items-center justify-center rounded-lg bor
 function useRefreshReadiness() {
   const qc = useQueryClient();
   return async () => {
-    for (const k of ["caregiver-readiness", "aws-caregivers", "aws-accounts", "caregiver-compliance", "compliance-holds", "document-readiness"]) await qc.invalidateQueries({ queryKey: [k] });
+    for (const k of ["caregiver-readiness", "aws-caregivers", "aws-staff", "aws-accounts", "caregiver-compliance", "compliance-holds", "document-readiness"]) await qc.invalidateQueries({ queryKey: [k] });
   };
 }
 
@@ -39,10 +39,10 @@ function line(i: ReadinessItem): string {
   return i.detail ?? "Not done";
 }
 
-type Panel = null | "verify" | "training" | "contact" | "extend";
+type Panel = null | "verify" | "training" | "contact" | "extend" | "override";
 
-function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, children }: {
-  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; children?: ReactNode;
+function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, canOverride = false, canSetup = false, backgroundClear = false, children }: {
+  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; canOverride?: boolean; canSetup?: boolean; backgroundClear?: boolean; children?: ReactNode;
 }) {
   const api = useAwsApi();
   const refresh = useRefreshReadiness();
@@ -64,8 +64,8 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ch
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return setState({ busy: false, error: "Enter the caregiver's own email address.", done: null });
     await run(async () => {
       await api.post(`${base}/contact`, { organizationId: activeOrganizationId, email: f.email.trim() }, { idempotencyKey: key.current });
-      await api.post(`${base}/signin-link`, { organizationId: activeOrganizationId });
-    }, "Email saved and sign-in link sent.", "The sign-in link was not sent.");
+      if (!hasContact) await api.post(`${base}/signin-link`, { organizationId: activeOrganizationId });
+    }, hasContact ? "Contact email saved." : "Email saved and sign-in link sent.", hasContact ? "The contact email could not be saved." : "The sign-in link was not sent.");
   };
   const toggle = (p: Exclude<Panel, null>) => { setState((s) => ({ ...s, error: null, done: null })); setPanel(panel === p ? null : p); };
 
@@ -83,11 +83,20 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ch
     if (a === "add_contact") actions.push(<button key="c" type="button" className={btn} aria-expanded={panel === "contact"} onClick={() => toggle("contact")}>Add email</button>);
     else actions.push(<button key="s" type="button" className={btn} disabled={state.busy} onClick={() => void sendLink()}>{state.busy ? "Sending…" : a === "resend_link" ? "Resend sign-in link" : "Send sign-in link"}</button>);
   }
-  if ((item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
+  // An administrator can approve before the first sign-in (0090). The background check is never waived: without it there is no button, only the reason why.
+  if (item.requirement === "signin" && item.state !== "met" && canOverride && backgroundClear) {
+    actions.push(<button key="o" type="button" className={btn} aria-expanded={panel === "override"} onClick={() => toggle("override")}>Approve by override</button>);
+  }
+  const setupGap = (item.requirement === "cpr" || item.requirement === "tb") && /not set up/i.test(item.detail ?? "");
+  if (setupGap) {
+    // R7: the agency has not finished the CPR/TB setup, so uploading cannot fix it. An administrator goes to the setup; everyone else is told who can.
+    actions.push(canSetup
+      ? <Link key="setup" to="/care-team#readiness-setup" className={btn}>Set up CPR and TB</Link>
+      : <span key="setup" className="text-sm text-slate-600">Ask an administrator</span>);
+  } else if ((item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
     actions.push(<Link key="u" to="/documents" className={btn}>Upload</Link>);
     if (canCompliance) actions.push(<button key="x" type="button" className={btn} aria-expanded={panel === "extend"} onClick={() => toggle("extend")}>Extend</button>);
   }
-  void hasContact;
 
   return (
     <li className="px-3 py-2" data-requirement={item.requirement}>
@@ -97,7 +106,10 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ch
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-950">{item.label}<span className="sr-only"> — {ICON[item.state].sr}</span></p>
             <p className="text-sm text-slate-700">{line(item)}</p>
+            {item.requirement === "signin" && item.extra.override ? <p className="mt-0.5"><span className="inline-block rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" data-testid="override-badge">{OVERRIDE_BADGE_TEXT}</span></p> : null}
+            {item.requirement === "signin" && item.state !== "met" && canOverride && !backgroundClear ? <p className="text-xs text-slate-600" data-testid="override-needs-background">An administrator can approve before the first sign-in once the background check is clear. There is no override for the background check.</p> : null}
             {item.requirement === "signin" && item.extra.lastSentAt ? <p className="text-xs text-slate-600">Last sent {formatDateTime(item.extra.lastSentAt)}</p> : null}
+            {item.requirement === "signin" && item.state !== "met" ? <p className="text-xs text-slate-600">Confirm the caregiver's email, send the invitation, then ask them to sign in once. Resend if it expired; check spam before sending again.</p> : null}
             {item.state === "overdue" && item.blocksShifts ? <p className="text-xs font-semibold text-red-800">Blocks new shift assignments</p> : null}
             {item.state === "overdue" && !item.blocksShifts ? <p className="text-xs text-slate-600">Flagged only; the agency has not switched enforcement on</p> : null}
           </div>
@@ -142,8 +154,21 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ch
         <form className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end" onSubmit={(e) => { e.preventDefault(); void addAndSend(); }}>
           <div><label htmlFor={`ct-email-${caregiverRecordId}`} className="block text-xs font-medium text-slate-700">Caregiver's own email</label>
             <input id={`ct-email-${caregiverRecordId}`} type="email" inputMode="email" autoComplete="off" value={f.email} maxLength={254} onChange={(e) => set("email")(e.target.value)} className={inputClass} /></div>
-          <Button type="submit" disabled={state.busy}>{state.busy ? "Sending…" : "Save and send sign-in link"}</Button>
-          <p className="text-xs text-slate-600 sm:col-span-2">The caregiver gets an email with a temporary password and sets their own at first sign-in. The message contains no client or health information.</p>
+          <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : hasContact ? "Save contact email" : "Save and send sign-in link"}</Button>
+          <p className="text-xs text-slate-600 sm:col-span-2">{hasContact ? "This changes the contact address. The existing sign-in stays the same." : "The caregiver gets an email with a temporary password and sets their own at first sign-in."}</p>
+        </form>
+      ) : null}
+      {panel === "override" ? (
+        <form className="mt-2 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2" aria-label="Approve by override" onSubmit={(e) => {
+          e.preventDefault();
+          if (f.reason.trim().length < 5) return setState({ busy: false, error: "Write why you are approving this caregiver before their first sign-in (at least 5 characters).", done: null });
+          void run(() => api.post(`${base}/signin-override`, { organizationId: activeOrganizationId, reason: f.reason.trim() }), "Approved by override. It is recorded with your name, the time and your reason, and the badge stays until the first sign-in.", "Not recorded.");
+        }}>
+          <p className="text-sm text-amber-950">This caregiver has not signed in yet. You can approve them for work anyway. They cannot verify a visit until they sign in, and the schedule warns about their shifts.</p>
+          <p className="text-sm text-amber-950">Required training and the other requirements still apply. The background check cannot be overridden.</p>
+          <div><label htmlFor={`ov-reason-${caregiverRecordId}`} className="block text-xs font-medium text-slate-800">Reason (required)</label>
+            <textarea id={`ov-reason-${caregiverRecordId}`} value={f.reason} maxLength={500} rows={3} onChange={(e) => set("reason")(e.target.value)} className={inputClass} /></div>
+          <Button type="submit" disabled={state.busy}>{state.busy ? "Saving…" : "Record override"}</Button>
         </form>
       ) : null}
       {panel === "extend" ? (
@@ -208,7 +233,8 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
         </span>
       </div>
       <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card" aria-label="Requirements">
-        {r.items.map((i) => <Row key={i.requirement} item={i} caregiverRecordId={caregiverRecordId} canManage={canManage} canCompliance={canCompliance} hasContact={hasContact} />)}
+        {r.items.map((i) => <Row key={i.requirement} item={i} caregiverRecordId={caregiverRecordId} canManage={canManage} canCompliance={canCompliance} hasContact={hasContact}
+          canOverride={hasPermission("caregivers.signin_override")} canSetup={hasPermission("readiness.manage") || hasPermission("documents.requirements.manage")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
         <li className="px-3 py-2" data-requirement="approve">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-2">

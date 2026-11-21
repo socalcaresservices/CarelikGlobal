@@ -1,0 +1,5 @@
+US ZIP and place names derived from GeoNames Postal Code data.
+Source: https://download.geonames.org/export/zip/US.zip
+License: Creative Commons Attribution 4.0, https://creativecommons.org/licenses/by/4.0/
+GeoNames: https://www.geonames.org/
+Adaptation: retained ZIP and distinct place names only, grouped by ZIP.

@@ -7,7 +7,7 @@
 // or scheduler is NOT meant to use (explicit allow-lists) and must get 403/404.
 // A request body is built from the route's own validators, so the request passes validation and reaches the database check; a route whose probe still ends in a 400 is
 // counted separately ("validation first") and listed, never silently counted as covered. Public (token) routes have no agency identity at all: reason recorded below.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ageVisit, api, asActor, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
@@ -49,6 +49,15 @@ const BLOCKS = blocks();
 
 beforeAll(async () => {
   db = await createTestDbWithPending();   // includes the PENDING migration (infra/aws/db/pending) so the staff routes are swept too
+  // Every PENDING migration (infra/aws/db/pending/migrations: sign-in override, client labels, bulk import, duplicate staff) is applied too, so the routes that depend on them are
+  // swept against the real functions and tables, not against "function does not exist".
+  const pendingDir = new URL("../../../infra/aws/db/pending/migrations/", import.meta.url);
+  const adm = await db.admin.connect();
+  try {
+    for (const f of readdirSync(pendingDir).filter((x) => x.endsWith(".sql")).sort()) {
+      await adm.query("begin"); await adm.query("set local role ogevia_owner"); await adm.query(readFileSync(new URL(f, pendingDir), "utf8")); await adm.query("reset role"); await adm.query("commit");
+    }
+  } finally { adm.release(); }
   w = await seedWorld(db, 600);
   const evidence = new MemoryEvidenceStore();
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), log: () => {} });
@@ -87,7 +96,7 @@ beforeAll(async () => {
   ids = {
     organizationId: A, clientId: f.client, serviceId: f.service, authorizationId: f.auth, caregiverRecordId: rec, userId: w.caregiverA1.userId, caregiverUserId: w.caregiverA1.userId,
     f2ClientId, visitId: signed, reviewVisitId: review, decisionId: decision, shiftId: shift, seriesId: series ?? rnd(), assignmentId: assignment, billingApprovalId: billingApproval ?? rnd(),
-    confirmationRequestId: confirmationRequest?.request_id ?? rnd(), documentTypeId: docType ?? rnd(), clientTypeId: clientType ?? rnd(), lateVisitId: lateVisit,
+    confirmationRequestId: confirmationRequest?.request_id ?? rnd(), documentTypeId: docType ?? rnd(), officeId: rnd(), clientTypeId: clientType ?? rnd(), lateVisitId: lateVisit,
     // kinds with no cheap real row here: well-formed unknown ids (the 404 then proves "not found", not "other agency"); counted and listed separately
     careRequestId: rnd(), offerId: rnd(), impactId: rnd(), holdId: rnd(), versionId: rnd(), documentId: rnd(), lateConfirmationId: rnd(), adjustmentId: rnd(),
     pickupRequestId: rnd(), openShiftId: shift, availabilityRequestId: rnd(), caregiverServiceApprovalId: rnd(), excludeShiftId: shift, excludeClientId: f.client, authorizationLineageId: rnd(), correctedByUserId: w.managerA.userId,
@@ -105,6 +114,8 @@ beforeAll(async () => {
   real("authorizationLineageId", (await db.admin.query("select lineage_id from ogevia.client_authorizations where id = $1", [f.auth])).rows[0].lineage_id);
   const dt = await make(w.ownerA, "POST /v1/document-types", { name: "Synthetic Doc Type" });
   real("documentTypeId", dt.body.documentTypeId ?? dt.body.id);
+  const office = await make(w.ownerA, "POST /v1/offices", { name: "Synthetic Office" });   // 0110: a real org A office, so the office routes reach the database check
+  real("officeId", office.body.officeId);
   const docReq = await make(w.managerA, "POST /v1/documents/requests", { documentTypeId: ids.documentTypeId, caregiverRecordId: rec });
   real("documentId", docReq.body.documentId);
   const up = await make(w.caregiverA1, "POST /v1/documents/{documentId}/versions", {}, { documentId: ids.documentId! });
@@ -129,6 +140,8 @@ beforeAll(async () => {
   real("staffTypeId", st.body.staffType?.id);
   const sp = await make(w.ownerA, "POST /v1/staff", { displayName: "Synthetic Staff", staffTypeId: ids.staffTypeId });
   real("profileId", sp.body.staff?.id);
+  const sp2 = await make(w.ownerA, "POST /v1/staff", { displayName: "Synthetic Staff Two", staffTypeId: ids.staffTypeId, contactEmail: "synthetic.two@example.test" });
+  real("duplicateProfileId", sp2.body.staff?.id);
   // a care request through the client's portal link, and an offer on it
   try {
     const portal = await make(w.managerA, "POST /v1/care-portals");
@@ -230,6 +243,7 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "versionId") return /client-document-versions/.test(fam) ? ids.clientVersionId : ids.versionId;
   if (name === "approvalId") return /billing-approvals/.test(fam) ? ids.billingApprovalId : ids.caregiverSvcApprovalId ?? ids.caregiverServiceApprovalId;
   if (name === "decisionId") return ids.decisionId;
+  if (route === "POST /v1/business-documents" && name === "id") return undefined;
   if (ids[name]) return ids[name];
   if (name === "status" && route === "GET /v1/availability/requests") return "pending";
   if (name === "kind") return route === "GET /v1/readiness/flags" ? "service" : "weekly";
@@ -298,7 +312,7 @@ const SWEEP_ROUTES = ORG_ID_ROUTES.filter(hasEntityOrOrg);
 // Routes about the caller alone (no organization and no id): nothing of org A can be named.
 const SELF_ONLY = ORG_ID_ROUTES.filter((k) => !hasEntityOrOrg(k));
 
-const norm = (x: string) => x.replace(/\d{4}-\d{2}-\d{2}T[\d:.]+(?:\+\d{2}:\d{2}|Z)/g, "<time>");
+const norm = (x: string) => x.replace(/\d{4}-\d{2}-\d{2}T[\d:.]+(?:[+-]\d{2}:\d{2}|Z)/g, "<time>");
 const STRANGER_MARKERS = ["CAREGIVER_A", "MANAGER_A", "OWNER_A", "SCHEDULER_A", "org-a", "Synthetic Pat"];
 /** The same request with every org A entity id replaced by a fresh random id (so "exists in another agency" cannot differ from "does not exist"). */
 function neutral<T>(value: T): T {
@@ -465,9 +479,10 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
 
   it("scheduler A: only scheduling, care-request and read-evaluation POSTs succeed; no billing, visit review, correction, authorization, client, caregiver, account, branding, service, readiness or approval write does", async () => {
     const got = (await ok2xx(w.schedulerA, POSTS)).sort();
-    // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only
+    // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only.
+    // 0109: care-notifications/read clears only the scheduler's OWN care-request alerts (care_requests.read), like notifications/read.
     expect(got).toEqual([
-      "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
+      "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-notifications/read", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
       "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
       "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel"]);
     // billing reads: the scheduler holds no billing permission, so they are the stranger's (empty) answer

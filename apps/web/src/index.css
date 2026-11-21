@@ -85,6 +85,25 @@ body {
 
 /* Printouts: white page; the screen's full-height body and its margin must not
    push a blank extra page (the page margin comes from @page). */
+/* R13: on a touch screen every control is at least 44 px tall (WCAG 2.5.8 target size, and the owner's rule for phone use). It applies only to coarse pointers, so the
+   dense desktop layout is unchanged. Links inside a sentence or a list item keep their text size; a link that stands alone is made a 44 px control. Checkboxes, radios,
+   and range inputs keep their native size (their label is the target). */
+@media (pointer: coarse) {
+  button,
+  select,
+  summary,
+  [role="button"],
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"]),
+  textarea {
+    min-height: 44px;
+  }
+  a[href]:not(p a, li a, dd a, td a, th a, label a, span a, h1 a, h2 a, h3 a, h4 a, strong a, em a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 @media print {
   :root,
   html,

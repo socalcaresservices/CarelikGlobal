@@ -29,10 +29,10 @@ export function SendSignInLink({ caregiverRecordId, hasContact, canManage, lastS
   return (
     <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0 text-xs">
       {hasContact
-        ? <button type="button" disabled={state.busy} onClick={() => void send()} className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline disabled:opacity-50 md:min-h-[28px]">{state.busy ? "Sending…" : "Send sign-in link"}</button>
+        ? <button type="button" disabled={state.busy} onClick={() => void send()} className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline disabled:opacity-50 md:min-h-[28px]">{state.busy ? "Sending…" : lastSentAt ? "Resend sign-in link" : "Send sign-in link"}</button>
         : <Link to={`/care-team/${caregiverRecordId}`} className="inline-flex min-h-[44px] items-center font-semibold text-slate-900 underline md:min-h-[28px]">Add email</Link>}
       {lastSentAt ? <span className="text-slate-600">Last sent {formatDateTime(lastSentAt)}</span> : null}
-      {state.done ? <span role="status" className="text-emerald-800">Sent</span> : null}
+      {state.done ? <span role="status" className="text-emerald-800">Sent. Ask the caregiver to check their inbox and spam folder, then sign in once.</span> : null}
       {state.error ? <span role="alert" className="text-red-700">{state.error}</span> : null}
     </span>
   );

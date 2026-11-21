@@ -86,6 +86,20 @@ jobs:
       # (PGSSLMODE=require), as RDS does. The stock postgres image has TLS off. This step turns it on with a throwaway self-signed
       # certificate generated here (valid one day, never stored); nothing is disabled or weakened, and the scripts still verify
       # that TLS is in use. Test database only.
+      # The TEST-only logical backup regression uses pg_dump, whose major version must support the server.
+      # Official packages: https://www.postgresql.org/download/linux/ubuntu/
+      - name: Use PostgreSQL 18 client tools
+        run: |
+          set -euo pipefail
+          if [[ ! -x /usr/lib/postgresql/18/bin/pg_dump ]]; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-common
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-18
+          fi
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
       - name: Enable TLS on the test database
         run: |
           set -euo pipefail

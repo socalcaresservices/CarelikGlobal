@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { ClientsPage } from "./clients-page";
+import { captureCsvDownload } from "@/test/csv-capture";
 
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: vi.fn(),
@@ -423,4 +424,26 @@ describe("ClientsPage", () => {
       "22222222-2222-4222-8222-222222222222",
     );
   });
+
+  it("exports the clients in the order shown on screen, including a chosen sort", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn((permission: string) => permission === "clients.read") });
+    const client = (n: number, first: string, last: string) => ({
+      id: `22222222-2222-4222-8222-22222222222${n}`, client_code: `CL-00000${n}`, first_name: first, last_name: last, phone: null, email: null,
+      address: null, care_notes: null, status: "active",
+    });
+    mockedFrom.mockReturnValue({ select: mockReadableClients([client(1, "Mia", "Lopez"), client(2, "Zed", "Park"), client(3, "Amy", "Chen")]) } as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Zed Park")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
+    const shown = screen.getAllByRole("row").slice(1).map((r) => r.textContent ?? "");
+    const cap = captureCsvDownload();
+    fireEvent.click(screen.getByRole("button", { name: /Download as CSV/ }));
+    const csv = (await cap.rows()).slice(1);
+    cap.restore();
+    expect(csv).toHaveLength(shown.length);
+    csv.forEach((r, i) => expect(shown[i]).toContain(r[0]));
+    expect(csv.map((r) => r[1])).toHaveLength(3);
+  });
+
 });

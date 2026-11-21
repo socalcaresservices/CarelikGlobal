@@ -56,6 +56,7 @@ function fakeApi(role: "caregiver" | "manager" | "organization_owner", opts: { d
         return json(200, { branding: { organizationId: ORG, displayName: body?.["displayName"], accentColor: body?.["accentColor"] } });
       case "GET /v1/attention":
         return json(200, { summary: role === "caregiver" ? null : { missingTimeOut: 1, notConfirmed: 0, needsReview: 2, billingReadyUnapproved: 1, uncoveredShifts: 0, documentsBlocking: 1, documentsToReview: 1, documentsExpiring: 1, total: 5 } });
+      case "GET /v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] });
       case "GET /v1/attention/overview":
         return json(200, { overview: { asOf: "2026-10-18T12:00:00Z", urgentWindowHours: 48,
           urgent: { items: [{ kind: "shift", id: "s1", startsAt: "2026-10-18T20:00:00Z", endsAt: "2026-10-18T23:00:00Z", reasons: ["uncovered_open"], severity: "red", inProgress: false, caregiverRecordId: null, caregiverCode: null, clientCode: "C-104", serviceCode: "862" }], itemCount: 1, issueCount: 1, shifts: 1, visits: 0 },
@@ -165,7 +166,8 @@ describe("AWS build: caregiver vertical slice", () => {
     const { api } = renderAws("/", "caregiver");
 
     // Landing sends caregivers to Verify Visit; only the assigned client code is shown.
-    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }, { timeout: COLD_RENDER_MS }));
+    fireEvent.click(await screen.findByRole("button", { name: /Start an unscheduled visit/ }, { timeout: COLD_RENDER_MS }));
+    fireEvent.click(await screen.findByRole("button", { name: /Client C-104/ }));
     const details = await screen.findByRole("group", { name: "Visit details" });
     await waitFor(() => expect(details).toHaveTextContent("ClientC-104"));
     // Nothing is scheduled for this client: a reason is required before the visit can start (Wave 1).
@@ -176,7 +178,7 @@ describe("AWS build: caregiver vertical slice", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Start visit/ }));
     fireEvent.click(await screen.findByRole("button", { name: /End visit/ }));
-    await screen.findByRole("heading", { name: "Verify visit details" });
+    await screen.findByRole("heading", { name: "Confirm visit with client" });
 
     const canvas = screen.getByLabelText("Client or guardian signature");
     fireEvent.pointerDown(canvas, { pointerId: 1, clientX: 10, clientY: 10 });
@@ -224,12 +226,9 @@ describe("AWS build: manager review and billing-review data", () => {
     expect(await screen.findByText("MANAGER VIEW")).toBeInTheDocument();
     expect(await screen.findByText("Morgan Manager")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    // Home shows the count once, as its first tile (the header badge is not repeated on Home); the tile opens the Needs attention now page.
-    const attention = await screen.findByTestId("stream-now");
-    expect(attention.getAttribute("href")).toBe("/attention");
-    // The uncovered shift starts 8 hours after asOf, so it is Urgent (amber); it would be Critical (red) once started.
-    expect(attention.className).toMatch(/amber/);
-    expect(attention).toHaveTextContent("1");
+    // R19: one headline number (issues needing action); no separate "Needs attention now" tile or header chip.
+    expect(await screen.findByTestId("headline-count")).toBeInTheDocument();
+    expect(screen.queryByTestId("stream-now")).toBeNull();
     expect(screen.queryByTestId("attention-badge")).toBeNull();
     expect(screen.getByTestId("stream-visits")).toHaveTextContent("3");
     // 1590 of 6000 minutes worked = 26.5 h of 100 h; the table sits behind the details control.
@@ -316,7 +315,7 @@ describe("AWS build: manager review and billing-review data", () => {
     const post = api.calls.find((c) => c.method === "POST" && c.path === `/v1/visits/${VISIT}/billing-approval`)!;
     expect(post.body).toEqual({ approvedMinutes: 110, notes: null });
     expect(post.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(await screen.findByText(/by Manager A · not submitted or paid/)).toBeInTheDocument();
+    expect(await screen.findByText(/by Manager A/)).toBeInTheDocument();
     // No owner-only Amount column for a manager.
     expect(screen.queryByRole("columnheader", { name: "Amount" })).not.toBeInTheDocument();
   });
@@ -396,7 +395,7 @@ describe("AWS build: manager review and billing-review data", () => {
   it("NEEDS ATTENTION opens the exceptions view; the Visits menu item returns to the visit list", async () => {
     renderAws("/service-verification/reports?view=exceptions", "manager");
     expect(await screen.findByRole("heading", { name: "Visits to review" })).toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Section tabs" })).getByRole("link", { name: "Visits" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Visits" }));
     expect(await screen.findByRole("heading", { name: "Visit records" })).toBeInTheDocument();
   });
 

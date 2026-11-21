@@ -45,6 +45,7 @@ function renderAt(path: string, role: Role) {
         return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "/v1/attention":
         return json(200, { summary: role === "caregiver" ? null : SUMMARY });
+      case "/v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] });
       case "/v1/attention/overview":
         return json(200, { overview: OVERVIEW });
       case "/v1/reports/utilisation":
@@ -128,10 +129,12 @@ describe("sidebar: expanded", () => {
     // Nothing is open on the Dashboard until a group is opened.
     expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["Dashboard"]);
     openAll(nav);
-    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual(["Dashboard", "Clients", "Authorization changes", "Caregivers", "Schedule", "Reports", "Billing", "Agency Settings"]);
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual(["Dashboard", "Clients", "Authorization changes", "Caregivers", "Recruiting", "Documents", "Schedule", "Calendar", "Requests", "Reports", "Billing", "Visits", "Visits to review", "Outage records", "Agency Settings", "Continuity"]);
     expect(hrefs(nav)).toEqual({
       "Dashboard": "/", "Clients": "/clients", "Authorization changes": "/authorization-impacts", "Caregivers": "/care-team", "Schedule": "/schedule",
       "Reports": "/service-verification/reports?view=overview", "Billing": "/billing-review", "Agency Settings": "/settings/services",
+      "Recruiting": "/care-team/recruiting", "Documents": "/documents", "Calendar": "/service-verification/reports?view=calendar", "Requests": "/schedule/shift-requests",
+      "Visits": "/service-verification/reports", "Visits to review": "/service-verification/reports?view=exceptions", "Outage records": "/outage-visits", "Continuity": "/continuity",
     });
   });
 
@@ -158,7 +161,7 @@ describe("sidebar: expanded", () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     openAll(nav);
-    expect(Object.keys(hrefs(nav)).sort()).toEqual(["My Schedule", "Verify Visit"]);
+    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Availability", "My Schedule", "My documents", "Verify Visit"]);
     expect(within(nav).getAllByTestId("nav-section").map((e) => e.querySelector("button")?.textContent)).toEqual(["My Work"]);
     expect(screen.getByRole("link", { name: "Appearance" }).getAttribute("href")).toBe("/settings/appearance");
   });
@@ -284,12 +287,12 @@ describe("sidebar: mobile drawer", () => {
 });
 
 describe("Home layout", () => {
-  it("keeps the Home essentials: title, month, four alert tiles, hours with the service table behind details, Outage readiness", async () => {
+  it("keeps the Home essentials: title, month, three alert tiles, hours with the service table behind details, Outage readiness", async () => {
     renderAt("/", "manager");
     expect(await screen.findByRole("heading", { name: "Dashboard", level: 1 })).toBeInTheDocument();
     expect(screen.getByLabelText("Month")).toHaveAttribute("type", "month");
     const tiles = await screen.findByRole("region", { name: "What needs attention" }).catch(() => screen.findByLabelText("What needs attention"));
-    for (const [key, label, href] of [["now", "Needs attention now", "/attention"], ["staffing", "Upcoming staffing", "/staffing"], ["documents", "Documents & compliance", "/documents"], ["visits", "Visit review", "/visit-review"]] as const) {
+    for (const [key, label, href] of [["staffing", "Upcoming staffing", "/staffing"], ["documents", "Documents & compliance", "/documents"], ["visits", "Visit review", "/visit-review"]] as const) {
       const tile = await within(tiles).findByTestId(`stream-${key}`);
       expect(tile).toHaveTextContent(label);
       expect(tile).toHaveAttribute("href", href);
@@ -321,7 +324,7 @@ describe("Home layout", () => {
 
   it("no old catch-all: the removed 'Action needed' sum and its mixed list are gone from Home", async () => {
     renderAt("/", "manager");
-    await screen.findByTestId("stream-now");
+    await screen.findByRole("heading", { name: "Dashboard" });
     expect(screen.queryByText(/^Action needed/)).toBeNull();
     expect(screen.queryByText("Reminders (not counted)")).toBeNull();
   });
@@ -334,7 +337,7 @@ describe("Home layout", () => {
     expect(screen.queryByText("Caregiver cost and margin", { selector: "dt" })).toBeNull();
     cleanup();
     renderAt("/", "manager");
-    await screen.findByTestId("stream-now");
+    await screen.findByRole("heading", { name: "Dashboard" });
     expect(screen.queryByText(/\$\d/)).toBeNull();
     expect(screen.queryByText("Financial impact")).toBeNull();
   });

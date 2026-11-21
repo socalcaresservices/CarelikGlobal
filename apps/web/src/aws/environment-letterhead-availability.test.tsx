@@ -72,7 +72,8 @@ afterEach(() => cleanup());
 describe("environment marker: explicit configuration only", () => {
   it.each([
     ["test", "test", TEST_MARKER_LABEL],
-    ["development", "development", TEST_MARKER_LABEL],
+    ["demo", "demo", "DEMO — synthetic data only"],
+    ["development", "development", "DEV — synthetic data only"],
     ["  TEST  ", "test", TEST_MARKER_LABEL],
     ["production", "production", null],
     [undefined, "unverified", UNVERIFIED_MARKER_LABEL],
@@ -117,7 +118,7 @@ describe("environment marker: explicit configuration only", () => {
     expect(screen.queryByText(/synthetic clients only until the security approval/)).toBeNull();
     cleanup();
     renderApp("/", "manager", { env: "development" });
-    expect(await screen.findByTestId("environment-banner")).toHaveTextContent("TEST — synthetic data only");
+    expect(await screen.findByTestId("environment-banner")).toHaveTextContent("DEV — synthetic data only");
   });
 
   it("production shows no TEST banner, and nothing about the environment", async () => {

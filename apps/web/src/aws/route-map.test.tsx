@@ -128,44 +128,31 @@ const linkNames = async () => {
   openAllSections(nav);   // a group is closed until the page moves into it or the person opens it
   return within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""));
 };
-const tabNames = async () => within(await screen.findByRole("navigation", { name: "Section tabs" })).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""));
 const sectionNames = async (nav: HTMLElement) => within(nav).queryAllByTestId("nav-section").map((e) => e.querySelector("button")?.textContent?.replace(/\d+$/, "") ?? e.textContent?.replace(/\d+$/, ""));
 
 describe("route map: the menu shows each destination only to the roles that hold its permission", () => {
-  it("manager: the agreed groups, with the related pages as tabs beside them", async () => {
+  it("manager: the agreed groups; the related pages are sidebar items and there is no strip of tabs", async () => {
     renderAt("/", "manager");
-    expect(await linkNames()).toEqual(["Dashboard", "Clients", "Authorization changes", "Caregivers", "Schedule", "Reports", "Billing", "Agency Settings"]);
+    expect(await linkNames()).toEqual(["Dashboard", "Clients", "Authorization changes", "Caregivers", "Recruiting", "Documents", "Schedule", "Calendar", "Requests", "Reports", "Billing", "Visits", "Visits to review", "Outage records", "Agency Settings", "Continuity"]);
     expect(await sectionNames(screen.getByRole("navigation", { name: "Main" }))).toEqual(["Dashboard", "Clients", "Staff", "Scheduling", "Operations", "Settings"]);
-    cleanup(); renderAt("/schedule", "manager");
-    expect(await tabNames()).toEqual(["Schedule", "Calendar", "Requests"]);
-    cleanup(); renderAt("/service-verification/reports?view=overview", "manager");
-    expect(await tabNames()).toEqual(["Reports", "Billing", "Visits", "Visits to review", "Verify visit", "Outage records"]);
-    cleanup(); renderAt("/care-team", "manager");
-    expect(await tabNames()).toEqual(["Caregivers", "Recruiting", "Documents"]);
-    cleanup(); renderAt("/settings/services", "manager");
-    expect(await tabNames()).toEqual(["Agency Settings", "Continuity", "Appearance"]);
+    expect(screen.queryByRole("navigation", { name: "Section tabs" })).toBeNull();
   });
 
-  it("scheduler (shifts.manage, care_requests.read, no billing, no documents): sees Schedule with Requests as a tab, never Services, Accounts, Documents, Recruiting", async () => {
+  it("scheduler (shifts.manage, care_requests.read, no billing, no documents): sees Schedule with Requests under it, never Services, Accounts, Documents, Recruiting", async () => {
     renderAt("/", "scheduler");
     const names = await linkNames();
     expect(names).toContain("Schedule");
+    expect(names).toContain("Requests");
     expect(names).toContain("Authorization changes"); // shifts.manage may open the Authorization changes screen
-    for (const hidden of ["Agency Settings", "Accounts", "Caregivers", "Billing"]) expect(names).not.toContain(hidden);
-    cleanup(); renderAt("/schedule", "scheduler");
-    expect(await tabNames()).toEqual(["Schedule", "Calendar", "Requests"]);
-    cleanup(); renderAt("/service-verification/reports", "scheduler");
-    const reportTabs = await tabNames();
-    for (const hidden of ["Documents", "Recruiting", "Continuity", "Verify visit", "Outage records"]) expect(reportTabs).not.toContain(hidden);
+    for (const hidden of ["Agency Settings", "Accounts", "Caregivers", "Billing", "Documents", "Recruiting", "Continuity", "Outage records"]) expect(names).not.toContain(hidden);
   });
 
-  it("owner also sees Branding as Agency Settings and Accounts as a tab of Roles & Permissions; the manager sees neither", async () => {
+  it("owner also sees Branding as Agency Settings and Accounts under Roles & Permissions; the manager sees neither", async () => {
     renderAt("/", "organization_owner");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     openAllSections(nav);
     expect(within(nav).getByRole("link", { name: "Agency Settings" }).getAttribute("href")).toBe("/settings/branding");
-    cleanup(); renderAt("/accounts", "organization_owner");
-    expect(await tabNames()).toContain("Accounts");
+    expect(within(nav).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
     cleanup();
     renderAt("/", "manager");
     const nav2 = await screen.findByRole("navigation", { name: "Main" });
@@ -174,10 +161,9 @@ describe("route map: the menu shows each destination only to the roles that hold
     expect(within(nav2).queryByRole("link", { name: "Accounts" })).toBeNull();
   });
 
-  it("caregiver keeps the simple list: My Schedule and Verify Visit, with Availability and My documents as tabs", async () => {
+  it("caregiver: My Schedule, Verify Visit, Availability and My documents, nothing else", async () => {
     renderAt("/my-shifts", "caregiver");
-    expect(await linkNames()).toEqual(["My Schedule", "Verify Visit"]);
-    expect(await tabNames()).toEqual(["My Schedule", "Verify Visit", "Availability", "My documents"]);
+    expect(await linkNames()).toEqual(["My Schedule", "Verify Visit", "Availability", "My documents"]);
   });
 
   it("no destination appears twice in the sidebar", async () => {
@@ -187,15 +173,13 @@ describe("route map: the menu shows each destination only to the roles that hold
   });
 
   it("the links open the existing addresses", async () => {
-    renderAt("/schedule", "manager");
-    const strip = await screen.findByRole("navigation", { name: "Section tabs" });
-    const href = (name: string) => within(strip).getByRole("link", { name }).getAttribute("href");
-    expect(href("Requests")).toBe("/schedule/shift-requests");
-    expect(href("Calendar")).toBe("/service-verification/reports?view=calendar");
-    cleanup(); renderAt("/", "manager");
+    renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
     openAllSections(nav);
-    expect(within(nav).getByRole("link", { name: "Authorization changes" }).getAttribute("href")).toBe("/authorization-impacts");
+    const href = (name: string) => within(nav).getByRole("link", { name }).getAttribute("href");
+    expect(href("Requests")).toBe("/schedule/shift-requests");
+    expect(href("Calendar")).toBe("/service-verification/reports?view=calendar");
+    expect(href("Authorization changes")).toBe("/authorization-impacts");
     fireEvent.click(within(nav).getByRole("link", { name: "Agency Settings" }));
     await waitFor(() => expect(screen.getByTestId("page")).toHaveTextContent("services"));
     await waitFor(() => expect(within(nav).getByRole("link", { name: "Agency Settings" })).toHaveAttribute("aria-current", "page"));

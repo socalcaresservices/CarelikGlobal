@@ -1,9 +1,13 @@
 import { Fragment, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MobileSortControl, SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { Button, Card } from "@carelik/ui";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
+import { ImportButton } from "./import-drawer";
+import { PossibleDuplicates } from "./staff-duplicates";
 import { PageHeader } from "./ui/page-header";
 
 // People > Staff, Settings > Staff Types, Settings > Roles & Permissions (migration 0086).
@@ -37,9 +41,7 @@ const ROLE_NAME: Record<string, string> = {
 };
 const roleName = (role: string | null) => (role ? ROLE_NAME[role] ?? role : "No access");
 const ACCESS_LABEL: Record<StaffRow["accessStatus"], string> = { none: "No sign-in", invitation_pending: "Invited", active: "Active", disabled: "Disabled" };
-/** What the Status column and its filter show: an inactive profile first, otherwise the state of the person's sign-in. */
-const statusOf = (r: StaffRow) => (r.status === "inactive" ? "Inactive" : ACCESS_LABEL[r.accessStatus]);
-const STATUS_CHOICES = ["Active", "Invited", "Disabled", "No sign-in", "Inactive"] as const;
+const STATUS_CHOICES = ["Active", "Invited", "Disabled", "No sign-in"] as const;
 const ACCESS_BADGE: Record<StaffRow["accessStatus"], string> = {
   none: "bg-slate-100 text-slate-800", invitation_pending: "bg-amber-100 text-amber-900", active: "bg-emerald-100 text-emerald-900", disabled: "bg-slate-200 text-slate-800",
 };
@@ -75,7 +77,7 @@ function useStaffTypes(enabled: boolean) {
 type Panel = { kind: "add" } | { kind: "edit" | "invite" | "role" | "access" | "history" | "member"; row: StaffRow };
 
 const ALL = "all";
-const filterClass = "min-h-[36px] rounded-md border border-slate-300 bg-og-card px-2 text-sm";
+const filterClass = "min-h-[44px] md:min-h-[36px] rounded-md border border-slate-300 bg-og-card px-2 text-sm";
 
 export function StaffPage() {
   const api = useAwsApi();
@@ -86,17 +88,19 @@ export function StaffPage() {
   const canAccounts = hasPermission("accounts.manage");
   const [panel, setPanel] = useState<Panel | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const person = params.get("person");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [roleFilter, setRoleFilter] = useState(ALL);
   const [statusFilter, setStatusFilter] = useState(ALL);
+  const [recordFilter, setRecordFilter] = useState(ALL);
   const staff = useQuery({
     queryKey: staffKey(activeOrganizationId),
     queryFn: () => api.get<{ staff: StaffRow[] }>("/v1/staff", { organizationId: activeOrganizationId }),
     enabled: !!activeOrganizationId && canRead,
   });
   const types = useStaffTypes(canRead);
-  if (!canRead) return <NotAllowed />;
 
   const finish = async (text: string) => {
     setDone(text);
@@ -107,13 +111,25 @@ export function StaffPage() {
   const all = staff.data?.staff ?? [];
   const activeTypes = (types.data?.staffTypes ?? []).filter((t) => t.isActive);
   const needle = search.trim().toLowerCase();
-  const rows = all.filter((r) =>
-    (!needle || [r.displayName, r.staffTypeName, r.contactEmail, r.phone].some((v) => v?.toLowerCase().includes(needle)))
+  const matching = all.filter((r) =>
+    (!person || r.userId === person)
+    && (!needle || [r.displayName, r.staffTypeName, r.contactEmail, r.phone].some((v) => v?.toLowerCase().includes(needle)))
     && (typeFilter === ALL || (typeFilter === "none" ? r.staffTypeId === null : r.staffTypeId === typeFilter))
     && (roleFilter === ALL || (r.systemRole ?? "none") === roleFilter)
-    && (statusFilter === ALL || statusOf(r) === statusFilter));
-  const filtered = needle !== "" || typeFilter !== ALL || roleFilter !== ALL || statusFilter !== ALL;
-  const clear = () => { setSearch(""); setTypeFilter(ALL); setRoleFilter(ALL); setStatusFilter(ALL); };
+    && (statusFilter === ALL || ACCESS_LABEL[r.accessStatus] === statusFilter)
+    && (recordFilter === ALL || r.status === recordFilter));
+  const { rows, sort } = useSortedRows(matching, {
+    name: { get: (r) => r.displayName },
+    type: { get: (r) => r.staffTypeName },
+    role: { get: (r) => (r.systemRole ? roleName(r.systemRole) : null) },
+    signin: { get: (r) => ACCESS_LABEL[r.accessStatus] },
+    record: { get: (r) => r.status },
+    email: { get: (r) => r.contactEmail },
+    phone: { get: (r) => r.phone },
+  });
+  if (!canRead) return <NotAllowed />;
+  const filtered = !!person || needle !== "" || typeFilter !== ALL || roleFilter !== ALL || statusFilter !== ALL || recordFilter !== ALL;
+  const clear = () => { if (person) setParams({}); setSearch(""); setTypeFilter(ALL); setRoleFilter(ALL); setStatusFilter(ALL); setRecordFilter(ALL); };
   const rolesPresent = [...new Set(all.map((r) => r.systemRole ?? "none"))].sort((x, y) => roleName(x === "none" ? null : x).localeCompare(roleName(y === "none" ? null : y)));
 
   return (
@@ -121,10 +137,12 @@ export function StaffPage() {
       <PageHeader
         title="Staff"
         lead="Everyone who works for the agency. A staff type is only a label; a person's role decides what they can do."
-        action={canManage ? <Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add staff</Button> : undefined}
+        action={canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="people" onDone={finish} />{hasPermission("caregivers.manage") ? <Link className="inline-flex min-h-11 items-center text-sm text-og-link underline" to="/care-team?add=1">Add caregiver</Link> : null}<Button type="button" onClick={() => { setPanel({ kind: "add" }); setDone(null); }}>Add office staff</Button></div> : undefined}
       />
       {done ? <p role="status" className="rounded-md bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900">{done}</p> : null}
-      {panel?.kind === "add" ? <ProfileForm title="Add staff" types={activeTypes} onDone={finish} onCancel={() => setPanel(null)} /> : null}
+      {canManage && all.length > 0 ? <BulkInvite rows={all} onDone={finish} /> : null}
+      {canManage ? <PossibleDuplicates /> : null}
+      {panel?.kind === "add" ? <ProfileForm title="Add office staff" types={activeTypes} onDone={finish} onCancel={() => setPanel(null)} /> : null}
       {all.length > 0 ? (
         <div role="search" aria-label="Find staff" className="flex flex-wrap items-end gap-2 border-b border-slate-200 pb-2">
           <label className="min-w-[12rem] flex-1 text-xs font-medium text-slate-700">Search
@@ -143,13 +161,20 @@ export function StaffPage() {
               {rolesPresent.map((r) => <option key={r} value={r}>{roleName(r === "none" ? null : r)}</option>)}
             </select>
           </label>
-          <label className="text-xs font-medium text-slate-700">Status
+          <label className="text-xs font-medium text-slate-700">Sign-in status
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${filterClass} mt-0.5 block`}>
-              <option value={ALL}>All statuses</option>
+              <option value={ALL}>All sign-in statuses</option>
               {STATUS_CHOICES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-          {filtered ? <Button type="button" variant="secondary" className="min-h-[36px]" onClick={clear}>Clear Filters</Button> : null}
+          <label className="text-xs font-medium text-slate-700">Staff record status
+            <select value={recordFilter} onChange={(e) => setRecordFilter(e.target.value)} className={`${filterClass} mt-0.5 block`}>
+              <option value={ALL}>All records</option>
+              <option value="active">Active record</option>
+              <option value="inactive">Inactive record</option>
+            </select>
+          </label>
+          {filtered ? <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px]" onClick={clear}>Clear Filters</Button> : null}
         </div>
       ) : null}
       {staff.isLoading ? <p className="text-sm text-slate-500" role="status">Loading…</p> : null}
@@ -159,16 +184,20 @@ export function StaffPage() {
       {rows.length > 0 ? (
         <div className="relative overflow-x-auto md:rounded-lg md:border md:border-slate-200 md:bg-og-card">
           {filtered ? <p className="px-1 pb-1 text-xs text-slate-600 md:px-3 md:pt-1" role="status">{rows.length} of {all.length}</p> : null}
+          <MobileSortControl sort={sort} className="px-1 pb-2" options={[
+            { column: "name", label: "Name" }, { column: "type", label: "Staff type" }, { column: "role", label: "Role" }, { column: "signin", label: "Sign-in status" },
+            { column: "record", label: "Staff record" }, { column: "email", label: "Contact email" }, { column: "phone", label: "Phone" },
+          ]} />
           <table className="block w-full text-left text-sm md:table" aria-label="Staff">
             <thead className="hidden md:table-header-group">
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-600">
                 <th scope="col" className="w-10 px-3 py-1.5 text-right font-semibold">No.</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Name</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Staff Type</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Role</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Status</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Email</th>
-                <th scope="col" className="px-3 py-1.5 font-semibold">Phone</th>
+                <SortTh sort={sort} column="name" className="px-3 py-0.5">Name</SortTh>
+                <SortTh sort={sort} column="type" className="px-3 py-0.5">Staff Type</SortTh>
+                <SortTh sort={sort} column="role" className="px-3 py-0.5">Role</SortTh>
+                <SortTh sort={sort} column="signin" className="px-3 py-0.5">Sign-in status</SortTh><SortTh sort={sort} column="record" className="px-3 py-0.5">Staff record</SortTh>
+                <SortTh sort={sort} column="email" className="px-3 py-0.5">Contact email</SortTh>
+                <SortTh sort={sort} column="phone" className="px-3 py-0.5">Phone</SortTh>
                 <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -197,12 +226,11 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
   onOpen: (kind: PanelKind) => void; onClose: () => void; onDone: (text: string) => Promise<void>;
 }) {
   const isProfile = row.profileId !== null, isMember = row.staffKey.startsWith("member:"), isCaregiver = row.caregiverRecordId !== null;
-  const changeableRole = !row.isSelf && row.systemRole !== null && (ASSIGNABLE_ROLES as readonly string[]).includes(row.systemRole);
+  const changeableRole = !row.isSelf && row.userId !== null && row.systemRole !== null && (row.systemRole === "caregiver" || (ASSIGNABLE_ROLES as readonly string[]).includes(row.systemRole));
   const hasAccount = row.accessStatus === "active" || row.accessStatus === "invitation_pending" || row.accessStatus === "disabled";
   const btn = (label: string, kind: PanelKind, shown = label) => (
-    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`${label}: ${row.displayName}`} onClick={() => onOpen(kind)}>{shown}</Button>
+    <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px] px-2 py-1 text-xs" aria-label={`${label}: ${row.displayName}`} onClick={() => onOpen(kind)}>{shown}</Button>
   );
-  const status = statusOf(row);
   const more = [
     canManage && isMember && types.length > 0 ? btn("Add profile", "member") : null,
     canManage && changeableRole ? btn("Change role", "role") : null,
@@ -213,12 +241,13 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
       <tr className="block border-b border-slate-100 py-1.5 last:border-0 md:table-row md:py-0 md:align-top">
         <td className="hidden w-10 px-3 py-1 text-right tabular-nums text-slate-600 md:table-cell" data-testid="row-no">{index}</td>
         <th scope="row" className="block px-3 py-0.5 font-medium text-slate-950 md:table-cell md:py-1">
-          {row.displayName}{row.isSelf ? <span className="ml-1 text-xs font-normal text-slate-600">· you</span> : null}
+          {row.caregiverRecordId ? <Link className="text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>{row.displayName}</Link> : row.displayName}{row.isSelf ? <span className="ml-1 text-xs font-normal text-slate-600">· you</span> : null}
         </th>
         <td className={cell} data-label="Staff Type">{row.staffTypeName ?? <span className="text-slate-500">—</span>}</td>
         <td className={cell} data-label="Role">{roleName(row.systemRole)}</td>
-        <td className={cell} data-label="Status"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${row.status === "inactive" ? "bg-slate-200 text-slate-800" : ACCESS_BADGE[row.accessStatus]}`}>{status}</span></td>
-        <td className={`${cell} break-all`} data-label="Email">{row.contactEmail ?? <span className="text-slate-500">—</span>}</td>
+        <td className={cell} data-label="Sign-in status"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${ACCESS_BADGE[row.accessStatus]}`}>{ACCESS_LABEL[row.accessStatus]}</span></td>
+        <td className={cell} data-label="Staff record">{row.status === "inactive" ? "Inactive record" : "Active record"}</td>
+        <td className={`${cell} break-all`} data-label="Contact email">{row.contactEmail ?? <span className="text-slate-500">—</span>}</td>
         <td className={`${cell} whitespace-nowrap`} data-label="Phone">{row.phone ?? <span className="text-slate-500">—</span>}</td>
         <td className="block px-3 py-1 md:table-cell">
           <div className="flex flex-wrap items-center gap-1">
@@ -227,10 +256,10 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
             {canManage && isProfile && row.accessStatus === "invitation_pending" ? btn("Resend invite", "invite", "Invite again") : null}
             {canAccounts && row.userId && !row.isSelf && hasAccount && !isCaregiver
               ? btn(row.accessStatus === "disabled" ? "Enable access" : "Disable access", "access", row.accessStatus === "disabled" ? "Enable" : "Disable") : null}
-            {isCaregiver ? <Link className="inline-flex min-h-[36px] items-center text-xs font-medium text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>Open caregiver</Link> : null}
+            {isCaregiver ? <Link className="inline-flex min-h-[44px] md:min-h-[36px] items-center text-xs font-medium text-og-link underline" to={`/care-team/${row.caregiverRecordId}`}>Open caregiver</Link> : null}
             {more.length > 0 ? (
               <details className="relative">
-                <summary className="inline-flex min-h-[36px] cursor-pointer list-none items-center rounded-md border border-slate-300 bg-og-card px-2 text-xs font-medium" aria-label={`More actions: ${row.displayName}`}>More</summary>
+                <summary className="inline-flex min-h-[44px] md:min-h-[36px] cursor-pointer list-none items-center rounded-md border border-slate-300 bg-og-card px-2 text-xs font-medium" aria-label={`More actions: ${row.displayName}`}>More</summary>
                 <div className="absolute right-0 z-20 mt-1 flex min-w-[9rem] flex-col gap-1 rounded-lg border border-og-line bg-og-card p-1.5 shadow-md">{more}</div>
               </details>
             ) : null}
@@ -239,7 +268,7 @@ function RowWithPanel({ index, row, open, canManage, canAccounts, types, onOpen,
       </tr>
       {open ? (
         <tr className="block border-b border-slate-100 bg-og-page md:table-row">
-          <td colSpan={8} className="block px-3 py-2 md:table-cell">
+          <td colSpan={9} className="block px-3 py-2 md:table-cell">
             {open.kind === "edit" ? <ProfileForm title="Edit staff" row={row} types={types} onDone={onDone} onCancel={onClose} /> : null}
             {open.kind === "member" ? <MemberForm row={row} types={types} onDone={onDone} onCancel={onClose} /> : null}
             {open.kind === "invite" ? <InviteForm row={row} onDone={onDone} onCancel={onClose} /> : null}
@@ -300,7 +329,7 @@ function ProfileForm({ title, row, types, onDone, onCancel }: { title: string; r
         ) : null}
       </div>
       {save.isError ? <p role="alert" className="text-sm text-red-700">{message(save.error, "The change could not be saved.")}</p> : null}
-      <FormActions pending={save.isPending} label={row ? "Save" : "Add staff"} onCancel={onCancel} disabled={!name.trim() || !typeId} />
+      <FormActions pending={save.isPending} label={row ? "Save" : "Add office staff"} onCancel={onCancel} disabled={!name.trim() || !typeId} />
     </form>
   );
 }
@@ -354,6 +383,88 @@ function InviteForm({ row, onDone, onCancel }: { row: StaffRow; onDone: (t: stri
   );
 }
 
+/**
+ * R25: sign-in links are never sent by an import or by adding staff. This is the one explicit bulk action: the administrator picks the people, picks one role, and confirms.
+ * It calls the same one-person invitation route for each person in turn, so every server rule still applies per person (a pending invitation is never overwritten, a role
+ * limit is checked, the audit trail records each invitation). A failure for one person never stops or hides the others; people already sent are not sent again.
+ */
+const BULK_INVITE_MAX = 50;
+function BulkInvite({ rows, onDone }: { rows: StaffRow[]; onDone: (text: string) => Promise<void> }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const waiting = rows.filter((r) => r.profileId !== null && r.accessStatus === "none" && r.status === "active");
+  const eligible = waiting.filter((r) => !!r.contactEmail);
+  const noEmail = waiting.length - eligible.length;
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [role, setRole] = useState<string>("staff");
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<{ key: string; name: string; error: string | null }[]>([]);
+  if (eligible.length === 0 && results.length === 0) return null;
+  const chosen = eligible.filter((r) => picked.has(r.staffKey));
+  const toggle = (key: string) => setPicked((cur) => { const next = new Set(cur); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+  const send = async () => {
+    setRunning(true);
+    setResults([]);
+    const out: { key: string; name: string; error: string | null }[] = [];
+    for (const r of chosen.slice(0, BULK_INVITE_MAX)) {
+      try {
+        await api.post(`/v1/staff/${r.profileId}/invitation`, { organizationId: activeOrganizationId, email: r.contactEmail, role });
+        out.push({ key: r.staffKey, name: r.displayName, error: null });
+      } catch (cause) {
+        out.push({ key: r.staffKey, name: r.displayName, error: message(cause, "Not sent.") });
+      }
+      setResults([...out]);
+    }
+    setPicked(new Set());
+    setRunning(false);
+    const sent = out.filter((x) => !x.error).length;
+    await onDone(`Sign-in links: ${sent} sent${out.length - sent ? `, ${out.length - sent} not sent (see the list)` : ""}.`);
+  };
+  return (
+    <section aria-label="Send sign-in links" className="rounded-md border border-slate-200 bg-og-card p-2">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="inline-flex min-h-[44px] items-center font-semibold text-og-accent underline md:min-h-[32px]">
+        Send sign-in links{eligible.length ? ` (${eligible.length} can be invited)` : ""}
+      </button>
+      {open ? (
+        <div className="mt-1 space-y-2">
+          <p className="text-sm text-slate-700">Adding or importing staff never sends an invitation. Choose the people who should receive a sign-in link now.{noEmail ? ` ${noEmail} ${noEmail === 1 ? "person has" : "people have"} no email on file and cannot be invited from here.` : ""}</p>
+          {eligible.length > 0 ? (
+            <fieldset className="space-y-1" disabled={running}>
+              <legend className="sr-only">People to invite</legend>
+              <button type="button" className="min-h-[44px] text-sm font-medium underline md:min-h-[32px]" onClick={() => setPicked(picked.size === Math.min(eligible.length, BULK_INVITE_MAX) ? new Set() : new Set(eligible.slice(0, BULK_INVITE_MAX).map((r) => r.staffKey)))}>
+                {picked.size > 0 ? "Clear selection" : `Select ${Math.min(eligible.length, BULK_INVITE_MAX)}`}
+              </button>
+              <ul className="divide-y divide-slate-200 rounded-md border border-slate-200">
+                {eligible.map((r) => (
+                  <li key={r.staffKey}>
+                    <label className="flex min-h-[44px] items-center gap-2 px-2 text-sm">
+                      <input type="checkbox" className="h-5 w-5" checked={picked.has(r.staffKey)} onChange={() => toggle(r.staffKey)} disabled={!picked.has(r.staffKey) && picked.size >= BULK_INVITE_MAX} />
+                      <span className="font-medium">{r.displayName}</span>
+                      <span className="truncate text-slate-600">{r.contactEmail}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <label className="block text-sm font-medium text-slate-800">Role for everyone selected
+                <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_NAME[r]}</option>)}</select>
+              </label>
+              <Button type="button" loading={running} disabled={chosen.length === 0} onClick={() => void send()}>
+                {chosen.length === 0 ? "Send sign-in links" : `Send ${chosen.length} sign-in ${chosen.length === 1 ? "link" : "links"}`}
+              </Button>
+            </fieldset>
+          ) : null}
+          {results.length > 0 ? (
+            <ul aria-label="Results" role="status" className="space-y-0.5 text-sm">
+              {results.map((x) => <li key={x.key} className={x.error ? "text-red-700" : "text-emerald-800"}>{x.name}: {x.error ?? "sent"}</li>)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function RoleForm({ row, onDone, onCancel }: { row: StaffRow; onDone: (t: string) => Promise<void>; onCancel: () => void }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
@@ -366,8 +477,9 @@ function RoleForm({ row, onDone, onCancel }: { row: StaffRow; onDone: (t: string
   return (
     <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-2" aria-label="Change role">
       <h2 className="text-base font-semibold text-slate-950">Change the role of {row.displayName}</h2>
+      {row.caregiverRecordId ? <p>Office roles keep caregiver access under the same sign-in.</p> : null}
       <label className="block text-sm font-medium text-slate-800">Role
-        <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_NAME[r]}</option>)}</select>
+        <select value={role} onChange={(e) => setRole(e.target.value)} className={inputClass}>{row.caregiverRecordId ? <option value="caregiver">Caregiver only</option> : null}{ASSIGNABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_NAME[r]}</option>)}</select>
       </label>
       <label className="block text-sm font-medium text-slate-800">Reason
         <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={500} className={inputClass} />
@@ -493,8 +605,8 @@ export function StaffTypesPage() {
                 </p>
                 {canManage ? (
                   <div className="flex gap-1">
-                    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`Rename ${t.name}`} onClick={() => { setEditing({ id: t.id, name: t.name }); setDone(null); }}>Rename</Button>
-                    <Button type="button" variant="secondary" className="min-h-[36px] px-2 py-1 text-xs" aria-label={`${t.isActive ? "Deactivate" : "Activate"} ${t.name}`} disabled={toggle.isPending}
+                    <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px] px-2 py-1 text-xs" aria-label={`Rename ${t.name}`} onClick={() => { setEditing({ id: t.id, name: t.name }); setDone(null); }}>Rename</Button>
+                    <Button type="button" variant="secondary" className="min-h-[44px] md:min-h-[36px] px-2 py-1 text-xs" aria-label={`${t.isActive ? "Deactivate" : "Activate"} ${t.name}`} disabled={toggle.isPending}
                       onClick={() => { setDone(null); toggle.mutate({ id: t.id, active: !t.isActive }); }}>{t.isActive ? "Deactivate" : "Activate"}</Button>
                   </div>
                 ) : null}
