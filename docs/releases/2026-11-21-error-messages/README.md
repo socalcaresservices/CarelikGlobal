@@ -39,3 +39,8 @@ Unit tests: `apps/web/src/lib/aws-api-switched.test.ts` (15 tests, including the
 ## Not done / pending
 - NOT verified in TEST or production: this session cannot reach either. TEST needs a web publish of the fix (web only; no API or database change); production needs its own approval.
 - Production: unchanged.
+
+## TEST deployment record (2026-11-21)
+- Web-only publish of release commit `a6f7e3ccb990547820af8f3be4f47caad0f4bb9c` to the TEST site with `TEST_WEB_FIX.sh` (CI green: harness, validate, postgres). Operator output: "TEST WEB PUBLISHED ... serves a6f7e3cc". API, database and switches untouched; production untouched.
+- Rollback reference (CloudShell, ephemeral): `/tmp/ogevia-wf-11211250/webfix-20261121T125102Z`.
+- NOT yet verified: the owner's Retire check on TEST (expected: "This is not available in this environment yet."). The TEST `requestCleanup` switch is still OFF, so the action itself does not succeed there. Production: unchanged, pending approval.
