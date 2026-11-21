@@ -2,7 +2,7 @@
 
 **Owner authorization (2026-11-21, verbatim):** "GO production, switch OFF". Given after the owner chose to skip the remaining TEST browser checks (C1 to C10, D1 to D3) and the TEST switch-on step (H2c). Those were not run; this record does not claim them.
 
-**Status: PREPARED, NOT DEPLOYED.** Implemented and tested here; nothing has run in production.
+**Status: DEPLOYED TO PRODUCTION 2026-11-21 (request-cleanup switch OFF).** Record built from the operator's pasted CloudShell output; production sign-in acceptance in the app is NOT yet recorded.
 
 ## What goes to production
 | Part | Change |
@@ -23,3 +23,17 @@ API and web: the saved `rollback-api-web.sh` in the private archive (`s3://cdk-h
 
 ## Not verified before production
 TEST browser checks C1 to C10 and D1 to D3; H2c (the three routes behaving with the switch on). Production sign-in acceptance after deployment is a human check; do not create a real visit to test.
+
+## Deployed record (2026-11-21, operator: the owner, AWS CloudShell, account 300094796789, us-west-2)
+Application commit `ef90a2a42c21e2c68e6fbf3f361e618806699b8d` (PR #113, merged into the production branch as `2b07ae4`). Approval: typed `GO-PRODUCTION-0109` after `OGEVIA_DEPLOY_APPROVAL=owner-production-0109-go`, following the owner's instruction "GO production, switch OFF".
+
+**Evidence (from the operator's pasted output; the tail of the final run):** the production web build passed the production sign-in assertion ("the bundle carries the production sign-in pool, domain and client and nothing of the TEST pool"); files uploaded to the production bucket; origin `https://d3l4psdkokkvnb.cloudfront.net`; "PASS: the three request-cleanup routes are absent in production (switch OFF)"; "PRODUCTION DEPLOYED: migration 0109 applied (108 verified ledger rows), request-cleanup switch OFF, production web published; TEST API unchanged"; "ADMIN HOST RESTORED"; "Release state: database=1 API=1 website-started=1". That final line is printed only after every earlier check in the script passed (ledger 107 before and 108 after with the 20 object checks, the reviewed code-only change set, the deployed Handler hash).
+**Private recovery archive:** `s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-production-release/ogevia-production-release.z5JzVG/before-update.tgz` (previous template, Handler code, web files, logical database dump, rollback script). Preserve it.
+
+**An earlier attempt stopped at stage 2, before any change** (`database=0 API=0`): production had two sign-in override routes live since the 2026-11-15 release (branch `claude/keen-hawking-e9o2jg`, PR #109, not merged to the production branch), which the helper then rejected. The helper was corrected to allow exactly those two routes (commit `57828291`), and the release re-run.
+
+## Not verified
+The earlier stage lines (ledger 108, 20 checks, change-set check, deployed Handler hash) were not in the pasted tail; they are implied by the final line. Not run anywhere: TEST browser checks C1 to C10, D1 to D3, and the request-cleanup switch ON (H2c). Production sign-in and the ten go-live items still need the owner's check in the app. Do not create a real visit to test.
+
+## Open items
+Production is ahead of the production branch in one respect: the 2026-11-15 sign-in override change set exists only on `claude/keen-hawking-e9o2jg`. The CDK code at the production branch still does not synthesize those two routes for production; keep using the code-only change-set method until that branch is reconciled.
