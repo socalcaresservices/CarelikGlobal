@@ -10,8 +10,12 @@ export const INFO_TIP_MAX_CHARS = 250;
  * Hover, keyboard focus, a click or a tap shows it; Escape, the close button, the icon again, or a tap elsewhere dismisses it. It floats (never moves the layout and never
  * blocks the page), and the text stays in the page for screen readers (aria-describedby). 44 px target on touch screens. Use for background and instructions, never for a
  * warning the person must act on (use CompactAlert for that).
+ *
+ * `inline` is for help that sits directly above form controls (for example the Care Request screen). The panel then takes its own space in the page instead of floating,
+ * so it can never cover the fields or buttons below it and the person can type and send with the help open. It opens and closes by click, tap, Escape or its close button only
+ * (no hover, so it never flickers open as the pointer passes over it).
  */
-export function InfoTip({ children, label = "More information", title, more, className }: { children: ReactNode; label?: string; title?: string; more?: { to: string; label?: string }; className?: string }) {
+export function InfoTip({ children, label = "More information", title, more, className, inline = false }: { children: ReactNode; label?: string; title?: string; more?: { to: string; label?: string }; className?: string; inline?: boolean }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   // Dismissed on purpose (close button, Escape): stays hidden even while the pointer rests on the icon or it keeps focus, until the person leaves and comes back or taps the icon.
@@ -27,7 +31,7 @@ export function InfoTip({ children, label = "More information", title, more, cla
   return (
     <span
       ref={root}
-      className={cn("group relative inline-flex align-middle", className)}
+      className={cn(inline ? "relative flex w-full flex-col items-start" : "group relative inline-flex align-middle", className)}
       onMouseLeave={() => setDismissed(false)}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDismissed(false); }}
       onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); setDismissed(true); button.current?.focus(); } }}
@@ -47,8 +51,10 @@ export function InfoTip({ children, label = "More information", title, more, cla
         id={id}
         role="tooltip"
         className={cn(
-          "absolute left-0 top-full z-30 mt-1 w-64 max-w-[80vw] rounded-lg border border-og-line bg-og-card p-2 pr-7 text-xs font-normal normal-case leading-snug text-og-ink shadow-md",
-          dismissed ? "hidden" : open ? "block" : "hidden group-hover:block group-focus-within:block",
+          "rounded-lg border border-og-line bg-og-card p-2 pr-7 text-xs font-normal normal-case leading-snug text-og-ink shadow-md",
+          inline
+            ? cn("relative mt-1 w-full max-w-prose", dismissed || !open ? "hidden" : "block")
+            : cn("absolute left-0 top-full z-30 mt-1 w-64 max-w-[80vw]", dismissed ? "hidden" : open ? "block" : "hidden group-hover:block group-focus-within:block"),
         )}
       >
         {title ? <span className="mb-0.5 block text-[12px] font-semibold">{title}</span> : null}

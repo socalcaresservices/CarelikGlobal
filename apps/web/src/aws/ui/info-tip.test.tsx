@@ -55,6 +55,35 @@ describe("InfoTip", () => {
   });
 });
 
+describe("InfoTip inline (help above form controls)", () => {
+  it("takes its own space instead of floating, opens by click only (no hover), and closes by second click, Escape, the close button and a tap elsewhere", () => {
+    render(<div><InfoTip inline label="Help">Create once per family.</InfoTip><label>Client<select><option>Pick</option></select></label><button type="button">Create request link</button></div>);
+    const button = screen.getByRole("button", { name: "Help" });
+    expect(tip().className).not.toContain("absolute");              // in the page flow: it can never sit on top of the controls below
+    expect(tip().className).not.toContain("group-hover:block");     // no hover flicker
+    expect(tip().className).not.toContain("group-focus-within:block");
+    expect(visible()).toBe(false);
+    fireEvent.click(button);
+    expect(visible()).toBe(true);
+    // the controls below stay present and usable while the help is open
+    const create = screen.getByRole("button", { name: "Create request link" });
+    expect(screen.getByLabelText("Client")).toBeInTheDocument();
+    expect(create).toBeEnabled();
+    fireEvent.click(button);
+    expect(visible()).toBe(false);
+    fireEvent.click(button);
+    fireEvent.keyDown(button, { key: "Escape" });
+    expect(visible()).toBe(false);
+    expect(button).toHaveFocus();
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Close help" }));
+    expect(visible()).toBe(false);
+    fireEvent.click(button);
+    fireEvent.pointerDown(create);
+    expect(visible()).toBe(false);
+  });
+});
+
 describe("every help text in the application is short", () => {
   it(`no InfoTip text is longer than ${INFO_TIP_MAX_CHARS} characters`, () => {
     const files: string[] = [];

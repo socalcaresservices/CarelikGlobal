@@ -48,8 +48,8 @@ Sources outside the repo: [CalEVV alternate EVV guide](https://dhcs.ca.gov/provg
 
 | ID | Item | Evidence | Size |
 |---|---|---|---|
-| B-01 | Help overlay blocks Care Request fields and sometimes needs a second click to close. Root cause: `InfoTip` (`apps/web/src/aws/ui/info-tip.tsx`) shows its panel from click state **and** CSS hover and focus-within. Closing by click leaves the button focused, so the panel stays visible. It also floats over the form. Fix: click state only, close on outside-click and Escape, render Care Request help inline above the fields. | VERIFIED in code (`main`; re-check on the live branch) | S |
-| B-02 | Care Request "Send link" access while help is open, tested on desktop, touch, keyboard, narrow screens. | Proposed | S |
+| B-01 | Help overlay: the "close needs a second click" complaint. **Already fixed on the live line** (`InfoTip` there has a close button, a dismissed state, Escape, and tap-away). My earlier root cause came from `main` and does not apply. | VERIFIED in code on `practical-tesla-r07odb` | Done before this session |
+| B-02 | Help overlay covers the Care Request controls. Cause: the floating panel (`absolute`, 16 rem wide) opens over the client picker and "Create request link". Fix: new `inline` mode for `InfoTip` and `Hint` (the panel takes its own space, opens by click only, same close behaviors), used on the Care Request screen. | **Implemented and tested** (unit test; real-browser check on the local demo at desktop and 390 px: no control overlapped, one tap closes). Not deployed. Not yet checked on the live site. | S |
 
 ## 5. Caregiver app (phone)
 
