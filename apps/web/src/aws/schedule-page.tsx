@@ -295,6 +295,16 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
   const { time, when } = useAgencyClock();
   const open = s.coverageState === "covered" || s.coverageState === "needs_coverage";
   const editable = canManage && open && !s.fromCareRequest && !s.hasVisit && new Date(s.endsAt).getTime() > Date.now();
+  async function copyCoverageText() {
+    const link = new URL("/my-shifts", window.location.origin).href;
+    const text = `Cover shift: ${when(s.startsAt)} to ${when(s.endsAt)}. Request in Ogevia: ${link}. Office approval required.`;
+    try {
+      await navigator.clipboard.writeText(text);
+      onDone("Shift text copied. Paste it into a message to an eligible caregiver.");
+    } catch {
+      onDone("Could not copy the shift text. Check your browser's clipboard permissions and try again.");
+    }
+  }
   const calledOut = s.coverageState === "needs_coverage" && !!s.caregiverRecordId;
   const future = new Date(s.startsAt).getTime() > Date.now();
   useEffect(() => { if (highlight && autoAssign && editable) setAction((a) => a ?? "assign"); }, [highlight, autoAssign, editable]);
@@ -319,6 +329,9 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 whitespace-nowrap md:min-h-7 md:py-0" {...(primary.action === "assign" ? { "aria-label": `Assign caregiver to shift for ${shiftLabel}` } : {})} onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
       {items.length === 1 && !primary ? <button type="button" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8" onClick={() => pick(items[0]!.action)}>{items[0]!.label}</button> : (
         <QuickActionMenu label="More actions" className="[&>button]:min-h-11 [&>button]:min-w-11 md:[&>button]:min-h-7 md:[&>button]:min-w-7">
+          {editable && future && s.coverageState === "needs_coverage" ? (
+            <button type="button" className="block min-h-11 w-full px-3 text-left text-slate-900 hover:bg-slate-50 md:min-h-10" onClick={() => void copyCoverageText()}>Copy cover-shift text</button>
+          ) : null}
           {items.map((i) => <button key={i.action} type="button" className={`block min-h-11 w-full px-3 text-left hover:bg-slate-50 md:min-h-10 ${i.danger ? "text-red-800" : "text-slate-900"}`} onClick={() => pick(i.action)}>{i.label}</button>)}
         </QuickActionMenu>
       )}
