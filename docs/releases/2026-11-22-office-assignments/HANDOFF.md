@@ -42,3 +42,6 @@ Partial failure: if the database step fails the sign-in account change is revers
 ## Production record (Approval A, owner approved 2026-11-22; run by the owner in CloudShell)
 Release commit `c7691b637621783615c1977d1f14e0f24e8f3689` (CI green: validate, postgres, harness). `PRD_OFFICE_ASSIGNMENTS_RELEASE.sh` operator output: "PRODUCTION DEPLOYED: migrations 0111 and 0112 applied (111 verified ledger rows), Handler code 4df8dee3d0fb18271e47e5207d8202cd7ee576901fea4b7a6cbeeb5b53fb6d5a, nine routes live (office assignments and assignment history), production web published at c7691b63; TEST unchanged". Release state database=1 api-code=1 api-routes=1 website-started=1. ADMIN HOST RESTORED. Rollback workspace (operator's CloudShell): `/tmp/ogevia-production-release.UQlw3X`; private recovery: `s3://cdk-hnb659fds-assets-300094796789-us-west-2/ogevia-production-release/ogevia-production-release.UQlw3X/before-update.tgz`.
 NOT yet verified by the owner in the live app (https://app.ogevia.com). Approval B (the one-caregiver correction) has not run.
+
+## Approval B record
+Done on production for CG-CBBE8E1D (see the invitation-email-fix README). Awaiting the caregiver's first sign-in with the newest password and the owner's in-app checks of the feature release.
