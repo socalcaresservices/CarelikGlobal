@@ -245,6 +245,12 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "decisionId") return ids.decisionId;
   if (route === "POST /v1/business-documents" && name === "id") return undefined;
   if (ids[name]) return ids[name];
+  // 0111 office assignments, counties and colour: well-formed values, so every probe reaches the database check
+  if (name === "primaryOfficeId") return ids.officeId;
+  if (name === "secondaryOfficeIds") return [];
+  if (name === "county") return "Riverside";
+  if (name === "counties") return ["Riverside"];
+  if (name === "color") return "blue";
   if (name === "status" && route === "GET /v1/availability/requests") return "pending";
   if (name === "kind") return route === "GET /v1/readiness/flags" ? "service" : "weekly";
   if (name === "pairs") return [{ caregiverRecordId: ids.caregiverRecordId, serviceId: ids.serviceId }];

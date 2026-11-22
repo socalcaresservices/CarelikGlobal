@@ -29,6 +29,7 @@ import { FilterBar, MonthGrid, ReplacementSuggestions, ViewTabs } from "./schedu
 import { Drawer } from "./ui/drawer";
 import { InfoTip } from "./ui/info-tip";
 import { CaregiverPicker } from "./caregiver-picker";
+import { CaregiverMarker } from "./office-assignments";
 import { refreshAfterShiftChange } from "./shift-refresh";
 import { schedulingRefusal } from "./scheduling-refusal";
 
@@ -319,7 +320,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
   const timeCell = <td className="whitespace-nowrap py-1 px-2 font-semibold text-slate-950">{withDate ? when(s.startsAt) : time(s.startsAt)}–{time(s.endsAt)}</td>;
   const shiftLabel = `${clientText}, ${when(s.startsAt)}`;
   const who = s.caregiverRecordId
-    ? <>{calledOut ? "Called out: " : ""}<Link className="underline" to={`/care-team/${s.caregiverRecordId}`}>{nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName)}</Link>{!s.hasSignIn ? " — no sign-in yet" : ""}{viaOverride ? <> <OverrideBadge /></> : null}{!s.hasSignIn && stateOfShift(s) !== "completed" ? <span className="block text-xs text-amber-900" data-testid="cannot-verify">Cannot verify a visit in Ogevia until they sign in.</span> : null}</>
+    ? <>{calledOut ? "Called out: " : ""}<CaregiverMarker caregiverRecordId={s.caregiverRecordId} /><Link className="underline" to={`/care-team/${s.caregiverRecordId}`}>{nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName)}</Link>{!s.hasSignIn ? " — no sign-in yet" : ""}{viaOverride ? <> <OverrideBadge /></> : null}{!s.hasSignIn && stateOfShift(s) !== "completed" ? <span className="block text-xs text-amber-900" data-testid="cannot-verify">Cannot verify a visit in Ogevia until they sign in.</span> : null}</>
     : <span className="text-slate-600" aria-label="No caregiver">—</span>;
   const rowActions = (
     <div className="flex items-center justify-end gap-1">
@@ -354,7 +355,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
         <dt className="text-slate-600">Client</dt><dd className="font-medium text-slate-950">{clientText}</dd>
         <dt className="text-slate-600">When</dt><dd>{when(s.startsAt)}, {time(s.startsAt)}–{time(s.endsAt)}</dd>
         <dt className="text-slate-600">Service</dt><dd>{s.serviceName ?? "Service"}</dd>
-        <dt className="text-slate-600">Caregiver</dt><dd>{s.caregiverRecordId ? nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName) : "No caregiver yet"}</dd>
+        <dt className="text-slate-600">Caregiver</dt><dd><CaregiverMarker caregiverRecordId={s.caregiverRecordId} />{s.caregiverRecordId ? nameWithCode(s.caregiverName, s.caregiverCode, s.caregiverDuplicateName) : "No caregiver yet"}</dd>
         <dt className="text-slate-600">Status</dt><dd>{DISPLAY_LABEL[stateKey] ?? STATE_LABEL[s.coverageState]}</dd>
       </dl>
       {forms}

@@ -1,4 +1,4 @@
-// Offices (0110): Settings > Offices, a client's responsible office, and the Office filters. SYNTHETIC data only.
+// Offices (0110/0111): Settings > Offices, Assigned Offices, Service County, Office/County filters. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
@@ -20,13 +20,15 @@ const OFFICES = [
   { officeId: SOUTH, name: "South Office", isActive: false, clientCount: 0 },
 ];
 
-function renderAt(path: string, opts: { perms: string[]; offices?: "on" | "off"; clientOffice?: string | null }) {
+function renderAt(path: string, opts: { perms: string[]; offices?: "on" | "off"; clientOffice?: string | null; facets?: "on" | "off" }) {
   const posts: Array<{ path: string; body: unknown }> = [];
   let assigned = opts.clientOffice ?? null;
+  const facetsOn = (opts.facets ?? opts.offices) === "on";
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     if (init?.method === "POST") {
       const body = JSON.parse(String(init.body)); posts.push({ path: url.pathname, body });
+      if (url.pathname === `/v1/clients/${CLIENT}/offices`) { const b = body as { primaryOfficeId: string | null }; assigned = b.primaryOfficeId; return json(200, { status: "set" }); }
       if (url.pathname.endsWith("/office")) { assigned = (body as { officeId: string | null }).officeId; return json(200, { status: assigned ? "set" : "cleared" }); }
       if (url.pathname === "/v1/offices") return json(200, { officeId: "new" });
       return json(200, { status: "ok" });
@@ -36,6 +38,9 @@ function renderAt(path: string, opts: { perms: string[]; offices?: "on" | "off";
       case "/v1/branding": return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "/v1/offices": return opts.offices === "on" ? json(200, { offices: OFFICES }) : (() => { throw new TypeError("Failed to fetch"); })();   // switch off: the browser sees a failed request, not a clean 404
       case "/v1/client-offices": return opts.offices === "on" ? json(200, { clientOffices: assigned ? [{ clientId: CLIENT, clientCode: "CL-TEST000001", officeId: assigned }] : [] }) : (() => { throw new TypeError("Failed to fetch"); })();
+      case "/v1/people-facets": return facetsOn
+        ? json(200, { facets: { clientOffices: assigned ? [{ clientId: CLIENT, clientCode: "CL-TEST000001", officeId: assigned, isPrimary: true }] : [], caregiverOffices: [], clientCounties: [], caregiverCounties: [], caregiverColors: [] } })
+        : (() => { throw new TypeError("Failed to fetch"); })();
       case "/v1/clients": return json(200, { clients: [{ clientId: CLIENT, clientCode: "CL-TEST000001", caregiverDisplayCode: null, status: "active", legalFirstName: "Synthetic", legalLastName: "Client", city: "Anaheim", clientTypeId: null, clientTypeName: null, currentAuthorizations: 1, openVisits: 0 }] });
       case "/v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] });
       default: return json(404, { error: { code: "not_found", message: "No such endpoint." } });
@@ -61,10 +66,27 @@ describe("Settings > Offices", () => {
     const list = await screen.findByRole("list", { name: "Offices" }, { timeout: 15000 });
     expect(within(list).getByText("North Office")).toBeInTheDocument();
     expect(within(list).getByText("Retired")).toBeInTheDocument();
-    expect(within(list).getByText("1 client")).toBeInTheDocument();
+    expect(within(list).getByText("1 client · 0 caregivers")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("New office"), { target: { value: "East Office" } });
     fireEvent.click(screen.getByRole("button", { name: "Add office" }));
     await waitFor(() => expect(posts).toContainEqual({ path: "/v1/offices", body: { organizationId: ORG, name: "East Office" } }));
+  });
+  it("edits an office's address and county on the same record (name, address, city, ZIP, county) and shows the saved address", async () => {
+    const { posts } = renderAt("/settings/offices", { perms: ["organization.update", "visits.read"], offices: "on" });
+    const list = await screen.findByRole("list", { name: "Offices" }, { timeout: 15000 });
+    fireEvent.click(within(list).getByRole("button", { name: "Edit" }));
+    fireEvent.change(within(list).getByLabelText("Address"), { target: { value: "1 Test Way" } });
+    fireEvent.change(within(list).getByLabelText("City"), { target: { value: "Temecula" } });
+    fireEvent.change(within(list).getByLabelText("ZIP"), { target: { value: "92590" } });
+    fireEvent.change(within(list).getByLabelText("County"), { target: { value: "Riverside" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save office" }));
+    await waitFor(() => expect(posts).toContainEqual({ path: `/v1/offices/${NORTH}/update`, body: { organizationId: ORG, name: "North Office", addressLine1: "1 Test Way", city: "Temecula", postalCode: "92590", county: "Riverside" } }));
+  });
+  it("a retired office can be reactivated", async () => {
+    const { posts } = renderAt("/settings/offices", { perms: ["organization.update", "visits.read"], offices: "on" });
+    const list = await screen.findByRole("list", { name: "Offices" }, { timeout: 15000 });
+    fireEvent.click(within(list).getByRole("button", { name: "Reactivate" }));
+    await waitFor(() => expect(posts).toContainEqual({ path: `/v1/offices/${SOUTH}/reactivate`, body: { organizationId: ORG } }));
   });
   it("retiring needs a reason, then posts it", async () => {
     const { posts } = renderAt("/settings/offices", { perms: ["organization.update", "visits.read"], offices: "on" });
@@ -87,33 +109,54 @@ describe("Settings > Offices", () => {
   });
 });
 
-describe("a client's responsible office", () => {
-  it("the client page offers the active offices (and the client's current one even if retired) and saves the choice", async () => {
+describe("a client's Assigned Offices", () => {
+  it("the client page lists the assigned office as Primary, offers only active unassigned offices, and saves an added office", async () => {
     const { posts } = renderAt(`/clients/${CLIENT}`, { perms: ["clients.names.read", "clients.manage", "visits.read"], offices: "on" });
-    const select = await screen.findByLabelText("Responsible office", {}, { timeout: 15000 });
+    const select = await screen.findByLabelText("Assign an office", {}, { timeout: 15000 });   // no office yet: "Unassigned"
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
     expect(within(select).getByRole("option", { name: "North Office" })).toBeInTheDocument();
-    expect(within(select).queryByRole("option", { name: /South Office/ })).not.toBeInTheDocument();
+    expect(within(select).queryByRole("option", { name: /South Office/ })).not.toBeInTheDocument();   // retired offices cannot receive new assignments
     fireEvent.change(select, { target: { value: NORTH } });
-    await waitFor(() => expect(posts).toContainEqual({ path: `/v1/clients/${CLIENT}/office`, body: { organizationId: ORG, officeId: NORTH } }));
+    await waitFor(() => expect(posts).toContainEqual({ path: `/v1/clients/${CLIENT}/offices`, body: { organizationId: ORG, primaryOfficeId: NORTH, secondaryOfficeIds: [] } }));
+    expect(await screen.findByRole("list", { name: "Assigned Offices" })).toHaveTextContent("Primary");
+  });
+  it("shows a retired assigned office with its name and lets the manager remove it", async () => {
+    const { posts } = renderAt(`/clients/${CLIENT}`, { perms: ["clients.names.read", "clients.manage", "visits.read"], offices: "on", clientOffice: SOUTH });
+    const list = await screen.findByRole("list", { name: "Assigned Offices" }, { timeout: 15000 });
+    expect(list).toHaveTextContent("South Office (retired)");
+    fireEvent.click(within(list).getByRole("button", { name: "Remove South Office" }));
+    await waitFor(() => expect(posts).toContainEqual({ path: `/v1/clients/${CLIENT}/offices`, body: { organizationId: ORG, primaryOfficeId: null, secondaryOfficeIds: [] } }));
+  });
+  it("offers a Service County list and saves the chosen county", async () => {
+    const { posts } = renderAt(`/clients/${CLIENT}`, { perms: ["clients.names.read", "clients.manage", "visits.read"], offices: "on" });
+    const select = await screen.findByLabelText("Service County", {}, { timeout: 15000 });
+    fireEvent.change(select, { target: { value: "Riverside" } });
+    await waitFor(() => expect(posts).toContainEqual({ path: `/v1/clients/${CLIENT}/service-county`, body: { organizationId: ORG, county: "Riverside" } }));
   });
   it("is not shown where offices are not available", async () => {
     renderAt(`/clients/${CLIENT}`, { perms: ["clients.names.read", "clients.manage", "visits.read"], offices: "off" });
     await screen.findByText("Details", {}, { timeout: 15000 });
-    expect(screen.queryByLabelText("Responsible office")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assigned Offices")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Service County")).not.toBeInTheDocument();
   });
 });
 
 describe("the Clients list Office filter", () => {
-  it("filters the list by office and by No office, and is absent where offices are not available", async () => {
+  it("filters the list by office, Unassigned and county, and is absent where offices are not available", async () => {
     renderAt("/clients", { perms: ["clients.names.read", "visits.read"], offices: "on", clientOffice: NORTH });
     const filter = await screen.findByLabelText("Office", {}, { timeout: 15000 });
+    expect(within(filter).getByRole("option", { name: "All Offices" })).toBeInTheDocument();
     expect(await screen.findByText(/Synthetic Client/)).toBeInTheDocument();
+    expect(await screen.findByTestId("office-names")).toHaveTextContent("North Office");
     fireEvent.change(filter, { target: { value: SOUTH } });
     expect(await screen.findByText("No clients match.")).toBeInTheDocument();
     fireEvent.change(filter, { target: { value: NORTH } });
     expect(await screen.findByText(/Synthetic Client/)).toBeInTheDocument();
     fireEvent.change(filter, { target: { value: "none" } });
     expect(await screen.findByText("No clients match.")).toBeInTheDocument();
+    fireEvent.change(filter, { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("County"), { target: { value: "none" } });   // the client has no service county
+    expect(await screen.findByText(/Synthetic Client/)).toBeInTheDocument();
     cleanup();
     renderAt("/clients", { perms: ["clients.names.read", "visits.read"], offices: "off" });
     expect(await screen.findByText(/Synthetic Client/, {}, { timeout: 15000 })).toBeInTheDocument();
@@ -124,10 +167,10 @@ describe("the Clients list Office filter", () => {
 describe("Billing review office filter (pure)", () => {
   const row = (code: string): BillingReviewRow => ({ visitId: code, visitNumber: null, serviceCode: "RSP", serviceDate: "2026-11-02", workedMinutes: 60, verifiedMinutes: 60, billableMinutes: 60, visitStatus: "verified", authorizationStatus: null, authorizationVersion: null, confirmationMethod: null, hasSignatureEvidence: true, isCorrection: false, reviewState: "ready", clientCode: code } as unknown as BillingReviewRow);
   const rows = [row("CL-A"), row("CL-B"), row("CL-C")];
-  const officeOf = (r: BillingReviewRow) => ({ "CL-A": NORTH, "CL-B": SOUTH } as Record<string, string>)[r.clientCode ?? ""];
+  const officeOf = (r: BillingReviewRow) => ({ "CL-A": [NORTH], "CL-B": [SOUTH, NORTH] } as Record<string, string[]>)[r.clientCode ?? ""];
   const approval = () => "ready" as never;
   it("keeps only the chosen office's clients; None keeps clients with no office; without an office map the choice is ignored", () => {
-    expect(applyBillingFilters(rows, { ...NO_FILTERS, office: NORTH }, approval, officeOf).map((r) => r.visitId)).toEqual(["CL-A"]);
+    expect(applyBillingFilters(rows, { ...NO_FILTERS, office: NORTH }, approval, officeOf).map((r) => r.visitId)).toEqual(["CL-A", "CL-B"]);
     expect(applyBillingFilters(rows, { ...NO_FILTERS, office: "none" }, approval, officeOf).map((r) => r.visitId)).toEqual(["CL-C"]);
     expect(applyBillingFilters(rows, { ...NO_FILTERS, office: NORTH }, approval).map((r) => r.visitId)).toEqual(["CL-A", "CL-B", "CL-C"]);
     expect(applyBillingFilters(rows, NO_FILTERS, approval, officeOf)).toHaveLength(3);
@@ -137,7 +180,8 @@ describe("Billing review office filter (pure)", () => {
 describe("the one Office filter rule (Billing review, Reports, Clients)", () => {
   it("no choice shows all; None shows only clients with no office; an office shows only its clients", () => {
     expect([officeMatches("", undefined), officeMatches("", NORTH)]).toEqual([true, true]);
-    expect([officeMatches("none", undefined), officeMatches("none", NORTH)]).toEqual([true, false]);
+    expect([officeMatches("none", undefined), officeMatches("none", NORTH), officeMatches("none", [])]).toEqual([true, false, true]);
+    expect([officeMatches(SOUTH, [NORTH, SOUTH]), officeMatches(NORTH, [NORTH, SOUTH]), officeMatches(NORTH, [SOUTH])]).toEqual([true, true, false]);   // any assigned office, primary or secondary
     expect([officeMatches(NORTH, NORTH), officeMatches(NORTH, SOUTH), officeMatches(NORTH, undefined)]).toEqual([true, false, false]);
   });
 });

@@ -57,7 +57,8 @@ import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
 import { useDashboardAppearance } from "@/aws/appearance/appearance-hooks";
-import { officeMatches, useClientOffices, useOffices } from "@/aws/offices-data";
+import { caregiverColor } from "@/aws/caregiver-colors";
+import { officeMatches, useClientOffices, useOffices, usePeopleFacets } from "@/aws/offices-data";
 import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
@@ -432,6 +433,8 @@ export function ServiceVerificationReportsPage() {
   const [officeFilter, setOfficeFilter] = useState("");   // 0110: an office id, "none" = clients with no office
   const { offices: officeList, available: officesOn } = useOffices();
   const { byClientId: officeByClient, ready: officeMapReady } = useClientOffices(officesOn);
+  // Caregiver Color (0111): when the chart is grouped by caregiver each slice/bar uses that caregiver's saved colour; a caregiver with none keeps the dashboard palette.
+  const caregiverColorByUser = usePeopleFacets(officesOn).caregiverColorByUser;
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
@@ -977,7 +980,7 @@ export function ServiceVerificationReportsPage() {
   const chartData = useMemo(() => {
     const grouped = new Map<
       string,
-      { name: string; workedMinutes: number; billableMinutes: number }
+      { name: string; workedMinutes: number; billableMinutes: number; color?: string; outline?: string }
     >();
     for (const row of billable) {
       const name =
@@ -993,6 +996,10 @@ export function ServiceVerificationReportsPage() {
         workedMinutes: 0,
         billableMinutes: 0,
       };
+      if (chartGroup === "caregiver" && !entry.color) {
+        const c = caregiverColor(caregiverColorByUser.get(row.caregiver_user_id));
+        if (c) { entry.color = c.fill; entry.outline = c.line; }
+      }
       entry.workedMinutes += row.worked_minutes ?? 0;
       entry.billableMinutes += row.billable_minutes ?? 0;
       grouped.set(name, entry);
@@ -1000,7 +1007,7 @@ export function ServiceVerificationReportsPage() {
     return Array.from(grouped.values()).sort(
       (a, b) => b.workedMinutes - a.workedMinutes,
     );
-  }, [billable, chartGroup, clientLocationMap]);
+  }, [billable, chartGroup, clientLocationMap, caregiverColorByUser]);
 
   const trendData = useMemo(() => {
     const grouped = new Map<
@@ -1580,11 +1587,11 @@ export function ServiceVerificationReportsPage() {
                 onChange={(event) => setOfficeFilter(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
               >
-                <option value="">All offices</option>
+                <option value="">All Offices</option>
                 {officeList.map((o) => (
                   <option key={o.officeId} value={o.officeId}>{o.isActive ? o.name : `${o.name} (retired)`}</option>
                 ))}
-                <option value="none">No office</option>
+                <option value="none">Unassigned</option>
               </select>
             </div>
             ) : null}
@@ -1789,7 +1796,9 @@ export function ServiceVerificationReportsPage() {
                         {chartData.map((entry, index) => (
                           <Cell
                             key={entry.name}
-                            fill={paletteColors[index % paletteColors.length]}
+                            fill={entry.color ?? paletteColors[index % paletteColors.length]}
+                            stroke={entry.outline}
+                            strokeWidth={entry.outline ? 2 : undefined}
                           />
                         ))}
                       </Pie>
@@ -1830,7 +1839,11 @@ export function ServiceVerificationReportsPage() {
                         name="Worked hours"
                         fill={paletteColors[0]}
                         radius={[6, 6, 0, 0]}
-                      />
+                      >
+                        {chartData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color ?? paletteColors[0]} stroke={entry.outline} strokeWidth={entry.outline ? 2 : undefined} />
+                        ))}
+                      </Bar>
                       <Bar
                         dataKey="billableMinutes"
                         name="Billable hours"

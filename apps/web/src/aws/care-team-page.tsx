@@ -25,6 +25,9 @@ import { OverrideBadge } from "./readiness/override-badge";
 import { SendSignInLink } from "./readiness/send-signin-link";
 import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
+import { ColorSwatch } from "./caregiver-color";
+import { CaregiverColorControl, CaregiverServiceCountiesControl, OfficeAssignmentsControl, OfficeCountyFilters, OfficeNames } from "./office-assignments";
+import { countyMatches, officeMatches, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
@@ -122,11 +125,20 @@ export function CareTeamPage() {
   const [params] = useSearchParams();
   const [adding, setAdding] = useState(() => params.get("add") === "1");
   const [added, setAdded] = useState<string | null>(null);
+  const { offices, available: officesOn } = useOffices();
+  const facets = usePeopleFacets(officesOn);
+  const peopleReady = officesOn && facets.ready;
+  const [officeFilter, setOfficeFilter] = useState("");
+  const [countyFilter, setCountyFilter] = useState("");
+  const countiesInUse = useMemo(() => [...new Set([...facets.caregiverCounties.values()].flat())].sort(), [facets.caregiverCounties]);
   const shown = useMemo(() => {
     const s = search.trim().toLowerCase();
+    // A caregiver appears once however many offices or counties match: the filters test "any of" their lists, never join rows.
     return (caregivers.data ?? []).filter((c) => (status === "all" || (status === "current" ? c.workStatus !== "inactive" : c.workStatus === status))
-      && (!s || [caregiverName(c), c.caregiverCode].some((x) => x.toLowerCase().includes(s))));
-  }, [caregivers.data, search, status]);
+      && (!s || [caregiverName(c), c.caregiverCode].some((x) => x.toLowerCase().includes(s)))
+      && officeMatches(officeFilter, facets.caregiverOffices.get(c.caregiverRecordId))
+      && countyMatches(countyFilter, facets.caregiverCounties.get(c.caregiverRecordId)));
+  }, [caregivers.data, search, status, officeFilter, countyFilter, facets.caregiverOffices, facets.caregiverCounties]);
   const { rows: sortedCaregivers, sort: cgSort } = useSortedRows(shown, {
     caregiver: { get: (c) => caregiverName(c) },
     status: { get: (c) => WORK_STATUS_LABEL[c.workStatus] },
@@ -154,6 +166,7 @@ export function CareTeamPage() {
             <option value="all">All ({caregivers.data?.length ?? 0})</option>
           </select>
         </div>
+        {peopleReady ? <OfficeCountyFilters idPrefix="cg" offices={offices} counties={countiesInUse} office={officeFilter} onOffice={setOfficeFilter} county={countyFilter} onCounty={setCountyFilter} /> : null}
       </div>
       {caregivers.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {caregivers.isError ? <p role="alert" className="text-sm text-red-700">{(caregivers.error as Error).message}</p> : null}
@@ -166,6 +179,7 @@ export function CareTeamPage() {
                 <th scope="col" className="w-10 px-3 py-1 text-right font-semibold">No.</th>
                 <SortTh sort={cgSort} column="caregiver" className="px-3 py-0.5">Caregiver</SortTh>
                 <SortTh sort={cgSort} column="status" className="px-3 py-0.5">Status</SortTh>
+                {peopleReady ? <th scope="col" className="px-3 py-1 font-semibold">Offices</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -174,6 +188,7 @@ export function CareTeamPage() {
                   <td className="w-10 px-3 py-1 text-right align-middle tabular-nums text-slate-600" data-testid="row-no">{i + 1}</td>
                   <th scope="row" className="px-3 py-1 font-normal">
                     <Link to={`/care-team/${c.caregiverRecordId}`} className="inline-flex min-h-[44px] flex-wrap items-baseline gap-x-3 gap-y-0 py-0.5 md:min-h-[30px]">
+                      {peopleReady ? <ColorSwatch color={facets.caregiverColor.get(c.caregiverRecordId)} /> : null}
                       <span className="font-semibold text-slate-950 underline">{caregiverName(c)}</span>
                       <span className={`text-xs font-normal ${c.hasSignIn ? "text-slate-700" : "text-amber-900"}`}>
                         {signInLabel(c)} · {c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
@@ -186,6 +201,7 @@ export function CareTeamPage() {
                     {c.workStatus === "not_ready" && c.readinessTotal ? <span className="ml-2 text-xs text-slate-700">{c.readinessMet ?? 0} of {c.readinessTotal} done</span> : null}
                     {!c.signedIn && c.workStatus !== "inactive" ? <SendSignInLink caregiverRecordId={c.caregiverRecordId} hasContact={!!c.hasContact} canManage={canManage} lastSentAt={c.invitationLastSentAt ?? null} /> : null}
                   </td>
+                  {peopleReady ? <td className="px-3 py-1 align-middle text-slate-800"><OfficeNames ids={facets.caregiverOffices.get(c.caregiverRecordId)} offices={offices} />{(facets.caregiverCounties.get(c.caregiverRecordId) ?? []).length > 0 ? <span className="block text-xs text-slate-600">{(facets.caregiverCounties.get(c.caregiverRecordId) ?? []).join(", ")}</span> : null}</td> : null}
                 </tr>
               ))}
             </tbody>
@@ -421,6 +437,11 @@ function CaregiverFiles({ caregiverRecordId }: { caregiverRecordId: string }) {
   );
 }
 
+function CaregiverProfileSwatch({ caregiverRecordId }: { caregiverRecordId: string }) {
+  const { available } = useOffices();
+  const facets = usePeopleFacets(available);
+  return facets.ready ? <ColorSwatch color={facets.caregiverColor.get(caregiverRecordId)} /> : null;
+}
 export function CaregiverDetailPage() {
   const { caregiverRecordId } = useParams<{ caregiverRecordId: string }>();
   const { hasPermission } = useOrganization();
@@ -436,7 +457,7 @@ export function CaregiverDetailPage() {
     <div className="max-w-3xl space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Link to="/care-team" className="inline-flex min-h-[44px] items-center text-sm text-slate-700 underline md:min-h-0">← Care Team</Link>
-        <h1 className="text-xl font-bold tracking-tight text-slate-950">{caregiverName(c)}</h1>
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-950"><CaregiverProfileSwatch caregiverRecordId={c.caregiverRecordId} />{caregiverName(c)}</h1>
         {!c.hasSignIn && (overrides.data ?? []).some((o) => o.caregiverRecordId === c.caregiverRecordId) ? <OverrideBadge /> : null}
       </div>
       <section className="space-y-2" aria-label="Contact and employment">
@@ -447,6 +468,12 @@ export function CaregiverDetailPage() {
         <HireDateForm c={c} />
         <EmploymentCard c={c} canManage={canManage} />
       </Card> : null}
+      <Card className="space-y-3" aria-label="Offices, service area and color">
+        <h2 className="text-sm font-semibold">Offices, service area and color</h2>
+        <OfficeAssignmentsControl kind="caregiver" subjectId={c.caregiverRecordId} />
+        <CaregiverServiceCountiesControl caregiverRecordId={c.caregiverRecordId} />
+        <CaregiverColorControl caregiverRecordId={c.caregiverRecordId} />
+      </Card>
       {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={c.caregiverRecordId} /> : null}
       </section>
       <section className="space-y-2" aria-label="Readiness and services">

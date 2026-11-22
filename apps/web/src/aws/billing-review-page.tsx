@@ -240,7 +240,7 @@ export function BillingReviewPage() {
     { key: "visitStatus", label: "Visit status", all: "All visit statuses", opts: options.visitStatuses },
     { key: "approval", label: "Approval status", all: "All approval statuses", opts: options.approvals },
     ...(options.reasons.length > 0 ? [{ key: "reason" as const, label: "Review reason", all: "All review reasons", opts: options.reasons }] : []),
-    ...(officesOn && officeMapReady && offices.length > 0 ? [{ key: "office" as const, label: "Office", all: "All offices", opts: [...offices.map((o): [string, string] => [o.officeId, o.isActive ? o.name : `${o.name} (retired)`]), ["none", "No office"] as [string, string]] }] : []),
+    ...(officesOn && officeMapReady && offices.length > 0 ? [{ key: "office" as const, label: "Office", all: "All Offices", opts: [...offices.map((o): [string, string] => [o.officeId, o.isActive ? o.name : `${o.name} (retired)`]), ["none", "Unassigned"] as [string, string]] }] : []),
   ];
   return (
     <div className="space-y-2">

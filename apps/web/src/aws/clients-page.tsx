@@ -17,7 +17,8 @@ import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 import { actionBtn } from "./ui-classes";
-import { officeMatches, useClientOffices, useOffices } from "./offices-data";
+import { OfficeCountyFilters, OfficeNames } from "./office-assignments";
+import { countyMatches, officeMatches, type OfficeRow, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -153,9 +154,12 @@ export function ClientsPage() {
   }, [userId]);
   const chooseView = (next: ClientView) => { setView(next); writeViewPreference(userId, next, safeStorage()); };
   const { offices, available: officesOn } = useOffices(hasPermission("clients.names.read"));
-  const { byClientId: officeOf } = useClientOffices(officesOn);
+  const facets = usePeopleFacets(officesOn);
+  const officeOf = facets.clientOffices;
   const [officeFilter, setOfficeFilter] = useState("");
-  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort).filter((c) => officeMatches(officeFilter, officeOf.get(c.clientId))), [clients.data, search, status, authorization, sort, officeFilter, officeOf]);
+  const [countyFilter, setCountyFilter] = useState("");
+  const countiesInUse = useMemo(() => [...new Set(facets.clientCounty.values())].sort(), [facets.clientCounty]);
+  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort).filter((c) => officeMatches(officeFilter, officeOf.get(c.clientId)) && countyMatches(countyFilter, facets.clientCounty.get(c.clientId))), [clients.data, search, status, authorization, sort, officeFilter, countyFilter, officeOf, facets.clientCounty]);
   if (!hasPermission("clients.names.read")) return <p className="text-sm text-slate-600">You do not have access to client records.</p>;
   const counts = (clients.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {});
   return (
@@ -186,16 +190,7 @@ export function ClientsPage() {
             <option value="none">None current</option>
           </select>
         </div>
-        {officesOn && offices.length > 0 ? (
-          <div>
-            <label htmlFor="client-office-filter" className="block text-sm font-medium text-slate-700">Office</label>
-            <select id="client-office-filter" value={officeFilter} onChange={(e) => setOfficeFilter(e.target.value)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
-              <option value="">All offices</option>
-              {offices.map((o) => <option key={o.officeId} value={o.officeId}>{o.name}{o.isActive ? "" : " (retired)"}</option>)}
-              <option value="none">No office</option>
-            </select>
-          </div>
-        ) : null}
+        {officesOn && facets.ready ? <OfficeCountyFilters idPrefix="client" offices={offices} counties={countiesInUse} office={officeFilter} onOffice={setOfficeFilter} county={countyFilter} onCounty={setCountyFilter} /> : null}
         <div>
           <label htmlFor="client-sort" className="block text-sm font-medium text-slate-700">Sort by</label>
           <select id="client-sort" value={sort} onChange={(e) => setSort(e.target.value as ClientSort)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
@@ -215,10 +210,10 @@ export function ClientsPage() {
       {clients.isError ? <p role="alert" className="text-sm text-red-700">{(clients.error as Error).message}</p> : null}
       {clients.data && shown.length === 0 ? <p className="text-sm text-slate-600">No clients match.</p> : null}
       {view === "list" ? (
-        shown.length > 0 ? <ClientList clients={shown} /> : null
+        shown.length > 0 ? <ClientList clients={shown} offices={officesOn && facets.ready ? offices : null} officeOf={officeOf} countyOf={facets.clientCounty} /> : null
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Clients as cards">
-          {shown.map((c) => <ClientCard key={c.clientId} c={c} />)}
+          {shown.map((c) => <ClientCard key={c.clientId} c={c} offices={officesOn && facets.ready ? offices : null} officeIds={officeOf.get(c.clientId)} county={facets.clientCounty.get(c.clientId)} />)}
         </ul>
       )}
     </div>
@@ -237,7 +232,7 @@ const authLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? `${c.current
 const actionLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? "View authorized hours →" : "Add authorized hours →");
 
 /** Compact rows: client, status, authorization, one action. The same rows and permissions as Cards. */
-function ClientList({ clients: input }: { clients: AdminClient[] }) {
+function ClientList({ clients: input, offices, officeOf, countyOf }: { clients: AdminClient[]; offices: readonly OfficeRow[] | null; officeOf: Map<string, string[]>; countyOf: Map<string, string> }) {
   const { rows: clients, sort } = useSortedRows(input, {
     client: { get: (c) => clientName(c) ?? c.clientCode },
     status: { get: (c) => STATUS_LABEL[c.status] },
@@ -252,6 +247,7 @@ function ClientList({ clients: input }: { clients: AdminClient[] }) {
             <SortTh sort={sort} column="client" className="px-3 py-0.5">Client</SortTh>
             <SortTh sort={sort} column="status" className="px-3 py-0.5">Status</SortTh>
             <SortTh sort={sort} column="authorization" kind="number" className="px-3 py-0.5">Authorization</SortTh>
+            {offices ? <th scope="col" className="px-3 py-1.5 font-semibold">Offices</th> : null}
             <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Action</span></th>
           </tr>
         </thead>
@@ -265,6 +261,7 @@ function ClientList({ clients: input }: { clients: AdminClient[] }) {
               </th>
               <td className="px-3 py-1"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
               <td className={`px-3 py-1 ${!hasCurrentAuthorization(c) && c.status === "active" ? "font-semibold text-red-700" : "text-slate-800"}`}>{authLabel(c)}</td>
+              {offices ? <td className="px-3 py-1 text-slate-800"><OfficeNames ids={officeOf.get(c.clientId)} offices={offices} />{countyOf.get(c.clientId) ? <span className="block text-xs text-slate-600">{countyOf.get(c.clientId)} County</span> : null}</td> : null}
               <td className="px-3 py-1"><Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline md:min-h-[32px]" aria-label={`${actionLabel(c)} for ${clientName(c) ?? c.clientCode}`}>{actionLabel(c)}</Link></td>
             </tr>
           ))}
@@ -275,7 +272,7 @@ function ClientList({ clients: input }: { clients: AdminClient[] }) {
 }
 
 /** Phone and Cards view: a compact expandable row; the key line and status show, details and the one action open on tap. */
-function ClientCard({ c }: { c: AdminClient }) {
+function ClientCard({ c, offices, officeIds, county }: { c: AdminClient; offices: readonly OfficeRow[] | null; officeIds: readonly string[] | undefined; county: string | undefined }) {
   const name = clientName(c);
   const missing = !hasCurrentAuthorization(c) && c.status === "active";
   return (
@@ -295,6 +292,7 @@ function ClientCard({ c }: { c: AdminClient }) {
           <p className={missing ? "font-semibold text-red-700" : "text-slate-700"}>
             Authorization: {authLabel(c)}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
           </p>
+          {offices ? <p className="text-slate-700">Offices: <OfficeNames ids={officeIds} offices={offices} />{county ? ` · ${county} County` : ""}</p> : null}
           <Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline">{actionLabel(c)}</Link>
         </div>
       </details>

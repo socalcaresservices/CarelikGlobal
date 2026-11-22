@@ -40,8 +40,8 @@ export const serviceKey = (r: BillingReviewRow) => (r.serviceName ? `${r.service
 
 export const activeFilterCount = (f: BillingFilters) => Object.values(f).filter(Boolean).length;
 
-/** officeOf gives the responsible office id of a row's client (undefined = none). Without it an office choice is ignored. */
-export function applyBillingFilters(rows: BillingReviewRow[], f: BillingFilters, approvalOf: (r: BillingReviewRow) => ApprovalStatus, officeOf?: (r: BillingReviewRow) => string | undefined): BillingReviewRow[] {
+/** officeOf gives the office ids of a row's client, primary first (undefined or empty = none). Without it an office choice is ignored. */
+export function applyBillingFilters(rows: BillingReviewRow[], f: BillingFilters, approvalOf: (r: BillingReviewRow) => ApprovalStatus, officeOf?: (r: BillingReviewRow) => string | readonly string[] | undefined): BillingReviewRow[] {
   return rows.filter(
     (r) =>
       (!f.client || clientKey(r) === f.client) &&
