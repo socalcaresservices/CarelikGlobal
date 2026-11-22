@@ -203,7 +203,7 @@ await op.screenshot({ path: `${out}/10-reports-office-filter.png`, fullPage: tru
 await op.goto("https://localhost/billing-review"); await settle(op, 1500);
 await op.locator("summary", { hasText: /^Filters/ }).first().click(); await op.waitForTimeout(400);
 const billRows = async () => op.getByText("Visit details", { exact: true }).count();
-const bOffice = op.getByLabel("Office", { exact: true });
+const bOffice = op.locator("label", { hasText: /^Office/ }).locator("select");
 check("billing review: the Office filter is present", (await bOffice.count()) === 1);
 const bAll = await billRows();
 await bOffice.selectOption({ label: "Temecula Office" }); await settle(op, 600); const bTem = await billRows();
