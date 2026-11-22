@@ -3642,9 +3642,9 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/assignment-history": {
     mutating: false,
     handle: async ({ event, tx }) => {
-      const q = event.queryStringParameters ?? {};
-      const type = q.subjectType === "client" || q.subjectType === "caregiver" ? q.subjectType : (() => { throw new ApiError(400, "bad_request", "subjectType must be client or caregiver."); })();
-      return { events: await tx((db) => rows(db, "select * from ogevia_api.list_assignment_history($1,$2,$3,50)", [orgParam(event), type, uuid(q.subjectId, "subjectId")])) };
+      const query = event.queryStringParameters ?? {};
+      const type = query.subjectType === "client" || query.subjectType === "caregiver" ? query.subjectType : (() => { throw new ApiError(400, "bad_request", "subjectType must be client or caregiver."); })();
+      return { events: await tx((db) => rows(db, "select * from ogevia_api.list_assignment_history($1,$2,$3,50)", [orgParam(event), type, uuid(query.subjectId, "subjectId")])) };
     },
   },
 
