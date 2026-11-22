@@ -1,6 +1,6 @@
 # Offices, service counties and Caregiver Color (migration 0111)
 
-**Status: IMPLEMENTED and TESTED on the local harness. NOT deployed to TEST. NOT deployed to production.** Production waits for the owner's explicit GO.
+**Status: IMPLEMENTED; TESTED on the local harness; DEPLOYED TO TEST on 2026-11-22 (release commit `f91ea1c1db7306bc8559449ce8d198e2971fc386`, script `TEST_H7_OFFICE_ASSIGNMENTS.sh`, operator output: "H7 COMPLETE (TEST): migration 0111 applied (ledger 110/0111), officeAssignments ON (276 routes), web serves f91ea1c1"). Owner browser checks on TEST: PENDING (see TEST_REPORT.md). NOT deployed to production.** Production waits for the owner's explicit GO.
 
 ## What the owner asked for
 1. Assign clients and caregivers to offices (zero, one or many; one primary) and filter by office and county.
@@ -26,7 +26,7 @@
 - API: `apps/sv-api/test/office-assignments.db.test.ts` (3) and the tenant-isolation sweep (9, covers all 8 new routes); CDK switch test (5).
 - Web: `office-assignments.test.tsx` (6), `offices.test.tsx` (12), full web suite 1411 passed; lint and typecheck clean.
 - Browser: `browser-checks/office-assignments-checks.mjs` — ALL PASSED (offices with address/county, assign/primary change/persist after refresh, caregiver with two offices found by either filter and once under All Offices, two service counties, Office+County+status+search combine, office address move keeps assignments, retire keeps links and blocks new assignments, reactivate, red/yellow/blue save and persist, swatches on profile/list/schedule/Reports chart, caregiver login sees no office controls). Yellow swatch computed style: fill rgb(250,204,21), 2px border rgb(133,77,14).
-- NOT YET VERIFIED: TEST environment, production, and a physical phone. The TEST report follows the TEST rollout.
+- TEST: deployed and script-verified (ledger, routes, web bundle); the in-app checks are in `TEST_REPORT.md` and are not yet confirmed by the owner. NOT VERIFIED: production and a physical phone.
 
 ## Production rollout (after TEST and the owner's explicit GO)
 Same method as the 0110 release: temporary admin-host attach with automatic restore; logical backup first; one-transaction migration guarded to the exact ledger; code-only change set, then routes-only change set; route smoke checks with automatic route rollback; web publish. Blocks are provided one at a time, only when CI is green on the exact commit.
