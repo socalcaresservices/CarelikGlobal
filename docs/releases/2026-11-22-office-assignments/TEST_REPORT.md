@@ -1,6 +1,6 @@
 # TEST report: offices, service counties, Caregiver Color (0111)
 
-Site: https://d2xumch5w0izfg.cloudfront.net (TEST only, dummy records). Release commit f91ea1c1db7306bc8559449ce8d198e2971fc386.
+Site: https://d2xumch5w0izfg.cloudfront.net (TEST only, dummy records). Release commit now `7fca778457589aa213cd85e44f17b5cfbcc2f49c` (H8 applied on top of H7: migration 0112, assignment-history route, create-with-office forms, web). Checks 11-13 below are new.
 
 ## Deployment evidence (operator output, 2026-11-22)
 `H7 COMPLETE (TEST)`: verified backup; migration 0111 in one transaction (ledger 110/0111, all 58 object checks); API 268 -> 276 routes (the 8 new routes answer 401 without a sign-in); web bundle carries the release commit. Rollback reference: the H7 capture directory printed by the script. Production: not touched.
@@ -21,3 +21,7 @@ Site: https://d2xumch5w0izfg.cloudfront.net (TEST only, dummy records). Release 
 
 ## Records needing manual assignment
 Every caregiver, and every client with no earlier office, shows Unassigned until an administrator assigns one. Counties and colours start empty.
+
+| 11 | Clients > Add client; Staff > Caregivers > Add caregiver | Choose a Primary office, save, open the record | The record already has that office as Primary; retired offices are not offered |
+| 12 | Client Details and caregiver profile | Make a primary change, add a county, change a colour, then open "Assignment history" | Newest first: who, when, the new value and "was: ..." |
+| 13 | Operations > Billing review and Reports > Visits overview | Put one client in two offices; use the Office filter | That client's visits appear once under each office; Unassigned + assigned = all; hours totals unchanged |
