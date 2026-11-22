@@ -42,6 +42,9 @@ describe("what the procedure may and may not do", () => {
     for (const bad of [/admin-set-user-password/, /admin-delete-user/, /admin-disable-user|admin-enable-user/, /admin-reset-user-password/, /get-secret-value/, /delete-user/, /cdk |cloudformation (update|deploy)/]) expect(core).not.toMatch(bad);
     expect(core).not.toMatch(/echo[^\n]*\$(NEW_EMAIL|OLD_EMAIL)(?![A-Za-z_])(?!"\))/); // addresses are printed only through mask()
   });
+  it("no command is piped into grep -q under pipefail (an early-exiting grep breaks the pipe and fails a check that passed)", () => {
+    for (const f of [core, prd, test]) expect(f).not.toMatch(/\|\s*grep\s+-[A-Za-z]*q/);
+  });
   it("the SQL changes only the invitation, the contact (through the app's function) and the audit; it deletes and drops nothing", () => {
     const body = sql.replace(/--[^\n]*/g, "");
     expect(body).toMatch(/update ogevia\.caregiver_invitations set email/); expect(body).toContain("ogevia_api.set_caregiver_contact"); expect(body).toContain("ogevia.write_audit");
