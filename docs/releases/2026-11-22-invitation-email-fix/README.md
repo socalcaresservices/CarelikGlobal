@@ -20,3 +20,8 @@ Output shows addresses masked only; no password is read or printed.
 
 ## Status
 Built and tested locally 2026-11-22. NOT yet run on TEST. NOT run on production. Open question until the TEST run: how the real sign-in service treats an email change on an account that has not signed in (the TEST run answers it).
+
+## TEST run (owner, CloudShell, 2026-11-22) - procedure completed
+Release commit `798f37262e3d69a48ae3ce98463e98b880279991`, caregiver `CG-D86216F3` ("sign in test caregiver", a new account, never signed in, invited to a real inbox). Operator output: sign-in account email changed; database transaction "CORRECTED: the invitation and the contact email for caregiver CG-D86216F3 now use the corrected address; one audit event written."; "invitation sent"; read-back: sign-in account status FORCE_CHANGE_PASSWORD, email verified true, same account: yes; Ogevia invitation email and contact email both the corrected address, invitations sent 2.
+This answers the open question: the real sign-in service accepts an email change on an account that has not signed in, and a RESEND then goes to the corrected address.
+NOT yet verified by the owner: that the fresh invitation email arrived, that its temporary password signs in on TEST (and that the old password no longer works), and that "Resend sign-in link" in the app now targets the corrected address. Cosmetic: the output shows a stray `pg_advisory_xact_lock` table (a psql display detail). Production: NOT run.
