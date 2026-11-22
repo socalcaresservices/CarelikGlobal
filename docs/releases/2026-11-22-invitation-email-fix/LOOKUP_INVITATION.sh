@@ -23,7 +23,7 @@ select r.caregiver_code, r.first_name || ' ' || r.last_name, i.email, i.send_cou
   from ogevia.caregiver_records r join ogevia.organizations o on o.id = r.organization_id
   join ogevia.caregiver_invitations i on i.organization_id = r.organization_id and i.caregiver_record_id = r.id
  where r.deleted_at is null and (:'slug' = '' or o.slug = :'slug')
-   and (r.caregiver_code ilike :'q' or (r.first_name || ' ' || r.last_name) ilike '%' || :'q' || '%')
+   and (r.caregiver_code ilike '%' || :'q' || '%' or (r.first_name || ' ' || r.last_name) ilike '%' || :'q' || '%')
  order by r.caregiver_code limit 10;
 SQL
 )"
