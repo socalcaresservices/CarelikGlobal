@@ -23,7 +23,7 @@ A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-300}" aws --cli-connect-t
 POOL=us-west-2_FHJoX71ca
 # Production refers to its user pool through the Ogevia-prd-Auth stack (an import), not as a literal: check that the Auth stack owns the expected pool AND that the API uses it (literal id or that import).
 [[ "$(A cloudformation describe-stacks --stack-name Ogevia-prd-Auth --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)" == "$POOL" ]] || stop "the production Auth stack does not own the expected user pool"
-# (stored first, then searched: `... | grep -q` under pipefail reports a failure when grep stops reading early and the writer gets a broken pipe)
+# (stored first, then searched: under pipefail a quiet grep that stops reading early makes the writer fail with a broken pipe, and a check that passed would be reported as failed)
 API_TEMPLATE="$(A cloudformation get-template --stack-name Ogevia-prd-ServiceVerificationApi --template-stage Original --query TemplateBody --output json)"
 grep -Eq "$POOL|Ogevia-prd-Auth:ExportsOutputRefUserPool" <<<"$API_TEMPLATE" || stop "the production API does not use the expected user pool"
 HOST=ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com
