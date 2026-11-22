@@ -80,3 +80,17 @@ export function useClientOffices(enabled: boolean) {
   const f = usePeopleFacets(enabled);
   return { byClientId: f.clientOffices, byClientCode: f.clientOfficesByCode, ready: f.ready };
 }
+
+/** Assigns the chosen primary office to a record that was just created. Returns a short note when it could not be saved (the record itself was created). */
+export async function assignOfficeAfterCreate(
+  api: { post: (path: string, body: unknown) => Promise<unknown> }, organizationId: string | null, kind: "client" | "caregiver", id: string, officeId: string,
+): Promise<string | null> {
+  if (!officeId) return null;
+  try {
+    await api.post(kind === "client" ? `/v1/clients/${id}/offices` : `/v1/caregivers/${id}/offices`, { organizationId, primaryOfficeId: officeId, secondaryOfficeIds: [] });
+    return null;
+  } catch (cause) {
+    return `The office was not saved (${cause instanceof Error ? cause.message : "check your connection"}). Open the record to assign it.`;
+  }
+}
+

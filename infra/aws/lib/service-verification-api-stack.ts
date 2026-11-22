@@ -332,6 +332,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/update", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/reactivate", feature: "officeAssignments" },
   { method: apigw.HttpMethod.GET, path: "/v1/people-facets", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.GET, path: "/v1/assignment-history", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/offices", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/offices", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-county", feature: "officeAssignments" },

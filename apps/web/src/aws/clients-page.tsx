@@ -17,8 +17,8 @@ import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 import { actionBtn } from "./ui-classes";
-import { OfficeCountyFilters, OfficeNames } from "./office-assignments";
-import { countyMatches, officeMatches, type OfficeRow, useOffices, usePeopleFacets } from "./offices-data";
+import { NewRecordOffice, OfficeCountyFilters, OfficeNames } from "./office-assignments";
+import { assignOfficeAfterCreate, countyMatches, officeMatches, type OfficeRow, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -71,12 +71,13 @@ export function ClientTypeField({ value, onChange, id }: { value: string; onChan
   );
 }
 
-function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
+function AddClientForm({ onDone }: { onDone: (clientId: string, note?: string) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
   const [form, setForm] = useState({ first: "", last: "", city: "", type: "", label: "" });
   const [draft, setDraft] = useState(false);
+  const [office, setOffice] = useState("");
   const [dupConfirmed, setDupConfirmed] = useState(false);
   const dupes = useDuplicateClients(form.first, form.last);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
@@ -94,10 +95,12 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       if (draft) await api.post(`/v1/clients/${encodeURIComponent(r.client.clientId)}/stage`, { organizationId: activeOrganizationId, stage: "draft", note: null }, { idempotencyKey: newIdempotencyKey() });
+      const note = await assignOfficeAfterCreate(api, activeOrganizationId, "client", r.client.clientId, office);
       await queryClient.invalidateQueries({ queryKey: ["aws-clients"] });
       await queryClient.invalidateQueries({ queryKey: ["aws-client-directory"] });
+      await queryClient.invalidateQueries({ queryKey: ["people-facets"] });
       setState({ busy: false, error: null });
-      onDone(r.client.clientId);
+      onDone(r.client.clientId, note ?? undefined);
     } catch (cause) {
       setState({ busy: false, error: message(cause, "The client was not added.") });
     }
@@ -112,6 +115,7 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
         <div><label htmlFor="new-city" className="block text-sm font-medium text-slate-700">City (optional)</label><input id="new-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
         <ClientTypeField id="new-type" value={form.type} onChange={set("type")} />
         <div className="sm:col-span-2"><label htmlFor="new-label" className="block text-sm font-medium text-slate-700">Label caregivers see instead of the code (optional)</label><input id="new-label" value={form.label} maxLength={40} autoComplete="off" onChange={(e) => set("label")(e.target.value)} className={inputClass} /></div>
+        <NewRecordOffice kind="client" value={office} onChange={setOffice} />
         <DuplicateWarning matches={dupes.data} confirmed={dupConfirmed} onConfirm={setDupConfirmed} />
         <label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-slate-700 sm:col-span-2"><input type="checkbox" className="h-5 w-5" checked={draft} onChange={(e) => setDraft(e.target.checked)} />Save as a draft (it cannot be scheduled until you activate it)</label>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
@@ -141,6 +145,7 @@ export function ClientsPage() {
   const [sort, setSort] = useState<ClientSort>("name");
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
+  const [addedNote, setAddedNote] = useState<string | null>(null);
   // View: the signed-in person's saved choice, else List on a wide screen and Cards on a phone.
   const [view, setView] = useState<ClientView>(() => {
     const saved = readViewPreference(user?.id, safeStorage());
@@ -168,8 +173,8 @@ export function ClientsPage() {
         <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Clients</h1><InfoTip label="About Clients" title="Clients">Manage client profiles and care information.</InfoTip></div>
         {canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="clients" /><Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button></div> : null}
       </div>
-      {adding ? <AddClientForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
-      {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.</p> : null}
+      {adding ? <AddClientForm onDone={(id, note) => { setAdding(false); setAdded(id); setAddedNote(note ?? null); }} /> : null}
+      {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.{addedNote ? <span className="text-red-700"> {addedNote}</span> : null}</p> : null}
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[220px] flex-1">
           <label htmlFor="client-search" className="block text-sm font-medium text-slate-700">Search</label>

@@ -251,6 +251,8 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "county") return "Riverside";
   if (name === "counties") return ["Riverside"];
   if (name === "color") return "blue";
+  if (name === "subjectType") return "client";
+  if (name === "subjectId") return ids.clientId;
   if (name === "status" && route === "GET /v1/availability/requests") return "pending";
   if (name === "kind") return route === "GET /v1/readiness/flags" ? "service" : "weekly";
   if (name === "pairs") return [{ caregiverRecordId: ids.caregiverRecordId, serviceId: ids.serviceId }];

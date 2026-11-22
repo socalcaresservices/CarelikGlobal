@@ -9,7 +9,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { HelpLine } from "./ui/help-line";
 import { CA_COUNTIES } from "./ca-counties";
-import { ClientServiceCountyControl, OfficeAssignmentsControl } from "./office-assignments";
+import { AssignmentHistory, ClientServiceCountyControl, OfficeAssignmentsControl } from "./office-assignments";
 import { useOffices } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -152,6 +152,7 @@ export function ClientOfficeControl({ clientId }: { clientId: string }) {
     <div className="space-y-3">
       <OfficeAssignmentsControl kind="client" subjectId={clientId} />
       <ClientServiceCountyControl clientId={clientId} />
+      <AssignmentHistory kind="client" subjectId={clientId} />
     </div>
   );
 }

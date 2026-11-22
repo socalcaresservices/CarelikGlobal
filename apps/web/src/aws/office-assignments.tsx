@@ -1,11 +1,13 @@
 // Assigned Offices, Service County and Caregiver Color controls (0111, behind the officeAssignments release switch). They identify and filter people; they grant no access and change no schedule, hour or status.
 // Every control stays out of sight unless the facets actually loaded (`ready`), because with the switch off the routes do not exist.
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { CA_COUNTIES } from "./ca-counties";
+import { formatDateTime } from "@/lib/service-verification";
 import { CaregiverColorPicker, ColorSwatch } from "./caregiver-color";
+import { caregiverColor } from "./caregiver-colors";
 import { useAwsApi } from "./aws-workspace";
 import { type OfficeRow, useOffices, usePeopleFacets } from "./offices-data";
 
@@ -44,7 +46,7 @@ export function OfficeAssignmentsControl({ kind, subjectId }: { kind: "client" |
     setState({ busy: true, error: null });
     try {
       await api.post(path, { organizationId: activeOrganizationId, primaryOfficeId: nextPrimary, secondaryOfficeIds: nextSecondary });
-      await queryClient.invalidateQueries({ queryKey: ["people-facets"] });
+      await queryClient.invalidateQueries({ queryKey: ["people-facets"] }); await queryClient.invalidateQueries({ queryKey: ["assignment-history"] });
       await queryClient.invalidateQueries({ queryKey: ["offices"] });
       await queryClient.invalidateQueries({ queryKey: ["client-offices"] });
       setAdding("");
@@ -106,7 +108,7 @@ export function ClientServiceCountyControl({ clientId }: { clientId: string }) {
     setState({ busy: true, error: null });
     try {
       await api.post(`/v1/clients/${clientId}/service-county`, { organizationId: activeOrganizationId, county: county || null });
-      await queryClient.invalidateQueries({ queryKey: ["people-facets"] });
+      await queryClient.invalidateQueries({ queryKey: ["people-facets"] }); await queryClient.invalidateQueries({ queryKey: ["assignment-history"] });
       setState({ busy: false, error: null });
     } catch (cause) { setState({ busy: false, error: message(cause, "Could not save. Check your connection and try again.") }); }
   }
@@ -140,7 +142,7 @@ export function CaregiverServiceCountiesControl({ caregiverRecordId }: { caregiv
     setState({ busy: true, error: null });
     try {
       await api.post(`/v1/caregivers/${caregiverRecordId}/service-counties`, { organizationId: activeOrganizationId, counties: next });
-      await queryClient.invalidateQueries({ queryKey: ["people-facets"] });
+      await queryClient.invalidateQueries({ queryKey: ["people-facets"] }); await queryClient.invalidateQueries({ queryKey: ["assignment-history"] });
       setState({ busy: false, error: null });
     } catch (cause) { setState({ busy: false, error: message(cause, "Could not save. Check your connection and try again.") }); }
   }
@@ -185,7 +187,7 @@ export function CaregiverColorControl({ caregiverRecordId }: { caregiverRecordId
     setState({ busy: true, error: null });
     try {
       await api.post(`/v1/caregivers/${caregiverRecordId}/color`, { organizationId: activeOrganizationId, color });
-      await queryClient.invalidateQueries({ queryKey: ["people-facets"] });
+      await queryClient.invalidateQueries({ queryKey: ["people-facets"] }); await queryClient.invalidateQueries({ queryKey: ["assignment-history"] });
       setState({ busy: false, error: null });
     } catch (cause) { setState({ busy: false, error: message(cause, "Could not save. Check your connection and try again.") }); }
   }
@@ -230,4 +232,71 @@ export function CaregiverMarker({ caregiverRecordId }: { caregiverRecordId: stri
   const facets = usePeopleFacets(true);
   if (!caregiverRecordId || !facets.ready) return null;
   return <ColorSwatch color={facets.caregiverColor.get(caregiverRecordId)} className="mr-1" />;
+}
+
+/** Optional "Primary office" choice on the Add client / Add caregiver forms. Renders nothing where offices are not available or the user may not assign. After the record is created the form calls `assignOfficeAfterCreate`. */
+export function NewRecordOffice({ kind, value, onChange }: { kind: "client" | "caregiver"; value: string; onChange: (v: string) => void }) {
+  const { hasPermission } = useOrganization();
+  const { offices, available } = useOffices();
+  const facets = usePeopleFacets(available);
+  if (!available || !facets.ready || !hasPermission(kind === "client" ? "clients.manage" : "caregivers.manage")) return null;
+  const active = offices.filter((o) => o.isActive);
+  if (active.length === 0) return null;
+  return (
+    <div className="sm:col-span-2">
+      <label htmlFor={`new-${kind}-office`} className="block text-sm font-medium text-slate-700">Primary office (optional)</label>
+      <select id={`new-${kind}-office`} value={value} onChange={(e) => onChange(e.target.value)} className={`${selectClass} block`}>
+        <option value="">Unassigned</option>
+        {active.map((o) => <option key={o.officeId} value={o.officeId}>{o.name}</option>)}
+      </select>
+      <p className="mt-1 text-xs text-slate-500">Add more offices, or change the primary one, on the profile after saving.</p>
+    </div>
+  );
+}
+
+type HistoryEvent = { occurredAt: string; action: string; actorName: string | null; beforeState: Record<string, unknown> | null; afterState: Record<string, unknown> | null };
+const COLOR_NAME = (k: unknown) => (typeof k === "string" ? caregiverColor(k)?.label ?? k : "none");
+
+/** Who changed an office assignment, service county or caregiver colour, and when (newest first). Read from the audit trail. */
+export function AssignmentHistory({ kind, subjectId }: { kind: "client" | "caregiver"; subjectId: string }) {
+  const api = useAwsApi();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const { offices, available } = useOffices();
+  const facets = usePeopleFacets(available);
+  const allowed = kind === "client" ? hasPermission("clients.manage") || hasPermission("clients.names.read") || hasPermission("visits.manage") : hasPermission("caregivers.manage") || hasPermission("visits.manage");
+  const q = useQuery({
+    queryKey: ["assignment-history", activeOrganizationId, kind, subjectId],
+    queryFn: async () => (await api.get<{ events: HistoryEvent[] }>("/v1/assignment-history", { organizationId: activeOrganizationId, subjectType: kind, subjectId })).events,
+    enabled: available && facets.ready && allowed && !!activeOrganizationId,
+    retry: false,
+  });
+  if (!available || !facets.ready || !allowed || !q.isSuccess) return null;
+  const officeName = (id: unknown) => offices.find((o) => o.officeId === id)?.name ?? "Office";
+  const officeList = (s: Record<string, unknown> | null) => {
+    const ids = Array.isArray(s?.offices) ? (s!.offices as string[]) : [];
+    return ids.length === 0 ? "Unassigned" : ids.map((id, i) => `${officeName(id)}${i === 0 && ids.length > 1 ? " (primary)" : ""}`).join(", ");
+  };
+  const describe = (e: HistoryEvent) => {
+    switch (e.action) {
+      case "client.offices_set": case "caregiver.offices_set": return `Offices: ${officeList(e.afterState)} (was: ${officeList(e.beforeState)})`;
+      case "client.service_county_set": return `Service County: ${(e.afterState?.service_county as string) || "not set"} (was: ${(e.beforeState?.service_county as string) || "not set"})`;
+      case "caregiver.service_counties_set": return `Service Counties: ${((e.afterState?.counties as string[]) ?? []).join(", ") || "none"} (was: ${((e.beforeState?.counties as string[]) ?? []).join(", ") || "none"})`;
+      case "caregiver.color_set": return `Caregiver Color: ${COLOR_NAME(e.afterState?.color)} (was: ${COLOR_NAME(e.beforeState?.color)})`;
+      default: return e.action.replace(/[._]/g, " ");
+    }
+  };
+  return (
+    <details className="text-sm" data-testid="assignment-history">
+      <summary className="min-h-[44px] cursor-pointer py-2 font-medium text-slate-700 md:min-h-0 md:py-0">Assignment history ({q.data.length})</summary>
+      {q.data.length === 0 ? <p className="mt-1 text-slate-600">No changes recorded yet.</p> : (
+        <ul aria-label="Assignment history" className="mt-1 space-y-1">
+          {q.data.map((e, i) => (
+            <li key={`${e.occurredAt}-${i}`} className="text-slate-800">
+              <span className="text-xs text-slate-600">{formatDateTime(e.occurredAt)} · {e.actorName ?? "Someone"}</span><br />{describe(e)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  );
 }

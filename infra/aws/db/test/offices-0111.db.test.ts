@@ -6,6 +6,8 @@ import { asActor, createTestDb, expectPgError, seedWorld, type Actor, type TestD
 const UP0110 = new URL("../pending/migrations/0110_offices.sql", import.meta.url);
 const UP = new URL("../pending/migrations/0111_office_assignments_counties_colors.sql", import.meta.url);
 const DOWN = new URL("../pending/rollback/0111_office_assignments_counties_colors.down.sql", import.meta.url);
+const UP0112 = new URL("../pending/migrations/0112_assignment_history.sql", import.meta.url);
+const DOWN0112 = new URL("../pending/rollback/0112_assignment_history.down.sql", import.meta.url);
 let db: TestDb; let w: World;
 let temecula: string; let moreno: string; let corona: string; let cgA: string; let cgB: string; let cgOrgB: string; let preAssignedClient: string;
 
@@ -33,6 +35,7 @@ beforeAll(async () => {
   preAssignedClient = w.clientA2;
   await call(w.managerA, "select ogevia_api.set_client_office($1,$2,$3)", [w.orgA, preAssignedClient, old]);
   await run(UP);
+  await run(UP0112);
   temecula = await create("Temecula"); moreno = await create("Moreno Valley"); corona = await create("Corona");
   cgA = (await q("insert into ogevia.caregiver_records (organization_id, caregiver_code, first_name, last_name, status) values ($1, 'CG-SYN-A', 'Syn', 'One', 'active') returning id", [w.orgA]))[0].id;
   cgB = (await q("insert into ogevia.caregiver_records (organization_id, caregiver_code, first_name, last_name, status) values ($1, 'CG-SYN-B', 'Syn', 'Two', 'active') returning id", [w.orgA]))[0].id;
@@ -201,5 +204,32 @@ describe("rollback", () => {
     const web = [...ts.slice(ts.indexOf("[")).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
     const dbList = (await q("select unnest(ogevia.california_counties()) c")).map((r: { c: string }) => r.c);
     expect(web).toEqual(dbList);
+  });
+
+  it("0112: who changed an assignment and when (newest first, with before and after), for one client or caregiver only", async () => {
+    await setOffices("client", w.clientA1, corona, [temecula]);
+    await setOffices("client", w.clientA1, temecula, [corona]);
+    await call(w.managerA, "select ogevia_api.set_client_service_county($1,$2,'Riverside')", [w.orgA, w.clientA1]);
+    await setOffices("caregiver", cgA, moreno, [temecula]);
+    await call(w.managerA, "select ogevia_api.set_caregiver_color($1,$2,'yellow')", [w.orgA, cgA]);
+    const h = await call<any>(w.managerA, "select * from ogevia_api.list_assignment_history($1,'client',$2,50)", [w.orgA, w.clientA1]);
+    expect(h.slice(0, 3).map((r: any) => r.action)).toEqual(["client.service_county_set", "client.offices_set", "client.offices_set"]);   // newest first (earlier tests also changed this client)
+    expect(h[1].before_state.primary).toBe(corona); expect(h[1].after_state.primary).toBe(temecula);   // the primary office change, with both values
+    expect(h.every((r: any) => r.actor_name !== undefined && r.occurred_at)).toBe(true);
+    expect(h.some((r: any) => r.action.startsWith("caregiver"))).toBe(false);
+    const c = await call<any>(w.managerA, "select * from ogevia_api.list_assignment_history($1,'caregiver',$2,50)", [w.orgA, cgA]);
+    expect(c.slice(0, 2).map((r: any) => r.action)).toEqual(["caregiver.color_set", "caregiver.offices_set"]);
+    expect(c[0].after_state.color).toBe("yellow");
+    expect((await call<any>(w.managerA, "select * from ogevia_api.list_assignment_history($1,'caregiver',$2,50)", [w.orgA, cgB])).every((r: any) => r.action.startsWith("caregiver."))).toBe(true);
+  });
+  it("0112: permission and tenant checks; rollback drops only the function", async () => {
+    await expectPgError(call(w.managerB, "select * from ogevia_api.list_assignment_history($1,'client',$2,50)", [w.orgA, w.clientA1]), "OGN04", /Organization not found/);
+    await expectPgError(call(w.managerA, "select * from ogevia_api.list_assignment_history($1,'client',$2,50)", [w.orgA, w.clientB1]), "OGN04", /Record not found/);
+    await expectPgError(call(w.managerA, "select * from ogevia_api.list_assignment_history($1,'staff',$2,50)", [w.orgA, w.clientA1]), "OGV22", /Unknown record type/);
+    const n = (await q("select count(*)::int n from ogevia.audit_events where entity_id = $1", [w.clientA1]))[0].n;
+    await run(DOWN0112);
+    expect((await q("select to_regprocedure('ogevia_api.list_assignment_history(uuid,text,uuid,integer)') as f"))[0].f).toBeNull();
+    expect((await q("select count(*)::int n from ogevia.audit_events where entity_id = $1", [w.clientA1]))[0].n).toBe(n);   // the audit events stay
+    await run(UP0112);
   });
 });

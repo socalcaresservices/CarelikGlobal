@@ -3638,6 +3638,16 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0112 (pending, same officeAssignments switch): who changed an office assignment, service county or caregiver colour, and when (read only).
+  "GET /v1/assignment-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const q = event.queryStringParameters ?? {};
+      const type = q.subjectType === "client" || q.subjectType === "caregiver" ? q.subjectType : (() => { throw new ApiError(400, "bad_request", "subjectType must be client or caregiver."); })();
+      return { events: await tx((db) => rows(db, "select * from ogevia_api.list_assignment_history($1,$2,$3,50)", [orgParam(event), type, uuid(q.subjectId, "subjectId")])) };
+    },
+  },
+
   "POST /v1/caregivers/{caregiverRecordId}/color": {
     mutating: true,
     handle: async ({ event, tx }) => {

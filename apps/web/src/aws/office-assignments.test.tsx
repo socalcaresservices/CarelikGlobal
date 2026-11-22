@@ -40,9 +40,15 @@ function renderAt(path: string, perms: string[]) {
     const url = new URL(String(input));
     if (init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>; posts.push({ path: url.pathname, body });
+      if (url.pathname === "/v1/caregivers") return json(200, { caregiver: { caregiverRecordId: CG2 } });
+      if (url.pathname === "/v1/clients") return json(200, { client: { clientId: "cccccccc-0000-4000-8000-000000000001", clientCode: "CL-TEST000001" } });
       return json(200, { status: "ok" });
     }
     switch (url.pathname) {
+      case "/v1/assignment-history": return json(200, { events: url.searchParams.get("subjectId") === CG1 ? [
+        { occurredAt: "2026-11-22T20:15:00Z", actorName: "Olivia Owner", action: "caregiver.color_set", beforeState: { color: null }, afterState: { color: "yellow" } },
+        { occurredAt: "2026-11-22T20:10:00Z", actorName: "Olivia Owner", action: "caregiver.offices_set", beforeState: { primary: MOV, offices: [MOV] }, afterState: { primary: TEM, offices: [TEM, MOV] } },
+      ] : [] });
       case "/v1/me": return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role: "owner", permissions: perms }], profile: { displayName: "Synthetic Person" } });
       case "/v1/branding": return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "/v1/offices": return json(200, { offices: OFFICES });
@@ -133,6 +139,44 @@ describe("Caregiver profile", () => {
     expect(within(list).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Caregiver Color" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Add a county")).not.toBeInTheDocument();
+  });
+});
+
+describe("who changed an assignment, and when", () => {
+  it("the caregiver profile lists each change newest first with who, when, the new value and the old one", async () => {
+    renderAt(`/care-team/${CG1}`, MANAGER);
+    const summary = await screen.findByText(/Assignment history \(2\)/, {}, { timeout: 15000 });
+    fireEvent.click(summary);
+    const list = await screen.findByRole("list", { name: "Assignment history" });
+    const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(items[0]).toContain("Olivia Owner"); expect(items[0]).toContain("Caregiver Color: Yellow (was: none)");
+    expect(items[1]).toContain("Offices: Temecula Office (primary), Moreno Valley Office (was: Moreno Valley Office)");
+  });
+});
+
+describe("assigning an office when creating a record", () => {
+  it("Add caregiver: the chosen primary office is saved right after the record is created", async () => {
+    const { posts } = renderAt("/care-team", [...MANAGER]);
+    fireEvent.click(await screen.findByRole("button", { name: "Add caregiver" }, { timeout: 15000 }));
+    fireEvent.change(await screen.findByLabelText("First name"), { target: { value: "New" } });
+    fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Person" } });
+    const select = await screen.findByLabelText("Primary office (optional)");
+    expect(within(select).queryByRole("option", { name: "Old Office" })).not.toBeInTheDocument();   // a retired office cannot be chosen
+    fireEvent.change(select, { target: { value: TEM } });
+    fireEvent.submit(select.closest("form")!);
+    await waitFor(() => expect(posts.map((p) => p.path)).toContain(`/v1/caregivers/${CG2}/offices`));
+    expect(posts.find((p) => p.path === `/v1/caregivers/${CG2}/offices`)!.body).toEqual({ organizationId: ORG, primaryOfficeId: TEM, secondaryOfficeIds: [] });
+    expect(posts.findIndex((p) => p.path === "/v1/caregivers")).toBeLessThan(posts.findIndex((p) => p.path === `/v1/caregivers/${CG2}/offices`));
+  });
+  it("Add client: the office control is offered to someone who can manage clients", async () => {
+    renderAt("/clients", ["clients.manage", "clients.names.manage", "clients.names.read", "visits.read"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Add client" }, { timeout: 15000 }));
+    expect(await screen.findByLabelText("Primary office (optional)")).toBeInTheDocument();
+  });
+  it("is not offered to someone who cannot assign offices", async () => {
+    renderAt("/care-team", ["visits.manage", "visits.read"]);
+    await screen.findByText(/Alpha Tester/, {}, { timeout: 15000 });
+    expect(screen.queryByRole("button", { name: "Add caregiver" })).not.toBeInTheDocument();
   });
 });
 

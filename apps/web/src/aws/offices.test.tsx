@@ -164,6 +164,28 @@ describe("the Clients list Office filter", () => {
   });
 });
 
+describe("secondary offices never duplicate visits or inflate totals (pure)", () => {
+  const row = (id: string, code: string, minutes: number): BillingReviewRow => ({ visitId: id, visitNumber: null, serviceCode: "RSP", serviceDate: "2026-11-02", workedMinutes: minutes, verifiedMinutes: minutes, billableMinutes: minutes, visitStatus: "verified", authorizationStatus: null, authorizationVersion: null, confirmationMethod: null, hasSignatureEvidence: true, isCorrection: false, reviewState: "ready", clientCode: code } as unknown as BillingReviewRow);
+  const rows = [row("v1", "CL-A", 60), row("v2", "CL-A", 120), row("v3", "CL-B", 30), row("v4", "CL-C", 15)];
+  const offices: Record<string, string[]> = { "CL-A": [NORTH, SOUTH], "CL-B": [SOUTH], "CL-C": [] };   // CL-A is assigned to BOTH offices
+  const officeOf = (r: BillingReviewRow) => offices[r.clientCode ?? ""];
+  const approval = () => "ready" as never;
+  const total = (rs: BillingReviewRow[]) => rs.reduce((n, r) => n + (r.billableMinutes ?? 0), 0);
+  it("each visit appears once under All, and once under each of its client's offices, with its own minutes", () => {
+    const all = applyBillingFilters(rows, NO_FILTERS, approval, officeOf);
+    expect(all.map((r) => r.visitId)).toEqual(["v1", "v2", "v3", "v4"]); expect(total(all)).toBe(225);
+    const north = applyBillingFilters(rows, { ...NO_FILTERS, office: NORTH }, approval, officeOf);
+    const south = applyBillingFilters(rows, { ...NO_FILTERS, office: SOUTH }, approval, officeOf);
+    expect(north.map((r) => r.visitId)).toEqual(["v1", "v2"]); expect(total(north)).toBe(180);
+    expect(south.map((r) => r.visitId)).toEqual(["v1", "v2", "v3"]); expect(total(south)).toBe(210);
+    expect(new Set(south.map((r) => r.visitId)).size).toBe(south.length);
+  });
+  it("Unassigned is exactly the visits whose client has no office; the three groups cover every visit with none counted twice beyond the shared client", () => {
+    const none = applyBillingFilters(rows, { ...NO_FILTERS, office: "none" }, approval, officeOf);
+    expect(none.map((r) => r.visitId)).toEqual(["v4"]);
+  });
+});
+
 describe("Billing review office filter (pure)", () => {
   const row = (code: string): BillingReviewRow => ({ visitId: code, visitNumber: null, serviceCode: "RSP", serviceDate: "2026-11-02", workedMinutes: 60, verifiedMinutes: 60, billableMinutes: 60, visitStatus: "verified", authorizationStatus: null, authorizationVersion: null, confirmationMethod: null, hasSignatureEvidence: true, isCorrection: false, reviewState: "ready", clientCode: code } as unknown as BillingReviewRow);
   const rows = [row("CL-A"), row("CL-B"), row("CL-C")];

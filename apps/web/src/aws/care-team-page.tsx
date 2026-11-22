@@ -26,8 +26,8 @@ import { SendSignInLink } from "./readiness/send-signin-link";
 import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
 import { ColorSwatch } from "./caregiver-color";
-import { CaregiverColorControl, CaregiverServiceCountiesControl, OfficeAssignmentsControl, OfficeCountyFilters, OfficeNames } from "./office-assignments";
-import { countyMatches, officeMatches, useOffices, usePeopleFacets } from "./offices-data";
+import { AssignmentHistory, CaregiverColorControl, CaregiverServiceCountiesControl, NewRecordOffice, OfficeAssignmentsControl, OfficeCountyFilters, OfficeNames } from "./office-assignments";
+import { assignOfficeAfterCreate, countyMatches, officeMatches, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
@@ -36,7 +36,7 @@ const WORK_STATUSES: readonly WorkStatus[] = ["not_ready", "approved", "active",
 function useRefreshCareTeam() {
   const queryClient = useQueryClient();
   return async () => {
-    for (const k of ["aws-caregivers", "aws-document-people"]) await queryClient.invalidateQueries({ queryKey: [k] });
+    for (const k of ["aws-caregivers", "aws-document-people", "people-facets", "assignment-history"]) await queryClient.invalidateQueries({ queryKey: [k] });
   };
 }
 
@@ -50,7 +50,7 @@ function NameFields({ v, set, idPrefix }: { v: { first: string; last: string; pr
   );
 }
 
-function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
+function AddCaregiverForm({ onDone }: { onDone: (id: string, note?: string) => void }) {
   const api = useAwsApi();
   const refresh = useRefreshCareTeam();
   const { activeOrganizationId } = useOrganization();
@@ -66,6 +66,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
   const displayedCity = city ?? lookup.data?.city ?? "";
   const [status, setStatus] = useState<Exclude<CaregiverStatus, "inactive" | "interview" | "offer" | "pending_documents">>("applicant");
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const [office, setOffice] = useState("");
   const key = useRef(newIdempotencyKey());
   const set = (k: "first" | "last" | "preferred") => (x: string) => { setV((o) => ({ ...o, [k]: x })); key.current = newIdempotencyKey(); };
   async function submit() {
@@ -78,9 +79,10 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
         ...(zip ? { zip, city: displayedCity.trim() || null } : {}),
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
+      const note = await assignOfficeAfterCreate(api, activeOrganizationId, "caregiver", r.caregiver.caregiverRecordId, office);
       await refresh();
       setState({ busy: false, error: null });
-      onDone(r.caregiver.caregiverRecordId);
+      onDone(r.caregiver.caregiverRecordId, note ?? undefined);
     } catch (cause) {
       setState({ busy: false, error: message(cause, "The caregiver was not added.") });
     }
@@ -106,6 +108,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
             {(["applicant", "onboarding"] as const).map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
           </select>
         </div>
+        <NewRecordOffice kind="caregiver" value={office} onChange={setOffice} />
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
         <div className="sm:col-span-2"><Button type="submit" disabled={state.busy || lookup.isFetching}>{state.busy ? "Adding…" : "Add caregiver"}</Button></div>
       </form>
@@ -125,6 +128,7 @@ export function CareTeamPage() {
   const [params] = useSearchParams();
   const [adding, setAdding] = useState(() => params.get("add") === "1");
   const [added, setAdded] = useState<string | null>(null);
+  const [addedNote, setAddedNote] = useState<string | null>(null);
   const { offices, available: officesOn } = useOffices();
   const facets = usePeopleFacets(officesOn);
   const peopleReady = officesOn && facets.ready;
@@ -151,8 +155,8 @@ export function CareTeamPage() {
         <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Caregivers</h1><InfoTip label="About Caregivers" title="Caregivers">Manage caregiver profiles, services and onboarding.</InfoTip></div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add caregiver"}</Button> : null}
       </div>
-      {canManage && adding ? <AddCaregiverForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
-      {added ? <p role="status" className="text-sm text-emerald-800">Caregiver added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.</p> : null}
+      {canManage && adding ? <AddCaregiverForm onDone={(id, note) => { setAdding(false); setAdded(id); setAddedNote(note ?? null); }} /> : null}
+      {added ? <p role="status" className="text-sm text-emerald-800">Caregiver added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.{addedNote ? <span className="text-red-700"> {addedNote}</span> : null}</p> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div className="flex min-w-[220px] flex-1 items-center gap-1.5">
           <label htmlFor="cg-search" className="text-xs font-medium text-slate-700">Search</label>
@@ -473,6 +477,7 @@ export function CaregiverDetailPage() {
         <OfficeAssignmentsControl kind="caregiver" subjectId={c.caregiverRecordId} />
         <CaregiverServiceCountiesControl caregiverRecordId={c.caregiverRecordId} />
         <CaregiverColorControl caregiverRecordId={c.caregiverRecordId} />
+        <AssignmentHistory kind="caregiver" subjectId={c.caregiverRecordId} />
       </Card>
       {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={c.caregiverRecordId} /> : null}
       </section>

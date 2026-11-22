@@ -147,17 +147,80 @@ await op.goto("https://localhost/settings/offices"); await settle(op);
 await L.locator("li", { hasText: "Moreno Valley Office" }).getByRole("button", { name: "Reactivate" }).click(); await settle(op, 1200);
 check("retire: reactivate works", !(await L.locator("li", { hasText: "Moreno Valley Office" }).innerText()).includes("Retired"));
 
+// ---- 7b. offices when creating a record, and who/when history ---------------------------------------------------------------------------------------------
+await op.goto("https://localhost/care-team"); await settle(op);
+await op.getByRole("button", { name: "Add caregiver" }).click(); await op.waitForTimeout(500);
+await op.getByLabel("First name").fill("Created"); await op.getByLabel("Last name").fill("WithOffice");
+const newCgOffices = await op.getByLabel("Primary office (optional)").locator("option").allInnerTexts();
+check("create caregiver: the form offers active offices only", newCgOffices.includes("Temecula Office") && newCgOffices.includes("Unassigned"), newCgOffices.join(","));
+await op.getByLabel("Primary office (optional)").selectOption({ label: "Temecula Office" });
+await op.getByRole("button", { name: "Add caregiver", exact: true }).last().click(); await settle(op, 1500);
+await op.getByRole("link", { name: "Open the record" }).click(); await settle(op);
+check("create caregiver: the new caregiver already has Temecula as primary", /Temecula Office Primary/.test((await op.getByTestId("office-assignments").innerText()).replace(/\s+/g, " ")));
+await op.getByTestId("assignment-history").locator("summary").click(); await op.waitForTimeout(300);
+const hist = (await op.getByRole("list", { name: "Assignment history" }).innerText()).replace(/\s+/g, " ");
+check("history: shows who and when, and the new and previous offices", /Olivia Owner/.test(hist) && /Offices: Temecula Office \(was: Unassigned\)/.test(hist), hist);
+await op.getByLabel("Add an office").selectOption({ label: "Moreno Valley Office" }); await settle(op, 1200);
+await op.getByRole("button", { name: "Make primary" }).click(); await settle(op, 1200);
+const hist2 = (await op.getByRole("list", { name: "Assignment history" }).innerText()).replace(/\s+/g, " ");
+check("history: a primary change is listed newest first with before and after", /Offices: Moreno Valley Office \(primary\), Temecula Office \(was: Temecula Office, Moreno Valley Office\)/.test(hist2) && hist2.indexOf("Moreno Valley Office (primary)") < hist2.indexOf("(was: Unassigned)"), hist2);
+await op.screenshot({ path: `${out}/09-history-and-create.png`, fullPage: true });
+await op.goto("https://localhost/clients"); await settle(op);
+await op.getByRole("button", { name: "Add client" }).click(); await op.waitForTimeout(500);
+await op.getByLabel("First name").fill("Created"); await op.getByLabel("Last name").fill("ClientWithOffice");
+await op.getByLabel("Primary office (optional)").selectOption({ label: "Corona Office" });
+await op.getByRole("button", { name: "Add client", exact: true }).last().click(); await settle(op, 1500);
+check("create client: no error after saving with an office", (await op.getByText("The office was not saved").count()) === 0 && (await op.getByText(/Client added/).count()) === 1);
+await op.getByLabel("Office", { exact: true }).selectOption({ label: "Corona Office" }); await settle(op, 500);
+check("create client: the new client is under Corona Office", (await op.locator("table[aria-label='Clients as a list'] tbody tr").count()) === 1);
+await op.getByLabel("Office", { exact: true }).selectOption({ label: "All Offices" });
+
+// ---- 7c. secondary offices never duplicate visits or inflate totals (Visit records) ----------------------------------------------------------------------------
+// The first client (section 2) is assigned to BOTH Temecula and Moreno Valley. If a secondary office duplicated rows, Temecula + Unassigned would exceed the unfiltered totals.
+const mins = (t) => { const h = /(\d+)\s*hr/.exec(t); const m = /(\d+)\s*min/.exec(t); return (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0); };
+const readTotals = async () => { const t = (await op.locator("main").innerText()).replace(/\s+/g, " "); const v = /Visits \((\d+)\)/.exec(t); const w = /Worked: (.*?) Billable: (.*?)(?: Replaced|$| By client| Visits)/.exec(t); return { visits: v ? Number(v[1]) : -1, worked: w ? mins(w[1]) : -1, billable: w ? mins(w[2]) : -1 }; };
+await op.goto("https://localhost/service-verification/reports?view=visits"); await settle(op, 1500);
+const base = await readTotals();
+const officeSel = op.locator("#report-office");
+if (!(await officeSel.count())) { const f = op.getByText("Filters", { exact: true }); if (await f.count()) await f.first().click(); await op.waitForTimeout(400); }
+check("reports: the Office filter is present", (await officeSel.count()) === 1);
+const pick = async (label) => { await officeSel.selectOption({ label }); await settle(op, 600); return readTotals(); };
+const rAll = await pick("All Offices"), rTem = await pick("Temecula Office"), rMov = await pick("Moreno Valley Office"), rNone = await pick("Unassigned");
+console.log("INFO totals", JSON.stringify({ base, rAll, rTem, rMov, rNone }));
+check("reports: All Offices equals the unfiltered totals", JSON.stringify(rAll) === JSON.stringify(base));
+check("reports: a client in two offices gives identical visits and hours under either office", rTem.visits > 0 && JSON.stringify(rTem) === JSON.stringify(rMov));
+check("reports: assigned + Unassigned = all (no visit duplicated, hours not inflated)", rTem.visits + rNone.visits === base.visits && rTem.worked + rNone.worked === base.worked && rTem.billable + rNone.billable === base.billable);
+await op.screenshot({ path: `${out}/10-reports-office-filter.png`, fullPage: true });
+// Billing review
+await op.goto("https://localhost/billing-review"); await settle(op, 1500);
+const billRows = async () => op.locator("table tbody tr").count();
+const bOffice = op.getByLabel("Office", { exact: true });
+if (await bOffice.count()) {
+  const bAll = await billRows();
+  await bOffice.selectOption({ label: "Temecula Office" }); await settle(op, 500); const bTem = await billRows();
+  await bOffice.selectOption({ label: "Moreno Valley Office" }); await settle(op, 500); const bMov = await billRows();
+  await bOffice.selectOption({ label: "Unassigned" }); await settle(op, 500); const bNone = await billRows();
+  console.log("INFO billing rows", JSON.stringify({ bAll, bTem, bMov, bNone }));
+  check("billing review: a client in two offices appears once under each, and assigned + Unassigned = all", bTem === bMov && bTem + bNone === bAll, JSON.stringify({ bAll, bTem, bMov, bNone }));
+} else check("billing review: the Office filter is present", false);
+
 // ---- 8. schedule + reports ----------------------------------------------------------------------------------------------------------------------------------
 await op.goto("https://localhost/schedule"); await settle(op, 1500);
 const sched = await op.locator("[data-testid='caregiver-swatch']").count();
 await op.screenshot({ path: `${out}/07-schedule.png`, fullPage: true });
 console.log("INFO schedule swatches visible:", sched);
 check("schedule: coloured caregivers show a swatch beside the name", sched > 0);
-await op.goto("https://localhost/service-verification/reports?view=overview"); await settle(op, 2500);
-const fills = await op.locator("[aria-label='Filtered hours chart'] path[fill], [aria-label='Filtered hours chart'] .recharts-sector, [aria-label='Filtered hours chart'] .recharts-bar-rectangle path").evaluateAll((els) => els.map((e) => (e.getAttribute("fill") || "").toLowerCase()));
-console.log("INFO reports chart fills:", [...new Set(fills)].join(","));
+// the chart's caregiver mark follows the saved colour: change Alex's colour red -> blue -> yellow and read the chart fills each time
+const alexUrl = cgUrls[0];
+for (const [label, hex] of [["Red", "#dc2626"], ["Blue", "#2563eb"], ["Yellow", "#facc15"]]) {
+  await op.goto("https://localhost" + alexUrl); await settle(op);
+  await op.getByRole("radiogroup", { name: "Caregiver Color" }).getByText(label, { exact: true }).click(); await settle(op, 1200);
+  await op.goto("https://localhost/service-verification/reports?view=overview"); await settle(op, 2500);
+  const fills = await op.locator("[aria-label='Filtered hours chart'] path[fill], [aria-label='Filtered hours chart'] .recharts-sector, [aria-label='Filtered hours chart'] .recharts-bar-rectangle path").evaluateAll((els) => els.map((e) => (e.getAttribute("fill") || "").toLowerCase()));
+  check(`reports chart (Group by Caregiver): Alex's mark is ${label} after saving ${label}`, fills.includes(hex), [...new Set(fills)].join(","));
+  if (label === "Blue") await op.screenshot({ path: `${out}/08-reports-blue.png`, fullPage: true });
+}
 await op.screenshot({ path: `${out}/08-reports.png`, fullPage: true });
-check("reports: chart grouped by caregiver uses the saved colours (yellow #facc15 / red #dc2626 / blue #2563eb)", ["#facc15", "#dc2626", "#2563eb"].some((c) => fills.includes(c)), fills.join(","));
 
 // ---- 9. a caregiver sees no office controls ----------------------------------------------------------------------------------------------------------------
 const cg = await login("Alex Caregiver", { width: 390, height: 844 });
