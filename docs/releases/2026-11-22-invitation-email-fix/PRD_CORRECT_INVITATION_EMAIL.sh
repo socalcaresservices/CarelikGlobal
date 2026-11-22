@@ -21,7 +21,9 @@ HERE="$REPO/docs/releases/2026-11-22-invitation-email-fix"; [[ -f "$HERE/CORRECT
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-300}" aws --cli-connect-timeout 5 --cli-read-timeout 120 "$@"; }
 [[ "$(A sts get-caller-identity --query Account --output text)" == 300094796789 ]] || stop "wrong AWS account (expected 300094796789 in us-west-2)"
 POOL=us-west-2_FHJoX71ca
-A cloudformation get-template --stack-name Ogevia-prd-ServiceVerificationApi --template-stage Original --query TemplateBody --output json | grep -q "$POOL" || stop "the production API does not use the expected user pool"
+# Production refers to its user pool through the Ogevia-prd-Auth stack (an import), not as a literal: check that the Auth stack owns the expected pool AND that the API uses it (literal id or that import).
+[[ "$(A cloudformation describe-stacks --stack-name Ogevia-prd-Auth --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)" == "$POOL" ]] || stop "the production Auth stack does not own the expected user pool"
+A cloudformation get-template --stack-name Ogevia-prd-ServiceVerificationApi --template-stage Original --query TemplateBody --output json | grep -Eq "$POOL|Ogevia-prd-Auth:ExportsOutputRefUserPool" || stop "the production API does not use the expected user pool"
 HOST=ogevia-prod-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com
 IID=i-0ce8db2d7e5839dd5; ADMIN=sg-00e01e2ca80442c1f; APP=sg-064ffce3bcbe8eb3b
 ATTACHED=0; TUNNEL=""
