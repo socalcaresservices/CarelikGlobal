@@ -39,17 +39,31 @@ describe("offices route switch", () => {
 
 describe("office assignments route switch (0111)", () => {
   const ASSIGN = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "officeAssignments").map((r) => `${r.method} ${r.path}`).sort();
-  it("marks exactly the nine 0111/0112 routes", () => {
-    expect(ASSIGN).toEqual(["GET /v1/assignment-history", "GET /v1/people-facets", "POST /v1/caregivers/{caregiverRecordId}/color", "POST /v1/caregivers/{caregiverRecordId}/offices", "POST /v1/caregivers/{caregiverRecordId}/service-counties",
+  it("marks exactly the eight 0111 routes", () => {
+    expect(ASSIGN).toEqual(["GET /v1/people-facets", "POST /v1/caregivers/{caregiverRecordId}/color", "POST /v1/caregivers/{caregiverRecordId}/offices", "POST /v1/caregivers/{caregiverRecordId}/service-counties",
       "POST /v1/clients/{clientId}/offices", "POST /v1/clients/{clientId}/service-county", "POST /v1/offices/{officeId}/reactivate", "POST /v1/offices/{officeId}/update"].sort());
   });
-  it("is absent (off) in TEST and production, and with the switch on exactly those nine JWT routes are added", () => {
+  it("is absent (off) in TEST and production, and with the switch on exactly those eight JWT routes are added", () => {
     for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
       expect(base.features.officeAssignments ?? false).toBe(false);
       const have = routes(base).map((r) => r.key); for (const k of ASSIGN) expect(have, k).not.toContain(k);
       const on = { ...base, features: { ...base.features, officeAssignments: true } } as OgeviaEnvironmentConfig;
-      const withOn = routes(on); expect(withOn.length).toBe(have.length + 9);
+      const withOn = routes(on); expect(withOn.length).toBe(have.length + 8);
       for (const k of ASSIGN) expect(withOn.find((r) => r.key === k), k).toMatchObject({ auth: "JWT" });
+    }
+  });
+});
+
+describe("assignment history route switch (0112)", () => {
+  const H = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "assignmentHistory").map((r) => `${r.method} ${r.path}`);
+  it("is exactly one read route behind its own switch, absent (off) in TEST and production, and a JWT route when on", () => {
+    expect(H).toEqual(["GET /v1/assignment-history"]);
+    for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
+      expect(base.features.assignmentHistory ?? false).toBe(false);
+      const have = routes(base).map((r) => r.key); expect(have).not.toContain(H[0]);
+      const on = { ...base, features: { ...base.features, assignmentHistory: true } } as OgeviaEnvironmentConfig;
+      const withOn = routes(on); expect(withOn.length).toBe(have.length + 1);
+      expect(withOn.find((r) => r.key === H[0])).toMatchObject({ auth: "JWT" });
     }
   });
 });

@@ -116,4 +116,29 @@ describe("CORRECT_INVITATION_EMAIL.sh", () => {
     const r = run(); expect(r.status).toBe(1); expect(r.stderr).toContain("Resend sign-in link");
     expect(readState().users[0]!.email).toBe(NEW); expect((await invitationEmail()).email).toBe(NEW);
   });
+
+  it("INVITATION_MODE=check runs only the read-only checks: it confirms the address is wrong-but-pending, changes nothing, and works without a new address", async () => {
+    const auditBefore = await auditCount();
+    const r = run({ INVITATION_MODE: "check", NEW_EMAIL: "", REASON: "" });
+    expect(r.status, r.stderr + r.stdout).toBe(0); expect(r.stdout).toContain("PASS (read-only check)"); expect(r.stdout).not.toContain(OLD); expect(r.stdout).toContain("wr***@example.org");
+    const withNew = run({ INVITATION_MODE: "check" }); expect(withNew.status).toBe(0); expect(withNew.stdout).toContain("is free");
+    expect(writes()).toEqual([]); expect((await invitationEmail())).toEqual({ email: OLD, send_count: 1 }); expect(await auditCount()).toBe(auditBefore);
+    await q("update ogevia.caregiver_invitations set first_signed_in_at = now() where caregiver_record_id = $1", [rec]);
+    const signed = run({ INVITATION_MODE: "check", NEW_EMAIL: "" }); expect(signed.status).toBe(2); expect(signed.stderr).toContain("already signed in");
+    const bad = run({ INVITATION_MODE: "bogus" }); expect(bad.status).toBe(2);
+  });
+  it("LOOKUP_INVITATION.sh finds the code by part of the name, shows masked addresses and whether the account is still pending, and changes nothing", async () => {
+    const lookup = join(root, "docs/releases/2026-11-22-invitation-email-fix/LOOKUP_INVITATION.sh");
+    const go = (search: string, rehearsal = true) => { writeFileSync(join(bin, "aws"), aws()); chmodSync(join(bin, "aws"), 0o755);
+      return spawnSync("bash", [lookup], { encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, PGHOST: u.hostname, PGPORT: u.port || "5432", PGUSER: decodeURIComponent(u.username), PGPASSWORD: decodeURIComponent(u.password), PGDATABASE: db.name, TARGET: "test", POOL: "us-west-2_TESTPOOL", SEARCH: search, ...(rehearsal ? { OGEVIA_LOCAL_REHEARSAL: "1" } : {}) } }); };
+    const wrongDb = go("Dummy Care", false); expect(wrongDb.status).toBe(2); expect(wrongDb.stderr).toContain("connected to the wrong database");   // outside the rehearsal only ogevia_sv_test is accepted
+    const r = go("Dummy Care");
+    expect(r.status, r.stderr + r.stdout).toBe(0);
+    expect(r.stdout).toContain(`CG_CODE=${CODE}`); expect(r.stdout).toContain("wr***@example.org"); expect(r.stdout).not.toContain(OLD); expect(r.stdout).toContain("still pending (correctable): YES");
+    await q("update ogevia.caregiver_invitations set first_signed_in_at = now() where caregiver_record_id = $1", [rec]);
+    expect(go(CODE).stdout).toContain("signed in: yes"); expect(go(CODE).stdout).toContain("still pending (correctable): no");
+    expect(go("Nobody Here").stdout).toContain("no invited caregiver matches");
+    expect(go("x").stderr).toContain("SEARCH must be");
+    expect(writes()).toEqual([]);
+  });
 });

@@ -7,11 +7,17 @@ set +x +H
 umask 077
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER="" PYTHONDONTWRITEBYTECODE=1
 stop() { echo "STOP: $*" >&2; exit 2; }
-[[ "${OGEVIA_DEPLOY_APPROVAL:-}" == owner-production-invitation-email-go ]] || stop "production owner authorization is required (OGEVIA_DEPLOY_APPROVAL=owner-production-invitation-email-go)"
-: "${REPO:?set REPO}"; : "${OGEVIA_RELEASE_COMMIT:?set OGEVIA_RELEASE_COMMIT}"; : "${WORK:?set WORK}"; : "${CAREGIVER_CODE:?set CAREGIVER_CODE}"; : "${NEW_EMAIL:?set NEW_EMAIL}"; : "${REASON:?set REASON}"
+PROCEDURE="${PROCEDURE:-correct}"
+case "$PROCEDURE" in
+  correct) [[ "${OGEVIA_DEPLOY_APPROVAL:-}" == owner-production-invitation-email-go ]] || stop "production owner authorization is required (OGEVIA_DEPLOY_APPROVAL=owner-production-invitation-email-go)";;
+  check|lookup) [[ "${OGEVIA_DEPLOY_APPROVAL:-}" == owner-production-invitation-email-readonly ]] || stop "production owner authorization is required for the read-only check (OGEVIA_DEPLOY_APPROVAL=owner-production-invitation-email-readonly)";;
+  *) stop "PROCEDURE must be correct, check or lookup";;
+esac
+: "${REPO:?set REPO}"; : "${OGEVIA_RELEASE_COMMIT:?set OGEVIA_RELEASE_COMMIT}"; : "${WORK:?set WORK}"
+case "$PROCEDURE" in correct) : "${CAREGIVER_CODE:?set CAREGIVER_CODE}"; : "${NEW_EMAIL:?set NEW_EMAIL}"; : "${REASON:?set REASON}";; check) : "${CAREGIVER_CODE:?set CAREGIVER_CODE}";; lookup) : "${SEARCH:?set SEARCH}";; esac
 [[ "$(git -C "$REPO" rev-parse HEAD)" == "$OGEVIA_RELEASE_COMMIT" ]] || stop "the checkout is not at the release commit"
 [[ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]] || stop "tracked files in the checkout are modified"
-HERE="$REPO/docs/releases/2026-11-22-invitation-email-fix"; [[ -f "$HERE/CORRECT_INVITATION_EMAIL.sh" ]] || stop "the procedure is missing from the checkout"
+HERE="$REPO/docs/releases/2026-11-22-invitation-email-fix"; [[ -f "$HERE/CORRECT_INVITATION_EMAIL.sh" && -f "$HERE/LOOKUP_INVITATION.sh" ]] || stop "the procedure is missing from the checkout"
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-300}" aws --cli-connect-timeout 5 --cli-read-timeout 120 "$@"; }
 [[ "$(A sts get-caller-identity --query Account --output text)" == 300094796789 ]] || stop "wrong AWS account (expected 300094796789 in us-west-2)"
 POOL=us-west-2_FHJoX71ca
@@ -49,4 +55,8 @@ export PGUSER; PGUSER=$(jq -er .username <<<"$MASTER")
 export PGPASSWORD; PGPASSWORD=$(jq -er .password <<<"$MASTER"); unset MASTER
 unset PGSERVICE PGSERVICEFILE PGPASSFILE
 export PGHOST="$HOST" PGHOSTADDR=127.0.0.1 PGPORT="$PORT" PGSSLMODE=verify-full PGSSLROOTCERT="$WORK/ca.pem" PGCONNECT_TIMEOUT=15 PGDATABASE=ogevia_prd PGOPTIONS='-c statement_timeout=120000'
-TARGET=production POOL="$POOL" CAREGIVER_CODE="$CAREGIVER_CODE" NEW_EMAIL="$NEW_EMAIL" REASON="$REASON" ${ORG_SLUG:+ORG_SLUG="$ORG_SLUG"} bash "$HERE/CORRECT_INVITATION_EMAIL.sh"
+case "$PROCEDURE" in
+  lookup) TARGET=production POOL="$POOL" SEARCH="$SEARCH" ${ORG_SLUG:+ORG_SLUG="$ORG_SLUG"} bash "$HERE/LOOKUP_INVITATION.sh";;
+  check) TARGET=production INVITATION_MODE=check POOL="$POOL" CAREGIVER_CODE="$CAREGIVER_CODE" NEW_EMAIL="${NEW_EMAIL:-}" ${ORG_SLUG:+ORG_SLUG="$ORG_SLUG"} bash "$HERE/CORRECT_INVITATION_EMAIL.sh";;
+  *) TARGET=production POOL="$POOL" CAREGIVER_CODE="$CAREGIVER_CODE" NEW_EMAIL="$NEW_EMAIL" REASON="$REASON" ${ORG_SLUG:+ORG_SLUG="$ORG_SLUG"} bash "$HERE/CORRECT_INVITATION_EMAIL.sh";;
+esac

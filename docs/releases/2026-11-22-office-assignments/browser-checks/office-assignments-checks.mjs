@@ -163,7 +163,7 @@ check("history: shows who and when, and the new and previous offices", /Olivia O
 await op.getByLabel("Add an office").selectOption({ label: "Moreno Valley Office" }); await settle(op, 1200);
 await op.getByRole("button", { name: "Make primary" }).click(); await settle(op, 1200);
 const hist2 = (await op.getByRole("list", { name: "Assignment history" }).innerText()).replace(/\s+/g, " ");
-check("history: a primary change is listed newest first with before and after", /Offices: Moreno Valley Office \(primary\), Temecula Office \(was: Temecula Office, Moreno Valley Office\)/.test(hist2) && hist2.indexOf("Moreno Valley Office (primary)") < hist2.indexOf("(was: Unassigned)"), hist2);
+check("history: a primary change is listed newest first with before and after", /Offices: Moreno Valley Office \(primary\), Temecula Office \(was: Temecula Office \(primary\), Moreno Valley Office\)/.test(hist2) && hist2.indexOf("Moreno Valley Office (primary)") < hist2.indexOf("(was: Unassigned)"), hist2);
 await op.screenshot({ path: `${out}/09-history-and-create.png`, fullPage: true });
 await op.goto("https://localhost/clients"); await settle(op);
 await op.getByRole("button", { name: "Add client" }).click(); await op.waitForTimeout(500);
@@ -175,6 +175,14 @@ await op.getByLabel("Office", { exact: true }).selectOption({ label: "Corona Off
 check("create client: the new client is under Corona Office", (await op.locator("table[aria-label='Clients as a list'] tbody tr").count()) === 1);
 await op.getByLabel("Office", { exact: true }).selectOption({ label: "All Offices" });
 
+// Demo Vega (the client with the most visits) goes into BOTH Temecula and Moreno Valley, so a secondary office could duplicate her visits if the filters were wrong.
+await op.goto("https://localhost/clients"); await settle(op);
+await op.getByLabel("Search").fill("Vega"); await settle(op, 600);
+await op.locator("table[aria-label='Clients as a list'] tbody tr").first().getByRole("link").first().click(); await settle(op);
+await op.locator("details", { has: op.locator("summary", { hasText: /^Details.+/ }) }).locator("summary").first().click(); await op.waitForTimeout(400);
+await op.getByLabel("Assign an office").selectOption({ label: "Temecula Office" }); await settle(op, 1200);
+await op.getByLabel("Add an office").selectOption({ label: "Moreno Valley Office" }); await settle(op, 1200);
+check("secondary offices: Demo Vega is in both offices", /Temecula Office Primary/.test((await op.getByTestId("office-assignments").innerText()).replace(/\s+/g, " ")) && /Moreno Valley Office Additional/.test((await op.getByTestId("office-assignments").innerText()).replace(/\s+/g, " ")));
 // ---- 7c. secondary offices never duplicate visits or inflate totals (Visit records) ----------------------------------------------------------------------------
 // The first client (section 2) is assigned to BOTH Temecula and Moreno Valley. If a secondary office duplicated rows, Temecula + Unassigned would exceed the unfiltered totals.
 const mins = (t) => { const h = /(\d+)\s*hr/.exec(t); const m = /(\d+)\s*min/.exec(t); return (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0); };
@@ -182,7 +190,7 @@ const readTotals = async () => { const t = (await op.locator("main").innerText()
 await op.goto("https://localhost/service-verification/reports?view=visits"); await settle(op, 1500);
 const base = await readTotals();
 const officeSel = op.locator("#report-office");
-if (!(await officeSel.count())) { const f = op.getByText("Filters", { exact: true }); if (await f.count()) await f.first().click(); await op.waitForTimeout(400); }
+if (!(await officeSel.isVisible().catch(() => false))) { await op.locator("summary", { hasText: /^Filters/ }).first().click(); await op.waitForTimeout(500); }
 check("reports: the Office filter is present", (await officeSel.count()) === 1);
 const pick = async (label) => { await officeSel.selectOption({ label }); await settle(op, 600); return readTotals(); };
 const rAll = await pick("All Offices"), rTem = await pick("Temecula Office"), rMov = await pick("Moreno Valley Office"), rNone = await pick("Unassigned");
@@ -193,16 +201,16 @@ check("reports: assigned + Unassigned = all (no visit duplicated, hours not infl
 await op.screenshot({ path: `${out}/10-reports-office-filter.png`, fullPage: true });
 // Billing review
 await op.goto("https://localhost/billing-review"); await settle(op, 1500);
-const billRows = async () => op.locator("table tbody tr").count();
+await op.locator("summary", { hasText: /^Filters/ }).first().click(); await op.waitForTimeout(400);
+const billRows = async () => op.getByText("Visit details", { exact: true }).count();
 const bOffice = op.getByLabel("Office", { exact: true });
-if (await bOffice.count()) {
-  const bAll = await billRows();
-  await bOffice.selectOption({ label: "Temecula Office" }); await settle(op, 500); const bTem = await billRows();
-  await bOffice.selectOption({ label: "Moreno Valley Office" }); await settle(op, 500); const bMov = await billRows();
-  await bOffice.selectOption({ label: "Unassigned" }); await settle(op, 500); const bNone = await billRows();
-  console.log("INFO billing rows", JSON.stringify({ bAll, bTem, bMov, bNone }));
-  check("billing review: a client in two offices appears once under each, and assigned + Unassigned = all", bTem === bMov && bTem + bNone === bAll, JSON.stringify({ bAll, bTem, bMov, bNone }));
-} else check("billing review: the Office filter is present", false);
+check("billing review: the Office filter is present", (await bOffice.count()) === 1);
+const bAll = await billRows();
+await bOffice.selectOption({ label: "Temecula Office" }); await settle(op, 600); const bTem = await billRows();
+await bOffice.selectOption({ label: "Moreno Valley Office" }); await settle(op, 600); const bMov = await billRows();
+await bOffice.selectOption({ label: "Unassigned" }); await settle(op, 600); const bNone = await billRows();
+console.log("INFO billing rows", JSON.stringify({ bAll, bTem, bMov, bNone }));
+check("billing review: a client in two offices appears once under each, and assigned + Unassigned = all", bTem > 0 && bTem === bMov && bTem + bNone === bAll, JSON.stringify({ bAll, bTem, bMov, bNone }));
 
 // ---- 8. schedule + reports ----------------------------------------------------------------------------------------------------------------------------------
 await op.goto("https://localhost/schedule"); await settle(op, 1500);

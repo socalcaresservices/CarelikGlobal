@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ADMIN PROCEDURE (reusable): correct ONE caregiver's invitation email before their first sign-in. Runs inside an already-open database session (PGHOST/PGUSER/... set by the TEST or PRD wrapper) and with AWS access.
 #   TARGET=test|production POOL=<user pool id> CAREGIVER_CODE=<code> NEW_EMAIL=<corrected address> REASON=<why> [ORG_SLUG=<slug>] bash CORRECT_INVITATION_EMAIL.sh
+#   INVITATION_MODE=check (NEW_EMAIL and REASON optional): ONLY the read-only checks of step 1, then stop. Use it to confirm the address is wrong and the account is still pending before anything is changed.
 # Steps (read-only checks first, then one typed confirmation, then): 1 sign-in account email changed (Cognito, email marked verified) -> 2 ONE database transaction (invitation email, contact email, audit)
 #   -> if step 2 fails, step 1 is reversed -> 3 a fresh invitation is sent to the corrected address (new temporary password, valid 7 days; the old one stops working).
 # Never prints a full email address (masked) and never reads or prints a password. Changes nothing else.
@@ -11,11 +12,13 @@ export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2 AWS_PAGER="" PYTHONDONT
 stop() { echo "STOP: $*" >&2; exit 2; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SQL="$HERE/CORRECT_INVITATION_EMAIL.sql"; [[ -f "$SQL" ]] || stop "CORRECT_INVITATION_EMAIL.sql must sit beside this script"
-: "${TARGET:?set TARGET=test or production}"; : "${POOL:?set POOL}"; : "${CAREGIVER_CODE:?set CAREGIVER_CODE}"; : "${NEW_EMAIL:?set NEW_EMAIL}"; : "${REASON:?set REASON}"
+: "${TARGET:?set TARGET=test or production}"; : "${POOL:?set POOL}"; : "${CAREGIVER_CODE:?set CAREGIVER_CODE}"
+INVITATION_MODE="${INVITATION_MODE:-correct}"; [[ "$INVITATION_MODE" == correct || "$INVITATION_MODE" == check ]] || stop "INVITATION_MODE must be correct or check"
+if [[ "$INVITATION_MODE" == correct ]]; then : "${NEW_EMAIL:?set NEW_EMAIL}"; : "${REASON:?set REASON}"; else NEW_EMAIL="${NEW_EMAIL:-}"; REASON="${REASON:-check only}"; fi
 case "$TARGET" in test) WANT_DB=ogevia_sv_test;; production) WANT_DB=ogevia_prd;; *) stop "TARGET must be test or production";; esac
 [[ "$CAREGIVER_CODE" =~ ^[A-Za-z0-9-]{3,40}$ ]] || stop "the caregiver code looks wrong"
 NEW_EMAIL="$(printf '%s' "$NEW_EMAIL" | tr -d '[:space:]' | tr 'A-Z' 'a-z')"
-[[ "$NEW_EMAIL" =~ ^[a-z0-9.!#\$%\&\'*+/=?^_\`{|}~-]+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ && ${#NEW_EMAIL} -le 254 ]] || stop "the new email address is not valid"
+[[ "$INVITATION_MODE" == check && -z "$NEW_EMAIL" ]] || [[ "$NEW_EMAIL" =~ ^[a-z0-9.!#\$%\&\'*+/=?^_\`{|}~-]+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ && ${#NEW_EMAIL} -le 254 ]] || stop "the new email address is not valid"
 [[ ${#REASON} -ge 5 && ${#REASON} -le 500 ]] || stop "the reason must be 5 to 500 characters"
 mask() { local e="$1" l; if [[ "$e" == *@* ]]; then l="${e%%@*}"; printf '%s***@%s' "${l:0:2}" "${e#*@}"; else printf '(none)'; fi; }
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-60}" aws --cli-connect-timeout 5 --cli-read-timeout 30 "$@"; }
@@ -44,12 +47,17 @@ echo "caregiver $CAREGIVER_CODE: invited address $(mask "$OLD_EMAIL"), invitatio
 [[ "$EXISTING" == f ]] || stop "this caregiver already had a sign-in account; this procedure is only for accounts created by the invitation"
 [[ -z "$SIGNED" ]] || stop "this caregiver has already signed in ($SIGNED): they use Forgot password"
 [[ "$LINKED" == t && "$SUB" =~ ^[0-9a-f-]{36}$ ]] || stop "the invitation is not linked to this caregiver's sign-in account"
-[[ "$OLD_EMAIL" != "$NEW_EMAIL" ]] || stop "the new address is the same as the invited one"
+[[ -z "$NEW_EMAIL" || "$OLD_EMAIL" != "$NEW_EMAIL" ]] || stop "the new address is the same as the invited one"
 U="$(A cognito-idp admin-get-user --user-pool-id "$POOL" --username "$OLD_EMAIL" --output json)" || stop "no sign-in account found for the invited address"
 [[ "$(jq -r .UserStatus <<<"$U")" == FORCE_CHANGE_PASSWORD && "$(jq -r .Enabled <<<"$U")" == true ]] || stop "the account is not waiting for its first password (status $(jq -r .UserStatus <<<"$U"), enabled $(jq -r .Enabled <<<"$U")): this procedure does not apply"
 [[ "$(jq -r '[.UserAttributes[] | select(.Name=="sub")][0].Value' <<<"$U")" == "$SUB" ]] || stop "the sign-in account is not the one Ogevia has linked to this caregiver"
-TAKEN="$(A cognito-idp list-users --user-pool-id "$POOL" --filter "email = \"$NEW_EMAIL\"" --query 'length(Users)' --output text)"
+TAKEN=0; [[ -z "$NEW_EMAIL" ]] || TAKEN="$(A cognito-idp list-users --user-pool-id "$POOL" --filter "email = \"$NEW_EMAIL\"" --query 'length(Users)' --output text)"
 [[ "$TAKEN" == 0 ]] || stop "another sign-in account already uses the corrected address ($TAKEN found): nothing changed"
+if [[ "$INVITATION_MODE" == check ]]; then
+  echo "PASS (read-only check): caregiver $CAREGIVER_CODE is invited at $(mask "$OLD_EMAIL"), has never signed in, and the sign-in account is waiting for its first password and linked to this caregiver. Nothing was changed."
+  [[ -z "$NEW_EMAIL" ]] || echo "the corrected address $(mask "$NEW_EMAIL") is free"
+  exit 0
+fi
 echo "PASS: account waits for its first password, is linked to this caregiver, and the corrected address $(mask "$NEW_EMAIL") is free"
 
 confirm CORRECT-INVITATION-EMAIL "ABOUT TO CHANGE ($TARGET): caregiver $CAREGIVER_CODE. The invited address $(mask "$OLD_EMAIL") becomes $(mask "$NEW_EMAIL") on the sign-in account AND in Ogevia (invitation and contact email, with an audit entry: '$REASON'), then a fresh invitation with a new temporary password is sent to the corrected address."

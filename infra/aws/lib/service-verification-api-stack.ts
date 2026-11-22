@@ -84,7 +84,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -332,7 +332,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/update", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/reactivate", feature: "officeAssignments" },
   { method: apigw.HttpMethod.GET, path: "/v1/people-facets", feature: "officeAssignments" },
-  { method: apigw.HttpMethod.GET, path: "/v1/assignment-history", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.GET, path: "/v1/assignment-history", feature: "assignmentHistory" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/offices", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/offices", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-county", feature: "officeAssignments" },

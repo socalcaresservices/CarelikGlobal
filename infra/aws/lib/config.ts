@@ -105,7 +105,7 @@ export interface OgeviaEnvironmentConfig {
    * that environment (demo first); with it off the two routes are not in the API at all.
    * staffManagement (pending migration 0086, infra/aws/db/pending): on for the pilot/test slice and, since the owner's approval of 2026-10-26, on for production (PRD below). An environment that has not applied 0086 must keep it false.
    */
-  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean; readonly liveTestRepairs?: boolean; readonly requestCleanup?: boolean; readonly offices?: boolean; readonly officeAssignments?: boolean };
+  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean; readonly liveTestRepairs?: boolean; readonly requestCleanup?: boolean; readonly offices?: boolean; readonly officeAssignments?: boolean; readonly assignmentHistory?: boolean };
   readonly auth: {
     /**
      * Existing Cognito app client the API's JWT authorizer accepts (audience).
