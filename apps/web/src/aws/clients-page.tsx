@@ -17,6 +17,8 @@ import { nameWithCode } from "./name-label";
 import { clientName, STATUS_BADGE, STATUS_LABEL, useClients, useClientTypes, type AdminClient, type ClientStatus } from "./client-admin";
 import { defaultView, filterClients, hasCurrentAuthorization, readViewPreference, sortClients, WIDE_SCREEN_QUERY, writeViewPreference, type AuthorizationFilter, type ClientSort, type ClientView } from "./client-view";
 import { actionBtn } from "./ui-classes";
+import { NewRecordOffice, OfficeCountyFilters, OfficeNames } from "./office-assignments";
+import { assignOfficeAfterCreate, countyMatches, officeMatches, type OfficeRow, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -69,12 +71,13 @@ export function ClientTypeField({ value, onChange, id }: { value: string; onChan
   );
 }
 
-function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
+function AddClientForm({ onDone }: { onDone: (clientId: string, note?: string) => void }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
   const [form, setForm] = useState({ first: "", last: "", city: "", type: "", label: "" });
   const [draft, setDraft] = useState(false);
+  const [office, setOffice] = useState("");
   const [dupConfirmed, setDupConfirmed] = useState(false);
   const dupes = useDuplicateClients(form.first, form.last);
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
@@ -92,10 +95,12 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       if (draft) await api.post(`/v1/clients/${encodeURIComponent(r.client.clientId)}/stage`, { organizationId: activeOrganizationId, stage: "draft", note: null }, { idempotencyKey: newIdempotencyKey() });
+      const note = await assignOfficeAfterCreate(api, activeOrganizationId, "client", r.client.clientId, office);
       await queryClient.invalidateQueries({ queryKey: ["aws-clients"] });
       await queryClient.invalidateQueries({ queryKey: ["aws-client-directory"] });
+      await queryClient.invalidateQueries({ queryKey: ["people-facets"] });
       setState({ busy: false, error: null });
-      onDone(r.client.clientId);
+      onDone(r.client.clientId, note ?? undefined);
     } catch (cause) {
       setState({ busy: false, error: message(cause, "The client was not added.") });
     }
@@ -110,6 +115,7 @@ function AddClientForm({ onDone }: { onDone: (clientId: string) => void }) {
         <div><label htmlFor="new-city" className="block text-sm font-medium text-slate-700">City (optional)</label><input id="new-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
         <ClientTypeField id="new-type" value={form.type} onChange={set("type")} />
         <div className="sm:col-span-2"><label htmlFor="new-label" className="block text-sm font-medium text-slate-700">Label caregivers see instead of the code (optional)</label><input id="new-label" value={form.label} maxLength={40} autoComplete="off" onChange={(e) => set("label")(e.target.value)} className={inputClass} /></div>
+        <NewRecordOffice kind="client" value={office} onChange={setOffice} />
         <DuplicateWarning matches={dupes.data} confirmed={dupConfirmed} onConfirm={setDupConfirmed} />
         <label className="flex min-h-[44px] items-center gap-2 text-sm font-medium text-slate-700 sm:col-span-2"><input type="checkbox" className="h-5 w-5" checked={draft} onChange={(e) => setDraft(e.target.checked)} />Save as a draft (it cannot be scheduled until you activate it)</label>
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
@@ -139,6 +145,7 @@ export function ClientsPage() {
   const [sort, setSort] = useState<ClientSort>("name");
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
+  const [addedNote, setAddedNote] = useState<string | null>(null);
   // View: the signed-in person's saved choice, else List on a wide screen and Cards on a phone.
   const [view, setView] = useState<ClientView>(() => {
     const saved = readViewPreference(user?.id, safeStorage());
@@ -151,7 +158,13 @@ export function ClientsPage() {
     if (saved) setView(saved);
   }, [userId]);
   const chooseView = (next: ClientView) => { setView(next); writeViewPreference(userId, next, safeStorage()); };
-  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort), [clients.data, search, status, authorization, sort]);
+  const { offices, available: officesOn } = useOffices(hasPermission("clients.names.read"));
+  const facets = usePeopleFacets(officesOn);
+  const officeOf = facets.clientOffices;
+  const [officeFilter, setOfficeFilter] = useState("");
+  const [countyFilter, setCountyFilter] = useState("");
+  const countiesInUse = useMemo(() => [...new Set(facets.clientCounty.values())].sort(), [facets.clientCounty]);
+  const shown = useMemo(() => sortClients(filterClients(clients.data ?? [], { search, status, authorization }), sort).filter((c) => officeMatches(officeFilter, officeOf.get(c.clientId)) && countyMatches(countyFilter, facets.clientCounty.get(c.clientId))), [clients.data, search, status, authorization, sort, officeFilter, countyFilter, officeOf, facets.clientCounty]);
   if (!hasPermission("clients.names.read")) return <p className="text-sm text-slate-600">You do not have access to client records.</p>;
   const counts = (clients.data ?? []).reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {});
   return (
@@ -160,8 +173,8 @@ export function ClientsPage() {
         <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Clients</h1><InfoTip label="About Clients" title="Clients">Manage client profiles and care information.</InfoTip></div>
         {canManage ? <div className="flex flex-wrap items-center gap-3"><ImportButton kind="clients" /><Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add client"}</Button></div> : null}
       </div>
-      {adding ? <AddClientForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
-      {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.</p> : null}
+      {adding ? <AddClientForm onDone={(id, note) => { setAdding(false); setAdded(id); setAddedNote(note ?? null); }} /> : null}
+      {added ? <p role="status" className="text-sm text-emerald-800">Client added. <Link className="underline" to={`/clients/${added}`}>Add authorized hours</Link>.{addedNote ? <span className="text-red-700"> {addedNote}</span> : null}</p> : null}
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[220px] flex-1">
           <label htmlFor="client-search" className="block text-sm font-medium text-slate-700">Search</label>
@@ -182,6 +195,7 @@ export function ClientsPage() {
             <option value="none">None current</option>
           </select>
         </div>
+        {officesOn && facets.ready ? <OfficeCountyFilters idPrefix="client" offices={offices} counties={countiesInUse} office={officeFilter} onOffice={setOfficeFilter} county={countyFilter} onCounty={setCountyFilter} /> : null}
         <div>
           <label htmlFor="client-sort" className="block text-sm font-medium text-slate-700">Sort by</label>
           <select id="client-sort" value={sort} onChange={(e) => setSort(e.target.value as ClientSort)} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-base">
@@ -201,10 +215,10 @@ export function ClientsPage() {
       {clients.isError ? <p role="alert" className="text-sm text-red-700">{(clients.error as Error).message}</p> : null}
       {clients.data && shown.length === 0 ? <p className="text-sm text-slate-600">No clients match.</p> : null}
       {view === "list" ? (
-        shown.length > 0 ? <ClientList clients={shown} /> : null
+        shown.length > 0 ? <ClientList clients={shown} offices={officesOn && facets.ready ? offices : null} officeOf={officeOf} countyOf={facets.clientCounty} /> : null
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Clients as cards">
-          {shown.map((c) => <ClientCard key={c.clientId} c={c} />)}
+          {shown.map((c) => <ClientCard key={c.clientId} c={c} offices={officesOn && facets.ready ? offices : null} officeIds={officeOf.get(c.clientId)} county={facets.clientCounty.get(c.clientId)} />)}
         </ul>
       )}
     </div>
@@ -223,7 +237,7 @@ const authLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? `${c.current
 const actionLabel = (c: AdminClient) => (hasCurrentAuthorization(c) ? "View authorized hours →" : "Add authorized hours →");
 
 /** Compact rows: client, status, authorization, one action. The same rows and permissions as Cards. */
-function ClientList({ clients: input }: { clients: AdminClient[] }) {
+function ClientList({ clients: input, offices, officeOf, countyOf }: { clients: AdminClient[]; offices: readonly OfficeRow[] | null; officeOf: Map<string, string[]>; countyOf: Map<string, string> }) {
   const { rows: clients, sort } = useSortedRows(input, {
     client: { get: (c) => clientName(c) ?? c.clientCode },
     status: { get: (c) => STATUS_LABEL[c.status] },
@@ -238,6 +252,7 @@ function ClientList({ clients: input }: { clients: AdminClient[] }) {
             <SortTh sort={sort} column="client" className="px-3 py-0.5">Client</SortTh>
             <SortTh sort={sort} column="status" className="px-3 py-0.5">Status</SortTh>
             <SortTh sort={sort} column="authorization" kind="number" className="px-3 py-0.5">Authorization</SortTh>
+            {offices ? <th scope="col" className="px-3 py-1.5 font-semibold">Offices</th> : null}
             <th scope="col" className="px-3 py-1.5 font-semibold"><span className="sr-only">Action</span></th>
           </tr>
         </thead>
@@ -251,6 +266,7 @@ function ClientList({ clients: input }: { clients: AdminClient[] }) {
               </th>
               <td className="px-3 py-1"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE[c.status]}`}>{STATUS_LABEL[c.status]}</span></td>
               <td className={`px-3 py-1 ${!hasCurrentAuthorization(c) && c.status === "active" ? "font-semibold text-red-700" : "text-slate-800"}`}>{authLabel(c)}</td>
+              {offices ? <td className="px-3 py-1 text-slate-800"><OfficeNames ids={officeOf.get(c.clientId)} offices={offices} />{countyOf.get(c.clientId) ? <span className="block text-xs text-slate-600">{countyOf.get(c.clientId)} County</span> : null}</td> : null}
               <td className="px-3 py-1"><Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline md:min-h-[32px]" aria-label={`${actionLabel(c)} for ${clientName(c) ?? c.clientCode}`}>{actionLabel(c)}</Link></td>
             </tr>
           ))}
@@ -261,7 +277,7 @@ function ClientList({ clients: input }: { clients: AdminClient[] }) {
 }
 
 /** Phone and Cards view: a compact expandable row; the key line and status show, details and the one action open on tap. */
-function ClientCard({ c }: { c: AdminClient }) {
+function ClientCard({ c, offices, officeIds, county }: { c: AdminClient; offices: readonly OfficeRow[] | null; officeIds: readonly string[] | undefined; county: string | undefined }) {
   const name = clientName(c);
   const missing = !hasCurrentAuthorization(c) && c.status === "active";
   return (
@@ -281,6 +297,7 @@ function ClientCard({ c }: { c: AdminClient }) {
           <p className={missing ? "font-semibold text-red-700" : "text-slate-700"}>
             Authorization: {authLabel(c)}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
           </p>
+          {offices ? <p className="text-slate-700">Offices: <OfficeNames ids={officeIds} offices={offices} />{county ? ` · ${county} County` : ""}</p> : null}
           <Link to={`/clients/${c.clientId}`} className="inline-flex min-h-[44px] items-center font-medium text-og-link underline">{actionLabel(c)}</Link>
         </div>
       </details>

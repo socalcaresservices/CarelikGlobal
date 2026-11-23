@@ -84,7 +84,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -323,6 +323,21 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/care-notifications/read", feature: "requestCleanup" },
   { method: apigw.HttpMethod.POST, path: "/v1/documents/{documentId}/cancel", feature: "requestCleanup" },
   { method: apigw.HttpMethod.POST, path: "/v1/document-types/{documentTypeId}/retire", feature: "requestCleanup" },
+  { method: apigw.HttpMethod.GET, path: "/v1/offices", feature: "offices" },
+  { method: apigw.HttpMethod.GET, path: "/v1/client-offices", feature: "offices" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices", feature: "offices" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/rename", feature: "offices" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/retire", feature: "offices" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/office", feature: "offices" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/update", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/reactivate", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.GET, path: "/v1/people-facets", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.GET, path: "/v1/assignment-history", feature: "assignmentHistory" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/offices", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/offices", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-county", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/service-counties", feature: "officeAssignments" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/color", feature: "officeAssignments" },
   { method: apigw.HttpMethod.GET, path: "/v1/availability/me" },
   { method: apigw.HttpMethod.POST, path: "/v1/availability/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/care-opportunities" },

@@ -25,6 +25,9 @@ import { OverrideBadge } from "./readiness/override-badge";
 import { SendSignInLink } from "./readiness/send-signin-link";
 import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
+import { ColorSwatch } from "./caregiver-color";
+import { AssignmentHistory, CaregiverColorControl, CaregiverServiceCountiesControl, NewRecordOffice, OfficeAssignmentsControl, OfficeCountyFilters, OfficeNames } from "./office-assignments";
+import { assignOfficeAfterCreate, countyMatches, officeMatches, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm";
@@ -33,7 +36,7 @@ const WORK_STATUSES: readonly WorkStatus[] = ["not_ready", "approved", "active",
 function useRefreshCareTeam() {
   const queryClient = useQueryClient();
   return async () => {
-    for (const k of ["aws-caregivers", "aws-document-people"]) await queryClient.invalidateQueries({ queryKey: [k] });
+    for (const k of ["aws-caregivers", "aws-document-people", "people-facets", "assignment-history"]) await queryClient.invalidateQueries({ queryKey: [k] });
   };
 }
 
@@ -47,7 +50,7 @@ function NameFields({ v, set, idPrefix }: { v: { first: string; last: string; pr
   );
 }
 
-function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
+function AddCaregiverForm({ onDone }: { onDone: (id: string, note?: string) => void }) {
   const api = useAwsApi();
   const refresh = useRefreshCareTeam();
   const { activeOrganizationId } = useOrganization();
@@ -63,6 +66,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
   const displayedCity = city ?? lookup.data?.city ?? "";
   const [status, setStatus] = useState<Exclude<CaregiverStatus, "inactive" | "interview" | "offer" | "pending_documents">>("applicant");
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const [office, setOffice] = useState("");
   const key = useRef(newIdempotencyKey());
   const set = (k: "first" | "last" | "preferred") => (x: string) => { setV((o) => ({ ...o, [k]: x })); key.current = newIdempotencyKey(); };
   async function submit() {
@@ -75,9 +79,10 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
         ...(zip ? { zip, city: displayedCity.trim() || null } : {}),
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
+      const note = await assignOfficeAfterCreate(api, activeOrganizationId, "caregiver", r.caregiver.caregiverRecordId, office);
       await refresh();
       setState({ busy: false, error: null });
-      onDone(r.caregiver.caregiverRecordId);
+      onDone(r.caregiver.caregiverRecordId, note ?? undefined);
     } catch (cause) {
       setState({ busy: false, error: message(cause, "The caregiver was not added.") });
     }
@@ -103,6 +108,7 @@ function AddCaregiverForm({ onDone }: { onDone: (id: string) => void }) {
             {(["applicant", "onboarding"] as const).map((s) => <option key={s} value={s}>{CAREGIVER_STATUS_LABEL[s]}</option>)}
           </select>
         </div>
+        <NewRecordOffice kind="caregiver" value={office} onChange={setOffice} />
         {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
         <div className="sm:col-span-2"><Button type="submit" disabled={state.busy || lookup.isFetching}>{state.busy ? "Adding…" : "Add caregiver"}</Button></div>
       </form>
@@ -122,11 +128,21 @@ export function CareTeamPage() {
   const [params] = useSearchParams();
   const [adding, setAdding] = useState(() => params.get("add") === "1");
   const [added, setAdded] = useState<string | null>(null);
+  const [addedNote, setAddedNote] = useState<string | null>(null);
+  const { offices, available: officesOn } = useOffices();
+  const facets = usePeopleFacets(officesOn);
+  const peopleReady = officesOn && facets.ready;
+  const [officeFilter, setOfficeFilter] = useState("");
+  const [countyFilter, setCountyFilter] = useState("");
+  const countiesInUse = useMemo(() => [...new Set([...facets.caregiverCounties.values()].flat())].sort(), [facets.caregiverCounties]);
   const shown = useMemo(() => {
     const s = search.trim().toLowerCase();
+    // A caregiver appears once however many offices or counties match: the filters test "any of" their lists, never join rows.
     return (caregivers.data ?? []).filter((c) => (status === "all" || (status === "current" ? c.workStatus !== "inactive" : c.workStatus === status))
-      && (!s || [caregiverName(c), c.caregiverCode].some((x) => x.toLowerCase().includes(s))));
-  }, [caregivers.data, search, status]);
+      && (!s || [caregiverName(c), c.caregiverCode].some((x) => x.toLowerCase().includes(s)))
+      && officeMatches(officeFilter, facets.caregiverOffices.get(c.caregiverRecordId))
+      && countyMatches(countyFilter, facets.caregiverCounties.get(c.caregiverRecordId)));
+  }, [caregivers.data, search, status, officeFilter, countyFilter, facets.caregiverOffices, facets.caregiverCounties]);
   const { rows: sortedCaregivers, sort: cgSort } = useSortedRows(shown, {
     caregiver: { get: (c) => caregiverName(c) },
     status: { get: (c) => WORK_STATUS_LABEL[c.workStatus] },
@@ -139,8 +155,8 @@ export function CareTeamPage() {
         <div className="flex items-center gap-1.5"><h1 className="text-xl font-bold tracking-tight text-og-ink">Caregivers</h1><InfoTip label="About Caregivers" title="Caregivers">Manage caregiver profiles, services and onboarding.</InfoTip></div>
         {canManage ? <Button type="button" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>{adding ? "Close" : "Add caregiver"}</Button> : null}
       </div>
-      {canManage && adding ? <AddCaregiverForm onDone={(id) => { setAdding(false); setAdded(id); }} /> : null}
-      {added ? <p role="status" className="text-sm text-emerald-800">Caregiver added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.</p> : null}
+      {canManage && adding ? <AddCaregiverForm onDone={(id, note) => { setAdding(false); setAdded(id); setAddedNote(note ?? null); }} /> : null}
+      {added ? <p role="status" className="text-sm text-emerald-800">Caregiver added. <Link className="underline" to={`/care-team/${added}`}>Open the record</Link>.{addedNote ? <span className="text-red-700"> {addedNote}</span> : null}</p> : null}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div className="flex min-w-[220px] flex-1 items-center gap-1.5">
           <label htmlFor="cg-search" className="text-xs font-medium text-slate-700">Search</label>
@@ -154,6 +170,7 @@ export function CareTeamPage() {
             <option value="all">All ({caregivers.data?.length ?? 0})</option>
           </select>
         </div>
+        {peopleReady ? <OfficeCountyFilters idPrefix="cg" offices={offices} counties={countiesInUse} office={officeFilter} onOffice={setOfficeFilter} county={countyFilter} onCounty={setCountyFilter} /> : null}
       </div>
       {caregivers.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {caregivers.isError ? <p role="alert" className="text-sm text-red-700">{(caregivers.error as Error).message}</p> : null}
@@ -166,6 +183,7 @@ export function CareTeamPage() {
                 <th scope="col" className="w-10 px-3 py-1 text-right font-semibold">No.</th>
                 <SortTh sort={cgSort} column="caregiver" className="px-3 py-0.5">Caregiver</SortTh>
                 <SortTh sort={cgSort} column="status" className="px-3 py-0.5">Status</SortTh>
+                {peopleReady ? <th scope="col" className="px-3 py-1 font-semibold">Offices</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -174,6 +192,7 @@ export function CareTeamPage() {
                   <td className="w-10 px-3 py-1 text-right align-middle tabular-nums text-slate-600" data-testid="row-no">{i + 1}</td>
                   <th scope="row" className="px-3 py-1 font-normal">
                     <Link to={`/care-team/${c.caregiverRecordId}`} className="inline-flex min-h-[44px] flex-wrap items-baseline gap-x-3 gap-y-0 py-0.5 md:min-h-[30px]">
+                      {peopleReady ? <ColorSwatch color={facets.caregiverColor.get(c.caregiverRecordId)} /> : null}
                       <span className="font-semibold text-slate-950 underline">{caregiverName(c)}</span>
                       <span className={`text-xs font-normal ${c.hasSignIn ? "text-slate-700" : "text-amber-900"}`}>
                         {signInLabel(c)} · {c.activeAssignments} active assignment{c.activeAssignments === 1 ? "" : "s"}{c.openVisits > 0 ? ` · ${c.openVisits} visit in progress` : ""}
@@ -186,6 +205,7 @@ export function CareTeamPage() {
                     {c.workStatus === "not_ready" && c.readinessTotal ? <span className="ml-2 text-xs text-slate-700">{c.readinessMet ?? 0} of {c.readinessTotal} done</span> : null}
                     {!c.signedIn && c.workStatus !== "inactive" ? <SendSignInLink caregiverRecordId={c.caregiverRecordId} hasContact={!!c.hasContact} canManage={canManage} lastSentAt={c.invitationLastSentAt ?? null} /> : null}
                   </td>
+                  {peopleReady ? <td className="px-3 py-1 align-middle text-slate-800"><OfficeNames ids={facets.caregiverOffices.get(c.caregiverRecordId)} offices={offices} />{(facets.caregiverCounties.get(c.caregiverRecordId) ?? []).length > 0 ? <span className="block text-xs text-slate-600">{(facets.caregiverCounties.get(c.caregiverRecordId) ?? []).join(", ")}</span> : null}</td> : null}
                 </tr>
               ))}
             </tbody>
@@ -421,6 +441,11 @@ function CaregiverFiles({ caregiverRecordId }: { caregiverRecordId: string }) {
   );
 }
 
+function CaregiverProfileSwatch({ caregiverRecordId }: { caregiverRecordId: string }) {
+  const { available } = useOffices();
+  const facets = usePeopleFacets(available);
+  return facets.ready ? <ColorSwatch color={facets.caregiverColor.get(caregiverRecordId)} /> : null;
+}
 export function CaregiverDetailPage() {
   const { caregiverRecordId } = useParams<{ caregiverRecordId: string }>();
   const { hasPermission } = useOrganization();
@@ -436,8 +461,7 @@ export function CaregiverDetailPage() {
     <div className="max-w-3xl space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Link to="/care-team" className="inline-flex min-h-[44px] items-center text-sm text-slate-700 underline md:min-h-0">← Care Team</Link>
-        <h1 className="text-xl font-bold tracking-tight text-slate-950">{caregiverName(c)}</h1>
-        <span className="text-xs text-slate-500">{c.caregiverCode}</span>
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-950"><CaregiverProfileSwatch caregiverRecordId={c.caregiverRecordId} />{caregiverName(c)}</h1>
         {!c.hasSignIn && (overrides.data ?? []).some((o) => o.caregiverRecordId === c.caregiverRecordId) ? <OverrideBadge /> : null}
       </div>
       <section className="space-y-2" aria-label="Contact and employment">
@@ -448,6 +472,13 @@ export function CaregiverDetailPage() {
         <HireDateForm c={c} />
         <EmploymentCard c={c} canManage={canManage} />
       </Card> : null}
+      <Card className="space-y-3" aria-label="Offices, service area and color">
+        <h2 className="text-sm font-semibold">Offices, service area and color</h2>
+        <OfficeAssignmentsControl kind="caregiver" subjectId={c.caregiverRecordId} />
+        <CaregiverServiceCountiesControl caregiverRecordId={c.caregiverRecordId} />
+        <CaregiverColorControl caregiverRecordId={c.caregiverRecordId} />
+        <AssignmentHistory kind="caregiver" subjectId={c.caregiverRecordId} />
+      </Card>
       {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={c.caregiverRecordId} /> : null}
       </section>
       <section className="space-y-2" aria-label="Readiness and services">

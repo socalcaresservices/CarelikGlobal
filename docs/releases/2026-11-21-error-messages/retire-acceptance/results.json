@@ -1,0 +1,82 @@
+[
+ {
+  "n": "the synthetic duplicate type exists and is active",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "a request for the duplicate type was created",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "retiring with an open request is refused with the business-rule message",
+  "ok": true,
+  "d": "\"This type still has 1 open request(s). Cancel or complete them first.\""
+ },
+ {
+  "n": "... and the type is still active",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "the request was cancelled and kept for the record",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "success message shown",
+  "ok": true,
+  "d": "\"Synthetic CPR duplicate is retired and can no longer be requested. Existing records are kept.\""
+ },
+ {
+  "n": "gone from the active list immediately (no reload)",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "listed as retired (cannot be requested)",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "still gone from the active list after reload",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "still listed as retired after reload",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "not offered on a new request",
+  "ok": true,
+  "d": "[\"Choose…\",\"CPR card\",\"TB result\"]"
+ },
+ {
+  "n": "the type record is kept, inactive, with who and when",
+  "ok": true,
+  "d": "f|t|t"
+ },
+ {
+  "n": "the cancelled request is kept and still points at the type",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "the cancel reason is recorded",
+  "ok": true,
+  "d": ""
+ },
+ {
+  "n": "the audit event is recorded with the reason and the before/after state",
+  "ok": true,
+  "d": "document_type.retired|duplicate|true->false"
+ },
+ {
+  "n": "the cancel is audited too",
+  "ok": true,
+  "d": ""
+ }
+]

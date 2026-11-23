@@ -56,6 +56,9 @@ import { useServiceVerificationBackend } from "@/lib/sv-backend-supabase";
 import { buildClientMonthSummary } from "@/lib/client-month-summary";
 import { CalendarAuthorizedHours, CalendarSummary } from "@/components/calendar-summary";
 import { PageHeader } from "@/aws/ui/page-header";
+import { useDashboardAppearance } from "@/aws/appearance/appearance-hooks";
+import { caregiverColor } from "@/aws/caregiver-colors";
+import { officeMatches, useClientOffices, useOffices, usePeopleFacets } from "@/aws/offices-data";
 import { InfoTip } from "@/aws/ui/info-tip";
 import { useEnvironmentMarker } from "@/aws/environment";
 import { AwsApiContext } from "@/aws/aws-workspace";
@@ -156,14 +159,8 @@ const ALL_VISIT_COLUMNS = VISIT_COLUMN_OPTIONS.map((column) => column.key);
 // beside the expanded sidebar at 1440px; it is still a column in Columns.
 const DEFAULT_VISIT_COLUMNS = ALL_VISIT_COLUMNS.filter((key) => !BALANCE_COLUMNS.includes(key) && key !== "visitRef");
 
-const CHART_COLORS = [
-  "#4f46e5",
-  "#059669",
-  "#0284c7",
-  "#7c3aed",
-  "#e11d48",
-  "#d97706",
-];
+// The chart colours follow the palette chosen on the Dashboard (Settings > Appearance): Care blue, Blue shades, Primary colors or Ogevia.
+// Worked hours use the palette's first colour and billable hours its second; pie slices cycle through all of them.
 
 const STATUS_TONE: Record<ServiceVisitStatus, StatusTone> = {
   draft: "info",
@@ -433,6 +430,11 @@ export function ServiceVerificationReportsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [correctedByFilter, setCorrectedByFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [officeFilter, setOfficeFilter] = useState("");   // 0110: an office id, "none" = clients with no office
+  const { offices: officeList, available: officesOn } = useOffices();
+  const { byClientId: officeByClient, ready: officeMapReady } = useClientOffices(officesOn);
+  // Caregiver Color (0111): when the chart is grouped by caregiver each slice/bar uses that caregiver's saved colour; a caregiver with none keeps the dashboard palette.
+  const caregiverColorByUser = usePeopleFacets(officesOn).caregiverColorByUser;
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
@@ -441,6 +443,7 @@ export function ServiceVerificationReportsPage() {
   const inActions = (node: ReactNode) => (exportSlot ? createPortal(node, exportSlot) : node);
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [chartGroup, setChartGroup] = useState<ChartGroup>("caregiver");
+  const { colors: paletteColors } = useDashboardAppearance();
   const location = useLocation();
   const navigate = useNavigate();
   // A printout from a test or unverified environment says so on every page, so it cannot pass for a real record.
@@ -719,15 +722,11 @@ export function ServiceVerificationReportsPage() {
     return map;
   }, [clientLocationsQuery.data]);
 
-  const rows = useMemo(
-    () =>
-      locationFilter
-        ? rawRows.filter(
-            (row) => clientLocationMap.get(row.client_id) === locationFilter,
-          )
-        : rawRows,
-    [clientLocationMap, locationFilter, rawRows],
-  );
+  const rows = useMemo(() => {
+    const byLocation = locationFilter ? rawRows.filter((row) => clientLocationMap.get(row.client_id) === locationFilter) : rawRows;
+    if (!officeFilter || !officesOn || !officeMapReady) return byLocation;
+    return byLocation.filter((row) => officeMatches(officeFilter, officeByClient.get(row.client_id)));
+  }, [clientLocationMap, locationFilter, officeFilter, officesOn, officeMapReady, officeByClient, rawRows]);
 
   const locationOptions = useMemo(
     () => Array.from(new Set(clientLocationMap.values())).sort(),
@@ -981,7 +980,7 @@ export function ServiceVerificationReportsPage() {
   const chartData = useMemo(() => {
     const grouped = new Map<
       string,
-      { name: string; workedMinutes: number; billableMinutes: number }
+      { name: string; workedMinutes: number; billableMinutes: number; color?: string; outline?: string }
     >();
     for (const row of billable) {
       const name =
@@ -997,6 +996,10 @@ export function ServiceVerificationReportsPage() {
         workedMinutes: 0,
         billableMinutes: 0,
       };
+      if (chartGroup === "caregiver" && !entry.color) {
+        const c = caregiverColor(caregiverColorByUser.get(row.caregiver_user_id));
+        if (c) { entry.color = c.fill; entry.outline = c.line; }
+      }
       entry.workedMinutes += row.worked_minutes ?? 0;
       entry.billableMinutes += row.billable_minutes ?? 0;
       grouped.set(name, entry);
@@ -1004,7 +1007,7 @@ export function ServiceVerificationReportsPage() {
     return Array.from(grouped.values()).sort(
       (a, b) => b.workedMinutes - a.workedMinutes,
     );
-  }, [billable, chartGroup, clientLocationMap]);
+  }, [billable, chartGroup, clientLocationMap, caregiverColorByUser]);
 
   const trendData = useMemo(() => {
     const grouped = new Map<
@@ -1138,7 +1141,7 @@ export function ServiceVerificationReportsPage() {
     window.print();
   }
 
-  const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter]
+  const activeFilterCount = [clientFilter, caregiverFilter, serviceFilter, statusFilter, correctedByFilter, locationFilter, officeFilter]
     .filter(Boolean).length;
 
   // Monthly reports are chosen by month; of the filters only the ones their data honours are shown.
@@ -1156,6 +1159,7 @@ export function ServiceVerificationReportsPage() {
     setStatusFilter("");
     setCorrectedByFilter("");
     setLocationFilter("");
+    setOfficeFilter("");
     if (caregiverFilter) selectCaregiverFolder("");
   }
 
@@ -1572,6 +1576,25 @@ export function ServiceVerificationReportsPage() {
               </select>
             </div>
             ) : null}
+            {filterApplies("location") && officesOn && officeMapReady && officeList.length > 0 ? (
+            <div>
+              <label htmlFor="report-office" className="block text-xs font-medium text-slate-600">
+                Office
+              </label>
+              <select
+                id="report-office"
+                value={officeFilter}
+                onChange={(event) => setOfficeFilter(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900"
+              >
+                <option value="">All Offices</option>
+                {officeList.map((o) => (
+                  <option key={o.officeId} value={o.officeId}>{o.isActive ? o.name : `${o.name} (retired)`}</option>
+                ))}
+                <option value="none">Unassigned</option>
+              </select>
+            </div>
+            ) : null}
             {filterApplies("caregiver") ? (
             <div>
               <label
@@ -1773,7 +1796,9 @@ export function ServiceVerificationReportsPage() {
                         {chartData.map((entry, index) => (
                           <Cell
                             key={entry.name}
-                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            fill={entry.color ?? paletteColors[index % paletteColors.length]}
+                            stroke={entry.outline}
+                            strokeWidth={entry.outline ? 2 : undefined}
                           />
                         ))}
                       </Pie>
@@ -1791,14 +1816,14 @@ export function ServiceVerificationReportsPage() {
                         type="monotone"
                         dataKey="workedMinutes"
                         name="Worked hours"
-                        stroke="#4f46e5"
+                        stroke={paletteColors[0]}
                         strokeWidth={3}
                       />
                       <Line
                         type="monotone"
                         dataKey="billableMinutes"
                         name="Billable hours"
-                        stroke="#059669"
+                        stroke={paletteColors[1]}
                         strokeWidth={3}
                       />
                     </LineChart>
@@ -1812,13 +1837,17 @@ export function ServiceVerificationReportsPage() {
                       <Bar
                         dataKey="workedMinutes"
                         name="Worked hours"
-                        fill="#4f46e5"
+                        fill={paletteColors[0]}
                         radius={[6, 6, 0, 0]}
-                      />
+                      >
+                        {chartData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color ?? paletteColors[0]} stroke={entry.outline} strokeWidth={entry.outline ? 2 : undefined} />
+                        ))}
+                      </Bar>
                       <Bar
                         dataKey="billableMinutes"
                         name="Billable hours"
-                        fill="#059669"
+                        fill={paletteColors[1]}
                         radius={[6, 6, 0, 0]}
                       />
                     </BarChart>

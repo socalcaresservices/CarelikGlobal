@@ -3519,6 +3519,143 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0110 (pending, behind the offices release switch): offices and a client's responsible office. Administrators manage offices; managers assign clients; office roles read.
+  "GET /v1/offices": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      offices: await tx((db) => rows(db, "select * from ogevia_api.list_offices($1)", [orgParam(event)])),
+    }),
+  },
+
+  "GET /v1/client-offices": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      clientOffices: await tx((db) => rows(db, "select * from ogevia_api.list_client_offices($1)", [orgParam(event)])),
+    }),
+  },
+
+  "POST /v1/offices": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const name = text(body.name, "name", 80, { required: true })!;
+      const key = idempotencyKey(event.headers);
+      return { officeId: await tx(async (db) => (await first(db, "select ogevia_api.create_office($1,$2,$3) as id", [uuid(body.organizationId, "organizationId"), name, key])).id) };
+    },
+  },
+
+  "POST /v1/offices/{officeId}/rename": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const name = text(body.name, "name", 80, { required: true })!;
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.rename_office($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), name])).r) };
+    },
+  },
+
+  "POST /v1/offices/{officeId}/retire": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = text(body.reason, "reason", 500, { required: true })!;
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.retire_office($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), reason])).r) };
+    },
+  },
+
+  // The client's responsible office; officeId null clears it.
+  "POST /v1/clients/{clientId}/office": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const office = body.officeId === null || body.officeId === undefined ? null : uuid(body.officeId, "officeId");
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.set_client_office($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), office])).r) };
+    },
+  },
+
+  // 0111 (pending, behind the offices release switch): office address and county, office assignments (one primary), service counties, caregiver colour. Identification and filtering only.
+  "POST /v1/offices/{officeId}/update": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const name = text(body.name, "name", 80, { required: true })!;
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.update_office($1,$2,$3,$4,$5,$6,$7) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), name, text(body.addressLine1, "addressLine1", 200), text(body.city, "city", 80),
+        text(body.postalCode, "postalCode", 10), text(body.county, "county", 40)])).r) };
+    },
+  },
+
+  "POST /v1/offices/{officeId}/reactivate": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.reactivate_office($1,$2) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId")])).r) };
+    },
+  },
+
+  "GET /v1/people-facets": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ facets: await tx(async (db) => (await first(db, "select ogevia_api.list_people_facets($1) as f", [orgParam(event)])).f) }),
+  },
+
+  // The whole office set for one person: a primary office plus any secondary offices (the primary is never repeated in the secondary list).
+  "POST /v1/clients/{clientId}/offices": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const primary = body.primaryOfficeId === null || body.primaryOfficeId === undefined ? null : uuid(body.primaryOfficeId, "primaryOfficeId");
+      const secondary = body.secondaryOfficeIds === undefined || body.secondaryOfficeIds === null ? [] : Array.isArray(body.secondaryOfficeIds) && body.secondaryOfficeIds.length <= 20 ? body.secondaryOfficeIds.map((x) => uuid(x, "secondaryOfficeIds")) : (() => { throw new ApiError(400, "bad_request", "secondaryOfficeIds must be a short list"); })();
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.set_person_offices($1,'client',$2,$3,$4::uuid[]) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), primary, secondary])).r) };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/offices": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const primary = body.primaryOfficeId === null || body.primaryOfficeId === undefined ? null : uuid(body.primaryOfficeId, "primaryOfficeId");
+      const secondary = body.secondaryOfficeIds === undefined || body.secondaryOfficeIds === null ? [] : Array.isArray(body.secondaryOfficeIds) && body.secondaryOfficeIds.length <= 20 ? body.secondaryOfficeIds.map((x) => uuid(x, "secondaryOfficeIds")) : (() => { throw new ApiError(400, "bad_request", "secondaryOfficeIds must be a short list"); })();
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.set_person_offices($1,'caregiver',$2,$3,$4::uuid[]) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), primary, secondary])).r) };
+    },
+  },
+
+  "POST /v1/clients/{clientId}/service-county": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.set_client_service_county($1,$2,$3) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), text(body.county, "county", 40)])).r) };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/service-counties": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const counties = body.counties === undefined || body.counties === null ? [] : Array.isArray(body.counties) && body.counties.length <= 58 ? body.counties.map((x) => text(x, "counties", 40, { required: true })!) : (() => { throw new ApiError(400, "bad_request", "counties must be a list of at most 58 counties"); })();
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.set_caregiver_service_counties($1,$2,$3::text[]) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), counties])).r) };
+    },
+  },
+
+  // 0112 (pending, same officeAssignments switch): who changed an office assignment, service county or caregiver colour, and when (read only).
+  "GET /v1/assignment-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = event.queryStringParameters ?? {};
+      const type = query.subjectType === "client" || query.subjectType === "caregiver" ? query.subjectType : (() => { throw new ApiError(400, "bad_request", "subjectType must be client or caregiver."); })();
+      return { events: await tx((db) => rows(db, "select * from ogevia_api.list_assignment_history($1,$2,$3,50)", [orgParam(event), type, uuid(query.subjectId, "subjectId")])) };
+    },
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/color": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { status: await tx(async (db) => (await first(db, "select ogevia_api.set_caregiver_color($1,$2,$3) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"), text(body.color, "color", 20)])).r) };
+    },
+  },
+
   // 0109: the caller marks their OWN care-request alerts read (all, or up to 100 listed ids).
   "POST /v1/care-notifications/read": {
     mutating: true,

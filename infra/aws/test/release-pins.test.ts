@@ -9,7 +9,9 @@ import { describe, expect, it } from "vitest";
 const dir = fileURLToPath(new URL("../../../docs/releases/2026-11-20-test-plan/toolchain/", import.meta.url));
 const script = join(dir, "release_pins.py");
 const run = (...args: string[]) => spawnSync("python3", [script, ...args], { encoding: "utf8" });
-const PINNED = "88426e8cc979e91c8fb36dd4843345a6b3cf6a23";
+// The application commit the pins are validated against. Changed deliberately (2026-11-21) from 88426e8 (the release deployed to production as ef90a2a) to the web follow-up
+// the web follow-ups and minimal Offices (caregiver header without the staff ID; charts follow the Dashboard palette; offices, migration 0110, switch off). Any later application change must re-pin and update this line.
+const PINNED = "3f5fe4081374678e9261282a7c41e72a6062b0f6";
 const present = spawnSync("git", ["cat-file", "-e", `${PINNED}^{commit}`]).status === 0;
 
 describe.skipIf(!present)("release_pins.py", () => {
@@ -47,6 +49,27 @@ describe.skipIf(!present)("release_pins.py", () => {
       attempt((p) => { p.apiRoutes.switchOn = 263; }, /apiRoutes differs/);
       attempt((p) => { p.releasedMigrations.setSha256 = "0".repeat(64); }, /releasedMigrations differs/);
       attempt((p) => { p.applicationCommit = "0".repeat(40); }, /not in this checkout/);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it("PINS_0110.json (the Offices TEST release) matches this checkout and refuses altered hashes", () => {
+    const r = run("check", "--allow-dirty", "--pins", join(dir, "PINS_0110.json"));
+    expect(r.status, r.stdout + r.stderr).toBe(0); expect(r.stdout).toContain("PINS OK");
+    const pins = JSON.parse(readFileSync(join(dir, "PINS_0110.json"), "utf8"));
+    expect(pins.applicationCommit).toBe(PINNED);
+    expect(pins.expectedLedger).toEqual({ before: "108/0109", after: "109/0110" });
+    expect(pins.apiRoutes).toEqual({ switchOff: 259, switchOn: 262, officesRoutes: 6 });
+    const d = mkdtempSync(join(tmpdir(), "pins0110-"));
+    try {
+      for (const [edit, re] of [
+        [(q: any) => { q.migration0110.upSha256 = "0".repeat(64); }, /migration0110 differs/],
+        [(q: any) => { q.toolchainSha256["TEST_H3_OFFICES.sh"] = "0".repeat(64); }, /toolchainSha256 differs/],
+        [(q: any) => { q.apiRoutes.officesRoutes = 7; }, /apiRoutes differs/],
+        [(q: any) => { q.expectedLedger.after = "108/0109"; }, /expectedLedger differs/],
+      ] as const) {
+        const copy = structuredClone(pins); edit(copy); const f = join(d, "p.json"); writeFileSync(f, JSON.stringify(copy));
+        const x = run("check", "--allow-dirty", "--pins", f); expect(x.status).toBe(1); expect(x.stdout).toMatch(re);
+      }
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
 
