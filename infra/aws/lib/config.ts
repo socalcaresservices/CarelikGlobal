@@ -105,7 +105,13 @@ export interface OgeviaEnvironmentConfig {
    * 2026-11-15, for production (PRD below). An environment that has not applied 0103 must keep it false: with it off the two routes are not in the API at all.
    * staffManagement (pending migration 0086, infra/aws/db/pending): on for the pilot/test slice and, since the owner's approval of 2026-10-26, on for production (PRD below). An environment that has not applied 0086 must keep it false.
    */
-  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean; readonly liveTestRepairs?: boolean; readonly requestCleanup?: boolean; readonly offices?: boolean; readonly officeAssignments?: boolean; readonly assignmentHistory?: boolean };
+  readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean; readonly liveTestRepairs?: boolean; readonly requestCleanup?: boolean; readonly offices?: boolean; readonly officeAssignments?: boolean; readonly assignmentHistory?: boolean; readonly notifications?: boolean };
+  /**
+   * Release Train 2 (priority A): cover-shift notifications by email. ABSENT everywhere today. Present only when `features.notifications` is also on: CDK then
+   * adds one small Lambda OUTSIDE the VPC (the API Lambda has no internet route and NAT stays deferred) whose role may call ses:SendEmail on this ONE verified
+   * identity, plus the Lambda VPC-endpoint permission for the API to invoke it. `from` is "Name <address>". Needs a verified SES identity (the owner's decision).
+   */
+  readonly notificationEmail?: { readonly from: string; readonly sesIdentityArn: string; readonly configurationSetArn?: string; readonly configurationSet?: string };
   readonly auth: {
     /**
      * Existing Cognito app client the API's JWT authorizer accepts (audience).
@@ -509,6 +515,16 @@ export function assertVerified(value: unknown, label: string): void {
 }
 
 /** https origins of the environment's permanent hostnames. */
+/** Release Train 2: the email function exists only when the environment turns notifications on AND names its sender. */
+export function notificationEmailOf(config: OgeviaEnvironmentConfig): NonNullable<OgeviaEnvironmentConfig["notificationEmail"]> | undefined {
+  if (!config.features.notifications || !config.notificationEmail) return undefined;
+  const n = config.notificationEmail;
+  if (!/^[^<>\r\n]{1,80} <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>$/.test(n.from) && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(n.from)) throw new Error("notificationEmail.from must be an address or \"Name <address>\"");
+  if (!/^arn:aws:ses:[a-z0-9-]+:\d{12}:identity\/.+$/.test(n.sesIdentityArn)) throw new Error("notificationEmail.sesIdentityArn must be an SES identity ARN");
+  if (n.configurationSetArn && !/^arn:aws:ses:[a-z0-9-]+:\d{12}:configuration-set\/[A-Za-z0-9_-]+$/.test(n.configurationSetArn)) throw new Error("notificationEmail.configurationSetArn must be an SES configuration-set ARN");
+  return n;
+}
+
 export function customOriginsFor(config: OgeviaEnvironmentConfig): readonly string[] {
   return (config.customDomains?.hostnames ?? []).map((h) => `https://${h}`);
 }
