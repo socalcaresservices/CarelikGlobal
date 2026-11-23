@@ -10,6 +10,7 @@ import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { CENTER_REFRESH_MS, type CenterList, type CenterState, type CoverSettings, type HistoryRow, type Prefs } from "./notification-center-data";
+import { MySmsPanel, OfficeSmsPanel } from "./sms-settings";
 import { PageHeader } from "./ui/page-header";
 import { SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
@@ -23,7 +24,7 @@ export function NotificationCenterPage() {
   const queryClient = useQueryClient();
   const { activeOrganizationId, hasPermission } = useOrganization();
   const [state, setState] = useState<CenterState>("inbox");
-  const [category, setCategory] = useState<"" | "cover_shift">("");
+  const [category, setCategory] = useState<"" | "cover_shift" | "cover_office">("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const list = useQuery({
@@ -53,8 +54,8 @@ export function NotificationCenterPage() {
           </select>
         </label>
         <label className="text-sm">Type
-          <select className={inputClass} value={category} onChange={(e) => setCategory(e.target.value as "" | "cover_shift")} data-testid="center-category">
-            <option value="">All types</option><option value="cover_shift">Cover a shift</option>
+          <select className={inputClass} value={category} onChange={(e) => setCategory(e.target.value as "" | "cover_shift" | "cover_office")} data-testid="center-category">
+            <option value="">All types</option><option value="cover_shift">Cover a shift</option><option value="cover_office">Office alerts</option>
           </select>
         </label>
         <p className="text-sm font-semibold" role="status" data-testid="center-unread">{data ? `${data.unread} unread` : ""}</p>
@@ -83,7 +84,8 @@ export function NotificationCenterPage() {
         ))}
       </ul>
       <Preferences />
-      {hasPermission("shifts.manage") || hasPermission("organization.update") ? <OfficeSection /> : null}
+      <MySmsPanel />
+      {hasPermission("shifts.manage") || hasPermission("organization.update") ? <><OfficeSection /><OfficeSmsPanel /></> : null}
     </div>
   );
 }
@@ -97,9 +99,9 @@ function Preferences() {
   if (q.isLoading) return null;
   if (q.isError || !q.data) return <p role="alert" className="text-sm text-red-700">Your notification preferences could not be loaded.</p>;
   const p = q.data;
-  async function save(next: { inApp: boolean; email: boolean }) {
+  async function save(next: { inApp: boolean; email: boolean }, category: "cover_shift" | "cover_office" = "cover_shift") {
     setNote(null);
-    try { await api.post("/v1/notification-preferences", { organizationId: activeOrganizationId, category: "cover_shift", ...next }, { idempotencyKey: newIdempotencyKey() }); await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] }); await queryClient.invalidateQueries({ queryKey: ["notification-center"] }); setNote("Saved."); }
+    try { await api.post("/v1/notification-preferences", { organizationId: activeOrganizationId, category, ...next }, { idempotencyKey: newIdempotencyKey() }); await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] }); await queryClient.invalidateQueries({ queryKey: ["notification-center"] }); setNote("Saved."); }
     catch (cause) { setNote(message(cause, "Could not save. Nothing changed.")); }
   }
   return (
@@ -111,6 +113,13 @@ function Preferences() {
         {!p.emailAvailable ? <p className="text-xs text-og-sub">Email is not turned on for your agency.</p> : null}
         {!p.coverShift.inApp && !p.coverShift.email ? <p className="text-xs text-amber-900">With both off you will not be told about open shifts. You can still see them in Schedule.</p> : null}
       </div>
+      {p.canSeeOffice && p.coverOffice ? (
+        <div className="mt-3 space-y-1" data-testid="office-prefs">
+          <h3 className="text-sm font-semibold text-og-ink">Office alerts: call-outs and shifts still unfilled</h3>
+          <label className="flex min-h-[44px] items-center gap-2 text-sm md:min-h-[32px]"><input type="checkbox" checked={p.coverOffice.inApp} onChange={(e) => void save({ ...p.coverOffice!, inApp: e.target.checked }, "cover_office")} data-testid="office-pref-inapp" /> Show in Notifications</label>
+          <label className="flex min-h-[44px] items-center gap-2 text-sm md:min-h-[32px]"><input type="checkbox" checked={p.coverOffice.email} disabled={!p.emailAvailable} onChange={(e) => void save({ ...p.coverOffice!, email: e.target.checked }, "cover_office")} data-testid="office-pref-email" /> Email me too</label>
+        </div>
+      ) : null}
       {note ? <p role="status" className="mt-1 text-sm text-og-sub">{note}</p> : null}
     </Card>
   );

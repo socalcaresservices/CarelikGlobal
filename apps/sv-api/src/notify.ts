@@ -1,4 +1,5 @@
 import type { ConnectionSource } from "./db";
+import { runSmsSweep, type SmsSender } from "./sms";
 
 /**
  * The scheduled notification run (0113). An EventBridge rule invokes the API Lambda with { "ogevia-task": "notify-sweep" }. Two jobs, both safe to repeat:
@@ -21,10 +22,12 @@ export interface NotifyDeps {
   readonly db: ConnectionSource;
   readonly dbSetRole?: string | undefined;
   readonly sendEmail?: SendEmail | undefined;
+  /** The text sender (the mock until the owner approves a live sender). When present, the run also escalates unfilled shifts and sends due texts. */
+  readonly sms?: SmsSender | undefined;
   readonly appOrigin?: string | undefined;
   readonly log?: (record: Record<string, unknown>) => void;
 }
-export interface NotifyResult { readonly organizations: number; readonly shiftsNotified: number; readonly notifications: number; readonly blockedShifts: number; readonly claimed: number; readonly sent: number; readonly retried: number; readonly failed: number; readonly failedOrganizations: number }
+export interface NotifyResult { readonly organizations: number; readonly shiftsNotified: number; readonly notifications: number; readonly blockedShifts: number; readonly claimed: number; readonly sent: number; readonly retried: number; readonly failed: number; readonly failedOrganizations: number; readonly escalated?: number; readonly smsSent?: number; readonly smsFailed?: number }
 
 const SAFE_ROLE = /^[a-z_][a-z0-9_]{0,62}$/;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -93,7 +96,14 @@ export async function runNotifySweep(deps: NotifyDeps): Promise<NotifyResult> {
       }
     }
   }
-  const result: NotifyResult = { organizations: orgs.length, shiftsNotified: shifts, notifications, blockedShifts, claimed, sent, retried, failed, failedOrganizations };
+  let escalated = 0, smsSent = 0, smsFailed = 0;
+  if (deps.sms) {
+    try { escalated = Number((await inTx(async (query) => (await query("select ogevia_api.system_sms_escalate_orgs() as n")).rows[0]?.n)) ?? 0); }
+    catch (error) { log({ level: "error", task: NOTIFY_SWEEP_TASK, status: "escalation_failed", ...sqlState(error) }); }
+    try { const r = await runSmsSweep({ db: deps.db, dbSetRole: deps.dbSetRole, sender: deps.sms, log }); smsSent = r.sent; smsFailed = r.failed; }
+    catch (error) { log({ level: "error", task: NOTIFY_SWEEP_TASK, status: "sms_failed", ...sqlState(error) }); }
+  }
+  const result: NotifyResult = { organizations: orgs.length, shiftsNotified: shifts, notifications, blockedShifts, claimed, sent, retried, failed, failedOrganizations, escalated, smsSent, smsFailed };
   log({ level: failedOrganizations > 0 ? "error" : "info", task: NOTIFY_SWEEP_TASK, ...result });
   if (failedOrganizations > 0) throw new Error(`The notification run failed for ${failedOrganizations} of ${orgs.length} agencies.`);
   return result;

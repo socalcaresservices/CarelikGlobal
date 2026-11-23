@@ -25,6 +25,8 @@ export interface ApiConfig {
   readonly identityFunctionName: string | undefined;
   /** Email Lambda for cover-shift notifications (0113); unset = the outbox is never drained (notifications stay in-app only). */
   readonly emailFunctionName: string | undefined;
+  /** Texting for open shifts: only the mock sender exists. Set by the stack only when features.openShiftSms is on. */
+  readonly smsMode: "mock" | undefined;
   /** The web address used in notification links (https origin); required only when emailFunctionName is set. */
   readonly appOrigin: string | undefined;
 }
@@ -90,11 +92,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const appOrigin = env.APP_ORIGIN?.trim() || undefined;
   if (appOrigin && !/^https:\/\/[a-z0-9.-]+$/i.test(appOrigin)) throw new ConfigError("APP_ORIGIN must be a bare https origin");
   if (emailFunctionName && !appOrigin) throw new ConfigError("APP_ORIGIN is required when EMAIL_FUNCTION_NAME is set");
+  const smsRaw = env.SMS_MODE?.trim() || undefined;
+  if (smsRaw !== undefined && smsRaw !== "mock") throw new ConfigError("SMS_MODE must be mock (a live sender is not enabled)");
   return {
     environment,
     region,
     identityFunctionName,
     emailFunctionName,
+    smsMode: smsRaw,
     appOrigin,
     userPoolId,
     appClientIds,

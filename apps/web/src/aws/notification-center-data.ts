@@ -7,7 +7,7 @@ import { AwsApiContext } from "./aws-workspace";
 export interface CenterItem { id: string; category: "cover_shift"; title: string; body: string; link: string | null; shiftId: string | null; createdAt: string; readAt: string | null; archivedAt: string | null; state: "unread" | "read" | "archived" }
 export interface CenterList { asOf: string; unread: number; items: CenterItem[] }
 export type CenterState = "inbox" | "unread" | "archived" | "all";
-export interface Prefs { coverShift: { inApp: boolean; email: boolean }; emailAvailable: boolean }
+export interface Prefs { coverShift: { inApp: boolean; email: boolean }; coverOffice?: { inApp: boolean; email: boolean }; canSeeOffice?: boolean; emailAvailable: boolean }
 export interface CoverSettings { enabled: boolean; emailEnabled: boolean; autoNotify: boolean; windowHours: number; maxRecipients: number; audience: "office" | "agency"; subjectTemplate: string }
 export interface HistoryRow { notificationId: string; shiftId: string | null; caregiverCode: string | null; createdAt: string; inApp: boolean; readAt: string | null; emailStatus: string | null; emailAttempts: number | null; emailError: string | null; emailSentAt: string | null }
 

@@ -3764,7 +3764,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const query = q(event);
       const state = oneOf(query.state ?? "inbox", "state", ["inbox", "unread", "archived", "all"] as const);
-      const category = query.category === undefined || query.category === "" ? null : oneOf(query.category, "category", ["cover_shift"] as const);
+      const category = query.category === undefined || query.category === "" ? null : oneOf(query.category, "category", ["cover_shift", "cover_office"] as const);
       const limit = query.limit === undefined ? 30 : wholeNumber(Number(query.limit), "limit", 1, 100);
       const before = query.before === undefined || query.before === "" ? null : (Number.isNaN(Date.parse(query.before)) ? (() => { throw new ApiError(400, "bad_request", "before must be a date and time."); })() : new Date(query.before).toISOString());
       return { notifications: await tx(async (db) => (await first(db, "select ogevia_api.list_user_notifications($1,$2,$3,$4,$5::timestamptz) as r", [orgParam(event), state, category, limit, before])).r) };
@@ -3791,7 +3791,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       return { preferences: await tx(async (db) => (await first(db, "select ogevia_api.set_my_notification_preferences($1,$2,$3,$4) as r", [
-        uuid(body.organizationId, "organizationId"), oneOf(body.category, "category", ["cover_shift"] as const), booleanValue(body.inApp, "inApp"), booleanValue(body.email, "email")])).r) };
+        uuid(body.organizationId, "organizationId"), oneOf(body.category, "category", ["cover_shift", "cover_office"] as const), booleanValue(body.inApp, "inApp"), booleanValue(body.email, "email")])).r) };
     },
   },
 
@@ -3812,6 +3812,62 @@ export const ROUTES: Record<string, Route> = {
   },
 
   // The per-office audience override (office, agency or none; null removes it) and the list of offices with their override.
+  // 0117: automatic texting for open shifts (mock sender only). OFF unless features.openShiftSms.
+  "GET /v1/sms-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => (await first(db, "select ogevia_api.get_sms_settings($1) as r", [orgParam(event)])).r) }),
+  },
+  "POST /v1/sms-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      // only the known keys reach the database function, each checked here and again there
+      const s: Record<string, unknown> = {
+        enabled: booleanValue(body.enabled, "enabled"), provider: oneOf(body.provider, "provider", ["mock", "live"] as const),
+        senderLabel: text(body.senderLabel, "senderLabel", 24), senderId: text(body.senderId, "senderId", 20),
+        dailyLimit: wholeNumber(body.dailyLimit, "dailyLimit", 1, 5000), hourlyLimit: wholeNumber(body.hourlyLimit, "hourlyLimit", 1, 1000), perRecipientDaily: wholeNumber(body.perRecipientDaily, "perRecipientDaily", 1, 20),
+        quietStart: text(body.quietStart, "quietStart", 5, { required: true }), quietEnd: text(body.quietEnd, "quietEnd", 5, { required: true }),
+        recruitmentDays: wholeNumber(body.recruitmentDays, "recruitmentDays", 1, 14), escalationHours: wholeNumber(body.escalationHours, "escalationHours", 1, 72),
+        recruitOn: booleanValue(body.recruitOn, "recruitOn"), receiptOn: booleanValue(body.receiptOn, "receiptOn"), cancelOn: booleanValue(body.cancelOn, "cancelOn"),
+        confirmOn: booleanValue(body.confirmOn, "confirmOn"), officeOn: booleanValue(body.officeOn, "officeOn"),
+      };
+      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_sms_settings($1,$2::jsonb) as r", [org, JSON.stringify(s)])).r) };
+    },
+  },
+  "GET /v1/my-sms": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ sms: await tx(async (db) => (await first(db, "select ogevia_api.get_my_sms($1) as r", [orgParam(event)])).r) }),
+  },
+  "POST /v1/my-sms": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const consent = booleanValue(body.consent, "consent");
+      return { sms: await tx(async (db) => (await first(db, "select ogevia_api.set_my_sms($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), consent ? text(body.phone, "phone", 25, { required: true }) : null, consent, text(body.consentVersion, "consentVersion", 20) ?? "v1"])).r) };
+    },
+  },
+  "GET /v1/sms-oncall": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ contacts: await tx((db) => rows(db, "select * from ogevia_api.list_sms_oncall($1)", [orgParam(event)])) }),
+  },
+  "POST /v1/sms-oncall": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const action = oneOf(body.action, "action", ["add", "remove"] as const);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.set_sms_oncall($1,$2,$3,$4,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), action, action === "add" && body.officeId ? uuid(body.officeId, "officeId") : null,
+        action === "add" ? text(body.label, "label", 40, { required: true }) : null, action === "add" ? text(body.phone, "phone", 25, { required: true }) : null,
+        action === "remove" ? uuid(body.id, "id") : null])).r) };
+    },
+  },
+  "GET /v1/sms-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ messages: await tx((db) => rows(db, "select * from ogevia_api.list_sms_history($1, $2)", [orgParam(event), 100])) }),
+  },
+
   "GET /v1/cover-office-audiences": {
     mutating: false,
     handle: async ({ event, tx }) => ({ offices: await tx((db) => rows(db, "select * from ogevia_api.list_cover_office_audiences($1)", [orgParam(event)])) }),

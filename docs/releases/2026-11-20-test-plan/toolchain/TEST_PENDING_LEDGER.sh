@@ -3,12 +3,12 @@
 # Same rules as TEST_0112_LEDGER.sh (owner rule 2026-11-10: never untracked SQL; version, filename and SHA-256 recorded in
 # ogevia_meta.schema_migrations in the same transaction; rollback removes the row in the same transaction).
 #
-#   TEST_PENDING_LEDGER.sh probe    <0113|0114|0115|0116>   read-only: identity, ledger, prerequisites, target absent
+#   TEST_PENDING_LEDGER.sh probe    <0113|0114|0115|0116|0117>   read-only: identity, ledger, prerequisites, target absent
 #   TEST_PENDING_LEDGER.sh apply    <migration>             needs OGEVIA_DEPLOY_APPROVAL + a backup: OGEVIA_TEST_SNAPSHOT=<fresh RDS snapshot id of ogevia-postgres> or OGEVIA_TEST_BACKUP=<dump> (+ .sha256)
 #   TEST_PENDING_LEDGER.sh verify   <migration>             read-only: ledger row with the file's checksum, VERIFY_PENDING.sql all true
 #   TEST_PENDING_LEDGER.sh rollback <migration>             needs OGEVIA_DEPLOY_APPROVAL; runs the down script + removes the row atomically
 #
-# Order: 0113, 0114, 0115, 0116 (0113 needs 0110, 0111 and 0091; 0115 needs 0105; 0116 needs 0106 - checked from the ledger below).
+# Order: 0113, 0114, 0115, 0116, 0117 (0117 needs 0113 and 0104; 0113 needs 0110, 0111 and 0091; 0115 needs 0105; 0116 needs 0106 - checked from the ledger below).
 # Roll back in reverse order. Connection = the operator's own libpq variables (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE=ogevia_sv_test).
 # This script never reads a secret store and never prints a password. A database not named ogevia_sv_test, or containing "prd", is refused.
 # Unlike the 0112 script it does not assume an exact ledger row count (the TEST ledger is read and reported, not guessed); it requires the
@@ -18,13 +18,14 @@ set +x +H
 umask 077
 stop() { echo "STOP: $*" >&2; exit 2; }
 MODE="${1:-}"; MIG="${2:-}"
-case "$MODE" in probe|apply|verify|rollback) ;; *) stop "usage: probe|apply|verify|rollback <0113|0114|0115|0116>";; esac
+case "$MODE" in probe|apply|verify|rollback) ;; *) stop "usage: probe|apply|verify|rollback <0113|0114|0115|0116|0117>";; esac
 case "$MIG" in
   0113) STEM=0113_notifications;               NEED="0091 0110 0111";;
   0114) STEM=0114_office_branding;             NEED="0113";;
   0115) STEM=0115_import_history_rollback;     NEED="0105 0114";;
   0116) STEM=0116_staff_merge_hardening;       NEED="0106 0115";;
-  *) stop "migration must be one of 0113 0114 0115 0116";;
+  0117) STEM=0117_open_shift_sms;              NEED="0063 0104 0113";;
+  *) stop "migration must be one of 0113 0114 0115 0116 0117";;
 esac
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(cd "$HERE/../../../.." && pwd)}"

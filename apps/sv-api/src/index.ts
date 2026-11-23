@@ -1,3 +1,4 @@
+import { createSmsSender } from "./sms";
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { S3Client } from "@aws-sdk/client-s3";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
@@ -39,7 +40,7 @@ export async function handler(event: HttpApiEvent | Record<string, unknown>) {
     const config = loadConfig();
     dbInstance ??= secretsManagerPool(config, new SecretsManagerClient({ region: config.region }));
     const sendEmail = config.emailFunctionName ? invokeEmail(new LambdaClient({ region: config.region }), config.emailFunctionName) : undefined;
-    return runNotifySweep({ db: dbInstance, dbSetRole: config.dbSetRole, sendEmail, appOrigin: config.appOrigin });
+    return runNotifySweep({ db: dbInstance, dbSetRole: config.dbSetRole, sendEmail, appOrigin: config.appOrigin, sms: createSmsSender(config.smsMode) });
   }
   if (!handlerInstance) {
     const config = loadConfig();

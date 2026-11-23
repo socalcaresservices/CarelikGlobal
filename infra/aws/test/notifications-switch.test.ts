@@ -107,3 +107,29 @@ describe("operations readiness release switch", () => {
     }
   });
 });
+
+describe("open-shift texting release switch (0117)", () => {
+  const SMS = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "openShiftSms").map((r) => `${r.method} ${r.path}`).sort();
+  const on = (base: OgeviaEnvironmentConfig, sms: boolean, notifications = true): OgeviaEnvironmentConfig =>
+    ({ ...base, features: { ...base.features, notifications, openShiftSms: sms } }) as OgeviaEnvironmentConfig;
+  it("marks exactly the seven texting routes", () => {
+    expect(SMS).toEqual(["GET /v1/my-sms", "GET /v1/sms-history", "GET /v1/sms-oncall", "GET /v1/sms-settings", "POST /v1/my-sms", "POST /v1/sms-oncall", "POST /v1/sms-settings"].sort());
+  });
+  it("is OFF in TEST and production: no routes, no SMS_MODE", () => {
+    for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
+      expect(base.features.openShiftSms ?? false).toBe(false);
+      const t = api(base);
+      for (const k of SMS) expect(routeKeys(t).map((r) => r.RouteKey), k).not.toContain(k);
+      expect(JSON.stringify(t.toJSON())).not.toContain("SMS_MODE");
+    }
+  });
+  it("with the switch on: exactly those seven routes (all JWT) and SMS_MODE=mock; it needs notifications", () => {
+    for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
+      const off = routeKeys(api(on(base, false))); const t = api(on(base, true)); const r = routeKeys(t);
+      expect(r.length).toBe(off.length + 7);
+      for (const k of SMS) expect(r.find((x) => x.RouteKey === k), k).toMatchObject({ AuthorizationType: "JWT" });
+      expect(JSON.stringify(t.toJSON())).toContain('"SMS_MODE":"mock"');
+      expect(() => api(on(base, true, false))).toThrow(/needs features.notifications/);
+    }
+  });
+});

@@ -1,4 +1,4 @@
--- READ-ONLY verification of pending migrations 0113-0116. Writes nothing.
+-- READ-ONLY verification of pending migrations 0113-0117. Writes nothing.
 --   psql -X -At -F '|' -v mig=0113 -v expect=absent|present -f VERIFY_PENDING.sql
 -- One row per check: name|t|detail (t = ok, f = FAILING). The wrapper counts rows and fails on any "|f|".
 -- Tables: must exist (present) / not exist (absent). Functions (by schema + name): must exist, be SECURITY DEFINER, have a pinned
@@ -9,7 +9,8 @@ with t(mig, rel) as (values
   ('0113','ogevia.user_notifications'),('0113','ogevia.notification_preferences'),('0113','ogevia.notification_deliveries'),('0113','ogevia.notification_delivery_events'),
   ('0114','ogevia.office_branding'),
   ('0115','ogevia.import_batch_records'),('0115','ogevia.import_batch_rollbacks'),
-  ('0116','ogevia.staff_merge_snapshots'),('0116','ogevia.staff_merge_reversals')
+  ('0116','ogevia.staff_merge_snapshots'),('0116','ogevia.staff_merge_reversals'),
+  ('0117','ogevia.sms_settings'),('0117','ogevia.sms_contacts'),('0117','ogevia.sms_oncall'),('0117','ogevia.sms_messages'),('0117','ogevia.sms_inbound_log')
 ), f(mig, sch, fn) as (values
   ('0113','ogevia_api','get_cover_notification_settings'),('0113','ogevia_api','set_cover_notification_settings'),('0113','ogevia_api','set_cover_office_audience'),
   ('0113','ogevia_api','list_cover_office_audiences'),('0113','ogevia_api','notify_cover_shift'),('0113','ogevia_api','system_cover_notify_orgs'),
@@ -17,7 +18,9 @@ with t(mig, rel) as (values
   ('0113','ogevia_api','set_my_notification_preferences'),('0113','ogevia_api','list_cover_notification_history'),('0113','ogevia_api','system_email_claim'),('0113','ogevia_api','system_email_record'),
   ('0114','ogevia_api','set_office_branding'),('0114','ogevia_api','list_office_branding'),('0114','ogevia_api','get_invitation_look'),
   ('0115','ogevia_api','list_import_batches'),('0115','ogevia_api','rollback_import_batch'),
-  ('0116','ogevia_api','preview_staff_merge'),('0116','ogevia_api','merge_staff_profiles_v2'),('0116','ogevia_api','unmerge_staff_profiles'),('0116','ogevia_api','list_staff_merges')
+  ('0116','ogevia_api','preview_staff_merge'),('0116','ogevia_api','merge_staff_profiles_v2'),('0116','ogevia_api','unmerge_staff_profiles'),('0116','ogevia_api','list_staff_merges'),
+  ('0117','ogevia_api','get_sms_settings'),('0117','ogevia_api','set_sms_settings'),('0117','ogevia_api','get_my_sms'),('0117','ogevia_api','set_my_sms'),('0117','ogevia_api','list_sms_oncall'),('0117','ogevia_api','set_sms_oncall'),
+  ('0117','ogevia_api','list_sms_history'),('0117','ogevia_api','system_sms_escalate_orgs'),('0117','ogevia_api','system_sms_inbound'),('0117','ogevia_api','system_sms_claim'),('0117','ogevia_api','system_sms_record')
 ), p as (
   select f.mig, f.sch || '.' || f.fn as name, (select pr.oid from pg_proc pr join pg_namespace n on n.oid = pr.pronamespace where n.nspname = f.sch and pr.proname = f.fn limit 1) as oid
   from f where f.mig = :'mig'

@@ -16,7 +16,7 @@ const message = schedulingRefusal;
 /** 0063: a caregiver's request for an open shift. Nothing is assigned until this person confirms; the server re-checks everything at that moment. */
 export interface PickupRequest {
   requestId: string; shiftId: string; requestedAt: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceName: string | null;
-  caregiverRecordId: string; caregiverCode: string; caregiverName: string | null; blockers: string[];
+  caregiverRecordId: string; caregiverCode: string; caregiverName: string | null; blockers: string[]; eligible?: boolean; requestRank?: number;
 }
 
 export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void }) {
@@ -26,6 +26,7 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
   const { when, time } = useAgencyClock();
   const canManage = hasPermission("shifts.manage");
   const [declining, setDeclining] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ id: string; text: string } | null>(null);
@@ -61,43 +62,61 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
     }
   }
   if (!canManage || !list.data || list.data.length === 0) return null;
+  // One card per shift. Within a shift the requests are ordered with the eligible ones first, then by who asked first, and the EARLIEST ELIGIBLE request is preselected.
+  const isEligible = (r: PickupRequest) => r.eligible ?? r.blockers.length === 0;
+  const groups = new Map<string, PickupRequest[]>();
+  for (const r of list.data) groups.set(r.shiftId, [...(groups.get(r.shiftId) ?? []), r]);
+  const ordered = [...groups.values()].map((g) => [...g].sort((a, b) => Number(isEligible(b)) - Number(isEligible(a)) || a.requestedAt.localeCompare(b.requestedAt)));
   return (
     <section className="space-y-2" data-testid="pickup-requests" aria-labelledby="pickup-heading">
       <h2 id="pickup-heading" className="text-base font-semibold text-slate-950">Caregiver requests for open shifts ({list.data.length})</h2>
-      <Hint details="Confirming checks the shift again: compliance, availability, other shifts, hour limits and the authorization." show>Nobody is assigned until you confirm.</Hint>
-      <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-og-card">
-        {list.data.map((r) => (
-          <li key={r.requestId} className="p-2 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <div className="min-w-0">
-                <p className="font-semibold text-slate-950">{when(r.startsAt)}–{time(r.endsAt)} · {clientLabel(r, true)}{r.serviceName ? ` · ${r.serviceName}` : ""} · {formatDuration(r.minutes)}</p>
-                <p className="text-slate-800">Asked by {r.caregiverName ?? r.caregiverCode} ({r.caregiverCode})</p>
-              </div>
-              {declining !== r.requestId ? (
-                <div className="flex items-center gap-3">
-                  <Button type="button" className="min-h-11" disabled={busy !== null} loading={busy === r.requestId} onClick={() => void act(r, "confirm")}>Confirm assignment</Button>
-                  <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:text-slate-500 disabled:no-underline" disabled={busy !== null} onClick={() => { setDeclining(r.requestId); setReason(""); setError(null); }}>Decline</button>
+      <Hint details="Confirming checks the shift again: compliance, availability, other shifts, hour limits and the authorization. Only the office confirms." show>Nobody is assigned until you confirm.</Hint>
+      <ul className="space-y-2">
+        {ordered.map((g) => {
+          const first = g[0]!; const defaultId = isEligible(first) ? first.requestId : null;
+          const chosenId = chosen[first.shiftId] ?? defaultId;
+          const sel = g.find((r) => r.requestId === chosenId) ?? null;
+          return (
+            <li key={first.shiftId} className="rounded-lg border border-slate-200 bg-og-card p-2 text-sm" data-testid="pickup-shift">
+              <p className="font-semibold text-slate-950">{when(first.startsAt)}–{time(first.endsAt)} · {clientLabel(first, true)}{first.serviceName ? ` · ${first.serviceName}` : ""} · {formatDuration(first.minutes)}</p>
+              <fieldset className="mt-1">
+                <legend className="sr-only">Choose who to confirm for this shift</legend>
+                <ul className="space-y-1">
+                  {g.map((r) => (
+                    <li key={r.requestId} className="rounded border border-slate-100 p-1.5">
+                      <label className="flex min-h-11 items-start gap-2">
+                        <input type="radio" name={`pick-${first.shiftId}`} className="mt-1" checked={chosenId === r.requestId} disabled={busy !== null} onChange={() => setChosen((c) => ({ ...c, [first.shiftId]: r.requestId }))} data-testid="pickup-choice" />
+                        <span className="min-w-0">
+                          <span className="font-medium text-slate-950">{r.caregiverName ?? r.caregiverCode} ({r.caregiverCode})</span>
+                          {r.requestId === defaultId ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900" data-testid="pickup-earliest">Earliest eligible request</span> : null}
+                          {r.blockers.length > 0 ? <span role="note" className="block text-red-800">Would be refused now: {r.blockers.join(" ")}</span> : <span className="block text-emerald-800">No problem found right now.</span>}
+                        </span>
+                      </label>
+                      {error?.id === r.requestId ? <p role="alert" className="mt-1 text-red-700">{error.text}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              </fieldset>
+              {sel && declining !== sel.requestId ? (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Button type="button" className="min-h-11" disabled={busy !== null} loading={busy === sel.requestId} onClick={() => void act(sel, "confirm")}>Confirm assignment</Button>
+                  <button type="button" className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 disabled:text-slate-500 disabled:no-underline" disabled={busy !== null} onClick={() => { setDeclining(sel.requestId); setError(null); }}>Decline this request</button>
                 </div>
               ) : null}
-            </div>
-            {r.blockers.length > 0 ? (
-              <p role="note" className="mt-1 text-red-800">Would be refused now: {r.blockers.join(" ")}</p>
-            ) : (
-              <p className="mt-1 text-emerald-800">No problem found right now.</p>
-            )}
-            {error?.id === r.requestId ? <p role="alert" className="mt-1 text-red-700">{error.text}</p> : null}
-            {declining === r.requestId ? (
-              <div className="mt-2 flex flex-wrap items-end gap-2">
-                <label className="text-xs font-medium text-slate-600">
-                  Reason for declining
-                  <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-64 max-w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
-                </label>
-                <Button type="button" variant="secondary" className="min-h-11" disabled={busy !== null} loading={busy === r.requestId} onClick={() => void act(r, "decline")}>Decline request</Button>
-                <button type="button" className="inline-flex min-h-11 items-center text-sm underline" onClick={() => { setDeclining(null); setError(null); }}>Cancel</button>
-              </div>
-            ) : null}
-          </li>
-        ))}
+              {!sel ? <p className="mt-1 text-slate-700">Nobody asking can be confirmed right now. Choose someone to see what blocks them.</p> : null}
+              {sel && declining === sel.requestId ? (
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <label className="text-xs font-medium text-slate-600">
+                    Reason for declining
+                    <input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} className="mt-1 block w-64 max-w-full rounded-lg border border-slate-200 px-3 py-2 text-base" />
+                  </label>
+                  <Button type="button" variant="secondary" className="min-h-11" disabled={busy !== null} loading={busy === sel.requestId} onClick={() => void act(sel, "decline")}>Decline request</Button>
+                  <button type="button" className="inline-flex min-h-11 items-center text-sm underline" onClick={() => { setDeclining(null); setError(null); }}>Cancel</button>
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
