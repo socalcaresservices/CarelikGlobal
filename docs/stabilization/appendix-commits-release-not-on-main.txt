@@ -1,0 +1,339 @@
+c7691b63 2026-11-22 Claude Handoff: correct the production route counts (267 -> 276)
+6c8bc9f2 2026-11-22 Claude Production release tooling for Approval A (0111+0112, nine routes, web): script, helper, tests. NOT RUN.
+c9337f3e 2026-11-22 Claude Record the passed end-to-end TEST of the invitation-email correction (CG-5EAC30D3)
+8d27f793 2026-11-22 Claude Lookup: match the caregiver code partially, like the name
+4b13f699 2026-11-22 Claude Record the TEST deployment of H8 (0112 assignment history, create-with-office) and the added TEST checks
+7fca7784 2026-11-22 Claude Toolchain: shallow-checkout pins check as a file (keeps CloudShell blocks short)
+7b3885a0 2026-11-22 Claude Handoff: five-item checklist, switches, two production approvals, invitation end-to-end test plan
+6bdeb257 2026-11-22 Claude Re-pin to the sweep fix
+3f5fe408 2026-11-22 Claude assignment-history route: query variable the isolation sweep recognises
+17ca3145 2026-11-22 Claude Browser checks: Billing review office filter selector
+b72ae918 2026-11-22 Claude Re-pin to the H8 tooling commit
+f8bb2240 2026-11-22 Claude H8 TEST tooling (0112 + assignmentHistory switch), read-only lookup/check for the invitation-email procedure, creation-office refresh fix
+e4fa3fab 2026-11-22 Claude Re-pin to the 0112 commit
+e177c71b 2026-11-22 Claude 0112 assignment history, office choice on Add client/Add caregiver, no-duplicate tests, browser checks
+12fdd5c9 2026-11-22 Claude Record the TEST deployment of 0111 (H7) and the owner TEST check list
+f91ea1c1 2026-11-22 Claude TEST release tooling for 0111 (H7): ledger script, object checks, route gate, deploy/rollback script, rehearsal tests
+d48777d4 2026-11-22 Claude Re-pin to the 0111 offices/counties/colors commit
+1213c373 2026-11-22 Claude Offices, service counties and Caregiver Color (0111): assignments, filters, swatches, migration, API routes, tests, browser checks
+c0dc62f8 2026-11-22 Claude Record the TEST run of the invitation-email correction (procedure completed; email arrival and sign-in checks pending)
+798f3726 2026-11-22 Claude Admin procedure: correct a caregiver's invitation email before first sign-in (reusable; tested locally, not run on TEST or production)
+4711b6b5 2026-11-21 Claude Record the production release (Offices + request cleanup + web): deployed; owner checks pending
+6e915c6b 2026-11-21 Claude Record the production schedule clear (done: 41 shifts cancelled, 1 series ended, authorizations untouched)
+aeaed304 2026-11-21 Claude Schedule clear (prepared, not run): CLEAR_SCHEDULE.sql, PRD_SCHEDULE_CLEAR.sh, guards; production preview result recorded
+afe1fddf 2026-11-21 Claude Production Offices + request-cleanup release (prepared, not run): helper, operator script, DB test, guard tests
+f5bc0d11 2026-11-21 Claude Record the TEST retire acceptance (owner: pass); production scope to be confirmed
+0133047c 2026-11-21 Claude Record the TEST request-cleanup switch-on (H6 complete); retire acceptance on TEST pending
+481ae9b2 2026-11-21 Claude Re-pin to the schedule Active/History commit
+42eab1e2 2026-11-21 Claude Schedule: Active schedule / History view; production schedule-clear preview (SQL + read-only runner) and plan; nothing deployed
+9b0e5551 2026-11-21 Claude TEST request-cleanup switch-on (TEST_H6_CLEANUP.sh, gate --set cleanup), retire acceptance check with evidence; pin
+02afad9b 2026-11-21 Claude Record the owner's TEST check of the error-message fix
+80d5708e 2026-11-21 Claude Record the TEST web publish of the error-message fix (published; owner check pending)
+a6f7e3cc 2026-11-21 Claude TEST web-only publish script for the error-message fix (TEST_WEB_FIX.sh) with tests; pin it
+71d401bf 2026-11-21 Claude Re-pin to the error-message fix
+10b8c69d 2026-11-21 Claude Fix 'Could not reach Ogevia' on actions whose route is behind a release switch; correct messages for expired sign-in, no permission, throttling and server failure
+fdaeaafa 2026-11-21 Claude Record the Offices TEST verification (owner: steps 1-5 pass); production still needs its own GO
+bf9233f8 2026-11-21 Claude Record the Offices TEST deployment (implemented and deployed to TEST; human checks pending)
+9f21c499 2026-11-21 Claude Offices TEST release: take the TEST backup directly (the earlier tool hard-codes ledger 107/0107 and refused at 108/0109); re-pin
+e31b3328 2026-11-21 Claude Offices TEST release tooling: TEST_H3_OFFICES.sh (capture, two gated assemblies, backup, 0110 with ledger, deploy, web, four rollbacks), TEST_0110_LEDGER.sh, VERIFY_0110.sql, diff_gate_0110.py, PINS_0110.json, tests
+d946ad14 2026-11-21 Claude Offices: browser checks on the local harness (create/rename/retire, assign, filters, caregiver) with screenshots
+631dc0ca 2026-11-21 Claude Re-pin to the offices lint fix
+97f3d351 2026-11-21 Claude Offices: move the data hooks and the filter rule out of the component file (lint: react-refresh, zero warnings allowed)
+c7810550 2026-11-21 Claude Re-pin to the offices commit
+cac98cfd 2026-11-21 Claude Offices (minimal): migration 0110, six switch-gated routes, Settings > Offices, a client's responsible office and the Office filter on Billing review, Reports and Clients
+d9378722 2026-11-21 Claude Record the production web follow-up publish (26f58384)
+15e54e84 2026-11-21 Claude Production web-only publish for the web follow-ups: operator, guard tests, pins
+aaada3e4 2026-11-21 Claude Re-pin to the web follow-up commit (shared Chart palette)
+26f58384 2026-11-21 Claude Web: the shared Chart follows the palette chosen in Appearance (Dashboard charts)
+58429311 2026-11-21 Claude Pin test: application commit is now the web follow-up (deliberate re-pin)
+2a02d672 2026-11-21 Claude Re-pin the release toolchain to the web follow-up commit (staff code removed from the caregiver header; Reports palette)
+9ad0c2d0 2026-11-21 Claude Web: drop the staff ID next to the caregiver name; Reports charts follow the chosen Dashboard palette
+e923841a 2026-11-21 Claude Fix a comment in the request-cleanup route release script
+5ed212ca 2026-11-21 Claude Production switch-on for request cleanup: route-only change set (plan, apply, rollback) with helper and tests
+1b467c0a 2026-11-21 Claude Record the production deployment of PR #113 (switch OFF)
+57828291 2026-11-21 Claude Production release helper: allow the two sign-in override routes that are live in production since 2026-11-15
+bd5955e3 2026-11-21 Claude Production release of PR #113 (switch OFF): re-pinned operator, helper, tests and record
+b7de1ce6 2026-11-20 Claude H2c: TEST switch-on script (request cleanup) with automated tests and re-pinned toolchain
+d9beacf5 2026-11-20 Claude H2b: TEST deployment script (migration 0109, API with the switch off, web) with automated tests and re-pinned toolchain
+5aa8682a 2026-11-20 Claude Regenerate pins to include the H2a comparison script
+98989370 2026-11-20 Claude H2a: read-only TEST comparison (capture live state, synthesize the candidate with the live context, run the gate) with tests
+fad162a0 2026-11-20 Claude Pin check: a change to a test file is not an application change (test files are never deployed)
+a1051cae 2026-11-20 Claude Test: wait for the availability windows instead of reading them when the candidate name appears (CI race)
+85caa480 2026-11-20 Claude Fix the type of the guard cases in the database session test
+b55a6d0c 2026-11-20 Claude Operator handoff for the TEST release: Phase H1 ready, Phase H2 gated; pins regenerated
+a2577f68 2026-11-20 Claude TEST_DB_SESSION.sh (guarded operator database session) with guard tests; pin the reused operator script
+5c34383f 2026-11-20 Claude GO/NO-GO report for PR #113 at 88426e8: NO-GO, TEST not deployed
+f5da532a 2026-11-20 Claude Pins for the TEST release (88426e8) and the plan updated with the prepared toolchain
+242acfd3 2026-11-20 Claude TEST release toolchain for 0109: ledger-recording apply and rollback, API diff gate, inventory and validator, pin checker (not run against AWS)
+34b335e5 2026-11-20 Claude TEST deployment plan for PR #113 at 96dd96a, with VERIFY_0109.sql and the requestCleanup switch patch (prepared, not run)
+b2b1e3c4 2026-11-20 Claude Record the full local gate at e18564f
+e18564fc 2026-11-20 Claude Staff header at 390px: the page header's action area may wrap inside the container (no sideways scroll)
+8640c8d3 2026-11-20 Claude DEV validation plan and sign-off checklist for PR #113 at 96dd96a (harness rehearsal recorded)
+4b004f98 2026-11-20 Claude Test: the caregiver contact audit check no longer matches a bare 555 inside ids and timestamps (flaky in CI)
+2ca2a6a5 2026-11-20 Claude Go-live tracker: all ten items complete with commit hashes and the gate result
+c19453df 2026-11-20 Claude Scheduling refusals: keep the server's sentence and add one plain next step
+914695fc 2026-11-20 Claude Mobile: phone sorting for Documents and Staff (Sort by control)
+369e988b 2026-11-20 Claude Homepage: Refresh uses the shared refresh so Home, Schedule and request lists agree
+7bf0a4ce 2026-11-20 Claude Office filtering: Billing review can be filtered by review reason (VIS-26)
+fea082ab 2026-11-20 Claude Requests refresh after shift updates: care requests, offers, alerts, pickups and matches join the shared refresh
+eef6b23d 2026-11-20 Claude Dashboard refresh after shift updates: one shared refresh used by every shift change
+4fc3859e 2026-11-20 Claude Shift drawer: an existing shift's change forms open in the side drawer, not inline
+494b3fdc 2026-11-20 Claude Caregiver picker: one shared chooser (A-Z, duplicate-name codes, find box on long lists)
+f88bdc42 2026-11-20 Claude Exports follow the on-screen order: shared documented default order, server files aligned, tests
+93e84d1d 2026-11-20 Claude Calendar CSV: fixed row order (service code, service name, authorization period)
+f82bb9c8 2026-11-18 Claude Tracker rows R34-R38 for the care request, document and sorting fixes
+a6badc6e 2026-11-18 Claude Care requests, document requests, client calendar and table sorting
+aabe6932 2026-11-17 Claude Dashboard: name the caregiver on caregiver document rows; add two chart color schemes
+12542b1f 2026-11-17 Claude Use the owner-supplied Ogevia logo for icons and link preview
+f38f3f3e 2026-11-17 Claude Add Ogevia app icon, web manifest and link-preview image
+48fa30f3 2026-11-11 SCS Record completed production database API and web deployment
+8e00abdd 2026-11-11 SCS Resume production API and web after verified migrations; validate exact ARN dependencies
+6e7772ff 2026-11-11 SCS Normalize known production function ownership within atomic UX promotion
+ec5a25e9 2026-11-11 SCS Preserve production QR parameter and fix standalone operator tool resolution
+3cae8a2f 2026-11-11 SCS Prepare bounded production promotion of accepted UX release with atomic ledger and rollback
+bbe6d286 2026-11-11 SCS Record TEST acceptance and prepare production metadata capture
+62842ee3 2026-11-11 SCS Record completed isolated TEST deployment and pending acceptance
+28d41eb5 2026-11-11 SCS Recover post-seed TEST cutover from durable rollback evidence
+3907e4a5 2026-11-11 SCS Verify isolated login through runtime role and resume after seeding
+a89b288f 2026-11-11 SCS Add bounded CloudShell execution to the existing TEST operator
+6cbab00b 2026-11-11 SCS Fix isolated comparison for independent CDK CLI assemblies
+5a1c2841 2026-11-11 SCS Exercise recovered live API routes on the combined 107-migration schema
+897b8b76 2026-11-11 SCS Preserve the accepted live routes without adding CLI-only path metadata
+27f3fb42 2026-11-11 SCS Reconcile accepted TEST 0102 features with the UX release
+c4b9a2b6 2026-11-11 SCS Verify synthetic cutover shifts and supersede old shared deployment instructions
+8815efd6 2026-11-11 SCS Prepare opt-in isolated TEST database cutover without changing production
+651163b3 2026-11-11 SCS Isolate TEST foundation settings from production without changing AWS targets
+7b422125 2026-11-10 SCS Validate exact release-tooling checksums before preparing TEST deployment
+c3acff35 2026-11-10 SCS Verify TEST backup recovery after a partially applied UX migration release
+f182fa02 2026-11-10 SCS Prepare TEST-only logical backup and deployment commands; verify final release gates
+f4316c5f 2026-11-10 SCS Make UX imports CSV-only, disable duplicate merging, and record TEST migration checksums
+82d40e63 2026-11-11 Claude docs: Phase C statement draft for the TEST release (unsigned; not an authorization)
+1823a4f3 2026-11-11 Claude docs: TEST release uses the 0088 web publish method (deploy-test-slice.sh web); pinned
+7174f074 2026-11-11 Claude docs: pinned toolchain for the TEST release candidate 7f9483d (prepared, not authorized, not run)
+06185540 2026-11-11 Claude docs: release readiness status, SEC-3 and TEST plan cite the CI-verified candidate 7f9483d
+7f9483d3 2026-11-11 Claude test(infra): production route table parity ignores only the five TEST-only release-switch routes
+69b122ff 2026-11-11 Claude chore(release): TEST stack turns on signInOverride, bulkImport, staffDuplicates; production stays off
+a709eb1d 2026-11-11 Claude chore(deps): override brace-expansion and uuid to patched versions (clears the exceljs audit findings)
+84666ae5 2026-11-11 Claude docs: checklist Phase A complete on a clean clone, CI verified, Phase B partial; tracker note
+c77bc788 2026-11-11 Claude docs: Phase B evidence for the TEST release (screenshots, touch targets, local regression report)
+ad64c132 2026-11-11 Claude docs: Feature Test Plan, security and compatibility review for the TEST release
+d7f71471 2026-11-10 Claude fix: workbook zip-bomb guard before decompression; import preview checks the caregiver permission (pending 0092)
+7f10e6b2 2026-11-10 Claude fix(web): possible-duplicates merge form opens in one group only
+6159f5c7 2026-11-10 Claude docs: TEST release checklist Phase B filled; C to F marked not started
+bfcda38c 2026-11-10 Claude docs: TEST release checklist filled for identity, contents, Phase A and Phase B; C to F not started
+32efa0be 2026-11-10 Claude docs: TEST-only release package prepared (not executed): package, checklist, switch patch
+3288a65b 2026-11-10 Claude feat: R7(d) standard CPR/TB document types for every agency (pending 0094; names only, no rule, no approval)
+16d9f21a 2026-11-10 Claude test: tenant sweep applies the pending migrations and covers the new import, duplicate-staff and override routes
+cf7c697b 2026-11-10 Claude test: remove unused lint directive
+dbd12719 2026-11-10 Claude feat(web): touch targets 44 px on phones (R13), preview stand-ins, tracker evidence
+df5a8520 2026-11-10 Claude feat(web): R7 standard CPR/TB setup and setup link, R27 pointers, R9 wrapping fix; touch-target measuring script; docs
+dc764854 2026-11-10 Claude feat: R6 duplicate staff report and audited merge-review (pending 0093, routes behind staffDuplicates switch, Staff page section, tests)
+37fe7198 2026-11-10 Claude feat(web): R11 import drawer on Staff and Clients; pending README and tracker
+d0668ed5 2026-11-10 Claude feat: R11 bulk import of people and clients (pending migration 0092, API route behind bulkImport switch, CSV/XLSX parser, tests)
+db58e5c4 2026-11-10 Claude feat(web): R19 one headline number (remove header chip and duplicate tile); tracker updates
+250789c4 2026-11-10 Claude feat: caregiver client labels (R23: name + initial for assigned, code + city for open shifts; pending 0091) and start-without-authorization negative test
+46919151 2026-11-10 Claude docs: U1-U4 read-only CloudShell checks; demo/production database separation proposal
+d48fcc35 2026-11-10 Claude fix: sign-in override test type error (CI validate); renumber pending override migration 0089 -> 0090
+20d0a13e 2026-11-10 Claude docs(ux): tracker: previews and CI status
+bbdad824 2026-11-10 Claude chore(preview): record Casey's profile and the Add shift panel for the milestone previews
+ed88d950 2026-11-10 Claude feat: administrator override for a caregiver who has not signed in (R10); pending migration 0089, API behind an OFF switch, screens
+ad0106ff 2026-11-10 Claude feat(web): schedule is calendar-first (side panel for Add shift, one exceptions panel); compact dashboard (five figures, work queue with chips) (R5, R4)
+408bc1f3 2026-11-10 Claude feat: demo auto-deploy proposal, release script for any reviewed commit, demo seed, single-file preview tooling; fix flaky API test assertion
+a8325076 2026-11-10 Claude feat(web): caregiver Verify Visit shows only today's visits; four bottom tabs on a phone (R8, R20)
+5a3e5b93 2026-11-10 Claude docs(ux): rename the mockup to ogevia-redesign-mockup.html (self-contained, runs offline); update references
+30c95ffe 2026-11-10 Claude docs(ux): tracker R15 done (draft PR #108 opened, #106 closed as superseded); R26 CI running
+3b45eea6 2026-11-10 Claude docs(ux): tracker second pass (R3, R18, R19, R21, R22, R23, R25, R26 statuses; owner answers)
+5591c72c 2026-11-10 Claude feat(web): R18 availability route guard, R25 bulk sign-in links, R3 failure-state tests; chore: withdraw unreleased migration 0089
+d9e18b9c 2026-11-10 Claude docs(ux): requirements tracker as the single source of truth; CLAUDE.md pointer
+e35781dd 2026-11-10 Claude feat(web): one navigation system and one help control (PR 2)
+f237ff36 2026-11-10 Claude fix(web): failed attention requests read Unavailable, never 0 or '?'
+e7204d2b 2026-11-10 Claude docs(ux): UX audit, redesign spec and clickable mockup (Phases 0-3); record admin-override decision
+757a5e47 2026-11-09 Claude docs: AGENTS.md and handoff note for moving the work to another coding agent
+3b250142 2026-11-09 Claude docs: combined update packet (decisions, baseline checks, fixes, cleanup, scheduling, imports, CalEVV)
+84bdc780 2026-11-09 Claude feat(readiness): app sign-in is a follow-up, not a requirement to approve, assign or schedule a caregiver (pending 0089)
+960cbb22 2026-11-09 Claude fix(care-team): do not report a caregiver as Not ready only because they have not signed in yet
+8cac727c 2026-11-02 Claude Isolation plan: placed on hold by the owner; gate stays in force; resume checklist
+e66f12b9 2026-11-01 Claude Isolation plan: X6 passed (counts unchanged); gate status
+d40c64c9 2026-11-01 Claude Isolation plan: X1-X5 reported passed by the owner (attestation); X6 and hash still open
+e471e223 2026-11-01 Claude Isolation plan: owner approval of the TEST authenticator reset (three accounts)
+be7c9f35 2026-11-01 Claude Isolation plan: account map to TEST pool users and chosen subjects
+5fca897b 2026-11-01 Claude Isolation plan: rerun results (one user in both organizations, invited only) and account map
+3faf1533 2026-11-01 Claude Isolation plan: record the 22:41 false alarm (transient AWS 500) and the verified baseline
+50d26632 2026-11-01 Claude Isolation plan: owner decisions, progress and the sign-in blocker
+c6b1afe9 2026-11-01 Claude Isolation check SQL: separation (users in both organizations) and account map
+d348f418 2026-11-01 Claude Cross-agency isolation check (TEST): read-only SQL and window script (copy of the reviewed Part 2b script; only the SQL file and output name differ)
+fb76531c 2026-11-01 Claude Plan: cross-agency isolation check (plan only)
+258daa44 2026-11-01 Claude PRD-0088 record: Owner MFA authenticator replaced (AdminDeleteSoftwareToken); item closed
+b7e95932 2026-11-01 Claude PRD-0088 record: release accepted by the owner; carried-forward items and lessons
+215a6115 2026-11-01 Claude PRD-0088 record: owner sign-in and page checks (screenshots), MFA finding, open items
+c604066a 2026-11-01 Claude PRD-0088 record: website republished and verified with the production sign-in pool; sign-in checks pending
+0efbfc06 2026-11-01 Claude PRD-0088 revision 3: record G3 pass on be7bccf
+a8abd0fb 2026-11-01 Claude PRD-0088 revision 3: website-only republish; scripts filled for be7bccf (ref GO-PRD-0088-R3-20261101, window 21:45-00:45Z)
+be7bccfa 2026-11-01 Claude Production web build uses the dedicated production sign-in pool; fail-closed bundle check before upload and after publish
+ed07811e 2026-11-01 Claude PRD-0088: production release record (database and API deployed; website rolled back after the sign-in pool defect)
+130e1a1d 2026-11-01 Claude PRD-0088: DB script accepts the API stack in UPDATE_ROLLBACK_COMPLETE; mock checks; pins revision 2b
+142d0d99 2026-11-01 Claude wip: mock checks for the rollback status rule
+eb31f733 2026-11-01 Claude wip: DB script template accepts UPDATE_ROLLBACK_COMPLETE (local, for the mock test)
+5f2c685d 2026-11-01 Claude PRD-0088: deploy script accepts the API stack in UPDATE_ROLLBACK_COMPLETE (template still compared); mock test; pins revision 2a
+f82bad2a 2026-11-01 Claude PRD-0088 revision 2: release scripts filled for fb8b7aa (ref GO-PRD-0088-R2-20261101, window 19:30-22:30Z); pins record the failed deploy, rollback and new GO
+fb8b7aa4 2026-11-01 Claude API stack: drop duplicate CORS origins (API Gateway rejects them); gate allowance narrowed to admin; tests
+a3a51250 2026-11-01 Claude PRD-0088: owner GO recorded; release scripts filled for f117510 (ref GO-PRD-0088-20261101, window 16:45-20:45Z); PRD_PINS.md
+5f94b717 2026-11-01 Claude Dry run: record the probe's top-of-output state (ledger 85/0085, staff absent, baseline matches)
+d46d177d 2026-11-01 Claude Record the production dry-run probe: read-only, rule removed, SG restored; 5 active onboarding requirements
+dccbe23a 2026-11-01 Claude Record the local gate re-run: EXPECTED-ONLY YES against the live production API template
+f1175107 2026-11-01 Claude Production gate: allow only the CORS catch-up the dry run found; re-issue dry-run copies; correct the dry-run record (retract the environment-tag claim)
+5e07a080 2026-11-01 Claude docs(aws): fix stray escape characters in the dry-run record
+88fc8b0d 2026-11-01 Claude docs(release): dry run re-run recorded (synth and capture verified; check found a difference on the API resource); gate now prints what differs
+c67f4483 2026-11-01 Claude docs(aws): fix stray escape characters in the dry-run record
+011d35c7 2026-11-01 Claude docs(aws): retract the reported dry-run outcomes: no evidence on the operator's home (record marked UNCONFIRMED)
+8a9326c8 2026-11-01 Claude docs(aws): partial record of the read-only production dry run (outcomes reported, outputs pending)
+31021183 2026-11-01 Claude docs(release): note the approved read-only dry run in the package README
+e160e4d6 2026-11-01 Claude docs(release): read-only production dry run set up (owner-approved): filled, restricted copies of the two scripts and their pins
+63374f7a 2026-11-01 Claude docs(release): production runbook, release checklist and Phase E package for 0086-0088 (drafts; not submitted)
+8ff84467 2026-11-01 Claude docs(release): production deploy script draft for 0086-0088 with a 22-route gate, drift check and database marker; tested locally
+c70778c8 2026-11-01 Claude docs(release): production database script tested locally (rehearsal and mocked-AWS test passed); build status recorded
+1c831950 2026-11-01 Claude docs(release): production database script draft for 0086-0088 (placeholders; nothing runs), its read-only SQL, pin filler and local rehearsal
+a1e7b919 2026-11-01 Claude docs(release): production deployment script design for 0086-0088 (draft; nothing runs)
+decfad57 2026-11-01 Claude test: make five date- and environment-dependent tests reliable; gates G1-G3 all pass
+ea5a59b6 2026-11-01 Claude docs(release): record gates G1-G3 run for the production path - lint, typecheck, build pass; G3 fails on five pre-existing tests
+2fa3cd8e 2026-11-01 Claude docs(aws): production database read of 2026-11-01 - ledger 85/0085, staff objects absent, security group restored
+fe691089 2026-11-01 Claude docs(aws): record the production baseline of 2026-11-01 (read-only capture; no drift since 2026-10-26)
+15d1fd9d 2026-11-01 Claude docs(release): record the month-boundary rerun of reservation-lifecycle and pending-hours-guards (34 of 34 passed, 2026-11-01 12:00 UTC)
+763b7abb 2026-11-01 Claude docs(release): owner risk acceptance (D38): 0088 accepted for the TEST release with listed gaps; not approved for production
+c877080d 2026-11-01 Claude docs(release): record group A outcome - O11/O12 passed (reported); A1-A4, S4, S6, O18, C7, C1 second half not run by owner decision (D37)
+e9530094 2026-11-01 Claude docs(release): complete checklist of unfinished UAT with the synthetic account plan (prepared, not run)
+9661155f 2026-11-01 Claude docs(release): record the owner's decision to delete the pre-release RDS snapshot later (retained for now)
+576bc456 2026-11-01 Claude docs(release): release record for 0088 on TEST; UAT closed with outstanding items; decisions D35/D36 (A28)
+08399e92 2026-11-01 Claude docs(release): record Phase C S10 and S11 results, the withdrawn staff check, the session rebuild and the accepted caregiver deviation (A27)
+f73fb6c2 2026-11-01 Claude docs(release): amendment A26 - web-verify hashes the served page as raw bytes; deploy script re-pinned
+63098293 2026-11-01 Claude docs(release): amendment A25 - expected verify-0087.sql row count is 22 (not 24); DB script re-pinned
+31a9ec72 2026-11-01 Claude docs(release): amendment A24 - vrun runs the staff verification SQL read-only as the login (no role switch); DB script re-pinned
+88c0327b 2026-11-01 Claude docs(release): amendment A23 - probe staff-object check uses a read-only catalog query (no schema USAGE needed); DB script re-pinned
+88c043ad 2026-11-01 Claude docs(release): apply the approved amendment A22 (window 2026-11-01 07:30-02:00 UTC, reference GO-0088-TEST-20261101-C); scripts re-filled and verified; earlier proposal marked superseded
+26c9b4d9 2026-11-01 Claude docs(release): prepare (not apply) an earlier-start amendment: options, proposed -C reference, inert proposed scripts and hashes
+e0211c07 2026-11-01 Claude docs(release): record the month-end rerun (partial; second rerun scheduled) and the pins/section-0 consistency check
+55b6353b 2026-11-01 Claude docs(release): amend the window to 2026-11-01 09:00-18:00 PST and the GO reference to GO-0088-TEST-20261101-B (A21); scripts re-filled, new hashes
+1b3e4781 2026-11-01 Claude docs(release): record the owner's clarification that an earlier window was intended; the recorded GO stands until an amended GO supersedes it
+bdd10e4e 2026-11-01 Claude docs(release): record the owner's GO (A20/D27) for the integrated candidate and the waiver of the merge security review
+c366c1ff 2026-11-01 Claude docs(release): fill the pins for the owner's window (2026-11-02 01:00-18:00 PST) and GO reference GO-0088-TEST-20261101; GO still unsigned; PINS.md
+f1e04a56 2026-11-01 Claude docs(release): note the owner's 'WINDOW 11/01/2026' message; not a GO; what is still missing
+a718b46f 2026-11-01 Claude docs(release): closure review revision 3 (post-integration statuses); UAT note
+535b9df2 2026-11-01 Claude docs(release): security review addendum for the integrated candidate (delta, the adopt write, interactions); not reviewed
+2834cbf9 2026-11-01 Claude docs(release): rewrite the runbook for the integrated candidate; record the integration results and the candidate commit; README and checklist banners
+33000dcc 2026-11-01 Claude docs(release): new GO draft, commands and run sheet for the integrated candidate (0088); first GO marked superseded
+464dea64 2026-10-31 Claude wip(integration): add the staff+readiness integration DB test; pin placeholders and fill_pins.py for the new candidate
+a34b5177 2026-10-31 Claude wip(integration): retire nine staff operator-package unit tests (kept in retired-tests, README updated)
+9747f423 2026-10-31 Claude docs(release): record the Operator's stop confirmation and her request for a new candidate, hashes, GO and window
+84aa0809 2026-10-31 Claude wip(integration): fix rollback/upgrade/schema tests for 0086-0088, retire two staff operator-package DB tests, add the integration record
+3da0fad0 2026-10-31 Claude wip(integration): promote staff 0086/0087 into the ledger set, renumber readiness to 0088, merge list_accounts, adapt tests and the Phase C database script (adopt mode)
+aa364373 2026-10-31 Claude docs(release): record Operator's stop confirmation; add read-only integration dry-run (one textual conflict against the TEST line)
+70163fd2 2026-10-31 Claude docs(release): Phase C stopped at S3b: TEST runs the staff-management line (fb491a5); 14 routes would be removed, 0086 number collides, list_accounts overlaps; nothing deployed
+598cff73 2026-10-31 Claude docs(release): record Phase C check STOP (expected-only gate NO; cause pending; nothing deployed)
+ac36e03b 2026-10-31 Claude docs(release): record Phase C synth and capture passed (rollback material captured)
+1dc8c804 2026-10-31 Claude docs(release): record Phase C S2 probe passed (baseline matches, TLS verified, restore verified, V7 shows the synthetic Owner in scs-pilot-synthetic)
+02d57915 2026-10-31 Claude docs(release): record Operator-reported preparation for the 14:00-18:00 PDT window
+c8a4f6af 2026-10-31 Claude docs(release): update remaining window times in the run sheet and commands
+69612f13 2026-10-31 Claude docs(release): record the new Phase C window (14:00-18:00 PDT, GO-0086-TEST-20261031-B, A19); re-issue both scripts with the new window and reference; rebuild block
+250c54b4 2026-10-31 Claude docs(release): record that the window lapsed with no Phase C step run; /tmp reset; new window and GO needed
+36d78148 2026-10-31 Claude docs(release): record that the window had about 15 minutes left at S0; Phase C not started; new window and GO needed
+69cd968b 2026-10-31 Claude docs(release): record Operator-reported pre-window checks (docs-checkout3 at d4b899e, hashes match)
+d4b899ee 2026-10-31 Claude docs(release): record D25 (test mailbox confirmed for one synthetic caregiver; no caregiver before Phase C completes); P3 has no sign-in step
+6e66d93f 2026-10-31 Claude docs(release): note the owner's designated test inbox for UAT caregiver P1 (address kept out of the repository) and the checks before use
+5e088fab 2026-10-31 Claude docs(release): record D24 (synthetic Owner exists; used for all owner-only UAT steps; no new user)
+003a144c 2026-10-31 Claude docs(release): restore the snapshot-restore item in the closure review's OPEN list; move item 9 to MITIGATED
+df0ce42b 2026-10-31 Claude docs(release): record D23 (Owner-only UAT workflows); add count-only V7 to the read-only SQL for the Owner check; refresh instructions
+7fd4f991 2026-10-31 Claude docs(release): record UAT account decisions (D22); flag that the no-Owner fallback also blocks background verification, approval of new caregivers and the Accounts page
+f6d80890 2026-10-31 Claude docs(release): record the UAT organizations (ogevia-test-slice, scs-pilot-synthetic); flag role and Owner-account gaps for X1-X3 and O11/O12
+24e2e47f 2026-10-31 Claude docs(release): issue-closure review rev 2 (24 required items, MITIGATED group); documentation only
+5982a952 2026-10-31 Claude docs(release): issue-closure review before Phase C (documentation and readiness only)
+328b4206 2026-10-31 Claude docs(release): record G1 extended to DB rollback (A14); record Operator's verification of the updated DB script
+cca4bcba 2026-10-31 Claude docs(release): record G1 approved as written (A13); window-gate DB final; separate confirmation for DB rollback access; new DB script hash
+3a33a7df 2026-10-31 Claude docs(release): record synth passed in the Operator's environment (Handler asset reproduced)
+e16fc235 2026-10-31 Claude docs(release): record Operator-reported pre-window setup (checkouts, hashes, install, selftests); G1 still open
+52a9110e 2026-10-31 Claude docs(release): add Phase C deployment script, expected-only diff gate, final commands doc; full TLS verification through the tunnel; scripts tested locally only; G1 still open
+c70e44e8 2026-10-31 Claude docs(release): add reviewed-draft Phase C database script (probe, snapshot, migrate, final, rollback); gated on G1; tested locally only
+c0f9c6ae 2026-10-31 Claude docs(release): add Phase C run sheet; record A12 clarifications (rollback after window end, UAT fallback, SHA reconfirmed); flag database-access and command-set gaps
+1d39d98e 2026-10-31 Claude docs(release): record signed decision record, six package decisions accepted, B9 accepted, GO given for TEST window 2026-10-31 09:00-12:00 PDT; Phase C not run; 0086 stays NOT RELEASABLE
+b169cd96 2026-10-31 Claude docs(release): record D17 (security review accepted as recorded); draft GO text for Phase C (not given)
+f3022dad 2026-10-31 Claude docs(release): review the recorded security sign-off; add author re-run evidence; fix packet test commands; times not recorded
+8796aa1b 2026-10-31 Claude docs(release): record security review outcome APPROVED, no findings (relayed); note evidence gaps; 0086 stays NOT RELEASABLE
+e3dcf085 2026-10-31 Claude docs(release): record Operator confirmation and accepted login role; target verification complete; security review pending
+d6bad660 2026-10-31 Claude docs(release): record login role as ogevia_admin (inferred from MasterUsername, not observed)
+4aac0149 2026-10-31 Claude docs(release): record login role name as UNKNOWN as observed; document read-only ways to settle it
+985135ee 2026-10-31 Claude docs(release): record D16 (S12 optional and unreviewed); required review scope unchanged; 0086 stays NOT RELEASABLE
+2919cd6d 2026-10-31 Claude docs(release): record Stella Okereke as designated security reviewer (D15); note operator/reviewer overlap; outcome not recorded
+315d98ee 2026-10-31 Claude docs(release): adopt recorded Part 2 facts; record window times; list items to collect from Stella; reviewer assignment pending
+7284c899 2026-10-31 Claude docs(release): order S11 before S12 in the security review
+265d3b73 2026-10-31 Claude docs(release): prepare reviewer's security review packet; update item 6a and add optional S12; not reviewed
+b390073e 2026-10-31 Claude docs(release): record complete Part 2 results V1-V6 (ledger 85/0085, enforcement off, 4 orgs); login role and no-change confirmation outstanding
+eaba53c4 2026-10-31 Claude docs(release): record partial Part 2 results (V3-V6; enforcement off, 4 organizations, restore verified); verification incomplete
+2d9960e7 2026-10-31 Claude docs(release): review and harden Part 2 window script (read-only session, tunnel wait, verified restore, signals); not run
+c8f72d39 2026-10-31 Claude docs(release): add Part 2 window script (attach, tunnel, read-only SQL, trap restore); not run
+7b931b5c 2026-10-31 Claude docs(release): record partial Part 2b pre-check (host running, SG unchanged); warn against production-targeted window.sh
+697a1601 2026-10-31 Claude docs(release): record D14 (Option A, verification only) and the window procedure; Part 2 not yet run; 0086 stays NOT RELEASABLE
+a7321094 2026-10-31 Claude docs(release): record Part 2 BLOCKED and the exact options to unblock; 0086 stays NOT RELEASABLE
+30c83dac 2026-10-31 Claude docs(release): record D13 least-privilege access for Part 2; no gate advanced; 0086 stays NOT RELEASABLE
+36fc72fc 2026-10-31 Claude docs(release): record Part 1 verification report; flag database access path conflicts; 0086 stays NOT RELEASABLE
+015c6a20 2026-10-30 Claude docs(release): add Stella's read-only TEST verification checklist and SQL (not run)
+fbe12dab 2026-10-30 Claude docs(release): record owner decisions D9-D12 (API-only due-days, enforcement OFF in UAT, cross-agency rule); 0086 stays NOT RELEASABLE
+ee17b05e 2026-10-30 Claude docs(release): record target-verification status, enforcement irreversibility, due-days decision and open items; 0086 stays NOT RELEASABLE
+974db816 2026-10-30 Claude docs(release): draft the Phase D UAT scripts (Owner, Scheduler, Caregiver, Authorization); not run, not authorized to run
+03742441 2026-10-30 Claude docs(release): file the security review checklist for the reviewer (author evidence measured, all reviewer verdicts blank, not reviewed)
+8057b794 2026-10-30 Claude docs(release): record the full DB suite on the D1 fix commit (99/99 files, 1084/1084)
+eddb4518 2026-10-30 Claude docs(release): B9 re-run PASS 30/30 after the D1 fix; Phase C SHA re-recorded as 54894411 (amendment A3, unsigned); evidence split run1/run2
+54894411 2026-10-30 Claude fix(sv-api): withClientNames no longer turns Date values into {} (Authorization changes page crashed)
+3e54d8dc 2026-10-30 Claude test(b9): run the B9 regression spot-check on the local harness (automated browser): 28/30 pass; 1 pre-existing defect (Authorization changes page, withClientNames drops Dates); worksheet filled, checklist updated
+996a182c 2026-10-30 Claude docs(release): record the Phase C commit SHA (44dbd2e); window deferred until B9 passes; no GO
+44dbd2ec 2026-10-30 Claude docs(release): record the target designation (existing TEST/pilot, unsigned; identifiers from repo docs, not verified live) and the database guard
+278d9837 2026-10-30 Claude docs(release): file the B9 regression spot-check worksheet (blank, not run)
+52139815 2026-10-30 Claude docs(release): file decisions D1-D8 as a decision record prepared for the owner's signature (unsigned)
+66153a6b 2026-10-30 Claude docs(release): G3 resolved and validated (99/99 files, 1084/1084 on the real date; fixed tests 34/34 on 18 frozen dates); 0086 still NOT releasable
+5303ca41 2026-10-30 Claude docs(release): remediation record for the date-dependent DB tests (G3 still pending the full-suite confirmation)
+0f7463f6 2026-10-30 Claude test: calendar-independent dates for the two further month-end-dependent authorization-tiers tests
+df099338 2026-10-30 Claude test: make the 4 date-dependent DB tests calendar-independent (validation across dates in progress; G3 not updated yet)
+d2cdbe1c 2026-10-30 Claude docs(release): record owner decisions D1-D7 and the release status table; classify the 41 failures by the owner's four classes
+821b411d 2026-10-30 Claude docs(release): categorize the 41 DB failures (37 obsolete/retired, 4 date-dependent, 0 defects); update checklist, README and runbook status
+b3b4c5d1 2026-10-30 Claude test: retire release-pin tests of the superseded 2026-10-19 and 2026-10-21 packages (moved, not deleted); B7 console/network check; runbook scope
+fcea96cc 2026-10-30 Claude docs(release): release package for 0086 (checklist, test plan, runbook, evidence) and harness seed/scenario
+dd59c8b3 2026-10-30 Claude feat(readiness): one caregiver readiness source, Approve for work, CPR/TB due-days setting and extensions (migration 0086)
+1e023a50 2026-10-30 Claude docs: caregiver readiness simplification discovery (no code changes)
+fb491a55 2026-10-28 Claude 0087: Accounts > Disable refuses a pending invitation (no Disable-then-Enable bypass of acceptance); Invited is shown before Disabled in the staff and account lists (no leak of a disabled sign-in); tests (candidate code commit)
+773b7625 2026-10-28 Claude TEST upgrade package: 0087-only apply on top of 0086, one-route gate, new fixtures, procedure and tests; verify-0087.sql; db tests
+468db931 2026-10-28 Claude Production operator package re-pinned to candidate code 730b601: 0086+0087 in one transaction, 14 routes, 242 total, new Handler asset, procedure and tests
+730b6016 2026-10-28 Claude Test: 0087 rolls back on its own to the 0086 behaviour and applies again (candidate code commit)
+9945cfa6 2026-10-28 Claude WIP: production operator package handles 0087 and the 14th route (pins not final)
+69e61bf6 2026-10-28 Claude Staff invitations: existing sign-ins must accept (M-1), neutral reply (L-1), no overwrite of any membership (L-2), inactive profile suspends access (L-3)
+644d6e20 2026-10-27 Claude Re-pin the production package to the candidate 24fd8b1 (label fix included); TEST candidate verification steps; environment differences; AI second-read record; D-P2 explanation
+24fd8b17 2026-10-27 Claude config: correct the staffManagement comment (it is on in production; review note I-3). Comment only: synthesized templates are unchanged
+d788c1fb 2026-10-26 Claude Show the environment band on the sign-in screens and make it more prominent
+4e052eb5 2026-10-27 Claude Production preparation record: section 12 (release comparison, remaining checks, record controls, rebuilt tarball)
+2ad82deb 2026-10-27 Claude Production as-found baseline, mandatory release records, no automatic redeploy, drift-monitoring proposal
+ea7281de 2026-10-26 Claude Production preparation record: CI on PostgreSQL 18 is green (PR 106, head 6030924)
+60309246 2026-10-26 Claude CI: give the postgres job 60 minutes (run 2 of PR 106 was cancelled at 30 while still passing)
+fb200e8d 2026-10-26 Claude CI: give the validate job 30 minutes (the added production operator tests exceeded 15)
+22435a6a 2026-10-26 Claude Production preparation record: discovery results, V1-V8 dispositions, window, test evidence
+37250c9a 2026-10-26 Claude Fix a type error in the production tarball test
+1d86210a 2026-10-26 Claude Production operator package for the staff-management release: gate, guard, apply, web, record, tests
+a9d1ae62 2026-10-26 Claude Production release preparation: discovery package, read-only counts option, prd-Auth capture, preparation record
+f8cd7dff 2026-10-26 Claude Hold the staff routes off in the auth-cutover script test's snapshot comparison
+515c49af 2026-10-26 Claude Production: enable the 13 staff-management API routes (owner approval, with migration 0086)
+1670116b 2026-10-26 Claude Close the TEST release with Owner exceptions (RELEASE_COMPLETION_TEST.md section 8)
+5bba9996 2026-10-26 Claude Security review checklist for 0086 prepared (V7); reviewer signature pending
+f0968fff 2026-10-26 Claude Release completion record for the TEST deployment; checklist Phase C and Owner acceptance filled in
+8f61571e 2026-10-26 Claude Deployed record: staff member creation reported by the Operator (no output seen)
+642f6321 2026-10-26 Claude Deployed record: Step 13 report screenshot (Client monthly calendar renders on TEST)
+98e908e7 2026-10-26 Claude Deployed record: Step 13 evidence from the Staff Types screenshot
+21fd6f10 2026-10-26 Claude Deployed record: tarball hash and recorded time confirmed; Step 9 after-counts note
+86f42339 2026-10-26 Claude Deployed record: Step 9 details from the apply run (counts before, objects 1|1|21, 110 checks)
+84108a9e 2026-10-26 Claude Deployed record: Step 14 verified (ComplianceSweep ran after the deploy, evaluated nothing)
+75191b87 2026-10-26 Claude Deployed record: Step 15 verified (0086 present, 1|1|21, ledger 85 / 0085)
+71bddea3 2026-10-26 Claude Deployed record: add the Step 15 summary the Operator pasted
+f4fbf3d3 2026-10-26 Claude Record the TEST deployment of 7870a04 (DEPLOYED_RECORD_TEST.md)
+5d88e07b 2026-10-26 Claude Operator package: allow the demo CORS origin catch-up in the API stack gate
+badcdb67 2026-10-26 Claude Checklist: record Phase A gate results for bfb851c
+bfb851cf 2026-10-26 Claude Make the dst-local-times weekly-series test independent of today's date
+c881b4fe 2026-10-26 Claude TEST release 2026-10-26: operator package for migration 0086 (decision D1 option b)
+7870a04c 2026-10-25 Claude Owner view label, Reports legend contrast, larger Reporting & billing link target
+25b6b32b 2026-10-25 Claude Redesign: navigation groups, Help control, Reports filter bar, Staff and Roles & Permissions
+96ba5184 2026-10-25 Claude Add release notes test results and before/after screenshots for staff/navigation work
+445a68c5 2026-10-25 Claude Staff management, five-section navigation, and UI simplification
