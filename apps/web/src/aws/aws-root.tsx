@@ -41,6 +41,7 @@ import { ServicesPage } from "./services-page";
 import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { OfficesPage } from "./offices";
 import { NotificationCenterPage } from "./notification-center";
+import { OperationsReadinessPage } from "./operations-readiness";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
 import { ConfirmVisitPage } from "./confirm-visit-page";
 import { EnvironmentProvider } from "./environment-marker";
@@ -138,6 +139,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="/settings/offices" element={<OfficesPage />} />
                     <Route path="/notifications" element={<NotificationCenterPage />} />
+                    <Route path="/operations-readiness" element={<OperationsReadinessPage />} />
                     <Route path="/settings/billing-rounding" element={<BillingRoundingSettingsPage />} />
                     <Route path="/settings/visit-rules" element={<VisitRulesPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />

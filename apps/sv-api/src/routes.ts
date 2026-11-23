@@ -1963,6 +1963,32 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Release Train 2 (behind the `operationsReadiness` release switch): the operations readiness view in ONE call. It only COMPOSES existing database functions (the attention overview, expiring
+  // authorization hours, the compliance summary), each in its own transaction and each under that function's own permission check. A part that fails or is not allowed comes back as null and is
+  // named in `unavailable`: the page then says so instead of showing zero.
+  "GET /v1/operations-readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      const unavailable: string[] = [];
+      const part = async <T>(name: string, work: () => Promise<T>): Promise<T | null> => { try { return await work(); } catch { unavailable.push(name); return null; } };
+      // The caller's permissions in THIS agency (the same source as /v1/me). A part the caller may not see is named as unavailable, never composed as empty.
+      const context = await tx((db) => rows(db, "select * from ogevia_api.get_my_context()", []));
+      const mine = context.find((m) => m.organizationId === org);
+      const perms = new Set<string>(Array.isArray(mine?.permissions) ? (mine!.permissions as string[]) : []);
+      const may = (...any: string[]) => any.some((x) => perms.has(x));
+      const overview = await part("overview", () => tx(async (db) => {
+        if (!may("visits.read", "shifts.manage", "documents.read", "readiness.read")) throw new ApiError(403, "forbidden", "Not allowed.");
+        const o = (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [org, 48])).o;
+        return o && typeof o === "object" ? withClientNames(o, await nameDirectory(db, org)) : o;
+      }));
+      const expiring = await part("expiring", async () => { if (!may("visits.read")) throw new ApiError(403, "forbidden", "Not allowed."); return tx((db) => rows(db, "select * from ogevia_api.list_expiring_authorization_hours($1)", [org])); });
+      const compliance = await part("compliance", async () => { if (!may("readiness.read")) throw new ApiError(403, "forbidden", "Not allowed."); return tx(async (db) => (await first(db, "select ogevia_api.get_compliance_summary($1) as c", [org])).c); });
+      if (overview === null && expiring === null && compliance === null) throw new ApiError(403, "forbidden", "You do not have permission to see operations readiness.");
+      return { readiness: { asOf: new Date().toISOString(), overview, expiring, compliance, unavailable } };
+    },
+  },
+
   // Appearance (0054): agency defaults (organization.update) and each person's own choices. A null value means "follow the next level".
   "GET /v1/appearance": {
     mutating: false,

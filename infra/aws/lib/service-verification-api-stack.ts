@@ -90,7 +90,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -347,6 +347,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   // Release Train 2 (0115): bulk import history and rollback. OFF unless features.importRollback.
   { method: apigw.HttpMethod.GET, path: "/v1/imports", feature: "importRollback" },
   { method: apigw.HttpMethod.POST, path: "/v1/imports/{batchId}/rollback", feature: "importRollback" },
+  // Release Train 2: operations readiness in one call (composes existing functions; no migration). OFF unless features.operationsReadiness.
+  { method: apigw.HttpMethod.GET, path: "/v1/operations-readiness", feature: "operationsReadiness" },
   { method: apigw.HttpMethod.GET, path: "/v1/office-branding", feature: "invitationBranding" },
   { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/branding", feature: "invitationBranding" },
   { method: apigw.HttpMethod.GET, path: "/v1/notification-center", feature: "notifications" },

@@ -90,3 +90,15 @@ describe("import rollback release switch (0115)", () => {
     }
   });
 });
+
+describe("operations readiness release switch", () => {
+  it("is exactly one route, OFF today; with the switch on it requires a JWT and nothing else changes", () => {
+    const OR = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "operationsReadiness").map((r) => `${r.method} ${r.path}`);
+    expect(OR).toEqual(["GET /v1/operations-readiness"]);
+    for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
+      expect(base.features.operationsReadiness ?? false).toBe(false);
+      const off = routeKeys(api(base)); const on = routeKeys(api({ ...base, features: { ...base.features, operationsReadiness: true } } as OgeviaEnvironmentConfig));
+      expect(off.map((r) => r.RouteKey)).not.toContain(OR[0]); expect(on.find((r) => r.RouteKey === OR[0])).toMatchObject({ AuthorizationType: "JWT" }); expect(on.length).toBe(off.length + 1);
+    }
+  });
+});
