@@ -21,6 +21,11 @@ Branch `feature-completion-phase-2` (from `main` 698ae23b). Governing documents:
 | `features.bulkImport` (existing) | already applied (0105) | CSV and now XLSX import (the XLSX reader ships in the API code) |
 | `features.staffDuplicates` (existing) | migration **0116** (with 0106, already in the production ledger) | merge wizard, conflict choices, undo, history |
 
+### Added 2026-11-23
+- Migration **0113** now also adds `shifts.coordinating_office_id` (nullable column + FK) and needs 0110/0111 and the service-ZIP table (0091) in the target database: all three are in the production ledger; the TEST check is the ledger guard in the TEST toolchain. Down script drops the column.
+- `features.notifications` also turns on `COVER_ALERT_ADDRESS_RULES` for the API: from that moment creating or editing a client needs city and ZIP. Tell staff first; clients with no ZIP are blocked from alerts (not from anything else).
+- Sender/Reply-To: `email-sender.md` (owner console step for TEST; config for production).
+
 ## 3. Order (each step: owner GO, evidence recorded, stop on any failure)
 1. **Merge** the PR (human). CI green on the merge commit. Complete `RELEASE_CHECKLIST_TEMPLATE.md`; re-pin to the release commit.
 2. **TEST, branch deployed with all switches OFF** (web + API code-only): verify nothing changed except sorting (checklist §5).
