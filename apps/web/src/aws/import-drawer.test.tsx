@@ -127,5 +127,25 @@ describe("import history and rollback (0115)", () => {
     const text = await new Promise<string>((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.readAsText(blob as unknown as Blob); });
     expect(text.split("\n")[0]).toBe("row,status,message"); expect(text).toContain("3,duplicate,");
   }, 40000);
+
+});
+
+describe("import templates", () => {
+  it("offers BOTH a CSV and an Excel template: the CSV is the header row; the Excel file is a real .xlsx (zip) with the right name and type", async () => {
+    const blobs: Blob[] = []; const names: string[] = [];
+    (URL as any).createObjectURL = (b: Blob) => { blobs.push(b); return "blob:x"; }; (URL as any).revokeObjectURL = () => {};
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { names.push(this.download); };
+    renderAws("/staff", PERMS, base(() => json(200, PREVIEW)), "organization_owner");
+    const dialog = await open();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Download CSV template" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Download Excel template" }));
+    expect(names).toEqual(["ogevia-people-template.csv", "ogevia-people-template.xlsx"]);
+    const read = (b: Blob) => new Promise<ArrayBuffer>((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result as ArrayBuffer); fr.readAsArrayBuffer(b); });
+    expect(new TextDecoder().decode(await read(blobs[0]!))).toBe("first_name,last_name,type,email,phone\n");
+    const x = new Uint8Array(await read(blobs[1]!));
+    expect(blobs[1]!.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect([x[0], x[1]]).toEqual([0x50, 0x4b]);   // "PK": a zip archive
+    expect(new TextDecoder("latin1").decode(x)).toContain("xl/worksheets/sheet1.xml");
+  }, 40000);
 });
 

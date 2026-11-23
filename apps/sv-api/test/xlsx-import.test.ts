@@ -73,3 +73,21 @@ describe("XLSX reader", () => {
 
 import { unzipSync } from "fflate";
 const unz = (b: Buffer) => unzipSync(new Uint8Array(b));
+
+import { buildXlsx } from "@carelik/shared";
+describe("the Excel template written for the web (round trip through the import's own reader)", () => {
+  it("a template with the headers and an instructions sheet is read as the FIRST sheet; with a data row it imports like CSV; a header-only template asks for data", async () => {
+    const headers = ["first_name", "last_name", "type", "email", "phone"];
+    const empty = Buffer.from(buildXlsx([{ name: "People", rows: [headers] }, { name: "Instructions", rows: [["first_name and last_name are required"]] }]));
+    await expect(parseImportFile("people", "ogevia-people-template.xlsx", empty)).rejects.toThrow(/header row and at least one data row/);
+    const filled = Buffer.from(buildXlsx([{ name: "People", rows: [headers, ["Ana", "Sample & Co", "Caregiver", "", ""]] }, { name: "Instructions", rows: [["ignored"]] }]));
+    const r = await parseImportFile("people", "x.xlsx", filled);
+    expect(r.rows).toMatchObject([{ _row: "2", first_name: "Ana", last_name: "Sample & Co", type: "Caregiver" }]);
+    expect(r.ignoredColumns).toEqual([]);
+  });
+  it("writes text only: a value that looks like a formula is stored as text, and special characters survive", () => {
+    const bytes = buildXlsx([{ name: "A/B*?[x]", rows: [["=1+1", "<b>&\"q\""]] }]);
+    const table = readXlsxTable(bytes);
+    expect(table).toEqual([["=1+1", "<b>&\"q\""]]);
+  });
+});

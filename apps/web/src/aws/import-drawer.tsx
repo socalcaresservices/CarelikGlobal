@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@carelik/ui";
+import { buildXlsx, XLSX_CONTENT_TYPE } from "@carelik/shared";
 import { useOrganization } from "@/providers/organization-provider";
 import { ApiRequestError } from "../lib/aws-api";
 import { useAwsApi } from "./aws-workspace";
@@ -18,13 +19,15 @@ type Preview = {
   rows: Array<{ row: number; status: "duplicate" | "invalid"; message: string }>;
 };
 
-const COPY: Record<Kind, { button: string; title: string; template: string; columns: string; noun: string; file: string }> = {
+const COPY: Record<Kind, { button: string; title: string; template: string; columns: string; noun: string; file: string; sheet: string; notes: string[] }> = {
   people: {
-    button: "Import from a file", title: "Import staff and caregivers", template: "first_name,last_name,type,email,phone\n", file: "ogevia-people-template.csv", noun: "people",
+    button: "Import from a file", title: "Import staff and caregivers", template: "first_name,last_name,type,email,phone\n", file: "ogevia-people-template.csv", noun: "people", sheet: "People",
+    notes: ["Fill in one person per row under the headings. Keep the headings as they are.", "first_name and last_name are required.", "type: Caregiver (the default) or one of your staff types.", "email and phone help spot people who already exist.", "Nobody is invited by an import. Delete nothing from the first sheet's headings."],
     columns: "first_name and last_name are required. type is Caregiver (the default) or one of your staff types. email and phone are used to spot people who already exist; caregivers are not given an email here.",
   },
   clients: {
-    button: "Import from a file", title: "Import clients", template: "first_name,last_name,city,client_type\n", file: "ogevia-clients-template.csv", noun: "clients",
+    button: "Import from a file", title: "Import clients", template: "first_name,last_name,city,client_type\n", file: "ogevia-clients-template.csv", noun: "clients", sheet: "Clients",
+    notes: ["Fill in one client per row under the headings. Keep the headings as they are.", "first_name and last_name are required.", "city and client_type are optional (client_type must be one of your active client types).", "Client codes are made by Ogevia."],
     columns: "first_name and last_name are required. city and client_type are optional (client_type must be one of your active client types). Client codes are made by Ogevia.",
   },
 };
@@ -85,6 +88,14 @@ export function ImportButton({ kind, onDone }: { kind: Kind; onDone?: (text: str
     a.href = url; a.download = `ogevia-${kind}-import-problems.csv`; a.click();
     URL.revokeObjectURL(url);
   };
+  const downloadExcelTemplate = () => {
+    // The first sheet is the template (the import reads the first sheet only); the second sheet holds the instructions.
+    const bytes = buildXlsx([{ name: copy.sheet, rows: [copy.template.trim().split(",")] }, { name: "Instructions", rows: copy.notes.map((n) => [n]) }]);
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: XLSX_CONTENT_TYPE }));
+    const a = document.createElement("a");
+    a.href = url; a.download = copy.file.replace(/\.csv$/, ".xlsx"); a.click();
+    URL.revokeObjectURL(url);
+  };
   const c = result?.counts;
   return (
     <>
@@ -93,7 +104,10 @@ export function ImportButton({ kind, onDone }: { kind: Kind; onDone?: (text: str
         <div className="space-y-3 text-sm text-slate-800">
           <p>Choose a CSV or Excel (.xlsx) file (up to 2 MB and 2,000 rows; the first sheet is read). Checking the file is a dry run: nothing is created until you confirm.</p>
           <p>{copy.columns}</p>
-          <Button type="button" variant="secondary" onClick={downloadTemplate}>Download the template</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={downloadTemplate}>Download CSV template</Button>
+            <Button type="button" variant="secondary" onClick={downloadExcelTemplate}>Download Excel template</Button>
+          </div>
           <label className="block font-semibold text-og-ink">
             File
             <input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="mt-1 block min-h-[44px] w-full text-sm"
