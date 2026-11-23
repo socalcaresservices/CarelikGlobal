@@ -23,7 +23,7 @@ import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_ROUTE } from "./action-needed";
 import { NotificationsBell } from "./notifications-bell";
-import { useNotificationCenter } from "./notification-center";
+import { useNotificationCenter } from "./notification-center-data";
 import { PageHelpButton, PageHelpProvider } from "./ui/page-help";
 import { PendingInvitations } from "./pending-invitations";
 import { AppearanceApplier } from "./appearance/use-appearance";

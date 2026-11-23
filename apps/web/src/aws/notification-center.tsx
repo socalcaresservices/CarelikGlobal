@@ -2,39 +2,17 @@
 // takes more categories), their preferences, and, for the office, the cover-shift settings and what was sent. Where the switch is off the routes do not exist: the list
 // does not load (`available` false), the sidebar link stays out of sight and this page says it is not available yet. Nothing here assigns a shift.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useContext, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
-import { AwsApiContext, useAwsApi } from "./aws-workspace";
+import { useAwsApi } from "./aws-workspace";
+import { CENTER_REFRESH_MS, type CenterList, type CenterState, type CoverSettings, type HistoryRow, type Prefs } from "./notification-center-data";
 import { PageHeader } from "./ui/page-header";
 import { SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
-
-export interface CenterItem { id: string; category: "cover_shift"; title: string; body: string; link: string | null; shiftId: string | null; createdAt: string; readAt: string | null; archivedAt: string | null; state: "unread" | "read" | "archived" }
-export interface CenterList { asOf: string; unread: number; items: CenterItem[] }
-export type CenterState = "inbox" | "unread" | "archived" | "all";
-interface Prefs { coverShift: { inApp: boolean; email: boolean }; emailAvailable: boolean }
-interface CoverSettings { enabled: boolean; emailEnabled: boolean; autoNotify: boolean; windowHours: number; maxRecipients: number }
-interface HistoryRow { notification_id: string; shift_id: string | null; caregiver_code: string | null; created_at: string; in_app: boolean; read_at: string | null; email_status: string | null; email_attempts: number | null; email_error: string | null; email_sent_at: string | null }
-
-export const CENTER_REFRESH_MS = 60_000;
-
-/** The shell's view of the centre: is the switch on (the list loaded), and how many are unread. Quiet (no error banner) where it is off. */
-export function useNotificationCenter(enabled = true) {
-  const api = useContext(AwsApiContext);
-  const { activeOrganizationId } = useOrganization();
-  const q = useQuery({
-    queryKey: ["notification-center", activeOrganizationId, "badge"],
-    queryFn: async () => (await api!.get<{ notifications: CenterList }>("/v1/notification-center", { organizationId: activeOrganizationId, state: "unread", limit: "1" })).notifications,
-    enabled: enabled && !!api && !!activeOrganizationId,
-    retry: false,
-    refetchInterval: CENTER_REFRESH_MS,
-  });
-  return { available: q.isSuccess, unread: q.data?.unread ?? 0 };
-}
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const STATE_LABEL: Record<CenterState, string> = { inbox: "Inbox", unread: "Unread", archived: "Archived", all: "All" };

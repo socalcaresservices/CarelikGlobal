@@ -32,7 +32,7 @@ import { SortButton, SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
 import { CaregiverPicker } from "./caregiver-picker";
 import { CaregiverMarker } from "./office-assignments";
-import { useNotificationCenter } from "./notification-center";
+import { useNotificationCenter } from "./notification-center-data";
 import { refreshAfterShiftChange } from "./shift-refresh";
 import { schedulingRefusal } from "./scheduling-refusal";
 

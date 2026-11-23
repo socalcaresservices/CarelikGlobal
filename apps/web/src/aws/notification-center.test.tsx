@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies are free-form JSON */
 // Notification centre (0113): inbox, filters, mark read, archive and restore, preferences, the office settings and history, the unavailable state, the shell link. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";

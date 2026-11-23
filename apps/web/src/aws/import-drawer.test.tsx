@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies are free-form JSON */
 // R11: the import drawer. Check first (nothing created), then confirm; plain messages for refusals; nothing is sent until a file is chosen. SYNTHETIC data only.
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";

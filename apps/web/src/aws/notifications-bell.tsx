@@ -8,7 +8,7 @@ import { useAwsApi } from "./aws-workspace";
 import { TONE } from "./attention";
 import { HelpLine } from "./ui/help-line";
 import { notificationLabel, useNotifications } from "./notifications";
-import { useNotificationCenter } from "./notification-center";
+import { useNotificationCenter } from "./notification-center-data";
 
 /** The header's notifications: unread count by word and number, and a short list. Opening an item's page is done from Action needed; nothing here changes an issue. */
 export function NotificationsBell() {

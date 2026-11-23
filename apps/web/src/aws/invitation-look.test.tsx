@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies are free-form JSON */
 // Invitation email look (0114): editor, preview, validation, and the switch-off state. SYNTHETIC data only.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
