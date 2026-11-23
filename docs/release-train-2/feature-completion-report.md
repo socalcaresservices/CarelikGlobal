@@ -56,10 +56,10 @@ Status words: IMPLEMENTED + TESTED = code and automated tests pass locally; NOT 
 |---|---|
 | `pnpm run lint --force`, `typecheck --force`, `build --force` | 6/6, 7/7, 6/6 tasks successful |
 | `pnpm test:all` (unit, infra database, sv-api database) | **PASS — all suites ran, none skipped** (infra database suite included the four new migrations; sv-api database suite 200 tests) |
-| Infra unit suite | 69 files / 920 tests |
-| Web suite | 160 files / 1,444 tests |
+| Unit suites (run per workspace, 2026-11-23 after the owner decisions) | web 162 files / 1,453 tests; infra 69 / 921; sv-api 10 / 129; shared 118; auth 155; ui 73. sv-api database suite 34 files / 205 tests |
 | New tests | database: notifications 16, office branding 4, import rollback 7, staff merge 10; API: notifications 6, email handler 3, custom message 9, XLSX 6 (+ import-file updates), operations readiness 3; CDK: notifications/branding/rollback/readiness switches 8, invitation email 8; web: notification centre 9, invitation look 3, import drawer +3, staff duplicates +5, operations readiness 5, care-team sorting +1, hours sorting 1 |
 | Existing sweeps | extended (tenant isolation and role sweeps now include the new routes: a caregiver's only new writes are her own notification centre and preferences; a scheduler's are those plus "Notify caregivers") |
+Note on the gate: one `pnpm test:all` run failed its first step (the all-workspace unit run, which executes everything in parallel) without any failing suite being identifiable afterwards; every workspace passes alone, `pnpm test` passes (6/6) and a second full `pnpm test:all` passed (all suites ran, none skipped). Treat that first failure as a load-related flake I could not reproduce.
 Fixes found by the gates: sweeps needed values for the new routes; the merge route's `result` had changed shape (restored); CDK tests timed out at the default 5 s under load (60 s limit added); the release-pin guard re-pinned twice (expected).
 
 ## Not verified / limits (be explicit)
