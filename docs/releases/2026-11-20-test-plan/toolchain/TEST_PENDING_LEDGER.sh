@@ -67,7 +67,9 @@ case "$MODE" in
     require_approval
     [[ -z "$MISSING" && "$HAS_ROW" == 0 ]] || stop "prerequisites missing or $MIG already recorded; run probe"
     BK="${OGEVIA_TEST_BACKUP:-}"
-    [[ -n "$BK" && -f "$BK" && -f "$BK.sha256" ]] || stop "set OGEVIA_TEST_BACKUP to the TEST logical backup (with its .sha256) taken for this release"
+    [[ -n "$BK" && -s "$BK" && -f "$BK.sha256" ]] || stop "set OGEVIA_TEST_BACKUP to a NON-EMPTY TEST logical backup (with its .sha256) taken for this release"
+    [[ "$(stat -c %s "$BK")" -ge 100000 ]] || stop "the backup is smaller than 100 kB; a real TEST dump is larger. Check that pg_dump finished"
+    if command -v pg_restore >/dev/null; then pg_restore --list "$BK" >/dev/null 2>&1 || stop "the backup is not a readable pg_dump custom-format archive"; fi
     (cd "$(dirname "$BK")" && sha256sum --check --status "$(basename "$BK").sha256") || stop "backup checksum does not match"
     verify_sql absent || stop "pre-check failed"
     set +e

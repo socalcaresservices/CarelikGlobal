@@ -57,7 +57,7 @@ CloudWatch: API errors/5xx, the NotifySweep invocations (every 5 min) and errors
 
 Approved by the owner for TEST only. Claude cannot run it: the build container has no AWS CLI and no route to the TEST database, so the owner (or an operator) runs it from the usual TEST shell/tunnel. Script: `docs/releases/2026-11-20-test-plan/toolchain/TEST_PENDING_LEDGER.sh` (checks in `VERIFY_PENDING.sql`). Rehearsed locally on a copy of the TEST baseline (ledger 111/0112): probe, apply, verify, and reverse rollback for all four passed.
 
-1. Take a TEST logical backup and its checksum: `pg_dump -Fc ogevia_sv_test > BK && sha256sum BK > BK.sha256`.
+1. Take a TEST logical backup with a **PostgreSQL 18** `pg_dump` (a 16 client refuses: server 18.3), through the wrapper: `bash TEST_DB_SESSION.sh pg_dump -Fc ogevia_sv_test -f BK`, then `sha256sum BK > BK.sha256`. The script rejects an empty or under-100 kB file and one `pg_restore --list` cannot read. Run all commands through `bash TEST_DB_SESSION.sh bash TEST_PENDING_LEDGER.sh <mode> <migration>`.
 2. Connection: set `PGHOST PGPORT PGUSER PGPASSWORD`, `PGDATABASE=ogevia_sv_test` (the script refuses any other name and anything containing "prd").
 3. Per migration, in order 0113, 0114, 0115, 0116: `bash TEST_PENDING_LEDGER.sh probe 0113`, then `OGEVIA_DEPLOY_APPROVAL=<ref> OGEVIA_TEST_BACKUP=BK bash TEST_PENDING_LEDGER.sh apply 0113`, then `... verify 0113`. Stop at the first failure (a failed apply rolls back by itself).
 4. Rollback (reverse order 0116 -> 0113): `OGEVIA_DEPLOY_APPROVAL=<ref> bash TEST_PENDING_LEDGER.sh rollback 0116`.
