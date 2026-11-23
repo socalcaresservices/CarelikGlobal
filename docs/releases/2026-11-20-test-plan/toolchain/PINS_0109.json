@@ -3,7 +3,7 @@
     "switchOff": 259,
     "switchOn": 262
   },
-  "applicationCommit": "f6dee4bdac9abc1666b1ae4867b540f454ddbb94",
+  "applicationCommit": "ae00b3bc5f94e51be364776518ec660bd708689a",
   "expectedLedger": {
     "after": "108/0109",
     "before": "107/0107"
@@ -16,7 +16,7 @@
     "count": 5,
     "setSha256": "ef7535f15a5caf6d9f315b1d91f44f59d915e1155a0d276a67484d2a1df8ee1e"
   },
-  "pnpmLockSha256": "ba705459c0c171dfac1ec4d028e4232526008f086318bd298682ff4267f6eeaf",
+  "pnpmLockSha256": "d4eb56abfbb25b1b4b4b8a1b0d3e74fb4f10dd2760eb9cee751e411f5bd55213",
   "releasedMigrations": {
     "count": 88,
     "setSha256": "e353d9225b4d0d428f28fd9907d64ac4072429ac8946351fe1ff8bb89f66923c"
