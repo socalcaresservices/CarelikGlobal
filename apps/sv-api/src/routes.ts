@@ -5,6 +5,7 @@ import { ApiError, storageUnavailable } from "./errors";
 import { MAX_IMPORT_BYTES, parseImportFile, type ImportKind } from "./import-file";
 import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
+import { hashLabelToken, labelContext, LABEL_CODE, LABEL_TOKEN, newLabelBatch, openLabelToken, renderSignaturePng, rowsToCsv, validateStrokes } from "./home-labels";
 import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
 import type { IdentityAdmin } from "./identity";
@@ -308,6 +309,47 @@ function exportFilename(report: ReportKey, p: ExportParams): string {
 
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
+
+
+/** 0120 reports: the database function, its filters and the CSV columns (the same columns the screen shows; nothing sensitive exists in a row to omit). */
+const VERIFICATION_REPORTS = {
+  visit_exceptions: {
+    sql: "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8)",
+    params: (org: string, c: unknown[], status: string | null, query: Record<string, string | undefined>) => [org, status, query.kind ?? null, c[0], c[1], c[2], c[3], c[4]],
+    columns: [["Opened", "openedAt"], ["Age (hours)", "ageHours"], ["Kind", "kind"], ["Status", "status"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"],
+      ["Scheduled start", "scheduledStart"], ["Scheduled end", "scheduledEnd"], ["Actual in", "actualTimeIn"], ["Actual out", "actualTimeOut"], ["Reviewer", "reviewerName"], ["Resolved", "resolvedAt"], ["Resolution", "resolution"]],
+  },
+  unsigned_checkouts: {
+    sql: "select * from ogevia_api.list_unsigned_checkouts($1,$2,$3,$4,$5,$6,$7)",
+    params: (org: string, c: unknown[], _s: string | null, query: Record<string, string | undefined>) => [org, c[0], c[1], c[2], c[3], c[4], query.includeResolved === "true"],
+    columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Checked out", "checkoutAt"], ["Pending since", "pendingSince"],
+      ["Pending (hours)", "pendingHours"], ["State", "state"], ["Reason", "reason"], ["Direct signing required", "directRequired"], ["Last request", "lastRequestAt"], ["Last delivery", "lastDelivery"], ["Owner", "ownerName"], ["Resolved", "resolvedAt"]],
+  },
+  time_signature_register: {
+    sql: "select * from ogevia_api.list_time_signature_register($1,$2,$3,$4,$5,$6,$7)",
+    params: (org: string, c: unknown[], status: string | null) => [org, c[0], c[1], c[2], c[3], c[4], status],
+    columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Scheduled start", "scheduledStart"], ["Scheduled end", "scheduledEnd"],
+      ["Actual in", "actualTimeIn"], ["Actual out", "actualTimeOut"], ["Punch in", "punchInMethod"], ["Punch out", "punchOutMethod"], ["Expected start", "expectedStart"], ["Expected end", "expectedEnd"],
+      ["Location in", "locationIn"], ["Location out", "locationOut"], ["Signature", "signatureStatus"], ["Signature method", "signatureMethod"], ["Signed", "signedAt"], ["Visit status", "visitStatus"]],
+  },
+  corrections_audit: {
+    sql: "select * from ogevia_api.list_corrections_audit($1,$2,$3)",
+    params: (org: string, c: unknown[]) => [org, c[0], c[1]],
+    columns: [["When", "occurredAt"], ["Kind", "kind"], ["Subject", "subject"], ["Original", "original"], ["Revised", "revised"], ["Requester", "requester"], ["Approver", "approver"], ["Reason", "reason"], ["Re-sign required", "needsResigning"], ["Location decision", "locationDecision"]],
+  },
+  billing_review: {
+    sql: "select * from ogevia_api.list_punch_billing_review($1,$2,$3,$4,$5,$6)",
+    params: (org: string, c: unknown[]) => [org, c[0], c[1], c[2], c[3], c[4]],
+    columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Recorded (min)", "recordedMinutes"], ["Reviewed (min)", "reviewedMinutes"],
+      ["Billable (min)", "billableMinutes"], ["Open exceptions", "openExceptions"], ["Signature", "signatureStatus"], ["Billing hold", "billingHold"], ["Hold reasons", "holdReasons"]],
+  },
+  label_inventory: {
+    sql: "select * from ogevia_api.list_home_labels($1,$2,$3,1000)",
+    params: (org: string, c: unknown[], status: string | null) => [org, status, c[3]],
+    columns: [["Sticker ID", "labelCode"], ["Status", "status"], ["Client code", "clientCode"], ["Location", "locationName"], ["City", "locationCity"], ["Installed", "installedAt"], ["Ended", "endedAt"],
+      ["Replaced by", "replacedByCode"], ["Last used", "lastUsedAt"], ["Registered", "createdAt"]],
+  },
+} satisfies Record<string, { sql: string; params: (org: string, c: unknown[], status: string | null, query: Record<string, string | undefined>) => unknown[]; columns: Array<[string, string]> }>;
 
 /**
  * Route table keyed by the API Gateway routeKey. Every route here MUST also be
@@ -4103,6 +4145,349 @@ export const ROUTES: Record<string, Route> = {
         return { city: saved.city ?? (candidates.length === 1 ? candidates[0] : null), candidates };
       }
       return { status: await tx(async (db) => (await first(db, "select ogevia_api.location_data_status($1) as status", [org])).status) };
+    },
+  },
+
+  // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+  // 0120 (pending, behind the homeLabels release switch): NFC / QR home labels, punches with location results, sign now or later, exceptions, corrections and reports.
+  // Writes go through the database functions only; the browser supplies a label token, an intent, a retry key and the phone location, never a time, an organization or a status.
+  // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+  "GET /v1/clients/{clientId}/service-locations": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      locations: await tx((db) => rows(db, "select * from ogevia_api.list_service_locations($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])),
+    }),
+  },
+
+  "POST /v1/clients/{clientId}/service-locations": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const coord = (value: unknown, name: string, limit: number) => {
+        if (value === undefined || value === null || value === "") return null;
+        if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > limit) throw new ApiError(400, "bad_request", `${name} is not valid.`);
+        return value;
+      };
+      const radius = body.radiusM === undefined || body.radiusM === null ? null : Number(body.radiusM);
+      if (radius !== null && (!Number.isInteger(radius) || radius < 50 || radius > 1000)) throw new ApiError(400, "bad_request", "radiusM must be 50 to 1000 metres.");
+      const geo = body.geoStatus === undefined || body.geoStatus === null ? null : oneOf(body.geoStatus, "geoStatus", ["not_checked", "located", "approximate", "not_found"] as const);
+      const id = await tx(async (db) => (await first(db, "select ogevia_api.save_service_location($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) as id", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), optionalUuid(body.locationId, "locationId"),
+        oneOf(body.kind, "kind", ["home", "community"] as const), text(body.name, "name", 80, { required: true }), text(body.street, "street", 120, { required: true }),
+        text(body.city, "city", 80, { required: true }), text(body.state, "state", 2), text(body.zip, "zip", 10, { required: true }),
+        coord(body.latitude, "latitude", 90), coord(body.longitude, "longitude", 180), geo, radius])).id);
+      return { locationId: id };
+    },
+  },
+
+  "POST /v1/services/{serviceId}/location-rule": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_service_location_rule($1,$2,$3,$4,$5)", [uuid(body.organizationId, "organizationId"), uuid(p(event).serviceId, "serviceId"),
+        oneOf(body.expectedStart, "expectedStart", ["home", "community"] as const), oneOf(body.expectedEnd, "expectedEnd", ["home", "community"] as const), booleanValue(body.allowOverride, "allowOverride")]));
+      return { saved: true };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/location-override": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_shift_location_override($1,$2,$3,$4,$5)", [uuid(body.organizationId, "organizationId"), uuid(p(event).shiftId, "shiftId"),
+        oneOf(body.expectedStart, "expectedStart", ["home", "community"] as const), oneOf(body.expectedEnd, "expectedEnd", ["home", "community"] as const), text(body.reason, "reason", 300, { required: true })]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/shifts/{shiftId}/expected-locations": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [expected] = await tx((db) => rows(db, "select * from ogevia_api.get_expected_locations($1,$2)", [orgParam(event), uuid(p(event).shiftId, "shiftId")]));
+      return { expected: expected ?? null };
+    },
+  },
+
+  "GET /v1/verification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: (await tx((db) => rows(db, "select * from ogevia_api.get_verification_settings($1)", [orgParam(event)])))[0] ?? null }),
+  },
+
+  "POST /v1/verification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const n = (v: unknown, name: string) => { if (typeof v !== "number" || !Number.isInteger(v)) throw new ApiError(400, "bad_request", `${name} must be a whole number.`); return v; };
+      await tx((db) => db.query("select ogevia_api.save_verification_settings($1,$2,$3,$4,$5,$6,$7,$8)", [uuid(body.organizationId, "organizationId"),
+        n(body.earlyCheckoutMinutes, "earlyCheckoutMinutes"), n(body.overdueGraceMinutes, "overdueGraceMinutes"), n(body.materialTimeChangeMinutes, "materialTimeChangeMinutes"),
+        n(body.signatureSessionSeconds, "signatureSessionSeconds"), n(body.accuracyLimitM, "accuracyLimitM"),
+        booleanValue(body.holdBillingWhileSignaturePending, "holdBillingWhileSignaturePending"), booleanValue(body.holdBillingOnOpenExceptions, "holdBillingOnOpenExceptions")]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/home-labels": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const status = query.status ? oneOf(query.status, "status", ["unassigned", "active", "disabled", "replaced"] as const) : null;
+      return { labels: await tx((db) => rows(db, "select * from ogevia_api.list_home_labels($1,$2,$3)", [orgParam(event), status, optionalUuid(query.clientId, "clientId")])) };
+    },
+  },
+
+  // Registers a batch of unassigned stickers. The response is the supplier list: sticker IDs only (no client, no address, no link).
+  "POST /v1/home-labels": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const count = typeof body.count === "number" ? body.count : NaN;
+      const batch = newLabelBatch(org, count);
+      const batchId = await tx(async (db) => (await first(db, "select ogevia_api.register_home_labels($1,$2::jsonb) as id", [org, JSON.stringify(batch.map(({ code, hash, sealed }) => ({ code, hash, sealed })))])).id);
+      return { batchId, codes: batch.map((b) => b.code) };
+    },
+  },
+
+  "POST /v1/home-labels/assign": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const code = text(body.labelCode, "labelCode", 20, { required: true })!.toUpperCase();
+      if (!LABEL_CODE.test(code)) throw new ApiError(400, "bad_request", "That is not a valid label ID.");
+      return { labelId: await tx(async (db) => (await first(db, "select ogevia_api.assign_home_label($1,$2,$3,$4,$5) as id", [uuid(body.organizationId, "organizationId"), code,
+        uuid(body.serviceLocationId, "serviceLocationId"), booleanValue(body.confirmedAddress, "confirmedAddress"), body.reassign === true])).id) };
+    },
+  },
+
+  "POST /v1/home-labels/{labelId}/deactivate": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.deactivate_home_label($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).labelId, "labelId"), text(body.reason, "reason", 300, { required: true })]));
+      return { deactivated: true };
+    },
+  },
+
+  "POST /v1/home-labels/{labelId}/replace": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const code = text(body.newLabelCode, "newLabelCode", 20, { required: true })!.toUpperCase();
+      if (!LABEL_CODE.test(code)) throw new ApiError(400, "bad_request", "That is not a valid label ID.");
+      return { labelId: await tx(async (db) => (await first(db, "select ogevia_api.replace_home_label($1,$2,$3,$4) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).labelId, "labelId"), code,
+        text(body.reason, "reason", 300, { required: true })])).id) };
+    },
+  },
+
+  // Preview, print and "copy link for tag programming": the link is opened only for an active or unassigned label, and every view is recorded.
+  "POST /v1/home-labels/{labelId}/link": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const sealed = await tx(async (db) => (await first(db, "select ogevia_api.get_home_label_link($1,$2) as t", [org, uuid(p(event).labelId, "labelId")])).t as string);
+      return { token: openLabelToken(sealed, labelContext(org)) };
+    },
+  },
+
+  "GET /v1/home-labels/{labelId}/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_home_label_history($1,$2)", [orgParam(event), uuid(p(event).labelId, "labelId")])) }),
+  },
+
+  // Opening the link or scanning previews only: nothing here can create, change or end a visit.
+  "POST /v1/label-punch/preview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (typeof body.token !== "string" || !LABEL_TOKEN.test(body.token)) return { state: "unavailable" };
+      return tx(async (db) => (await first(db, "select ogevia_api.preview_home_label($1) as r", [hashLabelToken(body.token as string)])).r);
+    },
+  },
+
+  // The only writer of punches. `intent` is chosen by the person on the screen after the preview ("Clock in" / "Clock out"), never inferred from a repeated scan.
+  "POST /v1/label-punch": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const intent = oneOf(body.intent, "intent", ["arrival", "departure"] as const);
+      const token = body.token === undefined || body.token === null ? null : body.token;
+      if (token !== null && (typeof token !== "string" || !LABEL_TOKEN.test(token))) throw new ApiError(400, "bad_request", "That label link is not valid.");
+      const org = optionalUuid(body.organizationId, "organizationId");
+      if (token === null && !org) throw new ApiError(400, "bad_request", "organizationId is required for an app punch.");
+      const shift = optionalUuid(body.shiftId, "shiftId");
+      if (token === null && intent === "arrival" && !shift) throw new ApiError(400, "bad_request", "shiftId is required to clock in from the visit screen.");
+      const num = (v: unknown, name: string, limit: number) => {
+        if (v === undefined || v === null) return null;
+        if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > limit) throw new ApiError(400, "bad_request", `${name} is not valid.`);
+        return v;
+      };
+      const lat = num(body.latitude, "latitude", 90), lng = num(body.longitude, "longitude", 180);
+      if ((lat === null) !== (lng === null)) throw new ApiError(400, "bad_request", "Send both latitude and longitude, or neither.");
+      const acc = body.accuracyM === undefined || body.accuracyM === null ? null : Math.round(Number(body.accuracyM));
+      if (acc !== null && (!Number.isFinite(acc) || acc < 0 || acc > 1_000_000)) throw new ApiError(400, "bad_request", "accuracyM is not valid.");
+      return tx(async (db) => (await first(db, "select ogevia_api.record_punch($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) as r", [
+        token === null ? null : hashLabelToken(token as string), org, intent, shift, optionalUuid(body.visitId, "visitId"), lat, lng, acc, key, body.confirm === true])).r);
+    },
+  },
+
+  "POST /v1/visits/{visitId}/signature-session": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const [session] = await tx((db) => rows(db, "select * from ogevia_api.open_signature_session($1)", [uuid(p(event).visitId, "visitId")]));
+      return { session };
+    },
+  },
+
+  // Sign now. The phone sends STROKES, never an image: an upload, a paste or a file is refused. The server checks the session, draws the PNG itself, stores it privately,
+  // then consumes the session, registers the evidence and confirms the visit in ONE transaction.
+  "POST /v1/visits/{visitId}/sign": {
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const sessionId = uuid(body.sessionId, "sessionId");
+      for (const forbidden of ["signaturePng", "image", "dataUrl", "file", "png"]) {
+        if (body[forbidden] !== undefined) throw new ApiError(422, "validation_failed", "A signature image cannot be accepted. Sign on the screen.");
+      }
+      const signerRole = oneOf(body.signerRole, "signerRole", SIGNER_ROLES);
+      const signerName = text(body.signerName, "signerName", 200, { required: true })!;
+      const relationship = text(body.signerRelationship, "signerRelationship", 100);
+      if (signerRole !== "client" && !relationship) throw new ApiError(400, "bad_request", "signerRelationship is required when someone signs for the client.");
+      if (body.attested !== true) throw new ApiError(422, "validation_failed", "The confirmation statement must be accepted.");
+      const strokes = validateStrokes(body.strokes);
+
+      const replay = () => tx((db) => rows(db, "select * from ogevia_api.get_confirmation_replay($1, $2)", [visit, key]));
+      const [prior] = await replay();
+      if (prior) return { result: await tx((db) => withOutcome(db, visit, prior)) };
+
+      // The session is checked first (and a refusal is recorded); nothing is drawn or stored for a session that is not valid.
+      const bad = await tx(async (db) => (await first(db, "select ogevia_api.check_signature_session($1,$2) as r", [sessionId, visit])).r as string | null);
+      if (bad) throw new ApiError(409, "conflict", "This signing screen is no longer valid. Open it again to sign.");
+
+      const png = validateSignaturePng(renderSignaturePng(strokes).toString("base64"));
+      const objectKey = signatureObjectKey(org, visit);
+      let versionId: string | null;
+      try { ({ versionId } = await evidence.put(objectKey, png.bytes, png.sha256)); }
+      catch { throw new ApiError(503, "evidence_unavailable", "The signature could not be saved. Please try again."); }
+
+      try {
+        const [result] = await tx(async (db) => {
+          await db.query("select ogevia_api.consume_signature_session($1,$2)", [sessionId, visit]);
+          const r = await db.query("select ogevia_api.register_visit_evidence($1, $2, $3, 'image/png', $4, $5, $6) as id", [visit, objectKey, versionId, png.bytes.length, png.sha256Hex, key]);
+          const [confirmed] = await rows(db, "select * from ogevia_api.confirm_service_visit($1, $2, 'draw', $3, $4, $5, null, $6, $7)", [
+            visit, signerRole, (r.rows[0] as { id: string }).id, signerName, relationship, key, ATTESTATION_VERSION]);
+          return [await withOutcome(db, visit, confirmed)];
+        });
+        return { result };
+      } catch (error) {
+        if ((error as { code?: string }).code === "OGI09" || (error as { code?: string }).code === "OGC09") {
+          const [committed] = await replay();
+          if (committed) return { result: await tx((db) => withOutcome(db, visit, committed)) };
+          throw new ApiError(409, "conflict", "This signing screen is no longer valid. Open it again to sign.");
+        }
+        throw error;
+      }
+    },
+  },
+
+  "POST /v1/visits/{visitId}/sign-later": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = oneOf(body.reasonCode, "reasonCode", ["signing_later", "client_unavailable", "declined"] as const);
+      const key = event.headers?.["idempotency-key"] || event.headers?.["Idempotency-Key"] ? idempotencyKey(event.headers) : null;
+      return { followupId: await tx(async (db) => (await first(db, "select ogevia_api.defer_visit_signature($1,$2,$3) as id", [uuid(p(event).visitId, "visitId"), reason, key])).id) };
+    },
+  },
+
+  "POST /v1/visits/{visitId}/signature-followup/owner": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_signature_followup_owner($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).visitId, "visitId"), optionalUuid(body.ownerUserId, "ownerUserId")]));
+      return { saved: true };
+    },
+  },
+
+  // Records that a link was created, copied, emailed or revoked. It never carries the link, the code or the recipient's address.
+  "POST /v1/visits/{visitId}/signature-followup/delivery": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,$3,$4,$5,$6)", [uuid(body.organizationId, "organizationId"), uuid(p(event).visitId, "visitId"),
+        oneOf(body.action, "action", ["request_created", "link_copied", "email_queued", "delivery_failed", "link_revoked"] as const), optionalUuid(body.requestId, "requestId"),
+        oneOf(body.channel, "channel", ["copied", "email", "paper"] as const), text(body.status, "status", 40, { required: true })]));
+      return { logged: true };
+    },
+  },
+
+  "GET /v1/visit-exceptions": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { exceptions: await tx((db) => rows(db, "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8)", [orgParam(event),
+        query.status ? oneOf(query.status, "status", ["open", "in_review", "resolved", "dismissed"] as const) : null,
+        query.kind ? oneOf(query.kind, "kind", ["missing_punch", "failed_punch", "overdue_clock_out", "location_issue", "overlap", "disputed_signature", "correction_request"] as const) : null,
+        optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId")])) };
+    },
+  },
+
+  "POST /v1/visit-exceptions/{exceptionId}/resolve": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.resolve_visit_exception($1,$2,$3,$4)", [uuid(body.organizationId, "organizationId"), uuid(p(event).exceptionId, "exceptionId"),
+        oneOf(body.action, "action", ["reviewing", "resolved", "dismissed"] as const), text(body.note, "note", 500, { required: true })]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/visit-exceptions/{exceptionId}/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_visit_exception_history($1,$2)", [orgParam(event), uuid(p(event).exceptionId, "exceptionId")])) }),
+  },
+
+  "POST /v1/visits/{visitId}/punch-corrections": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const timeIn = body.requestedTimeIn === undefined || body.requestedTimeIn === null ? null : timestamp(body.requestedTimeIn, "requestedTimeIn");
+      return { requestId: await tx(async (db) => (await first(db, "select ogevia_api.request_punch_correction($1,$2,$3,$4,$5) as id", [uuid(p(event).visitId, "visitId"),
+        oneOf(body.reasonCode, "reasonCode", ["poor_connectivity", "dead_phone", "lost_tag", "delayed_login", "other"] as const), text(body.reasonNote, "reasonNote", 1000, { required: true }), timeIn,
+        timestamp(body.requestedTimeOut, "requestedTimeOut")])).id) };
+    },
+  },
+
+  "POST /v1/punch-corrections/{requestId}/decide": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = event.headers?.["idempotency-key"] || event.headers?.["Idempotency-Key"] ? idempotencyKey(event.headers) : null;
+      return { visitId: await tx(async (db) => (await first(db, "select ogevia_api.decide_punch_correction($1,$2,$3,$4,$5,$6) as id", [uuid(body.organizationId, "organizationId"),
+        uuid(p(event).requestId, "requestId"), booleanValue(body.approve, "approve"), text(body.note, "note", 500, { required: true }),
+        body.locationDecision === undefined ? "not_applicable" : oneOf(body.locationDecision, "locationDecision", ["accepted", "not_applicable", "rejected"] as const), key])).id) };
+    },
+  },
+
+  // Reports. JSON for the screen; format=csv for the file (needs reports.export and is audited by report key and row count only). Rows never hold a signature image,
+  // precise GPS or a signing link, so neither the screen nor the file can show them.
+  "GET /v1/verification-reports/{report}": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const report = oneOf(p(event).report, "report", Object.keys(VERIFICATION_REPORTS) as Array<keyof typeof VERIFICATION_REPORTS>);
+      const query = q(event);
+      const org = orgParam(event);
+      const common = [optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId")];
+      const def = VERIFICATION_REPORTS[report];
+      const status = query.status ? oneOf(query.status, "status", ["open", "in_review", "resolved", "dismissed", "draft", "awaiting_signature", "signed", "administrator_review", "unassigned", "active", "disabled", "replaced"] as const) : null;
+      const data = await tx((db) => rows(db, def.sql, def.params(org, common, status, query)));
+      if (query.format !== "csv") return { rows: data };
+      await tx((db) => db.query("select ogevia_api.authorize_verification_export($1,$2,$3)", [org, report, data.length]));
+      return { rowCount: data.length, filename: `${report.replace(/_/g, "-")}.csv`, csv: rowsToCsv(data, def.columns) };
     },
   },
 

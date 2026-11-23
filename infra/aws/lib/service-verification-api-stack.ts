@@ -84,7 +84,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "homeLabels";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -323,6 +323,34 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/care-notifications/read", feature: "requestCleanup" },
   { method: apigw.HttpMethod.POST, path: "/v1/documents/{documentId}/cancel", feature: "requestCleanup" },
   { method: apigw.HttpMethod.POST, path: "/v1/document-types/{documentTypeId}/retire", feature: "requestCleanup" },
+  // 0120 (pending): NFC / QR home labels, punches, sign now or later, exceptions, corrections and reports (docs/releases/2026-11-23-nfc-qr-visits). OFF in every environment until the owner releases 0120.
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-locations", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-locations", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/location-rule", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/location-override", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shifts/{shiftId}/expected-locations", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/verification-settings", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/verification-settings", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/home-labels", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/assign", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/{labelId}/deactivate", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/{labelId}/replace", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/{labelId}/link", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/home-labels/{labelId}/history", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/label-punch/preview", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/label-punch", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-session", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/sign", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/sign-later", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-followup/owner", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-followup/delivery", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visit-exceptions", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visit-exceptions/{exceptionId}/resolve", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visit-exceptions/{exceptionId}/history", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/punch-corrections", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/punch-corrections/{requestId}/decide", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/verification-reports/{report}", feature: "homeLabels" },
   { method: apigw.HttpMethod.GET, path: "/v1/offices", feature: "offices" },
   { method: apigw.HttpMethod.GET, path: "/v1/client-offices", feature: "offices" },
   { method: apigw.HttpMethod.POST, path: "/v1/offices", feature: "offices" },
