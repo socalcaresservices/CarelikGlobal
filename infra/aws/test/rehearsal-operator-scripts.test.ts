@@ -279,11 +279,12 @@ describe("the operator procedure document", () => {
   const doc = readFileSync(join(REPO_ROOT, PKG_REL, "OPERATOR_PROCEDURE_e80b770.md"), "utf8");
   const sha = (cmd: string) => sh("bash", ["-c", cmd], { cwd: REPO_ROOT }).stdout.trim();
   it("pins the values that the files actually have (the document cannot drift from the code)", () => {
-    expect(doc).toContain(sha("cd infra/aws/db/migrations && LC_ALL=C sha256sum -- *.sql | sha256sum | cut -d' ' -f1"));
-    expect(doc).toContain(sha("cd infra/aws/db/rollback && LC_ALL=C sha256sum -- 00[7-8][0-9]_*.down.sql | awk '$2 >= \"0078\"' | sha256sum | cut -d' ' -f1"));
+    // the document pins the approved release (migrations 0001-0085); a later migration belongs to a later release package
+    expect(doc).toContain(sha("cd infra/aws/db/migrations && LC_ALL=C sha256sum -- $(ls *.sql | LC_ALL=C sort | head -85) | sha256sum | cut -d' ' -f1"));
+    expect(doc).toContain(sha("cd infra/aws/db/rollback && LC_ALL=C sha256sum -- 00[7-8][0-9]_*.down.sql | awk '$2 >= \"0078\" && $2 < \"0086\"' | sha256sum | cut -d' ' -f1"));
     expect(doc).toContain(sha("sha256sum pnpm-lock.yaml | cut -d' ' -f1"));
     expect(doc).toContain(sha("cd infra/aws/db/migrations && LC_ALL=C sha256sum -- $(ls *.sql | LC_ALL=C sort | head -77) | sha256sum | cut -d' ' -f1"));
-    expect(sha("ls infra/aws/db/migrations | wc -l")).toBe("85");
+    expect(sha("ls infra/aws/db/migrations | LC_ALL=C sort | head -85 | wc -l")).toBe("85");
     expect(doc).toContain(SHA);
     for (const m of doc.matchAll(/\be80b770[0-9a-f]{33}\b/g)) expect(m[0]).toBe(SHA);
     for (const key of [RELEASE_KEY, "929cdb1bde9bbf18025dc36f5cc61210246ca048efa6d6b51147cf4c22b24ab0", "7c5f8eb676c93261fd7a80f34d40ba70379c040d94bb2e9bd80f2d007ebc9759"]) expect(doc).toContain(key);

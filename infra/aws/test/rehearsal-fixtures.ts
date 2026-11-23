@@ -25,7 +25,11 @@ export function makeRepo(): SynthRepo {
   const repo = join(dir, "repo");
   const w = (p: string, c: string) => { mkdirSync(dirname(join(repo, p)), { recursive: true }); writeFileSync(join(repo, p), c); };
   mkdirSync(repo, { recursive: true });
-  for (const p of ["infra/aws/db/migrations", "infra/aws/db/rollback"]) cpSync(join(REPO_ROOT, p), join(repo, p), { recursive: true });
+  // The packages under test are the approved release (migrations and rollbacks through 0085). A later migration (0086 and after) belongs to a LATER release
+  // package and must not change this release's pinned set hashes, so only files up to 0085 are carried.
+  for (const p of ["infra/aws/db/migrations", "infra/aws/db/rollback"]) {
+    cpSync(join(REPO_ROOT, p), join(repo, p), { recursive: true, filter: (src) => { const m = /\/(\d{4})_[^/]*\.sql$/.exec(src); return !m || Number(m[1]) <= 85; } });
+  }
   w("infra/aws/bin/ogevia.ts", "// synthetic\n"); w("infra/aws/package.json", "{}\n"); w("infra/aws/lib/x.ts", "// synthetic\n");
   w("infra/aws/cdk.out/Ogevia-prd-Stale.template.json", "{}\n"); // tracked in the real repo; must NOT travel
   w("apps/sv-api/package.json", "{}\n"); w("apps/sv-api/src/a.ts", "// a\n"); w("apps/web/package.json", "{}\n"); w("apps/web/src/env.ts", "// env\n");
