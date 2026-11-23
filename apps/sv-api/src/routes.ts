@@ -2074,6 +2074,21 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0115 (pending, behind the importRollback release switch): the import history and rollback of one import (all or nothing; records become Inactive, nothing is deleted).
+  "GET /v1/imports": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ imports: await tx((db) => rows(db, "select * from ogevia_api.list_import_batches($1,50)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/imports/{batchId}/rollback": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.rollback_import_batch($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).batchId, "batchId"), text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
   // 0093 (pending, behind the staffDuplicates release switch): R6. The report is read-only; the merge marks a duplicate staff profile inactive and linked (never deletes),
   // refuses unless the two records really match, and refuses a record that has a sign-in or invitation.
   "GET /v1/staff/duplicates": {

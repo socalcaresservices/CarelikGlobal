@@ -77,3 +77,16 @@ describe("invitation branding release switch (0114)", () => {
     }
   });
 });
+
+describe("import rollback release switch (0115)", () => {
+  const IR = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "importRollback").map((r) => `${r.method} ${r.path}`).sort();
+  it("marks exactly the two import history and rollback routes, OFF today; with the switch on they require a JWT and nothing else changes", () => {
+    expect(IR).toEqual(["GET /v1/imports", "POST /v1/imports/{batchId}/rollback"]);
+    for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
+      expect(base.features.importRollback ?? false).toBe(false);
+      const off = routeKeys(api(base)); const on = routeKeys(api({ ...base, features: { ...base.features, importRollback: true } } as OgeviaEnvironmentConfig));
+      for (const k of IR) { expect(off.map((r) => r.RouteKey)).not.toContain(k); expect(on.find((r) => r.RouteKey === k)).toMatchObject({ AuthorizationType: "JWT" }); }
+      expect(on.length).toBe(off.length + 2);
+    }
+  });
+});

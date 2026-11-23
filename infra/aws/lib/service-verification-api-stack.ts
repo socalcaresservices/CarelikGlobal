@@ -90,7 +90,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -341,6 +341,9 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/assignment-history", feature: "assignmentHistory" },
   // Release Train 2 (0113): cover-shift notifications and the notification centre. OFF unless features.notifications.
   // Release Train 2 (0114): each office's look for invitation emails. OFF unless features.invitationBranding.
+  // Release Train 2 (0115): bulk import history and rollback. OFF unless features.importRollback.
+  { method: apigw.HttpMethod.GET, path: "/v1/imports", feature: "importRollback" },
+  { method: apigw.HttpMethod.POST, path: "/v1/imports/{batchId}/rollback", feature: "importRollback" },
   { method: apigw.HttpMethod.GET, path: "/v1/office-branding", feature: "invitationBranding" },
   { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/branding", feature: "invitationBranding" },
   { method: apigw.HttpMethod.GET, path: "/v1/notification-center", feature: "notifications" },

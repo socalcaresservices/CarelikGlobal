@@ -1,4 +1,4 @@
-// R11: import people or clients from a CSV/XLSX file. Check first (nothing is created), then confirm. The file is read in the browser only to send it to the API;
+// R11: import people or clients from a CSV or Excel (.xlsx) file. Check first (a dry run: nothing is created), then confirm. History and rollback appear where the importRollback switch is on. The file is read in the browser only to send it to the API;
 // the API parses, validates and creates in one transaction. No invitation is sent and no sign-in is created.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { ApiRequestError } from "../lib/aws-api";
 import { useAwsApi } from "./aws-workspace";
 import { Drawer } from "./ui/drawer";
+import { ImportHistory } from "./import-history";
 
 type Kind = "people" | "clients";
 type Preview = {
@@ -76,21 +77,29 @@ export function ImportButton({ kind, onDone }: { kind: Kind; onDone?: (text: str
     a.href = url; a.download = copy.file; a.click();
     URL.revokeObjectURL(url);
   };
+  const downloadProblems = (list: Preview["rows"]) => {
+    // Row number, status and message only: no names or contact details from the file are repeated here.
+    const csv = ["row,status,message", ...list.map((r) => `${r.row},${r.status},"${r.message.replace(/"/g, '""')}"`)].join("\n") + "\n";
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `ogevia-${kind}-import-problems.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
   const c = result?.counts;
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center font-semibold text-og-accent underline md:min-h-[32px]">{copy.button}</button>
       <Drawer open={open} title={copy.title} onClose={close}>
         <div className="space-y-3 text-sm text-slate-800">
-          <p>Choose a CSV file (up to 2 MB and 2,000 rows). Nothing is created until you check the file and then confirm.</p>
+          <p>Choose a CSV or Excel (.xlsx) file (up to 2 MB and 2,000 rows; the first sheet is read). Checking the file is a dry run: nothing is created until you confirm.</p>
           <p>{copy.columns}</p>
           <Button type="button" variant="secondary" onClick={downloadTemplate}>Download the template</Button>
           <label className="block font-semibold text-og-ink">
             File
-            <input type="file" accept=".csv,text/csv" className="mt-1 block min-h-[44px] w-full text-sm"
+            <input type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="mt-1 block min-h-[44px] w-full text-sm"
               onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); setError(null); }} />
           </label>
-          <Button type="button" disabled={!file || busy} onClick={() => void send(false)}>{busy && !result ? "Checking…" : "Check the file"}</Button>
+          <Button type="button" disabled={!file || busy} onClick={() => void send(false)}>{busy && !result ? "Checking…" : "Check the file (dry run)"}</Button>
           {error ? <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-red-800">{error}</p> : null}
           {result && c ? (
             <div role="status" className="space-y-2 rounded-md border border-slate-200 bg-og-card p-3" data-testid="import-result">
@@ -107,6 +116,7 @@ export function ImportButton({ kind, onDone }: { kind: Kind; onDone?: (text: str
                   {result.rows.length > 50 ? <li>…and more. Fix the first ones and check again.</li> : null}
                 </ul>
               ) : null}
+              {result.rows.length > 0 ? <button type="button" className="inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" onClick={() => downloadProblems(result.rows)}>Download the problem rows (CSV)</button> : null}
               {ignored.length > 0 ? <p className="text-og-sub">Columns not used: {ignored.join(", ")}.</p> : null}
               {result.mode === "preview" && c.invalid > 0 ? <p className="text-red-800">Fix the rows above and choose the file again. Nothing has been imported.</p> : null}
               {result.mode === "preview" && c.invalid === 0 && c.new === 0 ? <p>There is nothing new to import.</p> : null}
@@ -115,6 +125,7 @@ export function ImportButton({ kind, onDone }: { kind: Kind; onDone?: (text: str
               ) : null}
             </div>
           ) : null}
+          <ImportHistory kind={kind} />
         </div>
       </Drawer>
     </>

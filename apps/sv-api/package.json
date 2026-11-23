@@ -22,6 +22,7 @@
     "@aws-sdk/client-sesv2": "3.1144.0",
     "@carelik/auth": "workspace:*",
     "@carelik/shared": "workspace:*",
+    "fflate": "0.8.2",
     "pg": "^8.23.1"
   },
   "devDependencies": {

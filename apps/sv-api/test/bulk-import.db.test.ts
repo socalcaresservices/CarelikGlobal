@@ -51,12 +51,12 @@ describe("POST /v1/imports/{kind}", () => {
     expect(await count("caregiver_records")).toBe(before + 1);
   });
 
-  it("refuses XLSX and renamed archives without writing clients", async () => {
+  it("refuses renamed archives, a fake .xlsx and old .xls without writing clients", async () => {
     const before = await count("clients");
-    for (const fileName of ["clients.xlsx", "clients.csv"]) {
+    for (const fileName of ["clients.xlsx", "clients.csv", "clients.xls"]) {
       const r = await call(w.ownerA, "clients", { organizationId: w.orgA, fileName, contentBase64: b64("PK archive"), confirm: true });
       expect(r.status).toBe(422);
-      expect(r.body.error.message).toMatch(/Upload a \.csv file/);
+      expect(r.body.error.message).toMatch(/could not be read|Upload a \.csv or \.xlsx file/);
     }
     expect(await count("clients")).toBe(before);
   });
