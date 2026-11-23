@@ -3648,6 +3648,72 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0113 (pending, behind the `notifications` release switch): cover-shift notifications, the notification centre, preferences and the office history.
+  // Nothing here sends mail: the email outbox is drained by the scheduled worker (notify-worker.ts). Bodies never carry a client name or code.
+  "GET /v1/notification-center": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const state = oneOf(query.state ?? "inbox", "state", ["inbox", "unread", "archived", "all"] as const);
+      const category = query.category === undefined || query.category === "" ? null : oneOf(query.category, "category", ["cover_shift"] as const);
+      const limit = query.limit === undefined ? 30 : wholeNumber(Number(query.limit), "limit", 1, 100);
+      const before = query.before === undefined || query.before === "" ? null : (Number.isNaN(Date.parse(query.before)) ? (() => { throw new ApiError(400, "bad_request", "before must be a date and time."); })() : new Date(query.before).toISOString());
+      return { notifications: await tx(async (db) => (await first(db, "select ogevia_api.list_user_notifications($1,$2,$3,$4,$5::timestamptz) as r", [orgParam(event), state, category, limit, before])).r) };
+    },
+  },
+
+  "POST /v1/notification-center/mark": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const action = oneOf(body.action, "action", ["read", "read_all", "archive", "unarchive"] as const);
+      const ids = body.ids === undefined || body.ids === null ? [] : Array.isArray(body.ids) && body.ids.length <= 200 ? body.ids.map((id) => uuid(id, "ids")) : (() => { throw new ApiError(400, "bad_request", "ids must be a list of up to 200 ids."); })();
+      return { changed: await tx(async (db) => Number((await first(db, "select ogevia_api.mark_user_notifications($1,$2::uuid[],$3) as r", [uuid(body.organizationId, "organizationId"), ids, action])).r)) };
+    },
+  },
+
+  "GET /v1/notification-preferences": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ preferences: await tx(async (db) => (await first(db, "select ogevia_api.get_my_notification_preferences($1) as r", [orgParam(event)])).r) }),
+  },
+
+  "POST /v1/notification-preferences": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { preferences: await tx(async (db) => (await first(db, "select ogevia_api.set_my_notification_preferences($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), oneOf(body.category, "category", ["cover_shift"] as const), booleanValue(body.inApp, "inApp"), booleanValue(body.email, "email")])).r) };
+    },
+  },
+
+  "GET /v1/cover-notification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => (await first(db, "select ogevia_api.get_cover_notification_settings($1) as r", [orgParam(event)])).r) }),
+  },
+
+  "POST /v1/cover-notification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_notification_settings($1,$2,$3,$4,$5,$6,$7) as r", [
+        uuid(body.organizationId, "organizationId"), booleanValue(body.enabled, "enabled"), booleanValue(body.emailEnabled, "emailEnabled"), booleanValue(body.autoNotify, "autoNotify"),
+        wholeNumber(body.windowHours, "windowHours", 1, 336), wholeNumber(body.maxRecipients, "maxRecipients", 1, 200), text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/notify-cover": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.notify_cover_shift($1,$2) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).shiftId, "shiftId")])).r) };
+    },
+  },
+
+  "GET /v1/cover-notification-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_cover_notification_history($1,50)", [orgParam(event)])) }),
+  },
+
   "POST /v1/caregivers/{caregiverRecordId}/color": {
     mutating: true,
     handle: async ({ event, tx }) => {
