@@ -23,6 +23,7 @@ import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_ROUTE } from "./action-needed";
 import { NotificationsBell } from "./notifications-bell";
+import { useNotificationCenter } from "./notification-center";
 import { PageHelpButton, PageHelpProvider } from "./ui/page-help";
 import { PendingInvitations } from "./pending-invitations";
 import { AppearanceApplier } from "./appearance/use-appearance";
@@ -128,6 +129,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     if (drawerShown) closeButtonRef.current?.focus();
   }, [drawerShown]);
 
+  const center = useNotificationCenter(!loading && !!activeOrganizationId);   // the Notifications link appears only where the notifications switch is on
   const { available: officesOn } = useOffices(!loading && !!activeOrganizationId && hasPermission("organization.update"));   // the Offices link appears only where the offices switch is on (hook order: before the early returns)
   if (loading) {
     return <div className="flex min-h-screen flex-col"><EnvironmentBanner /><div className="flex flex-1 items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div></div>;
@@ -191,6 +193,8 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: SERVICES_PATH, label: "Services", group: "Settings", show: staff && canServices && agencyTo !== SERVICES_PATH },
     { to: "/continuity", label: "Continuity", group: "Settings", show: staff && canContinuity && agencyTo !== "/continuity" },
     // Appearance is everyone's; it is also in the menu footer next to Profile.
+    // Release Train 2 (0113): the notification centre. Caregivers find it under My Work; staff reach it from the Dashboard tabs and the header bell.
+    { to: "/notifications", label: center.unread > 0 ? `Notifications (${center.unread})` : "Notifications", group: staff ? "Dashboard" : "My Work", ...(staff ? { tabOnly: true, under: "Dashboard" } : {}), show: center.available && (staff || hasCaregiverAccess) },
     { to: "/settings/appearance", label: "Appearance", group: "Settings", tabOnly: true, under: "Agency Settings", show: true },
     // The caregiver's own day. There is no separate tasks page: verifying a visit is the caregiver's task.
     { to: "/my-shifts", label: "My Schedule", group: "My Work", show: hasCaregiverAccess },

@@ -32,6 +32,7 @@ import { SortButton, SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
 import { CaregiverPicker } from "./caregiver-picker";
 import { CaregiverMarker } from "./office-assignments";
+import { useNotificationCenter } from "./notification-center";
 import { refreshAfterShiftChange } from "./shift-refresh";
 import { schedulingRefusal } from "./scheduling-refusal";
 
@@ -294,6 +295,10 @@ const ACTION_TITLE: Record<Exclude<Action, null>, string> = {
 
 function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false, withDate = true }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean; withDate?: boolean }) {
   const [action, setAction] = useState<Action>(null);
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const notifyAvailable = useNotificationCenter(canManage).available;   // the action appears only where the notifications switch is on
+  const [notifying, setNotifying] = useState(false);
   const overrides = useSigninOverrides(canManage);
   const viaOverride = !s.hasSignIn && !!s.caregiverRecordId && (overrides.data ?? []).some((o) => o.caregiverRecordId === s.caregiverRecordId);
   const [expanded, setExpanded] = useState(stateOfShift(s) === "needs_coverage" || highlight);
@@ -314,6 +319,19 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
     ...(canManage && !s.makeupForShiftId && (s.coverageState === "cancelled" || s.coverageState === "completed") ? [{ label: "Schedule make-up", action: "makeup" as const }] : []),
     { label: "History", action: "history" },
   ];
+  const canNotify = notifyAvailable && editable && s.coverageState === "needs_coverage" && future;
+  async function notifyCaregivers() {
+    setNotifying(true);
+    try {
+      const r = await api.post<{ result: { state: string; notified?: number; alreadyNotified?: number } }>(`/v1/shifts/${s.shiftId}/notify-cover`, { organizationId: activeOrganizationId }, { idempotencyKey: newIdempotencyKey() });
+      const x = r.result;
+      onDone(x.state === "disabled" ? "Cover-shift notifications are off. The agency Administrator can turn them on in Notifications."
+        : x.state === "not_needed" ? "This shift does not need cover any more, so nobody was notified."
+        : (x.notified ?? 0) > 0 ? `${x.notified} caregiver${x.notified === 1 ? " was" : "s were"} notified.`
+        : (x.alreadyNotified ?? 0) > 0 ? "Eligible caregivers were already notified about this shift." : "No eligible caregiver to notify for this shift.");
+    } catch (cause) { onDone(cause instanceof Error ? cause.message : "Could not notify caregivers. Nothing was sent."); }
+    finally { setNotifying(false); }
+  }
   const pick = (a: Exclude<Action, null>) => setAction(action === a && (a === "history" || a === "makeup") ? null : a);
   const stateKey = stateOfShift(s);
   const chip = <span data-testid="shift-state" className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${DISPLAY_BADGE[stateKey] ?? STATE_BADGE[s.coverageState]}`}>{DISPLAY_LABEL[stateKey] ?? STATE_LABEL[s.coverageState]}</span>;
@@ -329,6 +347,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 whitespace-nowrap md:min-h-7 md:py-0" {...(primary.action === "assign" ? { "aria-label": `Assign caregiver to shift for ${shiftLabel}` } : {})} onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
       {items.length === 1 && !primary ? <button type="button" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8" onClick={() => pick(items[0]!.action)}>{items[0]!.label}</button> : (
         <QuickActionMenu label="More actions" className="[&>button]:min-h-11 [&>button]:min-w-11 md:[&>button]:min-h-7 md:[&>button]:min-w-7">
+          {canNotify ? <button type="button" disabled={notifying} className="block min-h-11 w-full px-3 text-left text-slate-900 hover:bg-slate-50 md:min-h-10" onClick={() => void notifyCaregivers()}>Notify caregivers</button> : null}
           {items.map((i) => <button key={i.action} type="button" className={`block min-h-11 w-full px-3 text-left hover:bg-slate-50 md:min-h-10 ${i.danger ? "text-red-800" : "text-slate-900"}`} onClick={() => pick(i.action)}>{i.label}</button>)}
         </QuickActionMenu>
       )}
