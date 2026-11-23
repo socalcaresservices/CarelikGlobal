@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies are free-form JSON */
 // Open-shift alerts from the schedule (0113): choose the coordinating office when there are several, block on an incomplete service address, and report what was sent. SYNTHETIC data only.
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
