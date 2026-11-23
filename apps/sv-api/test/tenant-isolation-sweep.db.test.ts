@@ -118,6 +118,7 @@ beforeAll(async () => {
   const openShift = (await q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'14:00'::time,'16:00'::time,null,$5)", [A, f.client, f.service, tomorrow, randomUUID()]))[0].shift_id as string;
   ids.openShiftId = openShift;
   ids.shiftRef = (await db.admin.query("select public_ref from ogevia.shifts where id = $1", [openShift])).rows[0].public_ref as string; // 0086: the board addresses a shift by its opaque reference
+  ids.jobId = (await db.admin.query("insert into ogevia.notification_jobs (organization_id, purpose, shift_id, recipient_kind, recipient_caregiver_record_id, dedupe_key, status) values ($1,'callout_receipt',$2,'caregiver',$3,$4,'failed') returning id", [A, openShift, (await db.admin.query('select id from ogevia.caregiver_records where organization_id = $1 limit 1', [A])).rows[0].id, `sweep|${randomUUID()}`])).rows[0].id as string;
   ids.contactId = (await q(w.ownerA, "select ogevia_api.upsert_office_contact($1,null,'Synthetic contact','+13105550177',null,true,false,false,true) as id", [A]))[0].id as string;
   await make(w.caregiverA1, "POST /v1/shifts/{shiftId}/pickup", {}, { shiftId: openShift });
   const pk = await make(w.managerA, "GET /v1/shift-pickups");
@@ -465,7 +466,7 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
     // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only
     expect(got).toEqual([
       "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
-      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
+      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notification-jobs/{jobId}/requeue", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
       "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel"]);
     // billing reads: the scheduler holds no billing permission, so they are the stranger's (empty) answer
     for (const route of ["GET /v1/billing-approvals", "GET /v1/billing-review", "GET /v1/billing-rounding/policies", "GET /v1/billing-rounding/preview", "GET /v1/accounts", "GET /v1/continuity/status"]) {

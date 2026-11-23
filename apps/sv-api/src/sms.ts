@@ -58,6 +58,8 @@ export interface SmsRunDeps {
   readonly appOrigin: string;
   /** TEST: when set, only these E.164 numbers are ever texted; anything else is recorded as a permanent failure and nothing is sent. */
   readonly allowlist?: ReadonlySet<string> | undefined;
+  /** Emergency disable for THIS environment (SMS_EMERGENCY_DISABLE=true): the run still sweeps (planning, escalation, reconciliation) but claims and sends nothing. */
+  readonly emergencyDisable?: boolean;
   readonly batchSize?: number;
   readonly maxBatches?: number;
   readonly log?: (record: Record<string, unknown>) => void;
@@ -106,7 +108,7 @@ export async function runCoverageSms(deps: SmsRunDeps): Promise<SmsRunResult> {
   const sweep = await inTx(async (query) => (await query("select ogevia_api.system_coverage_sweep() as r")).rows[0]?.r as Record<string, number>);
   let claimed = 0, accepted = 0, failed = 0, retryLater = 0, unknown = 0;
   const batch = deps.batchSize ?? 25;
-  for (let i = 0; i < (deps.maxBatches ?? 8); i += 1) {
+  for (let i = 0; i < (deps.emergencyDisable ? 0 : deps.maxBatches ?? 8); i += 1) {
     // Claiming commits before any send: a crash after this point leaves the job 'claimed', which the sweep turns into 'unknown' (never re-sent).
     const jobs = await inTx(async (query) => (await query("select * from ogevia_api.system_sms_claim($1)", [batch])).rows);
     if (jobs.length === 0) break;
@@ -133,7 +135,13 @@ export async function runCoverageSms(deps: SmsRunDeps): Promise<SmsRunResult> {
     }
   }
   const result: SmsRunResult = { sweep, claimed, accepted, failed, retryLater, unknown };
-  log({ level: "info", task: COVERAGE_SMS_TASK, ...result });
+  // One flat line per run: the CloudWatch metric filters (failed jobs, unknown outcomes, stale receipts, unfilled urgent shifts) read these numbers.
+  log({
+    level: failed + unknown > 0 || Number(sweep?.urgentUnfilled ?? 0) > 0 || Number(sweep?.staleAccepted ?? 0) > 0 ? "warn" : "info", task: COVERAGE_SMS_TASK,
+    emergencyDisable: deps.emergencyDisable === true, claimed, accepted, failed, retryLater, unknown,
+    urgentUnfilled: Number(sweep?.urgentUnfilled ?? 0), staleAccepted: Number(sweep?.staleAccepted ?? 0), failedLast24h: Number(sweep?.failedLast24h ?? 0),
+    unknownOutcomes: Number(sweep?.unknownOutcomes ?? 0), roundsEscalated: Number(sweep?.roundsEscalated ?? 0),
+  });
   return result;
 }
 

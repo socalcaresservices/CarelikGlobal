@@ -30,14 +30,17 @@ Status: **implemented and tested locally. Not deployed. SMS is off and cannot se
 - Rollback `0086_open_shifts_board_and_sms.down.sql` (BACKUP REQUIRED: drops the new tables and columns; restores 0063 confirmation and trigger). Tested in the range-rollback and upgrade rehearsals.
 
 ## Cost (estimates, not a quote; confirm on the AWS pricing page before provisioning)
-Toll-free lease about $2/month per sending agency plus about $0.03 per segment. 100 texts about $5/month; the cancellation notices add roughly 60-80 texts. EventBridge and Lambda are far below any charge. The worker rule is **not** added to the CDK stack in this PR (a second scheduled rule is a deploy decision and the stack test expects one rule); proposal below.
+Toll-free lease about $2/month per sending agency plus about $0.03 per segment. 100 texts about $5/month; the cancellation notices add roughly 60-80 texts. EventBridge and Lambda are far below any charge. The `CoverageSms` schedule is defined in the CDK stack **disabled**; deploying the stack is a separate YELLOW approval.
 
 ## Dependencies and owner decisions before any live text
 1. Approve applying 0086 to TEST, then production.
 2. Per agency: verified toll-free sender, opt-in evidence, message samples, public privacy and terms links; platform sets `sms_entitled`, `sender_status`, `sender_number`.
-3. Approve adding `@aws-sdk/client-pinpoint-sms-voice-v2` and wiring the transport; add an EventBridge rule (5 min, disabled until go-live) with env `APP_ORIGIN`, `SMS_TRANSPORT`, optional `SMS_ALLOWLIST` for TEST.
+3. Approve adding `@aws-sdk/client-pinpoint-sms-voice-v2` and wiring the transport; enable the (already defined, disabled) 5-minute rule and set env `APP_ORIGIN`, `SMS_TRANSPORT`, optional `SMS_ALLOWLIST` for TEST.
 4. Confirm defaults: 14-day window, urgent 48 h, escalation 24 h, quiet hours 9 PM-7 AM, office hours 8-18 (my default for the on-call rule), monthly limit 100 per agency, on-call routing, wording.
 5. Confirm the first-message "Reply STOP" suffix against the provider's requirement.
+
+## Added in the completion pass
+Requirements matrix (`REQUIREMENTS_MATRIX.md`), office runbook, deployment and rollback sequence, audit on every transition, platform/environment emergency switches, urgent (48 h) alert and escalation (24 h), schedule-change notice, daily receipt reconciliation, 30-day report, recent-alerts panel with re-queue, audit view, schedule posting panel, CloudWatch metric filters and alarms, disabled `CoverageSms` schedule, load test (300 concurrent), populated-data rollback test, accessibility checks, and a 31-check real-browser run on the local harness (phone 390x844).
 
 ## Known limits (stated, not hidden)
 - Office email alerts: the contact stores the email preference but no email is sent (no email transport exists).

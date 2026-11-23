@@ -27,3 +27,10 @@ export const deliverySummary = (d: QueueItem["delivery"]) => {
   return parts.length ? parts.join(", ") : "No texts";
 };
 
+
+export interface CoverageAlert { kind: "call_out" | "client_cancelled" | "notification_problem"; occurredAt: string; shiftId: string; startsAt: string; endsAt: string; serviceCity: string | null; detail: string | null; jobId: string | null; jobPurpose: string | null; jobStatus: string | null; jobReason: string | null }
+export interface OpenShiftReport {
+  openings: { currentlyNeedCoverage: number; currentlyPosted: number; roundsOpened: number; filled: number; clientCancelled: number; expiredUnfilled: number; escalations: number; urgentUnfilledNow: number };
+  texts: Record<string, number>; textsByPurpose: Record<string, number>;
+  quota: { period: string; used: number; limit: number; blocked: number; segments: number; failed: number; inbound: number; estimatedCostMicros: number };
+}

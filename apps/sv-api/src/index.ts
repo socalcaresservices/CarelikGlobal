@@ -41,8 +41,9 @@ export async function handler(event: HttpApiEvent | Record<string, unknown>) {
     return runCoverageSms({
       db: dbInstance,
       dbSetRole: config.dbSetRole,
-      transport: smsTransportFromEnv(),
+      transport: process.env.SMS_EMERGENCY_DISABLE?.trim() === "true" ? new MockSmsTransport() : smsTransportFromEnv(),
       appOrigin: process.env.APP_ORIGIN?.trim() ?? "",
+      emergencyDisable: process.env.SMS_EMERGENCY_DISABLE?.trim() === "true",
       allowlist: process.env.SMS_ALLOWLIST ? new Set(process.env.SMS_ALLOWLIST.split(",").map((n) => n.trim()).filter(Boolean)) : undefined,
     });
   }

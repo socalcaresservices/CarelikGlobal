@@ -229,8 +229,8 @@ describe("ServiceVerificationApiStack (FUTURE, Phase 4)", () => {
 describe("Lambda invoke permission (policy-size fix, 2026-10-04)", () => {
   const t = Template.fromStack(buildOgeviaApp(newApp(), ENVIRONMENTS.prod, "plan").find((s) => s.stack.stackName.endsWith("-ServiceVerificationApi"))!.stack);
   const perms = Object.values(t.findResources("AWS::Lambda::Permission"));
-  it("exactly two permissions: API Gateway (limited to this API) and the one compliance rule (limited to that rule)", () => {
-    expect(perms).toHaveLength(2);
+  it("exactly three permissions: API Gateway (limited to this API) and the two scheduled rules (each limited to its own rule)", () => {
+    expect(perms).toHaveLength(3);
     const gw = perms.map((x) => x.Properties as Record<string, any>).find((p) => p.Principal === "apigateway.amazonaws.com")!;
     expect(gw.Action).toBe("lambda:InvokeFunction");
     const arn = JSON.stringify(gw.SourceArn);
@@ -238,19 +238,29 @@ describe("Lambda invoke permission (policy-size fix, 2026-10-04)", () => {
     expect(arn).toContain(":execute-api:us-west-2:300094796789:");
     expect(arn).toMatch(/"Ref":"Api[0-9A-F]{8}"/);
     expect(arn).toContain("/*/*/*");
-    const ev = perms.map((x) => x.Properties as Record<string, any>).find((p) => p.Principal === "events.amazonaws.com")!;
-    expect(ev.Action).toBe("lambda:InvokeFunction");
-    expect(JSON.stringify(ev.SourceArn)).toMatch(/"Fn::GetAtt":\["ComplianceSweep[0-9A-F]+","Arn"\]/);
+    const evs = perms.map((x) => x.Properties as Record<string, any>).filter((p) => p.Principal === "events.amazonaws.com");
+    expect(evs).toHaveLength(2);
+    for (const ev of evs) expect(ev.Action).toBe("lambda:InvokeFunction");
+    const arns = evs.map((e) => JSON.stringify(e.SourceArn));
+    expect(arns.some((a) => /"Fn::GetAtt":\["ComplianceSweep[0-9A-F]+","Arn"\]/.test(a))).toBe(true);
+    expect(arns.some((a) => /"Fn::GetAtt":\["CoverageSms[0-9A-F]+","Arn"\]/.test(a))).toBe(true);
   });
   it("the compliance run: one rule, every 15 minutes, the same handler, a constant payload with no identity, retried once", () => {
-    t.resourceCountIs("AWS::Events::Rule", 1);
-    const rule = Object.values(t.findResources("AWS::Events::Rule"))[0]!.Properties as Record<string, any>;
+    t.resourceCountIs("AWS::Events::Rule", 2);
+    const rule = Object.values(t.findResources("AWS::Events::Rule")).map((r) => r.Properties as Record<string, any>).find((r) => r.ScheduleExpression === "rate(15 minutes)")!;
     expect(rule.ScheduleExpression).toBe("rate(15 minutes)");
     expect(rule.State).toBe("ENABLED");
     expect(rule.Targets).toHaveLength(1);
     expect(JSON.parse(rule.Targets[0].Input)).toEqual({ "ogevia-task": "compliance-sweep" });
     expect(rule.Targets[0].RetryPolicy).toEqual({ MaximumRetryAttempts: 1 });
     expect(rule.Targets[0].DeadLetterConfig).toBeUndefined();
+    expect(JSON.stringify(rule.Targets[0].Arn)).toMatch(/Handler/);
+  });
+  it("the Open Shifts text run (0086): a second rule every 5 minutes, DISABLED, same handler, constant payload, no retry", () => {
+    const rule = Object.values(t.findResources("AWS::Events::Rule")).map((r) => r.Properties as Record<string, any>).find((r) => r.ScheduleExpression === "rate(5 minutes)")!;
+    expect(rule.State).toBe("DISABLED");
+    expect(JSON.parse(rule.Targets[0].Input)).toEqual({ "ogevia-task": "coverage-sms" });
+    expect(rule.Targets[0].RetryPolicy).toEqual({ MaximumRetryAttempts: 0 });
     expect(JSON.stringify(rule.Targets[0].Arn)).toMatch(/Handler/);
   });
   it("route authentication is unchanged: every non-public route still uses the JWT authorizer", () => {

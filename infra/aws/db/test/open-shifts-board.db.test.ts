@@ -532,3 +532,198 @@ describe("permissions and privacy", () => {
     expect((await jobs(s, "open_shift")).every((j) => j.status === "suppressed")).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+// Completion pass: audit on every transition, emergency stop, urgent alerts, schedule-change notice, edits, reconciliation, report, requeue, tenant fail-closed.
+// ---------------------------------------------------------------------------------------------------------------------------------------------
+const reschedule = (shift: string, d: string, start: string, end: string) =>
+  q(w.managerA, "select * from ogevia_api.reschedule_shift($1,$2,$3::date,$4::time,$5::time,'Synthetic edit',$6)", [w.orgA, shift, d, start, end, randomUUID()]);
+const auditActions = async (shift: string) => (await db.admin.query("select action from ogevia.audit_events where entity_id = $1 order by id", [shift])).rows.map((r) => r.action as string);
+
+describe("audit logging on every state transition", () => {
+  it("posted, requested, withdrawn, approved, round closed as filled, unposted, called out, cancelled and escalated are all in the audit trail", async () => {
+    await cities("CG-A2", ["Winchester"]);
+    const f = await fixture("Winchester");
+    const s = await openShift(f, "04:00", "05:00", day(30 + next++));
+    await post(s);
+    await request(w.caregiverA2, await ref(s));
+    await q(w.caregiverA2, "select ogevia_api.withdraw_open_shift_request($1,$2)", [w.orgA, await ref(s)]);
+    await request(w.caregiverA2, await ref(s));
+    const [r1] = await reqs(s);
+    await confirm(w.managerA, r1.request_id);
+    await q(w.managerA, "select ogevia_api.record_shift_callout($1,$2,'Synthetic',null)", [w.orgA, s]);
+    await unpost(s);
+    await q(w.managerA, "select ogevia_api.cancel_shift($1,$2,'Synthetic',null)", [w.orgA, s]);
+    const a = await auditActions(s);
+    for (const x of ["shift.coverage_posted", "shift.pickup_requested", "shift.pickup_withdrawn", "shift.coverage_request_approved", "shift.pickup_confirmed", "shift.coverage_round_closed",
+      "shift.called_out", "shift.coverage_auto_posted", "shift.coverage_unposted", "shift.cancelled"]) expect(a, x).toContain(x);
+    const trail = await q(w.ownerA, "select * from ogevia_api.list_open_shift_audit($1,200)", [w.orgA]);
+    expect(trail.map((t) => t.action)).toContain("shift.coverage_posted");
+    await expectPgError(q(w.caregiverA2, "select * from ogevia_api.list_open_shift_audit($1,10)", [w.orgA]).then((r) => { if (r.length === 0) throw Object.assign(new Error("empty"), { code: "OGA03" }); }), "OGA03");
+  });
+});
+
+describe("emergency stop, urgent and escalation alerts, schedule changes (go-live safeguards)", () => {
+  it("the platform emergency switch stops every send for every agency at once and releasing it lets queued messages go", async () => {
+    await smsOn();
+    await cities("CG-A2", ["Winchester"]);
+    await optIn(w.caregiverA2, "310-555-0102");
+    const f = await fixture("Winchester");
+    const s = await openShift(f);
+    await db.admin.query("select ogevia.set_sms_emergency_disable(true, 'Synthetic drill')");
+    await post(s);
+    const mine = await ref(s);
+    expect((await claim()).filter((c) => String(c.link_path).includes(mine))).toEqual([]);
+    expect((await jobs(s, "open_shift")).every((j) => j.suppress_reason === "platform_disabled")).toBe(true);
+    await db.admin.query("select ogevia.set_sms_emergency_disable(false, null)");
+  });
+
+  it("urgent (within 48 h) and escalation (within 24 h) alerts go to the office once per round, never both at once, with URGENT in the text", async () => {
+    await smsOn();
+    await db.admin.query("update ogevia.agency_open_shift_settings set escalation_hours = 24, urgent_hours = 48, quiet_bypass = true where organization_id = $1", [w.orgA]);
+    const f = await fixture("Winchester");
+    // starts in ~36 hours: urgent only
+    const t36 = new Date(Date.now() + 36 * 3600_000);
+    const local = (d: Date) => ({ d: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(d), t: new Intl.DateTimeFormat("en-GB", { timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit" }).format(d) });
+    const a = local(t36);
+    const s = await openShiftAt(f, a.t, `${String((Number(a.t.slice(0, 2)) + 1) % 24).padStart(2, "0")}:${a.t.slice(3)}`, a.d);
+    await post(s);
+    await sys("select ogevia_api.system_coverage_sweep()");
+    await sys("select ogevia_api.system_coverage_sweep()");
+    expect((await jobs(s, "office_urgent")).length).toBeGreaterThanOrEqual(1);
+    expect(await jobs(s, "office_escalation")).toHaveLength(0);
+    const c = (await claim()).filter((x) => String(x.body_template).includes("URGENT"));
+    expect(c.length).toBeGreaterThanOrEqual(1);
+    // the sweep reports unfilled urgent shifts for monitoring
+    expect((await sys("select ogevia_api.system_coverage_sweep() r"))[0].r.urgentUnfilled).toBeGreaterThanOrEqual(1);
+    // a shift posted inside 24 h: escalation only
+    const t10 = local(new Date(Date.now() + 10 * 3600_000));
+    const s2 = await openShiftAt(f, t10.t, `${String((Number(t10.t.slice(0, 2)) + 1) % 24).padStart(2, "0")}:${t10.t.slice(3)}`, t10.d);
+    await post(s2);
+    expect((await jobs(s2, "office_escalation")).length).toBeGreaterThanOrEqual(1);
+    expect(await jobs(s2, "office_urgent")).toHaveLength(0);
+  });
+
+  it("an assigned shift whose time changes texts the assigned caregiver once for those exact details; the same edit twice or an unassigned edit sends nothing", async () => {
+    await smsOn();
+    await optIn(w.caregiverA2, "310-555-0102");
+    const f = await fixture("Winchester");
+    const s = await assignedShift(f, "CG-A2", "15:00", "16:30", day(9));
+    await reschedule(s, day(9), "16:00", "17:30");
+    const sc = await jobs(s, "schedule_change");
+    expect(sc.map((j) => j.recipient_caregiver_record_id)).toEqual([rec["CG-A2"]]);
+    const c = (await claim()).find((x) => x.job_id === sc[0].id)!;
+    expect(c.body_template).toMatch(/Your shift on \w{3} \w{3} \d+ changed\. Open Ogevia to review: \{link\}/);
+    const o = await openShift(f);
+    await reschedule(o, day(9), "19:00", "20:00");
+    expect(await jobs(o, "schedule_change")).toHaveLength(0);
+  });
+
+  it("editing a posted shift sends no second text and invalidates waiting requests; a replacement call-out contacts a previously texted caregiver once in the new round", async () => {
+    await smsOn();
+    await cities("CG-A2", ["Winchester"]); await cities("CG-A1", ["Winchester"]);
+    await optIn(w.caregiverA2, "310-555-0102");
+    const f = await fixture("Winchester");
+    const s = await openShift(f, "21:00", "22:00", day(2));
+    await post(s);
+    const before = (await jobs(s, "open_shift")).length;
+    await request(w.caregiverA2, await ref(s));
+    await reschedule(s, day(2), "21:30", "22:30");
+    expect((await jobs(s, "open_shift")).length).toBe(before);
+    expect((await requestStatus(s, "CG-A2")).status).toBe("invalidated");
+    // fill with A1, then A1 calls out: round 2 contacts A2 again (new round), not A1
+    await q(w.managerA, "select ogevia_api.assign_shift_caregiver($1,$2,$3,'Synthetic',null)", [w.orgA, s, rec["CG-A1"]]);
+    await q(w.managerA, "select ogevia_api.record_shift_callout($1,$2,'Synthetic',null)", [w.orgA, s]);
+    const r2 = (await rounds(s))[1];
+    const second = (await jobs(s, "open_shift")).filter((j) => j.round_id === r2.id).map((j) => j.recipient_caregiver_record_id);
+    expect(second).toContain(rec["CG-A2"]);
+    expect(second).not.toContain(rec["CG-A1"]);
+  });
+});
+
+describe("reconciliation, report, alerts and requeue", () => {
+  it("accepted texts with no receipt after 24 h are flagged once, never re-sent; the report and alerts show sent, failed, unknown, usage and escalations", async () => {
+    await smsOn();
+    await cities("CG-A2", ["Winchester"]);
+    await optIn(w.caregiverA2, "310-555-0102");
+    const f = await fixture("Winchester");
+    const s = await openShift(f);
+    await post(s);
+    const job = (await jobs(s, "open_shift")).find((j) => j.recipient_caregiver_record_id === rec["CG-A2"])!;
+    const c = (await claim()).find((x) => x.job_id === job.id)!;
+    await sys("select ogevia_api.system_sms_record($1,$2,'accepted','m-9',1,3000,null)", [c.job_id, c.claim_token]);
+    await db.admin.query("update ogevia.notification_jobs set sent_at = now() - interval '30 hours' where id = $1", [job.id]);
+    const r = (await sys("select ogevia_api.system_sms_reconcile() r"))[0].r;
+    expect(r.newlyFlaggedNoReceipt).toBeGreaterThanOrEqual(1);
+    expect((await sys("select ogevia_api.system_sms_reconcile() r"))[0].r.newlyFlaggedNoReceipt).toBe(0);
+    const alerts = await q(w.managerA, "select * from ogevia_api.list_coverage_alerts($1)", [w.orgA]);
+    expect(alerts.find((a) => a.job_id === job.id)).toMatchObject({ kind: "notification_problem", job_status: "accepted", job_reason: "no_receipt" });
+    const rep = (await q(w.managerA, "select ogevia_api.get_open_shift_report($1,$2::date,$3::date) r", [w.orgA, day(-1), day(30)]))[0].r;
+    expect(rep.texts.accepted).toBeGreaterThanOrEqual(1);
+    expect(rep.quota.limit).toBe(100);
+    expect(rep.quota.estimatedCostMicros).toBeGreaterThanOrEqual(3000);
+    expect(rep.openings.currentlyPosted).toBeGreaterThanOrEqual(1);
+    expect(Object.keys(rep.openings).sort()).toEqual(["clientCancelled", "currentlyNeedCoverage", "currentlyPosted", "escalations", "expiredUnfilled", "filled", "roundsOpened", "urgentUnfilledNow"]);
+    await expectPgError(q(w.caregiverA2, "select ogevia_api.get_open_shift_report($1,$2::date,$3::date) r", [w.orgA, day(-1), day(1)]), "OGA03");
+  });
+
+  it("a failed notification can be sent again by the office; an unknown outcome needs explicit confirmation; nothing else can be requeued", async () => {
+    const f = await fixture("Winchester");
+    const s = await openShift(f);
+    await post(s);
+    const [job] = await jobs(s, "office_callout").then((x) => (x.length ? x : jobs(s)));
+    const target = job ?? (await db.admin.query("insert into ogevia.notification_jobs (organization_id, purpose, shift_id, recipient_kind, recipient_caregiver_record_id, dedupe_key, status) values ($1,'callout_receipt',$2,'caregiver',$3,$4,'failed') returning *", [w.orgA, s, rec["CG-A2"], `t|${randomUUID()}`])).rows[0];
+    await db.admin.query("update ogevia.notification_jobs set status = 'failed' where id = $1", [target.id]);
+    expect((await q(w.managerA, "select ogevia_api.requeue_notification($1,$2) s", [w.orgA, target.id]))[0].s).toBe("queued");
+    await expectPgError(q(w.managerA, "select ogevia_api.requeue_notification($1,$2) s", [w.orgA, target.id]), "OGC09");
+    await db.admin.query("update ogevia.notification_jobs set status = 'unknown' where id = $1", [target.id]);
+    await expectPgError(q(w.managerA, "select ogevia_api.requeue_notification($1,$2) s", [w.orgA, target.id]), "OGC09", /unknown/);
+    expect((await q(w.managerA, "select ogevia_api.requeue_notification($1,$2,true) s", [w.orgA, target.id]))[0].s).toBe("queued");
+    await expectPgError(q(w.managerB, "select ogevia_api.requeue_notification($1,$2) s", [w.orgB, target.id]), "OGN04");
+  });
+});
+
+describe("tenant isolation: every new function fails closed for foreign tenant ids", () => {
+  it("agency B's people get nothing and no confirmation from agency A's shift, request, job, settings, report, contacts or cities, whichever organization id they send", async () => {
+    await cities("CG-A2", ["Winchester"]);
+    const f = await fixture("Winchester");
+    const s = await openShift(f);
+    await post(s);
+    await request(w.caregiverA2, await ref(s));
+    const [r] = await reqs(s);
+    const job = (await jobs(s))[0];
+    for (const org of [w.orgA, w.orgB]) {
+      for (const sql of [
+        ["select * from ogevia_api.list_coverage_queue($1)", [org]],
+        ["select * from ogevia_api.list_coverage_requests($1,$2)", [org, s]],
+        ["select * from ogevia_api.list_coverage_alerts($1)", [org]],
+        ["select * from ogevia_api.list_open_shift_board($1)", [org]],
+        ["select * from ogevia_api.list_my_open_shift_requests($1)", [org]],
+        ["select * from ogevia_api.get_shift_coverage_status($1,$2)", [org, s]],
+        ["select * from ogevia_api.list_office_contacts($1)", [org]],
+        ["select * from ogevia_api.list_caregiver_coverage_cities($1,$2)", [org, rec["CG-A2"]]],
+        ["select * from ogevia_api.list_open_shift_audit($1,50)", [org]],
+      ] as const) {
+        for (const actor of [w.managerB, w.caregiverB1]) {
+          const rows = await q(actor, sql[0], [...sql[1]]).catch((e) => { expect(["OGN04", "OGA03"]).toContain(e.code); return []; });
+          expect(JSON.stringify(rows), sql[0]).not.toContain(s);
+          expect(JSON.stringify(rows), sql[0]).not.toContain(r.request_id);
+        }
+      }
+      for (const sql of [
+        ["select ogevia_api.post_shift_for_coverage($1,$2)", [org, s]],
+        ["select ogevia_api.unpost_shift($1,$2,'x')", [org, s]],
+        ["select ogevia_api.set_shift_service_city($1,$2,'Temecula','CA')", [org, s]],
+        ["select ogevia_api.confirm_coverage_request($1,$2,null,null)", [org, r.request_id]],
+        ["select ogevia_api.requeue_notification($1,$2)", [org, job.id]],
+        ["select ogevia_api.set_caregiver_coverage_cities($1,$2,'[]'::jsonb)", [org, rec["CG-A2"]]],
+        ["select ogevia_api.update_open_shift_settings($1,'{\"smsEnabled\":false}'::jsonb)", [org]],
+      ] as const) {
+        await expect(q(w.managerB, sql[0], [...sql[1]]), sql[0]).rejects.toMatchObject({ code: expect.stringMatching(/^OG(N04|A03|C09)$/) });
+      }
+    }
+    await expect(q(w.managerB, "select ogevia_api.get_open_shift_report($1,current_date,current_date)", [w.orgA])).rejects.toMatchObject({ code: "OGA03" });
+    expect((await requestStatus(s, "CG-A2")).status).toBe("pending");
+    expect((await rounds(s))[0].state).toBe("posted");
+  });
+});

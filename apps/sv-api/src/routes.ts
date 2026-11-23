@@ -1672,6 +1672,39 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Office reporting, recent alerts, audit history and failed-notification handling.
+  "GET /v1/open-shift-report": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const from = date(query.from, "from");
+      const to = date(query.to, "to");
+      return { report: await tx(async (db) => ((await db.query("select ogevia_api.get_open_shift_report($1, $2::date, $3::date) as r", [orgParam(event), from, to])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "GET /v1/coverage-alerts": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ alerts: await tx((db) => rows(db, "select * from ogevia_api.list_coverage_alerts($1)", [orgParam(event)])) }),
+  },
+
+  "GET /v1/open-shift-audit": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ events: await tx((db) => rows(db, "select * from ogevia_api.list_open_shift_audit($1, 100)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/notification-jobs/{jobId}/requeue": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const job = uuid(p(event).jobId, "jobId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.requeue_notification($1, $2, $3) as s", [org, job, body.confirmedNotReceived === true])).rows[0] as { s: string }).s);
+      return { notificationState: state };
+    },
+  },
+
   // Agency settings, office contacts and a caregiver's approved cities.
   "GET /v1/open-shift-settings": {
     mutating: false,

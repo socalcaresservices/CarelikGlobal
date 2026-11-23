@@ -6,7 +6,8 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { useWindowLabel } from "./open-shifts-model";
-import { deliverySummary, REASON_TEXT, type CoverageRequest, type QueueItem } from "./coverage-model";
+import { deliverySummary, REASON_TEXT, type CoverageAlert, type CoverageRequest, type OpenShiftReport, type QueueItem } from "./coverage-model";
+import { useAgencyClock as useAgencyClockLite } from "./agency-clock";
 import { Hint } from "./hint";
 import { linkClass } from "./ui-classes";
 
@@ -74,6 +75,74 @@ function Requests({ item, onChanged }: { item: QueueItem; onChanged: (text: stri
   );
 }
 
+function ReportPanel() {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const to = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const rep = useQuery({
+    queryKey: ["aws-open-shift-report", activeOrganizationId],
+    queryFn: async () => (await api.get<{ report: OpenShiftReport }>("/v1/open-shift-report", { organizationId: activeOrganizationId, from, to })).report,
+    enabled: !!activeOrganizationId,
+  });
+  const r = rep.data;
+  if (!r) return rep.isError ? <p role="alert" className="text-sm text-red-700">The report could not be loaded.</p> : null;
+  const t = (k: string) => Number(r.texts[k] ?? 0);
+  return (
+    <section aria-labelledby="report-heading" data-testid="open-shift-report" className="rounded-lg border border-slate-200 bg-og-card p-3 text-sm">
+      <h2 id="report-heading" className="text-base font-semibold text-slate-950">Last 30 days</h2>
+      <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+        <div><dt className="text-slate-600">Need coverage now</dt><dd className="font-semibold">{r.openings.currentlyNeedCoverage}</dd></div>
+        <div><dt className="text-slate-600">On the board</dt><dd className="font-semibold">{r.openings.currentlyPosted}</dd></div>
+        <div><dt className="text-slate-600">Filled</dt><dd className="font-semibold">{r.openings.filled}</dd></div>
+        <div><dt className="text-slate-600">Escalations</dt><dd className="font-semibold">{r.openings.escalations}</dd></div>
+        <div><dt className="text-slate-600">Texts sent</dt><dd className="font-semibold">{t("accepted") + t("delivered")}</dd></div>
+        <div><dt className="text-slate-600">Texts failed</dt><dd className="font-semibold">{t("failed") + t("unknown")}</dd></div>
+        <div><dt className="text-slate-600">Urgent unfilled</dt><dd className="font-semibold">{r.openings.urgentUnfilledNow}</dd></div>
+        <div><dt className="text-slate-600">Monthly texts</dt><dd className="font-semibold" data-testid="quota">{r.quota.used} of {r.quota.limit}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function AlertsPanel() {
+  const api = useAwsApi();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = useOrganization();
+  const { when } = useAgencyClockLite();
+  const [error, setError] = useState<string | null>(null);
+  const alerts = useQuery({
+    queryKey: ["aws-coverage-alerts", activeOrganizationId],
+    queryFn: async () => (await api.get<{ alerts: CoverageAlert[] }>("/v1/coverage-alerts", { organizationId: activeOrganizationId })).alerts,
+    enabled: !!activeOrganizationId,
+  });
+  async function requeue(a: CoverageAlert) {
+    setError(null);
+    const unknown = a.jobStatus === "unknown";
+    if (unknown && !window.confirm("The outcome is unknown. Send again only if the person confirms they did not receive it. Send again?")) return;
+    try {
+      await api.post(`/v1/notification-jobs/${encodeURIComponent(a.jobId!)}/requeue`, { organizationId: activeOrganizationId, confirmedNotReceived: unknown });
+      await queryClient.invalidateQueries({ queryKey: ["aws-coverage-alerts"] });
+    } catch (cause) { setError(message(cause, "Not queued.")); }
+  }
+  if (!alerts.data || alerts.data.length === 0) return null;
+  return (
+    <section aria-labelledby="alerts-heading" data-testid="coverage-alerts" className="space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+      <h2 id="alerts-heading" className="text-base font-semibold text-slate-950">Recent call-outs, cancellations and notices that need a look</h2>
+      {error ? <p role="alert" className="text-red-700">{error}</p> : null}
+      <ul className="space-y-1">
+        {alerts.data.map((a, i) => (
+          <li key={`${a.kind}-${a.jobId ?? a.shiftId}-${i}`} className="flex flex-wrap items-center justify-between gap-2">
+            <span>{a.kind === "call_out" ? "Caregiver called out" : a.kind === "client_cancelled" ? "Client cancelled" : `Text not delivered (${a.jobPurpose?.replace(/_/g, " ")}: ${a.jobStatus}${a.jobReason ? `, ${a.jobReason.replace(/_/g, " ")}` : ""})`}
+              {" · "}{a.serviceCity ?? "no city"} · {when(a.startsAt)}</span>
+            {a.kind === "notification_problem" && (a.jobStatus === "failed" || a.jobStatus === "unknown") ? <button type="button" className="inline-flex min-h-11 items-center underline" onClick={() => void requeue(a)}>Send again</button> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Office: openings that need a caregiver, their posting state, requests in submission order, delivery summary and why they need attention. */
 export function CoveragePage() {
   const api = useAwsApi();
@@ -113,6 +182,8 @@ export function CoveragePage() {
       <Hint details="Caregivers who cover the shift's service city see it once it is posted. Requests are listed in the order they came in; nobody is assigned until you confirm." show>
         Posting does not assign anyone.
       </Hint>
+      <ReportPanel />
+      <AlertsPanel />
       {notice ? <p role="status" className="text-sm text-emerald-800">{notice}</p> : null}
       {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
       {queue.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}

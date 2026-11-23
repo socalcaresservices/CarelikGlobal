@@ -33,6 +33,8 @@ export function renderAws(path: string, permissions: string[], handlers: Record<
       case "GET /v1/open-shift-board": return json(200, { shifts: [] });
       case "GET /v1/my-open-shift-requests": return json(200, { requests: [] });
       case "GET /v1/coverage-queue": return json(200, { items: [] });
+      case "GET /v1/coverage-alerts": return json(200, { alerts: [] });
+      case "GET /v1/open-shift-report": return json(200, { report: { openings: { currentlyNeedCoverage: 0, currentlyPosted: 0, roundsOpened: 0, filled: 0, clientCancelled: 0, expiredUnfilled: 0, escalations: 0, urgentUnfilledNow: 0 }, texts: {}, textsByPurpose: {}, quota: { period: "2026-11-01", used: 0, limit: 100, blocked: 0, segments: 0, failed: 0, inbound: 0, estimatedCostMicros: 0 } } });
       case "GET /v1/my-sms-consent": return json(200, { consent: null });
       case "GET /v1/shifts": return json(200, { shifts: [] });
       case "GET /v1/clients": return json(200, { clients: [] });

@@ -11,6 +11,7 @@ import { clientName, useClients, useServices } from "./client-admin";
 import { useAgencyClock } from "./agency-clock";
 import { RecurringSeriesForm, RejectedDates, RescheduleForm, SeriesList } from "./recurring-schedule";
 import { OpenShiftsEntry } from "./open-shifts-page";
+import { ShiftCoveragePanel } from "./shift-coverage-panel";
 import { PickupRequestsPanel } from "./pickup-requests";
 import { ReconcileShiftsPanel } from "./reconcile-shifts";
 import { useShiftsToReconcile } from "./reconcile-data";
@@ -187,9 +188,9 @@ function AddShiftForm({ onDone, initialClientId = "" }: { onDone: (text: string)
   );
 }
 
-type Action = "callout" | "assign" | "cancel" | "history" | "reschedule" | "makeup" | null;
+type Action = "callout" | "assign" | "cancel" | "history" | "reschedule" | "makeup" | "coverage" | null;
 
-function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclude<Action, null | "reschedule" | "makeup">; onClose: () => void; onDone: (text: string) => void }) {
+function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclude<Action, null | "reschedule" | "makeup" | "coverage">; onClose: () => void; onDone: (text: string) => void }) {
   const api = useAwsApi();
   const refresh = useRefreshSchedule();
   const { activeOrganizationId, hasPermission } = useOrganization();
@@ -271,6 +272,8 @@ function ShiftActions({ s, action, onClose, onDone }: { s: Shift; action: Exclud
           <input id={`${id}-reason`} value={reason} maxLength={500} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} className={inputClass} />
         </div>
       ) : null}
+      {action === "callout" ? <p className="text-sm text-slate-700 sm:col-span-2" data-testid="action-effect">This reposts the same shift on the Open Shifts board, keeps its reserved hours, notifies the office and (if they opted in) the caregiver, and texts eligible backups. Other dates keep their caregivers.</p> : null}
+      {action === "cancel" ? <p className="text-sm text-slate-700 sm:col-span-2" data-testid="action-effect">Use this when the client cancels. The opening closes, no recruitment text goes out, reserved hours return to the authorization, and the assigned caregiver is told not to go.</p> : null}
       {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-2">{state.error}</p> : null}
       <div className="flex gap-2 sm:col-span-2">
         <Button type="submit" className="min-h-11" variant={action === "cancel" ? "secondary" : "primary"} disabled={state.busy || (action === "assign" && !!pick && ready === false)}>
@@ -301,6 +304,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
   const primary: MenuItem | null = editable ? (s.coverageState === "needs_coverage" ? { label: "Assign", action: "assign" } : { label: "Record call-out", action: "callout" }) : null;
   const items: MenuItem[] = [
     ...(editable && s.coverageState === "covered" ? [{ label: "Change caregiver", action: "assign" as const }] : []),
+    ...(editable && s.coverageState === "needs_coverage" ? [{ label: "Coverage and posting", action: "coverage" as const }] : []),
     ...(editable && future ? [{ label: s.seriesId ? "Change this date only" : "Change time", action: "reschedule" as const }] : []),
     ...(editable ? [{ label: s.seriesId ? "Cancel this date" : "Cancel shift", action: "cancel" as const, danger: true }] : []),
     ...(canManage && !s.makeupForShiftId && (s.coverageState === "cancelled" || s.coverageState === "completed") ? [{ label: "Schedule make-up", action: "makeup" as const }] : []),
@@ -338,6 +342,8 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
     <RescheduleForm shiftId={s.shiftId} localDate={s.localDate} startsAt={s.startsAt} endsAt={s.endsAt} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
   ) : action === "makeup" ? (
     <MakeupForm shiftId={s.shiftId} caregiverRecordId={s.caregiverRecordId} defaultDate={s.localDate} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
+  ) : action === "coverage" ? (
+    <ShiftCoveragePanel shiftId={s.shiftId} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} />
   ) : action ? <ShiftActions s={s} action={action} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} /> : null;
   const tone = highlight ? "bg-sky-50 outline outline-2 outline-slate-900" : "";
 

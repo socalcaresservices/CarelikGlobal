@@ -37,7 +37,7 @@ describe("alarm email subscription (opt-in)", () => {
     t.resourceCountIs("AWS::SNS::Subscription", 1);
     t.hasResourceProperties("AWS::SNS::Subscription", { Protocol: "email", Endpoint: "alarms@example.invalid" });
     t.resourceCountIs("AWS::SNS::Topic", 1);
-    t.resourceCountIs("AWS::CloudWatch::Alarm", 6);
+    t.resourceCountIs("AWS::CloudWatch::Alarm", 9);
   });
 
   it("supplying an address changes nothing except adding the one subscription", () => {

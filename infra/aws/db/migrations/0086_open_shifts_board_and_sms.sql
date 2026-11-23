@@ -113,12 +113,32 @@ create table ogevia.agency_sms_usage (
   segment_count integer not null default 0,
   blocked_count integer not null default 0,
   failed_count integer not null default 0,
+  inbound_count integer not null default 0,
   cost_micros bigint not null default 0,
+  rental_micros bigint not null default 0,
   primary key (organization_id, period_start)
 );
 alter table ogevia.agency_sms_usage enable row level security;
 create policy readonly_select on ogevia.agency_sms_usage for select to ogevia_readonly using (true);
 grant select on ogevia.agency_sms_usage to ogevia_readonly;
+
+-- Platform-wide emergency stop for SMS (operator action, not exposed through the API): while set, nothing is claimed or sent for any agency.
+create table ogevia.platform_sms_controls (
+  id boolean primary key default true check (id),
+  sms_disabled boolean not null default false,
+  reason text,
+  changed_at timestamptz not null default now()
+);
+insert into ogevia.platform_sms_controls (id) values (true);
+alter table ogevia.platform_sms_controls enable row level security;
+create function ogevia.set_sms_emergency_disable(p_disabled boolean, p_reason text)
+returns void
+language sql
+volatile
+security definer
+set search_path = ogevia, pg_temp
+as $$ update ogevia.platform_sms_controls set sms_disabled = p_disabled, reason = p_reason, changed_at = now() where id; $$;
+revoke all on function ogevia.set_sms_emergency_disable(boolean, text) from public;
 
 create table ogevia.caregiver_sms_consent (
   id uuid primary key default gen_random_uuid(),
@@ -191,6 +211,7 @@ create table ogevia.shift_coverage_rounds (
   recruit_planned_at timestamptz,
   recipients_planned integer,
   escalated_at timestamptz,
+  urgent_alerted_at timestamptz,
   unique (shift_id, round_no),
   constraint shift_coverage_rounds_closed_shape check ((state = 'closed') = (closed_at is not null))
 );
@@ -223,7 +244,7 @@ create index shift_pickup_requests_shift_seq on ogevia.shift_pickup_requests (sh
 create table ogevia.notification_jobs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references ogevia.organizations(id),
-  purpose text not null check (purpose in ('open_shift', 'callout_receipt', 'office_callout', 'client_cancel', 'assignment_confirmed', 'office_escalation')),
+  purpose text not null check (purpose in ('open_shift', 'callout_receipt', 'office_callout', 'client_cancel', 'assignment_confirmed', 'office_escalation', 'office_urgent', 'schedule_change')),
   shift_id uuid not null references ogevia.shifts(id) on delete cascade,
   round_id uuid references ogevia.shift_coverage_rounds(id) on delete cascade,
   recipient_kind text not null check (recipient_kind in ('caregiver', 'office_contact')),
@@ -411,7 +432,9 @@ begin
   if v_r.id is null then return; end if;
   update ogevia.shift_coverage_rounds set state = 'closed', closed_at = now(), closed_reason = p_reason, unposted_at = coalesce(unposted_at, null) where id = v_r.id;
   update ogevia.notification_jobs j set status = 'suppressed', suppress_reason = 'round_closed:' || p_reason, updated_at = now()
-   where j.round_id = v_r.id and j.status = 'queued' and j.purpose in ('open_shift', 'office_escalation');
+   where j.round_id = v_r.id and j.status = 'queued' and j.purpose in ('open_shift', 'office_escalation', 'office_urgent');
+  perform ogevia.write_audit(v_r.organization_id, 'shift.coverage_round_closed', 'shifts', p_shift_id, jsonb_build_object('round_id', v_r.id, 'round_no', v_r.round_no),
+    jsonb_build_object('reason', p_reason), case p_reason when 'filled' then 'Opening filled' when 'client_cancelled' then 'Client cancelled' when 'new_round' then 'Coverage reopened' when 'expired' then 'Shift started unfilled' else 'Shift no longer valid' end);
   update ogevia.shift_pickup_requests q
      set status = case p_reason when 'filled' then 'superseded' when 'new_round' then 'invalidated' else 'closed' end,
          decided_at = now(),
@@ -506,7 +529,8 @@ end;
 $$;
 revoke all on function ogevia.coverage_plan_round(uuid) from public;
 
--- Urgent office alert once per round when an unfilled opening is within the escalation window (immediately if posted inside it).
+-- Office alerts for an unfilled opening, once per round: "urgent" when it starts within the urgent window (default 48 h) and "escalation" within the
+-- escalation window (default 24 h, or immediately if posted inside it). When both are due at the same moment only the escalation is sent.
 create function ogevia.coverage_escalate_if_due(p_round_id uuid)
 returns void
 language plpgsql
@@ -520,13 +544,19 @@ declare
   v_set ogevia.agency_open_shift_settings%rowtype;
 begin
   select * into v_r from ogevia.shift_coverage_rounds where id = p_round_id for update;
-  if v_r.id is null or v_r.state = 'closed' or v_r.escalated_at is not null then return; end if;
+  if v_r.id is null or v_r.state = 'closed' then return; end if;
   select * into v_s from ogevia.shifts where id = v_r.shift_id;
   if v_s.status <> 'scheduled' or v_s.starts_at <= now() then return; end if;
   select * into v_set from ogevia.agency_open_shift_settings where organization_id = v_r.organization_id;
-  if v_s.starts_at > now() + make_interval(hours => v_set.escalation_hours) then return; end if;
-  update ogevia.shift_coverage_rounds set escalated_at = now() where id = v_r.id;
-  perform ogevia.enqueue_office_notice(v_r.organization_id, 'office_escalation', v_s.id, v_r.id, v_r.id::text);
+  if v_r.escalated_at is null and v_s.starts_at <= now() + make_interval(hours => v_set.escalation_hours) then
+    update ogevia.shift_coverage_rounds set escalated_at = now(), urgent_alerted_at = coalesce(urgent_alerted_at, now()) where id = v_r.id;
+    perform ogevia.enqueue_office_notice(v_r.organization_id, 'office_escalation', v_s.id, v_r.id, v_r.id::text);
+    perform ogevia.write_audit(v_r.organization_id, 'shift.coverage_escalated', 'shifts', v_s.id, null, jsonb_build_object('round_id', v_r.id, 'kind', 'escalation'), 'Unfilled opening escalated to the office');
+  elsif v_r.urgent_alerted_at is null and v_s.starts_at <= now() + make_interval(hours => v_set.urgent_hours) then
+    update ogevia.shift_coverage_rounds set urgent_alerted_at = now() where id = v_r.id;
+    perform ogevia.enqueue_office_notice(v_r.organization_id, 'office_urgent', v_s.id, v_r.id, v_r.id::text);
+    perform ogevia.write_audit(v_r.organization_id, 'shift.coverage_escalated', 'shifts', v_s.id, null, jsonb_build_object('round_id', v_r.id, 'kind', 'urgent'), 'Unfilled opening is urgent');
+  end if;
 end;
 $$;
 revoke all on function ogevia.coverage_escalate_if_due(uuid) from public;
@@ -613,6 +643,18 @@ begin
       update ogevia.shift_pickup_requests r
          set status = 'invalidated', decided_at = now(), decision_reason = 'The shift changed; review the new details and request it again'
        where r.shift_id = new.id and r.status = 'pending';
+      if found then
+        perform ogevia.write_audit(new.organization_id, 'shift.coverage_requests_invalidated', 'shifts', new.id, null, null, 'Date, time or service city changed');
+      end if;
+      -- An assigned shift that changed: tell the assigned caregiver once for these exact details (the existing acknowledgement flow is unchanged).
+      if new.caregiver_record_id is not null and not ogevia.shift_is_called_out(new.id)
+         and not exists (select 1 from ogevia.shift_coverage_rounds cr where cr.shift_id = new.id and cr.state <> 'closed')
+         and (new.starts_at is distinct from old.starts_at or new.ends_at is distinct from old.ends_at or v_old_key is distinct from v_new_key) then
+        insert into ogevia.notification_jobs (organization_id, purpose, shift_id, recipient_kind, recipient_caregiver_record_id, dedupe_key)
+        values (new.organization_id, 'schedule_change', new.id, 'caregiver', new.caregiver_record_id,
+                'schedule_change|' || new.id || '|' || extract(epoch from new.starts_at)::bigint || '|' || extract(epoch from new.ends_at)::bigint || '|' || new.caregiver_record_id)
+        on conflict (organization_id, dedupe_key) do nothing;
+      end if;
     end if;
   end if;
   return null;
@@ -691,7 +733,7 @@ begin
   update ogevia.shift_pickup_requests set status = 'closed', decided_at = now(), decided_by = v_actor, decision_reason = 'The office took this opening off the board'
    where shift_id = v_s.id and status = 'pending';
   update ogevia.notification_jobs set status = 'suppressed', suppress_reason = 'unposted', updated_at = now()
-   where round_id = v_r.id and status = 'queued' and purpose in ('open_shift', 'office_escalation');
+   where round_id = v_r.id and status = 'queued' and purpose in ('open_shift', 'office_escalation', 'office_urgent');
   perform ogevia.write_audit(p_organization_id, 'shift.coverage_unposted', 'shifts', v_s.id, null, jsonb_build_object('round_id', v_r.id), nullif(btrim(coalesce(p_reason, '')), ''));
   return 'unposted';
 end;
@@ -1410,6 +1452,7 @@ begin
   select * into st from ogevia.agency_open_shift_settings where organization_id = j.organization_id;
   select o.timezone, coalesce(st.sms_display_name, o.display_name) into v_tz, v_name from ogevia.organizations o where o.id = j.organization_id;
   select * into sh from ogevia.shifts where id = j.shift_id;
+  if (select c.sms_disabled from ogevia.platform_sms_controls c where c.id) then return jsonb_build_object('action', 'suppress', 'reason', 'platform_disabled'); end if;
   if not st.sms_entitled then return jsonb_build_object('action', 'suppress', 'reason', 'not_entitled'); end if;
   if not st.sms_enabled then return jsonb_build_object('action', 'suppress', 'reason', 'sms_disabled'); end if;
   if st.sender_status <> 'verified' or st.sender_number is null then return jsonb_build_object('action', 'suppress', 'reason', 'sender_unavailable'); end if;
@@ -1466,14 +1509,20 @@ begin
     v_body := v_name || ': You''re confirmed for ' || v_when || ' in ' || coalesce(v_city, 'your area') || '. Details in Ogevia: {link}';
     v_path := '/my-shifts';
   elsif j.purpose = 'office_callout' then
-    v_body := 'Ogevia: Caregiver cancelled ' || v_when || ', ' || coalesce(v_city, 'no city set') || '. Reposted for coverage. Review: {link}';
+    v_body := 'Ogevia: ' || case when sh.starts_at <= now() + make_interval(hours => st.urgent_hours) then 'URGENT. ' else '' end || 'Caregiver cancelled ' || v_when || ', ' || coalesce(v_city, 'no city set') || '. Reposted for coverage. Review: {link}';
     v_path := '/coverage';
-  elsif j.purpose = 'office_escalation' then
+  elsif j.purpose = 'schedule_change' then
+    if sh.status <> 'scheduled' or sh.caregiver_record_id is distinct from j.recipient_caregiver_record_id or ogevia.shift_is_called_out(sh.id) then
+      return jsonb_build_object('action', 'suppress', 'reason', 'assignment_changed');
+    end if;
+    v_body := v_name || ': Your shift on ' || to_char(sh.starts_at at time zone v_tz, 'Dy Mon FMDD') || ' changed. Open Ogevia to review: {link}';
+    v_path := '/my-shifts';
+  elsif j.purpose in ('office_escalation', 'office_urgent') then
     select * into rd from ogevia.shift_coverage_rounds where id = j.round_id;
     if rd.id is null or rd.state = 'closed' or sh.status <> 'scheduled' or ogevia.shift_coverage_state(sh) <> 'needs_coverage' then
       return jsonb_build_object('action', 'suppress', 'reason', 'no_longer_needed');
     end if;
-    v_body := v_name || ': Coverage needed in ' || coalesce(v_city, 'no city set') || ', ' || v_when || '. Review in Ogevia: {link}';
+    v_body := v_name || ': ' || case when j.purpose = 'office_urgent' then 'URGENT. ' else '' end || 'Coverage needed in ' || coalesce(v_city, 'no city set') || ', ' || v_when || '. Review in Ogevia: {link}';
     v_path := '/coverage';
   end if;
   if v_first then v_body := v_body || ' Reply STOP to opt out.'; end if;
@@ -1620,6 +1669,9 @@ declare
 begin
   select s.organization_id into v_org from ogevia.agency_open_shift_settings s where s.sender_number = p_sender_number;
   if v_org is null then return 0; end if;
+  insert into ogevia.agency_sms_usage (organization_id, period_start, inbound_count)
+  values (v_org, date_trunc('month', now() at time zone (select o.timezone from ogevia.organizations o where o.id = v_org))::date, 1)
+  on conflict (organization_id, period_start) do update set inbound_count = ogevia.agency_sms_usage.inbound_count + 1;
   for c in update ogevia.caregiver_sms_consent k set status = 'opted_out', opted_out_at = now(), opt_out_source = 'stop_reply', updated_at = now()
             where k.organization_id = v_org and k.phone_e164 = p_phone and k.status = 'opted_in' returning k.caregiver_record_id
   loop
@@ -1629,6 +1681,27 @@ begin
     v_n := v_n + 1;
   end loop;
   return v_n;
+end;
+$$;
+
+-- Daily reconciliation of message status: a text the provider accepted more than 24 hours ago with no delivery receipt is flagged once ('no_receipt'),
+-- never re-sent. Returns counts for monitoring.
+create function ogevia_api.system_sms_reconcile()
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare v_flagged integer;
+begin
+  update ogevia.notification_jobs set last_error_code = 'no_receipt', updated_at = now()
+   where status = 'accepted' and sent_at < now() - interval '24 hours' and last_error_code is distinct from 'no_receipt';
+  get diagnostics v_flagged = row_count;
+  return jsonb_build_object('newlyFlaggedNoReceipt', v_flagged,
+    'staleAccepted', (select count(*) from ogevia.notification_jobs where status = 'accepted' and sent_at < now() - interval '24 hours'),
+    'unknownOutcomes', (select count(*) from ogevia.notification_jobs where status = 'unknown'),
+    'failedLast24h', (select count(*) from ogevia.notification_jobs where status = 'failed' and updated_at > now() - interval '24 hours'));
 end;
 $$;
 
@@ -1647,6 +1720,7 @@ declare
   v_planned integer := 0;
   v_escalated integer := 0;
   v_stuck integer;
+  v_unfilled integer;
 begin
   for r in select cr.id, cr.shift_id, s.status, s.starts_at from ogevia.shift_coverage_rounds cr join ogevia.shifts s on s.id = cr.shift_id
             where cr.state <> 'closed' and (s.starts_at <= now() or s.status <> 'scheduled') order by cr.opened_at limit 500 loop
@@ -1664,7 +1738,139 @@ begin
   update ogevia.notification_jobs set status = 'unknown', last_error_code = 'claim_timeout', claim_token = null, updated_at = now()
    where status = 'claimed' and claimed_at < now() - interval '15 minutes';
   get diagnostics v_stuck = row_count;
-  return jsonb_build_object('roundsClosed', v_expired, 'roundsPlanned', v_planned, 'roundsEscalated', v_escalated, 'stuckToUnknown', v_stuck);
+  v_unfilled := (select count(*) from ogevia.shifts s
+                  join ogevia.agency_open_shift_settings st on st.organization_id = s.organization_id
+                 where s.status = 'scheduled' and s.starts_at > now() and s.starts_at <= now() + make_interval(hours => st.urgent_hours)
+                   and ogevia.shift_coverage_state(s) = 'needs_coverage' and not ogevia.shift_is_care_request(s.id));
+  return jsonb_build_object('roundsClosed', v_expired, 'roundsPlanned', v_planned, 'roundsEscalated', v_escalated, 'stuckToUnknown', v_stuck,
+                            'urgentUnfilled', v_unfilled) || ogevia_api.system_sms_reconcile();
+end;
+$$;
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+-- 14b. Office reporting, recent alerts, audit history and failed-notification handling
+------------------------------------------------------------------------------------------------------------------------------------------------------
+create function ogevia_api.get_open_shift_report(p_organization_id uuid, p_from date, p_to date)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  v_tz text;
+  v_from timestamptz;
+  v_to timestamptz;
+  v_period date;
+  u ogevia.agency_sms_usage%rowtype;
+  st ogevia.agency_open_shift_settings%rowtype;
+begin
+  if ogevia.require_actor() is null or not ogevia.is_active_member(p_organization_id)
+     or not (ogevia.has_permission(p_organization_id, 'shifts.manage') or ogevia.has_permission(p_organization_id, 'organization.update')) then
+    raise exception 'You do not have permission to view this report' using errcode = 'OGA03';
+  end if;
+  if p_from is null or p_to is null or p_to < p_from or p_to - p_from > 366 then raise exception 'Choose a date range of at most one year' using errcode = 'OGV22'; end if;
+  select o.timezone into v_tz from ogevia.organizations o where o.id = p_organization_id;
+  v_from := p_from::timestamp at time zone v_tz;
+  v_to := (p_to + 1)::timestamp at time zone v_tz;
+  v_period := date_trunc('month', now() at time zone v_tz)::date;
+  select * into u from ogevia.agency_sms_usage where organization_id = p_organization_id and period_start = v_period;
+  select * into st from ogevia.agency_open_shift_settings where organization_id = p_organization_id;
+  return jsonb_build_object(
+    'range', jsonb_build_object('from', p_from, 'to', p_to),
+    'openings', jsonb_build_object(
+      'currentlyNeedCoverage', (select count(*) from ogevia.shifts s where s.organization_id = p_organization_id and s.status = 'scheduled' and s.ends_at > now()
+                                  and ogevia.shift_coverage_state(s) = 'needs_coverage' and not ogevia.shift_is_care_request(s.id)),
+      'currentlyPosted', (select count(*) from ogevia.shift_coverage_rounds r where r.organization_id = p_organization_id and r.state = 'posted'),
+      'roundsOpened', (select count(*) from ogevia.shift_coverage_rounds r where r.organization_id = p_organization_id and r.opened_at >= v_from and r.opened_at < v_to),
+      'filled', (select count(*) from ogevia.shift_coverage_rounds r where r.organization_id = p_organization_id and r.closed_reason = 'filled' and r.closed_at >= v_from and r.closed_at < v_to),
+      'clientCancelled', (select count(*) from ogevia.shift_coverage_rounds r where r.organization_id = p_organization_id and r.closed_reason = 'client_cancelled' and r.closed_at >= v_from and r.closed_at < v_to),
+      'expiredUnfilled', (select count(*) from ogevia.shift_coverage_rounds r where r.organization_id = p_organization_id and r.closed_reason = 'expired' and r.closed_at >= v_from and r.closed_at < v_to),
+      'escalations', (select count(*) from ogevia.shift_coverage_rounds r where r.organization_id = p_organization_id and r.escalated_at >= v_from and r.escalated_at < v_to),
+      'urgentUnfilledNow', (select count(*) from ogevia.shifts s where s.organization_id = p_organization_id and s.status = 'scheduled' and s.starts_at > now()
+                              and s.starts_at <= now() + make_interval(hours => st.urgent_hours) and ogevia.shift_coverage_state(s) = 'needs_coverage' and not ogevia.shift_is_care_request(s.id))),
+    'texts', coalesce((select jsonb_object_agg(x.status, x.n) from (
+        select j.status, count(*) n from ogevia.notification_jobs j
+         where j.organization_id = p_organization_id and j.created_at >= v_from and j.created_at < v_to group by j.status) x), '{}'::jsonb),
+    'textsByPurpose', coalesce((select jsonb_object_agg(x.purpose, x.n) from (
+        select j.purpose, count(*) n from ogevia.notification_jobs j
+         where j.organization_id = p_organization_id and j.created_at >= v_from and j.created_at < v_to and j.status in ('accepted', 'delivered') group by j.purpose) x), '{}'::jsonb),
+    'quota', jsonb_build_object('period', v_period, 'used', coalesce(u.sent_count, 0), 'limit', st.monthly_send_limit, 'blocked', coalesce(u.blocked_count, 0),
+                                'segments', coalesce(u.segment_count, 0), 'failed', coalesce(u.failed_count, 0), 'inbound', coalesce(u.inbound_count, 0),
+                                'estimatedCostMicros', coalesce(u.cost_micros, 0) + coalesce(u.rental_micros, 0)));
+end;
+$$;
+
+-- Recent call-outs and client cancellations (next-week relevance) and any notification that was blocked, failed or has an unknown outcome.
+create function ogevia_api.list_coverage_alerts(p_organization_id uuid)
+returns table (kind text, occurred_at timestamptz, shift_id uuid, starts_at timestamptz, ends_at timestamptz, service_city text, detail text, job_id uuid, job_purpose text, job_status text, job_reason text)
+language sql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+  with ok as (
+    select ogevia.require_actor() is not null and ogevia.is_active_member(p_organization_id) and ogevia.has_permission(p_organization_id, 'shifts.manage') as can
+  )
+  select 'call_out', e.created_at, s.id, s.starts_at, s.ends_at, (select c.city from ogevia.shift_city(s.id) c), e.reason, null::uuid, null::text, null::text, null::text
+    from ok, ogevia.shift_coverage_events e join ogevia.shifts s on s.id = e.shift_id
+   where ok.can and e.organization_id = p_organization_id and e.event_type = 'called_out' and e.created_at > now() - interval '7 days' and s.ends_at > now()
+  union all
+  select 'client_cancelled', s.updated_at, s.id, s.starts_at, s.ends_at, (select c.city from ogevia.shift_city(s.id) c), s.cancel_reason, null, null, null, null
+    from ok, ogevia.shifts s
+   where ok.can and s.organization_id = p_organization_id and s.status = 'cancelled' and s.updated_at > now() - interval '7 days' and s.ends_at > now() - interval '1 day'
+     and exists (select 1 from ogevia.notification_jobs j where j.shift_id = s.id and j.purpose = 'client_cancel')
+  union all
+  select 'notification_problem', j.updated_at, s.id, s.starts_at, s.ends_at, (select c.city from ogevia.shift_city(s.id) c), null, j.id, j.purpose, j.status,
+         coalesce(j.suppress_reason, j.last_error_code)
+    from ok, ogevia.notification_jobs j join ogevia.shifts s on s.id = j.shift_id
+   where ok.can and j.organization_id = p_organization_id and j.updated_at > now() - interval '7 days'
+     and (j.status in ('failed', 'unknown') or (j.status = 'suppressed' and j.suppress_reason in ('quota_exceeded', 'no_consent', 'sender_unavailable', 'not_entitled', 'sms_disabled', 'platform_disabled', 'contact_unavailable')
+                                                 and j.purpose <> 'open_shift')
+          or (j.status = 'accepted' and j.last_error_code = 'no_receipt'))
+   order by 2 desc
+   limit 200;
+$$;
+
+create function ogevia_api.list_open_shift_audit(p_organization_id uuid, p_limit integer default 100)
+returns table (occurred_at timestamptz, action text, entity_id uuid, actor_name text, reason text)
+language sql
+stable
+security definer
+set search_path = ogevia, pg_temp
+as $$
+  select a.occurred_at, a.action, a.entity_id, u.display_name, a.reason
+    from ogevia.audit_events a left join ogevia.app_users u on u.id = a.actor_user_id
+   where a.organization_id = p_organization_id and ogevia.require_actor() is not null and ogevia.is_active_member(p_organization_id)
+     and (ogevia.has_permission(p_organization_id, 'organization.update') or ogevia.has_permission(p_organization_id, 'shifts.manage'))
+     and (a.action like 'shift.coverage%' or a.action like 'shift.pickup%' or a.action in ('shift.called_out', 'shift.cancelled', 'shift.service_city_set')
+          or a.action like 'open_shift_settings%' or a.action like 'office_contact%' or a.action = 'caregiver.coverage_cities_set')
+   order by a.occurred_at desc, a.id desc
+   limit greatest(1, least(coalesce(p_limit, 100), 500));
+$$;
+
+-- A notification that definitely was not sent may be queued again by the office. One whose outcome is unknown needs the office to say the person
+-- confirmed they did not receive it (otherwise a duplicate could go out). The same dedupe key stands: it is the same message, not a new one.
+create function ogevia_api.requeue_notification(p_organization_id uuid, p_job_id uuid, p_confirmed_not_received boolean default false)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = ogevia, pg_temp
+as $$
+declare
+  v_actor uuid := ogevia.shift_admin_guard(p_organization_id);
+  j ogevia.notification_jobs%rowtype;
+begin
+  select * into j from ogevia.notification_jobs where id = p_job_id and organization_id = p_organization_id for update;
+  if j.id is null then raise exception 'Notification not found' using errcode = 'OGN04'; end if;
+  if j.status = 'unknown' and not coalesce(p_confirmed_not_received, false) then
+    raise exception 'The outcome is unknown. Confirm the person did not receive it before sending again.' using errcode = 'OGC09';
+  end if;
+  if j.status not in ('failed', 'unknown') then raise exception 'Only a failed or unknown notification can be sent again' using errcode = 'OGC09'; end if;
+  update ogevia.notification_jobs set status = 'queued', attempts = 0, last_error_code = null, not_before = now(), claim_token = null, updated_at = now() where id = j.id;
+  perform ogevia.write_audit(p_organization_id, 'shift.coverage_notification_requeued', 'shifts', j.shift_id, jsonb_build_object('status', j.status), jsonb_build_object('job_id', j.id), 'Office sent a notification again');
+  return 'queued';
 end;
 $$;
 
@@ -1696,6 +1902,11 @@ revoke all on function ogevia_api.system_sms_record(uuid, uuid, text, text, inte
 revoke all on function ogevia_api.system_sms_receipt(text, text, boolean, text) from public;
 revoke all on function ogevia_api.system_sms_stop(text, text) from public;
 revoke all on function ogevia_api.system_coverage_sweep() from public;
+revoke all on function ogevia_api.system_sms_reconcile() from public;
+revoke all on function ogevia_api.get_open_shift_report(uuid, date, date) from public;
+revoke all on function ogevia_api.list_coverage_alerts(uuid) from public;
+revoke all on function ogevia_api.list_open_shift_audit(uuid, integer) from public;
+revoke all on function ogevia_api.requeue_notification(uuid, uuid, boolean) from public;
 revoke all on function ogevia.city_key(text, text) from public;
 revoke all on function ogevia.shift_city(uuid) from public;
 revoke all on function ogevia.sms_available(uuid) from public;
@@ -1728,3 +1939,8 @@ grant execute on function ogevia_api.system_sms_record(uuid, uuid, text, text, i
 grant execute on function ogevia_api.system_sms_receipt(text, text, boolean, text) to ogevia_app;
 grant execute on function ogevia_api.system_sms_stop(text, text) to ogevia_app;
 grant execute on function ogevia_api.system_coverage_sweep() to ogevia_app;
+grant execute on function ogevia_api.system_sms_reconcile() to ogevia_app;
+grant execute on function ogevia_api.get_open_shift_report(uuid, date, date) to ogevia_app;
+grant execute on function ogevia_api.list_coverage_alerts(uuid) to ogevia_app;
+grant execute on function ogevia_api.list_open_shift_audit(uuid, integer) to ogevia_app;
+grant execute on function ogevia_api.requeue_notification(uuid, uuid, boolean) to ogevia_app;

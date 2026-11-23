@@ -21,13 +21,24 @@ describe("ObservabilityStack (FUTURE, Phase 4/7)", () => {
       "CPUUtilization",
       "Errors",
       "FreeStorageSpace",
+      "SmsJobsFailedOrUnknown",
+      "SmsReceiptsMissing",
       "Throttles",
+      "UrgentShiftsUnfilled",
     ]);
     for (const alarm of alarms) {
       expect(alarm.Period).toBe(300);
       expect(alarm.TreatMissingData).toBe("notBreaching");
       expect((alarm.AlarmActions as unknown[]).length).toBe(1);
     }
+  });
+
+  it("alarms on failed or unknown text messages, missing delivery receipts and unfilled urgent shifts through log metric filters on the handler's log group (0086)", () => {
+    template.resourceCountIs("AWS::Logs::MetricFilter", 3);
+    for (const name of ["SmsJobsFailedOrUnknown", "SmsReceiptsMissing", "UrgentShiftsUnfilled"]) expect(byMetric(name)?.Namespace).toBe("Ogevia/OpenShifts");
+    const filters = JSON.stringify(template.findResources("AWS::Logs::MetricFilter"));
+    expect(filters).toContain("coverage-sms");
+    expect(filters).not.toMatch(/phone|body|caregiver/i);
   });
 
   it("covers Lambda errors, Lambda throttles, and API 5xx", () => {

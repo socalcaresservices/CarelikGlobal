@@ -141,6 +141,7 @@ describe("SCHEMA: migration chain", () => {
       "organizations",
       "outage_visit_records",
       "permissions",
+      "platform_sms_controls",
       "readiness_setting_events",
       "report_export_events",
       "report_exports",

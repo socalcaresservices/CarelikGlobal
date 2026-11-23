@@ -181,6 +181,40 @@ describe("the SMS worker with a mock transport (acceptance 4, 5, 7)", () => {
   });
 });
 
+describe("go-live safeguards in the worker", () => {
+  it("the environment emergency switch still sweeps but claims and sends nothing; the run logs one flat line the CloudWatch metric filters read; the platform switch suppresses every send", async () => {
+    const { shift } = await posted("Winchester", day(8), "09:00", "10:30");
+    const lines: Array<Record<string, unknown>> = [];
+    const t = new MockSmsTransport();
+    const r = await worker(t, { emergencyDisable: true, log: (l) => lines.push(l) });
+    expect(r.claimed).toBe(0);
+    expect(t.sent).toEqual([]);
+    expect((await db.admin.query("select count(*)::int n from ogevia.notification_jobs where shift_id = $1 and status = 'queued'", [shift])).rows[0].n).toBeGreaterThanOrEqual(1);
+    expect(lines.at(-1)).toMatchObject({ task: "coverage-sms", emergencyDisable: true, claimed: 0 });
+    for (const k of ["failed", "unknown", "urgentUnfilled", "staleAccepted", "failedLast24h", "unknownOutcomes", "roundsEscalated"]) expect(typeof lines.at(-1)![k], k).toBe("number");
+    expect(JSON.stringify(lines)).not.toMatch(/\+1310|Open shift in|SoCal/); // counts only: no number, text or agency name
+    // platform-wide stop: queued messages are suppressed, not sent, for every agency
+    await db.admin.query("select ogevia.set_sms_emergency_disable(true, 'Synthetic drill')");
+    const t2 = new MockSmsTransport();
+    expect((await worker(t2)).accepted).toBe(0);
+    expect(t2.sent).toEqual([]);
+    expect((await db.admin.query("select count(*)::int n from ogevia.notification_jobs where shift_id = $1 and suppress_reason = 'platform_disabled'", [shift])).rows[0].n).toBeGreaterThanOrEqual(1);
+    await db.admin.query("select ogevia.set_sms_emergency_disable(false, null)");
+  });
+
+  it("the new report, alerts, audit and requeue routes work through the handler with the right permissions", async () => {
+    const to = day(30), from = day(-30);
+    const rep = await call("GET /v1/open-shift-report", w.managerA, { query: { organizationId: w.orgA, from, to } });
+    expect(rep.status, rep.raw).toBe(200);
+    expect(rep.body.report.quota).toMatchObject({ limit: 50 });
+    expect((await call("GET /v1/open-shift-report", w.caregiverA2, { query: { organizationId: w.orgA, from, to } })).status).toBe(403);
+    expect((await call("GET /v1/coverage-alerts", w.managerA, { query: { organizationId: w.orgA } })).status).toBe(200);
+    const audit = await call("GET /v1/open-shift-audit", w.ownerA, { query: { organizationId: w.orgA } });
+    expect(audit.body.events.map((e: any) => e.action)).toContain("shift.coverage_posted");
+    expect((await call("POST /v1/notification-jobs/{jobId}/requeue", w.managerA, { path: { jobId: randomUUID() }, body: { organizationId: w.orgA }, key: randomUUID() })).status).toBe(404);
+  });
+});
+
 describe("transport and segment helpers", () => {
   it("counts GSM-7 and Unicode segments; the AWS transport maps provider errors without leaking message text", async () => {
     expect(smsSegments("a".repeat(160))).toBe(1);

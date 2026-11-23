@@ -74,6 +74,11 @@ export function OpenShiftSettingsPage() {
     queryFn: async () => (await api.get<{ caregivers: CaregiverRow[] }>("/v1/caregivers", { organizationId: activeOrganizationId })).caregivers,
     enabled: !!activeOrganizationId,
   });
+  const audit = useQuery({
+    queryKey: ["aws-open-shift-audit", activeOrganizationId],
+    queryFn: async () => (await api.get<{ events: Array<{ occurredAt: string; action: string; actorName: string | null; reason: string | null }> }>("/v1/open-shift-audit", { organizationId: activeOrganizationId })).events,
+    enabled: !!activeOrganizationId && canEdit,
+  });
   const s = settings.data;
   const v = <K extends keyof Settings>(k: K) => (form && k in form ? form[k] : s?.[k]) as Settings[K];
   async function save() {
@@ -138,6 +143,13 @@ export function OpenShiftSettingsPage() {
           <label className="flex items-center gap-2 text-xs font-medium text-slate-600"><input type="checkbox" checked={contact.isOnCall} onChange={(e) => setContact({ ...contact, isOnCall: e.target.checked })} /> On-call</label>
           <Button type="button" className="min-h-11" disabled={contact.label.trim().length < 2 || contact.phone.trim().length < 7} onClick={() => void addContact()}>Add contact</Button>
         </div>
+      </section>
+      <section className="rounded-lg border border-slate-200 bg-og-card p-3 text-sm" aria-labelledby="audit-heading">
+        <h2 id="audit-heading" className="text-base font-semibold text-slate-950">Recent activity</h2>
+        <ul className="divide-y divide-slate-200" data-testid="audit-list">
+          {(audit.data ?? []).slice(0, 25).map((e, i) => <li key={i} className="py-1">{new Date(e.occurredAt).toLocaleString()} · {e.action.replace(/^shift\./, "").replace(/_/g, " ")}{e.actorName ? ` · ${e.actorName}` : ""}{e.reason ? ` · ${e.reason}` : ""}</li>)}
+          {audit.data && audit.data.length === 0 ? <li className="py-1 text-slate-600">Nothing yet.</li> : null}
+        </ul>
       </section>
       <section className="rounded-lg border border-slate-200 bg-og-card p-3" aria-labelledby="cities-heading">
         <h2 id="cities-heading" className="text-base font-semibold text-slate-950">Cities each caregiver is approved to work</h2>

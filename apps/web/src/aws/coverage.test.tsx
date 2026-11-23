@@ -69,6 +69,30 @@ describe("Coverage queue", () => {
   });
 });
 
+describe("report, alerts and posting from the schedule", () => {
+  it("shows the 30-day report with quota, and offers Send again only for failed or unknown notices (unknown needs a confirmation)", async () => {
+    const api = renderAws("/schedule/coverage", ["shifts.manage"], {
+      ...handlers,
+      "GET /v1/open-shift-report": () => json(200, { report: { openings: { currentlyNeedCoverage: 3, currentlyPosted: 2, roundsOpened: 5, filled: 4, clientCancelled: 1, expiredUnfilled: 0, escalations: 1, urgentUnfilledNow: 1 },
+        texts: { accepted: 6, delivered: 3, failed: 1, unknown: 1 }, textsByPurpose: {}, quota: { period: "2026-11-01", used: 9, limit: 100, blocked: 0, segments: 11, failed: 1, inbound: 0, estimatedCostMicros: 0 } } }),
+      "GET /v1/coverage-alerts": () => json(200, { alerts: [
+        { kind: "notification_problem", occurredAt: "2026-11-23T10:00:00Z", shiftId: SHIFT, startsAt: "2026-12-01T17:30:00Z", endsAt: "2026-12-01T19:00:00Z", serviceCity: "Winchester", detail: null, jobId: "j1", jobPurpose: "office_callout", jobStatus: "failed", jobReason: "bad_number" },
+        { kind: "call_out", occurredAt: "2026-11-23T09:00:00Z", shiftId: SHIFT, startsAt: "2026-12-01T17:30:00Z", endsAt: "2026-12-01T19:00:00Z", serviceCity: "Winchester", detail: "sick", jobId: null, jobPurpose: null, jobStatus: null, jobReason: null }] }),
+      "POST /v1/notification-jobs/j1/requeue": () => json(200, { notificationState: "queued" }),
+    });
+    const rep = await screen.findByTestId("open-shift-report");
+    expect(rep).toHaveTextContent("Texts sent9");
+    expect(rep).toHaveTextContent("Texts failed2");
+    expect(within(rep).getByTestId("quota")).toHaveTextContent("9 of 100");
+    const alerts = await screen.findByTestId("coverage-alerts");
+    expect(alerts).toHaveTextContent("Caregiver called out");
+    expect(within(alerts).getAllByRole("button", { name: "Send again" })).toHaveLength(1);
+    fireEvent.click(within(alerts).getByRole("button", { name: "Send again" }));
+    await screen.findByTestId("coverage-alerts");
+    expect(api.calls.find((c) => c.path === "/v1/notification-jobs/j1/requeue")!.body).toEqual({ organizationId: expect.any(String), confirmedNotReceived: false });
+  });
+});
+
 describe("Open shifts settings", () => {
   it("says texting is waiting for a verified sender, shows usage, and keeps the board independent of texting", async () => {
     renderAws("/settings/open-shifts", ["organization.update"], {
