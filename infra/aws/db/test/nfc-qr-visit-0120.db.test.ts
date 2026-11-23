@@ -568,6 +568,29 @@ describe("0120 corrections, exceptions and reports", () => {
   });
 });
 
+describe("0120 grants and row security", () => {
+  it("every 0120 table has row security on and no privilege for the application role; no 0120 function is executable by PUBLIC; the application role may call only the 34 API functions", async () => {
+    const tables = (await db.admin.query(
+      `select c.relname, c.relrowsecurity, has_table_privilege('ogevia_app', c.oid, 'select,insert,update,delete') as app_any
+         from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'ogevia' and c.relkind = 'r' and c.relname in ('visit_verification_settings','client_service_locations','service_location_rules','shift_location_overrides','home_labels','home_label_events',
+              'visit_punches','visit_exceptions','visit_exception_events','visit_signature_followups','visit_signature_events','visit_signature_sessions','punch_correction_requests')`)).rows;
+    expect(tables).toHaveLength(13);
+    for (const t of tables) { expect(t.relrowsecurity, t.relname).toBe(true); expect(t.app_any, t.relname).toBe(false); }
+    const fns = (await db.admin.query(
+      `select n.nspname, p.proname, p.prosecdef, p.proconfig, has_function_privilege('public', p.oid, 'execute') as public_exec, has_function_privilege('ogevia_app', p.oid, 'execute') as app_exec
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where p.oid in (select objid from pg_depend where deptype = 'n' and false) or p.proname ~ '^(vv_|save_service_location|list_service_locations|set_service_location_rule|set_shift_location_override|get_expected_locations|save_verification_settings|get_verification_settings|register_home_labels|assign_home_label|deactivate_home_label|replace_home_label|get_home_label_link|list_home_labels|list_home_label_history|resolve_home_label_code|preview_home_label|record_punch|open_signature_session|check_signature_session|consume_signature_session|defer_visit_signature|set_signature_followup_owner|log_signature_delivery|flag_overdue_visits|list_visit_exceptions|resolve_visit_exception|list_visit_exception_history|request_punch_correction|decide_punch_correction|list_unsigned_checkouts|list_time_signature_register|list_corrections_audit|list_punch_billing_review|authorize_verification_export)'`)).rows
+      .filter((f) => (f.nspname === "ogevia" && f.proname.startsWith("vv_")) || f.nspname === "ogevia_api");
+    expect(fns.filter((f) => f.nspname === "ogevia_api")).toHaveLength(34);
+    for (const f of fns) {
+      expect(f.public_exec, `${f.nspname}.${f.proname}`).toBe(false);
+      expect(String(f.proconfig), `${f.nspname}.${f.proname} pins search_path`).toMatch(/search_path=ogevia, pg_temp/);
+      expect(f.app_exec, `${f.nspname}.${f.proname}`).toBe(f.nspname === "ogevia_api");
+    }
+  });
+});
+
 describe("0120 rollback", () => {
   it("label history rows are append-only", async () => {
     await expect(db.admin.query("update ogevia.home_label_events set reason = 'x'")).rejects.toThrow(/append-only/);

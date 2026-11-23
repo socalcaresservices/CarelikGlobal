@@ -72,16 +72,27 @@ Shared files touched (small, for merge): `apps/sv-api/src/routes.ts` (import, `V
 
 | Command | Result |
 |---|---|
-| `OGEVIA_TEST_DATABASE_URL=… vitest run --config vitest.db.config.ts db/test/nfc-qr-visit-0120` (infra/aws) | 2 files, **28 passed** (27 on the TEST baseline incl. 0089-0102, 1 on the production baseline) |
-| same folder, **full** `vitest.db.config.ts` | 126 files, **1,319 passed** |
+| `OGEVIA_TEST_DATABASE_URL=… vitest run --config vitest.db.config.ts db/test/nfc-qr-visit-0120` (infra/aws; PostgreSQL 16 locally, CI uses 18) | 2 files, **29 passed** (28 on the TEST baseline incl. 0089-0102, 1 on the production baseline) |
+| same folder, **full** `vitest.db.config.ts` (infra/aws) | 126 files, **1,320 passed** |
+| `apps/sv-api` **full** `vitest.db.config.ts` | 33 files, **195 passed** |
 | `apps/sv-api` unit | 8 files, **119 passed** (incl. 9 new: tokens, sealing, stroke validation, PNG) |
 | `apps/sv-api` `home-labels.db.test.ts` + `tenant-isolation-sweep.db.test.ts` | **13 passed**; sweep = 289 routes, 578 probes, 0 validation-first, 0 leaks, no synthetic id kinds |
 | `apps/web` full | 160 files, **1,440 passed** (22 new: pad, label page, signing, reports, inventory, print sheet) |
 | `infra/aws` unit (`pnpm test`) | 900 passed, **3 failed = the release-pin tripwire (section 3, item 1)**; the new switch test (3) passes: 29 routes, OFF in every environment, JWT-only when on, nothing else changes |
-| `pnpm typecheck`, web `eslint` | clean |
+| `pnpm typecheck` (7 packages), `pnpm build`, web `eslint` | clean / exit 0 |
+| **`pnpm test:all` (the release gate)** | **FAILED, as expected, in step 1 only**: the 3 release-pin tests (section 3, item 1) and 11 tests skipped in `operator-prd-tarball.test.ts` because this clone is shallow (the pinned code commit is not in it; not caused by this change). Steps 2 and 3 (database and API suites) passed in full. The gate is not passed until the re-pin is done and the suite is run in a full clone. |
 | Rollback | the down script removes every 0120 object, leaves visits/confirmations/audit rows untouched, and the migration re-applies (tested) |
 
 The sweep and the null-safety review found two real defects in the first draft, both fixed and covered: an open shift (no caregiver) was readable by any caregiver (NULL in an `or` chain read as "allowed"), and agency settings were readable by caregivers.
+
+## 6b. Security review checklist (`docs/security-review-checklist.md`) for the 45 new SECURITY DEFINER functions
+
+* **Target row belongs to the claimed organization:** every API function checks the caller's permission or membership for `p_organization_id` *and* reads the target row with `organization_id = p_organization_id` (labels by code and by id, locations, exceptions, correction requests, shifts, visits). The label punch takes **no organization from the caller**: the agency is the label's own, and the caller must be an active caregiver there. Proof: `tenant-isolation-sweep.db.test.ts` probes all 289 routes (29 of them from this change) as an agency-B manager naming agency A and naming his own agency with agency A's ids: 0 leaks, 0 existence differences, agency A unchanged.
+* **Specific relationship, not just membership:** a punch needs the caregiver's own assignment/shift and a running visit of their own; a signing session needs the caregiver's own visit; a caregiver sees an expected place only for a shift that is theirs (the null-safety defect found and fixed here was exactly this check).
+* **`search_path` pinned:** all 45 (`set search_path = ogevia, pg_temp`), asserted by test.
+* **Grants:** `revoke all … from public` on every function; `EXECUTE` only for the 34 API functions to `ogevia_app`; the 11 internal functions have no grant; nothing for `anon`. All 13 tables have row security on, no policy and no privilege for the application role. Asserted by test ("0120 grants and row security").
+* **Client-supplied ids:** the organization and ids a caller sends are only ever re-validated against the caller's own rights; times, status, location result and agency are never taken from the caller.
+* Tokens: the label token is 256 random bits, stored as a SHA-256 hash plus an AES-GCM sealed copy (existing QR key parameter, agency-bound context, discarded when the link is revoked); tokens, codes and strokes are not logged (API test asserts the log carries none).
 
 ## 7. TEST acceptance and cost
 
