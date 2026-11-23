@@ -1248,7 +1248,7 @@ begin
   insert into ogevia.punch_correction_requests (organization_id, visit_id, reason_code, reason_note, original_time_in, original_time_out, requested_time_in, requested_time_out, requested_by)
   values (v.organization_id, p_visit_id, p_reason_code, btrim(coalesce(p_reason_note, '')), v.time_in, v.time_out, p_requested_time_in, p_requested_time_out, v_actor)
   returning id into v_id;
-  perform ogevia.vv_open_exception(v.organization_id, 'correction_request', 'corr:' || v_id::text, p_visit_id, v.scheduled_shift_id, v.caregiver_user_id, v.client_id, null, jsonb_build_object('reason_code', p_reason_code));
+  perform ogevia.vv_open_exception(v.organization_id, 'correction_request', 'corr:' || v_id::text, p_visit_id, v.scheduled_shift_id, v.caregiver_user_id, v.client_id, null, jsonb_build_object('reason_code', p_reason_code, 'request_id', v_id));
   perform ogevia.write_audit(v.organization_id, 'punch_correction.requested', 'punch_correction_requests', v_id, null, jsonb_build_object('visit_id', p_visit_id, 'reason_code', p_reason_code), btrim(p_reason_note));
   return v_id;
 end;

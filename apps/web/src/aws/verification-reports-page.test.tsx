@@ -88,6 +88,28 @@ describe("Visit verification page", () => {
     const create = requests.find((r) => r.path === "/v1/visits/v9/confirmation-requests")!;
     expect(create.body).toMatchObject({ channel: "link", recipientName: "Synthetic Parent", recipientRole: "client", expiresInDays: 7 });
   });
+  it("a missed clock-out can be corrected through a request; another reviewer approves it with a note and the location decision is sent", async () => {
+    const rows = [
+      { exceptionId: "e2", kind: "overdue_clock_out", status: "open", visitId: "v2", openedAt: "2026-11-23T17:00:00Z", ageHours: 5, caregiverName: "Synthetic CG", clientCode: "CL-2" },
+      { exceptionId: "e3", kind: "correction_request", status: "open", visitId: "v3", openedAt: "2026-11-23T17:00:00Z", ageHours: 1, caregiverName: "Synthetic CG", clientCode: "CL-3", detail: { reason_code: "lost_tag", request_id: "dddddddd-0000-4000-8000-000000000004" } },
+    ];
+    const { requests } = renderPage({ reports: { visit_exceptions: rows }, post: () => json(200, { requestId: "r", visitId: "v" }) });
+    const table = await screen.findByRole("table", { name: "Visit exceptions" }, T);
+    const [overdue, correction] = within(table).getAllByRole("row").slice(1);
+    fireEvent.click(within(overdue!).getByRole("button", { name: "Request time correction" }));
+    fireEvent.change(within(overdue!).getByLabelText("Actual clock-out time"), { target: { value: "2026-11-23T10:30" } });
+    fireEvent.change(within(overdue!).getByLabelText("Details"), { target: { value: "Sticker was missing; caregiver called the office" } });
+    fireEvent.click(within(overdue!).getByRole("button", { name: "Send request" }));
+    await waitFor(() => expect(requests.some((r) => r.path === "/v1/visits/v2/punch-corrections")).toBe(true));
+    expect(requests.find((r) => r.path === "/v1/visits/v2/punch-corrections")!.body).toMatchObject({ reasonCode: "poor_connectivity", reasonNote: "Sticker was missing; caregiver called the office" });
+    expect(String((requests.find((r) => r.path === "/v1/visits/v2/punch-corrections")!.body as { requestedTimeOut: string }).requestedTimeOut)).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+    const approve = within(correction!).getByRole("button", { name: "Approve" });
+    expect(approve).toBeDisabled();
+    fireEvent.change(within(correction!).getByLabelText("Decision note"), { target: { value: "Verified with the caregiver" } });
+    fireEvent.click(approve);
+    await waitFor(() => expect(requests.some((r) => r.path === "/v1/punch-corrections/dddddddd-0000-4000-8000-000000000004/decide")).toBe(true));
+    expect(requests.find((r) => r.path.endsWith("/decide"))!.body).toEqual({ organizationId: ORG, approve: true, note: "Verified with the caregiver", locationDecision: "accepted" });
+  });
   it("the CSV button appears only with the export permission and asks the server for the file", async () => {
     const created: string[] = [];
     (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL = (b) => { created.push(String(b.size)); return "blob:x"; };

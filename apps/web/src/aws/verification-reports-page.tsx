@@ -109,14 +109,14 @@ function RowActions({ report, row, onChanged }: { report: string; row: Row; onCh
   const { activeOrganizationId, hasPermission } = useOrganization();
   const manage = hasPermission("visits.manage");
   const [open, setOpen] = useState<null | "resolve" | "link">(null);
-  const [text, setText] = useState(""); const [name, setName] = useState(""); const [role, setRole] = useState("client"); const [check, setCheck] = useState("");
+  const [text, setText] = useState(""); const [name, setName] = useState(""); const [role, setRole] = useState("client"); const [check, setCheck] = useState(""); const [reason, setReason] = useState("poor_connectivity");
   const [link, setLink] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const org = activeOrganizationId;
   const run = useMutation({ mutationFn: async (task: () => Promise<void>) => task(), onSuccess: () => { onChanged(); }, onError: (c) => setNote(fail(c)) });
   if (!manage) return null;
 
-  if (report === "visit_exceptions" && (row.status === "open" || row.status === "in_review")) {
+  if (report === "visit_exceptions" && row.kind !== "overdue_clock_out" && row.kind !== "location_issue" && row.kind !== "correction_request" && (row.status === "open" || row.status === "in_review")) {
     return <div className="space-y-1">
       <div className="flex gap-1">
         {row.status === "open" ? <Button type="button" onClick={() => run.mutate(async () => { await api.post(`/v1/visit-exceptions/${row.exceptionId}/resolve`, { organizationId: org, action: "reviewing", note: "Review started" }); })}>Start review</Button> : null}
@@ -124,6 +124,37 @@ function RowActions({ report, row, onChanged }: { report: string; row: Row; onCh
       </div>
       {open === "resolve" ? <div className="space-y-1"><label className="block">What was decided?<input value={text} onChange={(e) => setText(e.target.value)} className={input} /></label>
         <Button type="button" disabled={text.trim().length < 3 || run.isPending} onClick={() => run.mutate(async () => { await api.post(`/v1/visit-exceptions/${row.exceptionId}/resolve`, { organizationId: org, action: "resolved", note: text.trim() }); setOpen(null); setText(""); })}>Save decision</Button></div> : null}
+      {note ? <p role="alert" className="text-red-700">{note}</p> : null}
+    </div>;
+  }
+  // Audited missed-punch correction: a request, then a DIFFERENT reviewer decides. Approving a signed visit with a material time change reopens "Signature pending".
+  if (report === "visit_exceptions" && row.kind === "correction_request" && (row.status === "open" || row.status === "in_review")) {
+    const requestId = (row.detail as { request_id?: string } | null)?.request_id;
+    if (!requestId) return null;
+    const decide = (approve: boolean) => run.mutate(async () => { await api.post(`/v1/punch-corrections/${requestId}/decide`, { organizationId: org, approve, note: text.trim(), locationDecision: approve ? "accepted" : "rejected" }, { idempotencyKey: newIdempotencyKey() }); setText(""); });
+    return <div className="space-y-1">
+      <label className="block">Decision note<input value={text} onChange={(e) => setText(e.target.value)} className={input} /></label>
+      <div className="flex gap-1"><Button type="button" disabled={run.isPending || text.trim().length < 3} onClick={() => decide(true)}>Approve</Button><Button type="button" disabled={run.isPending || text.trim().length < 3} onClick={() => decide(false)}>Reject</Button></div>
+      <p className="text-xs text-slate-600">Someone other than the person who asked must decide.</p>
+      {note ? <p role="alert" className="text-red-700">{note}</p> : null}
+    </div>;
+  }
+  if (report === "visit_exceptions" && (row.kind === "overdue_clock_out" || row.kind === "location_issue") && row.visitId && (row.status === "open" || row.status === "in_review")) {
+    const visit = String(row.visitId);
+    return <div className="space-y-1">
+      <div className="flex flex-wrap gap-1">
+        <Button type="button" onClick={() => setOpen(open ? null : "resolve")}>Resolve</Button>
+        {row.kind === "overdue_clock_out" ? <Button type="button" onClick={() => setOpen(open === "link" ? null : "link")}>Request time correction</Button> : null}
+      </div>
+      {open === "resolve" ? <div className="space-y-1"><label className="block">What was decided?<input value={text} onChange={(e) => setText(e.target.value)} className={input} /></label>
+        <Button type="button" disabled={text.trim().length < 3 || run.isPending} onClick={() => run.mutate(async () => { await api.post(`/v1/visit-exceptions/${row.exceptionId}/resolve`, { organizationId: org, action: "resolved", note: text.trim() }); setOpen(null); setText(""); })}>Save decision</Button></div> : null}
+      {open === "link" ? <div className="space-y-1">
+        <label className="block">Actual clock-out time<input type="datetime-local" value={name} onChange={(e) => setName(e.target.value)} className={input} /></label>
+        <label className="block">Why was it missed?<select value={reason} onChange={(e) => setReason(e.target.value)} className={input}><option value="poor_connectivity">Poor connectivity</option><option value="dead_phone">Dead phone</option><option value="lost_tag">Lost or missing tag</option><option value="delayed_login">Delayed login</option><option value="other">Other</option></select></label>
+        <label className="block">Details<input value={check} onChange={(e) => setCheck(e.target.value)} className={input} /></label>
+        <Button type="button" disabled={run.isPending || !name || check.trim().length < 3} onClick={() => run.mutate(async () => {
+          await api.post(`/v1/visits/${visit}/punch-corrections`, { reasonCode: reason, reasonNote: check.trim(), requestedTimeOut: new Date(name).toISOString() }, { idempotencyKey: newIdempotencyKey() }); setOpen(null);
+        })}>Send request</Button></div> : null}
       {note ? <p role="alert" className="text-red-700">{note}</p> : null}
     </div>;
   }
