@@ -9,8 +9,8 @@ No production or TEST change was made. Re-run today (local Postgres): `bulk-impo
 
 | Feature | Where it is | Decision |
 |---|---|---|
-| Bulk import (people, clients; CSV) | DB functions already in the migration set (0105, so in the production ledger — VERIFIED from repo; confirm with the live ledger read). Routes `POST /v1/imports/{kind}` behind `bulkImport`: **ON in TEST (`config.ts` line 256), OFF in production** (line 296). | **FIX FIRST** (3 items) |
-| Duplicate staff report and merge | DB functions in the migration set (0106). Routes `GET /v1/staff/duplicates`, `POST /v1/staff/{profileId}/merge` behind `staffDuplicates`: **OFF in TEST and production**. | **DO NOT ENABLE** until the report has been reviewed on TEST (report-only first) |
+| Bulk import (people, clients; CSV) | DB functions in migration 0105, which lives in `db/pending/migrations` in the repository but is in the production ledger (the ledger has 0001–0112 minus 0108: computed earlier from the release records; confirm with the live ledger read). Routes `POST /v1/imports/{kind}` behind `bulkImport`: **ON in TEST (`config.ts` line 256), OFF in production** (line 296). | **FIX FIRST** (3 items) |
+| Duplicate staff report and merge | DB functions in migration 0106 (same situation as 0105). Routes `GET /v1/staff/duplicates`, `POST /v1/staff/{profileId}/merge` behind `staffDuplicates`: **OFF in TEST and production**. | **DO NOT ENABLE** until the report has been reviewed on TEST (report-only first) |
 | Save-to-phone help (public care request page) | Only commit `1bd7f28a` on `claude/peaceful-clarke-uw8l1h`; not in production, not in `main`, **not in this branch** (deliberately not merged in Phase 2). Front-end only; no data, no migration, no switch. | **ENABLE after merge** (clean merge computed in Phase 1) and a real-phone check |
 
 ## 1. Bulk import
@@ -26,7 +26,7 @@ Rollback: switch off (routes disappear). Created records remain; they are ordina
 FIX FIRST:
 1. **TEST end-to-end pass is not on record.** The switch is on in TEST, but I found no recorded TEST run of an import (UNKNOWN). Owner or I (with a CloudShell block) run one synthetic, non-PHI CSV: preview → confirm → re-upload (creates nothing) and attach the output.
 2. **Scope gap against R11:** the requirement says CSV/XLSX and Excel templates; the API **refuses XLSX** by design (test "refuses XLSX and renamed archives"). Decide: CSV only (change the requirement wording) or build XLSX parsing (new dependency + zip-bomb guard). Recommendation: CSV only.
-3. **Stale record:** `db/pending/README.md` still lists 0105/0106 as "pending, not part of any release" although the files are in `db/migrations`. Correct the README (it misleads release reviewers).
+3. **Record wording:** `db/pending/README.md` lists 0105/0106 as "not part of any release", but the production ledger contains them (they were applied by the UX release script from `db/pending/migrations`). Update the README to say "applied to production; routes OFF" when the next release re-pins.
 Then: ENABLE `bulkImport` in production by the existing two-step route release (code-only already deployed; routes-only change set), with the owner's explicit approval.
 
 ## 2. Duplicate staff merge
