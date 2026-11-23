@@ -15,7 +15,7 @@ type Dup = {
 };
 type Side = { profileId: string; displayName: string; staffType: string | null; email: string | null; phone: string | null };
 type Preview = { keep: Side; duplicate: Side; matchBasis: string | null; conflicts: Array<{ field: string; keep: string | null; duplicate: string | null }>; fills: Array<{ field: string; value: string }>; blockers: string[]; canMerge: boolean };
-type MergeRow = { link_id: string; kept_name: string; merged_name: string; match_basis: string; reason: string; merged_at: string; merged_by_name: string | null; has_snapshot: boolean; reversed_at: string | null; reversed_reason: string | null; can_undo: boolean };
+type MergeRow = { linkId: string; keptName: string; mergedName: string; matchBasis: string; reason: string; mergedAt: string; mergedByName: string | null; hasSnapshot: boolean; reversedAt: string | null; reversedReason: string | null; canUndo: boolean };
 const WHY: Record<Dup["matchBasis"], string> = { email: "Same email", phone: "Same phone number", name: "Same name" };
 const SOURCE: Record<string, string> = { profile: "Staff profile", caregiver: "Caregiver (Care Team)", member: "Has a sign-in only" };
 const FIELD: Record<string, string> = { display_name: "Name", staff_type_id: "Staff type", contact_email: "Email", phone: "Phone" };
@@ -179,18 +179,18 @@ function RecentMerges() {
       <div className="space-y-2 pb-3 text-sm text-slate-800">
         <ul className="space-y-2">
           {q.data.map((m) => (
-            <li key={m.link_id} className="rounded-md border border-slate-200 p-2" data-testid="merge-row">
-              <p><span className="font-semibold">{m.merged_name}</span> merged into <span className="font-semibold">{m.kept_name}</span> · {new Date(m.merged_at).toLocaleDateString()}{m.merged_by_name ? ` · ${m.merged_by_name}` : ""}</p>
-              <p className="text-og-sub">Reason: {m.reason}{m.reversed_at ? ` · Undone ${new Date(m.reversed_at).toLocaleDateString()}: ${m.reversed_reason}` : ""}</p>
-              {!m.reversed_at && !m.has_snapshot ? <p className="text-og-sub">Made before undo was available.</p> : null}
-              {!m.reversed_at && m.has_snapshot && !m.can_undo ? <p className="text-og-sub">Cannot be undone now: one of the records changed after the merge.</p> : null}
-              {m.can_undo ? (
-                target === m.link_id ? (
+            <li key={m.linkId} className="rounded-md border border-slate-200 p-2" data-testid="merge-row">
+              <p><span className="font-semibold">{m.mergedName}</span> merged into <span className="font-semibold">{m.keptName}</span> · {new Date(m.mergedAt).toLocaleDateString()}{m.mergedByName ? ` · ${m.mergedByName}` : ""}</p>
+              <p className="text-og-sub">Reason: {m.reason}{m.reversedAt ? ` · Undone ${new Date(m.reversedAt).toLocaleDateString()}: ${m.reversedReason}` : ""}</p>
+              {!m.reversedAt && !m.hasSnapshot ? <p className="text-og-sub">Made before undo was available.</p> : null}
+              {!m.reversedAt && m.hasSnapshot && !m.canUndo ? <p className="text-og-sub">Cannot be undone now: one of the records changed after the merge.</p> : null}
+              {m.canUndo ? (
+                target === m.linkId ? (
                   <div className="mt-1 space-y-1">
                     <label className="block font-semibold text-og-ink">Reason for the undo<input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} className="mt-1 block min-h-[44px] w-full rounded-md border border-slate-300 px-2" data-testid="undo-reason" /></label>
-                    <div className="flex gap-2"><Button onClick={() => void undo(m.link_id)}>Undo this merge</Button><Button variant="secondary" onClick={() => { setTarget(null); setNote(null); }}>Cancel</Button></div>
+                    <div className="flex gap-2"><Button onClick={() => void undo(m.linkId)}>Undo this merge</Button><Button variant="secondary" onClick={() => { setTarget(null); setNote(null); }}>Cancel</Button></div>
                   </div>
-                ) : <button type="button" className="mt-1 inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" onClick={() => { setTarget(m.link_id); setNote(null); }}>Undo…</button>
+                ) : <button type="button" className="mt-1 inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" onClick={() => { setTarget(m.linkId); setNote(null); }}>Undo…</button>
               ) : null}
             </li>
           ))}

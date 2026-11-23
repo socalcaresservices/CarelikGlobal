@@ -247,6 +247,8 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (ids[name]) return ids[name];
   // Release Train 2 (0113-0116): well-formed values, so every probe reaches the database check
   if (name === "keepProfileId") return ids.profileId;
+  if (name === "serviceZip") return "92596";
+  if (name === "audience" && route === "POST /v1/offices/{officeId}/cover-audience") return "none";
   if (name === "batchId") return (ids.batchId ??= randomUUID());
   if (name === "linkId") return (ids.linkId ??= randomUUID());
   if (name === "resolutions") return {};

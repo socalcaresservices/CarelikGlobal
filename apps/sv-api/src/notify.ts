@@ -24,7 +24,7 @@ export interface NotifyDeps {
   readonly appOrigin?: string | undefined;
   readonly log?: (record: Record<string, unknown>) => void;
 }
-export interface NotifyResult { readonly organizations: number; readonly shiftsNotified: number; readonly notifications: number; readonly claimed: number; readonly sent: number; readonly retried: number; readonly failed: number; readonly failedOrganizations: number }
+export interface NotifyResult { readonly organizations: number; readonly shiftsNotified: number; readonly notifications: number; readonly blockedShifts: number; readonly claimed: number; readonly sent: number; readonly retried: number; readonly failed: number; readonly failedOrganizations: number }
 
 const SAFE_ROLE = /^[a-z_][a-z0-9_]{0,62}$/;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -59,11 +59,13 @@ export async function runNotifySweep(deps: NotifyDeps): Promise<NotifyResult> {
   const sqlState = (error: unknown) => { const c = (error as { code?: unknown })?.code; return typeof c === "string" && /^[0-9A-Z]{5}$/.test(c) ? { sqlState: c } : {}; };
 
   const orgs = await inTx(async (query) => (await query("select ogevia_api.system_cover_notify_orgs() as id")).rows.map((r) => r.id as string));
-  let shifts = 0, notifications = 0, failedOrganizations = 0;
+  let shifts = 0, notifications = 0, blockedShifts = 0, failedOrganizations = 0;
   for (const org of orgs) {
     try {
-      const r = await inTx(async (query) => (await query("select ogevia_api.system_cover_notify_org($1) as r", [org])).rows[0]?.r as Record<string, number>);
+      const r = await inTx(async (query) => (await query("select ogevia_api.system_cover_notify_org($1) as r", [org])).rows[0]?.r as Record<string, any>);
       shifts += Number(r?.shifts ?? 0); notifications += Number(r?.notified ?? 0);
+      // shifts left for a person: no office chosen, incomplete service address, or the office's alerts turned off (counts only)
+      blockedShifts += Object.values((r?.blocked ?? {}) as Record<string, number>).reduce((n, v) => n + Number(v), 0);
     } catch (error) {
       failedOrganizations += 1;
       log({ level: "error", task: NOTIFY_SWEEP_TASK, status: "organization_failed", ...sqlState(error) });
@@ -91,7 +93,7 @@ export async function runNotifySweep(deps: NotifyDeps): Promise<NotifyResult> {
       }
     }
   }
-  const result: NotifyResult = { organizations: orgs.length, shiftsNotified: shifts, notifications, claimed, sent, retried, failed, failedOrganizations };
+  const result: NotifyResult = { organizations: orgs.length, shiftsNotified: shifts, notifications, blockedShifts, claimed, sent, retried, failed, failedOrganizations };
   log({ level: failedOrganizations > 0 ? "error" : "info", task: NOTIFY_SWEEP_TASK, ...result });
   if (failedOrganizations > 0) throw new Error(`The notification run failed for ${failedOrganizations} of ${orgs.length} agencies.`);
   return result;

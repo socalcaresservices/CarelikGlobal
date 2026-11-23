@@ -58,6 +58,7 @@ export class ProductionAuthStack extends Stack {
       const rendered = renderInvitationEmail({ companyName: invite.companyName, signInUrl: Token.isUnresolved(webOrigin) ? "https://app.ogevia.com" : webOrigin, ...(invite.logoUrl ? { logoUrl: invite.logoUrl } : {}), ...(invite.accentColor ? { accentColor: invite.accentColor } : {}), ...(invite.supportEmail ? { supportEmail: invite.supportEmail } : {}) });
       assertCognitoTemplate(rendered);
       inviteMessage = { emailSubject: rendered.subject, emailMessage: rendered.html };
+      if (invite.replyTo !== undefined && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(invite.replyTo)) throw new Error("invitation email: replyTo must be an email address");
       if (invite.sender && !/^arn:aws:ses:[a-z0-9-]+:\d{12}:identity\/.+$/.test(invite.sender.sesIdentityArn)) throw new Error("invitation email: sender.sesIdentityArn must be an SES identity ARN");
     }
     // Release Train 2 (priority B): Cognito custom-message trigger (branded invitation, branded password reset, per-office look from ClientMetadata). Created only when the
@@ -112,7 +113,10 @@ export class ProductionAuthStack extends Stack {
       },
       ...(customMessage ? { lambdaConfig: { customMessage: customMessage.functionArn } } : {}),
       accountRecoverySetting: { recoveryMechanisms: [{ name: "verified_email", priority: 1 }] },
-      emailConfiguration: invite?.sender ? { emailSendingAccount: "DEVELOPER", from: invite.sender.from, sourceArn: invite.sender.sesIdentityArn } : { emailSendingAccount: "COGNITO_DEFAULT" },
+      emailConfiguration: {
+        ...(invite?.sender ? { emailSendingAccount: "DEVELOPER", from: invite.sender.from, sourceArn: invite.sender.sesIdentityArn } : { emailSendingAccount: "COGNITO_DEFAULT" }),
+        ...(invite?.replyTo ? { replyToEmailAddress: invite.replyTo } : {}),
+      },
       schema: [{ name: "email", attributeDataType: "String", required: true, mutable: true }],
       userAttributeUpdateSettings: { attributesRequireVerificationBeforeUpdate: ["email"] },
     });

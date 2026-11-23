@@ -125,11 +125,11 @@ describe("merge wizard (0116)", () => {
     expect(await within(box).findByRole("alert", undefined, { timeout: 15000 })).toHaveTextContent("Nothing was changed");
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   }, 40000);
-  const M = (over: Record<string, unknown>) => ({ link_id: "ll111111-0000-4000-8000-000000000001", kept_name: "Pat Twin", merged_name: "Pat T.", match_basis: "email", reason: "Entered twice", merged_at: "2026-12-01T17:00:00Z", merged_by_name: "Olivia Owner", has_snapshot: true, reversed_at: null, reversed_reason: null, can_undo: true, ...over });
+  const M = (over: Record<string, unknown>) => ({ linkId: "ll111111-0000-4000-8000-000000000001", keptName: "Pat Twin", mergedName: "Pat T.", matchBasis: "email", reason: "Entered twice", mergedAt: "2026-12-01T17:00:00Z", mergedByName: "Olivia Owner", hasSnapshot: true, reversedAt: null, reversedReason: null, canUndo: true, ...over });
   it("recent merges: undo needs a reason and shows the server's answer; merges that cannot be undone say why", async () => {
     const { calls } = renderAws("/staff", PERMS, base({
       "GET /v1/staff/duplicates": () => json(200, { duplicates: [] }),
-      "GET /v1/staff-merges": () => json(200, { merges: [M({}), M({ link_id: "x2", can_undo: false }), M({ link_id: "x3", has_snapshot: false, can_undo: false }), M({ link_id: "x4", can_undo: false, reversed_at: "2026-12-02T10:00:00Z", reversed_reason: "Mistake" })] }),
+      "GET /v1/staff-merges": () => json(200, { merges: [M({}), M({ linkId: "x2", canUndo: false }), M({ linkId: "x3", hasSnapshot: false, canUndo: false }), M({ linkId: "x4", canUndo: false, reversedAt: "2026-12-02T10:00:00Z", reversedReason: "Mistake" })] }),
       "POST /v1/staff-merges/ll111111-0000-4000-8000-000000000001/undo": () => json(200, { result: { state: "reversed" } }),
     }), "organization_owner");
     const box = await screen.findByTestId("recent-merges", undefined, { timeout: 15000 });

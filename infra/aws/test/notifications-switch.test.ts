@@ -15,9 +15,9 @@ const NOTIF = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "notificat
 const routeKeys = (t: Template) => Object.values(t.findResources("AWS::ApiGatewayV2::Route")).map((r) => (r.Properties as { RouteKey: string; AuthorizationType?: string }));
 
 describe("notifications release switch", () => {
-  it("marks exactly the eight notification routes", () => {
-    expect(NOTIF).toEqual(["GET /v1/cover-notification-history", "GET /v1/cover-notification-settings", "GET /v1/notification-center", "GET /v1/notification-preferences",
-      "POST /v1/cover-notification-settings", "POST /v1/notification-center/mark", "POST /v1/notification-preferences", "POST /v1/shifts/{shiftId}/notify-cover"].sort());
+  it("marks exactly the ten notification routes", () => {
+    expect(NOTIF).toEqual(["GET /v1/cover-notification-history", "GET /v1/cover-notification-settings", "GET /v1/cover-office-audiences", "GET /v1/notification-center", "GET /v1/notification-preferences",
+      "POST /v1/cover-notification-settings", "POST /v1/notification-center/mark", "POST /v1/notification-preferences", "POST /v1/offices/{officeId}/cover-audience", "POST /v1/shifts/{shiftId}/notify-cover"].sort());
   });
   it("is OFF in TEST and production: no routes, no schedule, no email function", () => {
     for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
@@ -29,14 +29,17 @@ describe("notifications release switch", () => {
       expect(Object.values(t.findResources("AWS::Lambda::Function")).some((f) => (f.Properties as any).FunctionName?.endsWith?.("NotificationEmail"))).toBe(false);
     }
   });
-  it("with the switch on: exactly those eight routes (all require a JWT), plus one schedule; nothing else differs", () => {
+  it("with the switch on: exactly those ten routes (all require a JWT), plus one schedule; nothing else differs", () => {
     for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
       const off = routeKeys(api(withCfg(base, false))); const t = api(withCfg(base, true)); const on = routeKeys(t);
-      expect(on.length).toBe(off.length + 8);
+      expect(on.length).toBe(off.length + 10);
       for (const k of NOTIF) expect(on.find((r) => r.RouteKey === k), k).toMatchObject({ AuthorizationType: "JWT" });
       expect(on.filter((r) => !NOTIF.includes(r.RouteKey)).map((r) => r.RouteKey).sort()).toEqual(off.map((r) => r.RouteKey).sort());
       t.resourceCountIs("AWS::Events::Rule", 2);
       t.hasResourceProperties("AWS::Events::Rule", { ScheduleExpression: "rate(5 minutes)" });
+      // the address rules (city AND ZIP on a client's service address) switch on with the notifications, and only then
+      expect(JSON.stringify(t.toJSON())).toContain("COVER_ALERT_ADDRESS_RULES");
+      expect(JSON.stringify(api(withCfg(base, false)).toJSON())).not.toContain("COVER_ALERT_ADDRESS_RULES");
     }
   });
   it("with a sender: one email function outside the VPC, SES send on the one identity only, the API may invoke it, and the endpoint policy names it", () => {
@@ -46,6 +49,8 @@ describe("notifications release switch", () => {
     expect(fn).toBeDefined();
     expect((fn.Properties as any).VpcConfig).toBeUndefined();
     expect((fn.Properties as any).Environment.Variables).toEqual({ SES_FROM: "SoCal Care <no-reply@ogevia.com>" });
+    const withReply = Template.fromStack(stacks({ ...cfg, notificationEmail: { ...cfg.notificationEmail!, replyTo: "scheduling@ogevia.com" } } as OgeviaEnvironmentConfig).find((p) => p.stack.stackName.endsWith("-ServiceVerificationApi"))!.stack);
+    expect(Object.values(withReply.findResources("AWS::Lambda::Function")).find((f) => (f.Properties as any).FunctionName === "Ogevia-prd-NotificationEmail")!.Properties as any).toMatchObject({ Environment: { Variables: { SES_REPLY_TO: "scheduling@ogevia.com" } } });
     const stmts = Object.values(t.findResources("AWS::IAM::ManagedPolicy")).flatMap((p) => (p.Properties as any).PolicyDocument.Statement as any[]);
     const ses = stmts.filter((s) => ([] as string[]).concat(s.Action).includes("ses:SendEmail"));
     expect(ses).toHaveLength(1); expect(ses[0].Resource).toEqual(ARN);

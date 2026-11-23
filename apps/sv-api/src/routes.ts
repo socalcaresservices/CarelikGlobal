@@ -310,6 +310,17 @@ function exportFilename(report: ReportKey, p: ExportParams): string {
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
 /**
+ * Release Train 2 (open-shift alerts): when ON (CDK sets COVER_ALERT_ADDRESS_RULES=on together with the notifications switch) a client's service address must have BOTH a city and a
+ * 5-digit ZIP code, on creation and on every edit. The alert itself is also blocked in the database for a client that has neither, so older clients are completed on the client record.
+ */
+const addressRules = () => process.env.COVER_ALERT_ADDRESS_RULES === "on";
+const serviceZip = (value: unknown, required: boolean) => {
+  const z = text(value, "serviceZip", 5, { required });
+  if (z !== null && z !== undefined && !/^[0-9]{5}$/.test(z)) throw new ApiError(400, "bad_request", "Enter a 5-digit ZIP code.");
+  return z ?? null;
+};
+const requireCity = (city: string | null | undefined) => { if (!city || !city.trim()) throw new ApiError(400, "bad_request", "Enter the city of the service address."); return city; };
+/**
  * Release Train 2 (0114): the caregiver's office look for the invitation email. Only when INVITATION_BRANDING=on (set by CDK together with the Cognito trigger), and it
  * can never block an invitation: any failure (for example 0114 not applied) means the company look.
  */
@@ -608,8 +619,15 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
       const c = clientDetails(body);
-      const [created] = await tx((db) =>
-        rows(db, "select * from ogevia_api.create_client($1, $2, $3, $4, $5, $6, $7)", [c.org, c.first, c.last, c.city, c.type, c.label, key]));
+      const rules = addressRules();
+      if (rules) requireCity(c.city);
+      const zip = serviceZip(body.serviceZip, rules);
+      // one transaction: a client is never created with an address the rules refuse
+      const [created] = await tx(async (db) => {
+        const made = await rows(db, "select * from ogevia_api.create_client($1, $2, $3, $4, $5, $6, $7)", [c.org, c.first, c.last, c.city, c.type, c.label, key]);
+        if (rules && zip && made[0]) await db.query("select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [c.org, made[0].clientId, zip, c.city]);
+        return made;
+      });
       return { client: created };
     },
   },
@@ -621,7 +639,18 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
       const c = clientDetails(body);
-      await tx((db) => db.query("select ogevia_api.update_client($1, $2, $3, $4, $5, $6, $7, $8)", [c.org, client, c.first, c.last, c.city, c.type, c.label, key]));
+      const rules = addressRules();
+      if (rules) requireCity(c.city);
+      const zip = serviceZip(body.serviceZip, false);
+      await tx(async (db) => {
+        // with the rules on, the service ZIP must exist after this edit: either sent now or already on the client record
+        if (rules && !zip) {
+          const { location } = await first(db, "select ogevia_api.get_matching_zip($1,$2,'client') as location", [c.org, client]);
+          if (!location?.zip) throw new ApiError(400, "bad_request", "Enter the 5-digit ZIP code of the service address.");
+        }
+        await db.query("select ogevia_api.update_client($1, $2, $3, $4, $5, $6, $7, $8)", [c.org, client, c.first, c.last, c.city, c.type, c.label, key]);
+        if (rules && zip) await db.query("select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [c.org, client, zip, c.city]);
+      });
       return { ok: true };
     },
   },
@@ -3775,9 +3804,26 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_notification_settings($1,$2,$3,$4,$5,$6,$7) as r", [
+      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_notification_settings($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
         uuid(body.organizationId, "organizationId"), booleanValue(body.enabled, "enabled"), booleanValue(body.emailEnabled, "emailEnabled"), booleanValue(body.autoNotify, "autoNotify"),
-        wholeNumber(body.windowHours, "windowHours", 1, 336), wholeNumber(body.maxRecipients, "maxRecipients", 1, 200), text(body.reason, "reason", 500, { required: true })])).r) };
+        wholeNumber(body.windowHours, "windowHours", 1, 336), wholeNumber(body.maxRecipients, "maxRecipients", 1, 200), oneOf(body.audience, "audience", ["office", "agency"] as const),
+        text(body.subjectTemplate, "subjectTemplate", 120, { required: true }), text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
+  // The per-office audience override (office, agency or none; null removes it) and the list of offices with their override.
+  "GET /v1/cover-office-audiences": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ offices: await tx((db) => rows(db, "select * from ogevia_api.list_cover_office_audiences($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/offices/{officeId}/cover-audience": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const audience = body.audience === null || body.audience === undefined ? null : oneOf(body.audience, "audience", ["office", "agency", "none"] as const);
+      return { audience: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_office_audience($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), audience, text(body.reason, "reason", 500, { required: true })])).r) };
     },
   },
 
@@ -3785,7 +3831,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      return { result: await tx(async (db) => (await first(db, "select ogevia_api.notify_cover_shift($1,$2) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).shiftId, "shiftId")])).r) };
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.notify_cover_shift($1,$2,$3) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).shiftId, "shiftId"), optionalUuid(body.officeId, "officeId")])).r) };
     },
   },
 
@@ -4243,6 +4289,8 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       const args = [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), text(body.zip, "zip", 5, { required: true })];
+      if (addressRules()) requireCity(text(body.city, "city", 100)) ;
+      if (!/^[0-9]{5}$/.test(String(args[2] ?? ""))) throw new ApiError(400, "bad_request", "Enter a 5-digit ZIP code.");
       if (body.city === undefined) {
         await tx((db) => db.query("select ogevia_api.set_client_service_zip($1,$2,$3)", args));
       } else {

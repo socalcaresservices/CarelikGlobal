@@ -1,5 +1,9 @@
 -- 0113 (PENDING: infra/aws/db/pending, not in any release) | CLASS: ADDITIVE (five tables, functions). Not applied to any database.
--- Release Train 2, priority A. Cover-shift notifications and the notification centre.
+-- Release Train 2, priority A. Open-shift (cover) notifications and the notification centre. Depends on 0110/0111 (offices, office assignments) and the live-test 0091 service ZIP.
+--   * Decisions of 2026-11-23 (owner): the subject shows the SERVICE city (from the client's service address, never the office's city): "Open shift in Winchester | Fri, Nov 27 | 1:30–5:00 PM";
+--     the body names the coordinating office. Never the client's name, code, street address or ZIP. A client without a service city AND ZIP blocks the alert.
+--   * Routing by coordinating office: one office = that office; several = the office assigned to the shift (shifts.coordinating_office_id) or one the sender selects before publishing.
+--     Audience: caregivers assigned to that office (agency setting 'office', or 'agency' for everyone; a per-office override may also say 'none'). The sender is always excluded and each person gets one copy.
 --   * Per-agency settings, all OFF by default (cover_notification_settings): nothing is created for an agency until its owner turns it on.
 --   * user_notifications: one row per person and event (a cover-shift offer). The body never holds a client name, code or address: service, local date and time only.
 --     Rows are history: only read_at (once) and archived_at can change; nothing is deleted.
@@ -16,9 +20,42 @@ create table ogevia.cover_notification_settings (
   auto_notify boolean not null default false,
   window_hours integer not null default 48 check (window_hours between 1 and 336),
   max_recipients integer not null default 25 check (max_recipients between 1 and 200),
+  -- who is told: the caregivers of the coordinating office ('office') or every eligible caregiver of the agency ('agency')
+  audience text not null default 'office' check (audience in ('office', 'agency')),
+  -- the subject line; the service city is ALWAYS part of it (the check and the setter both require {city}); only these tokens exist
+  subject_template text not null default 'Open shift in {city} | {date} | {time}' check (length(subject_template) between 10 and 120 and subject_template like '%{city}%'),
   updated_by uuid references ogevia.app_users(id),
   updated_at timestamptz not null default now()
 );
+create table ogevia.cover_notification_office_audience (
+  office_id uuid primary key,
+  organization_id uuid not null references ogevia.organizations(id),
+  audience text not null check (audience in ('office', 'agency', 'none')),
+  updated_by uuid references ogevia.app_users(id),
+  updated_at timestamptz not null default now(),
+  foreign key (office_id, organization_id) references ogevia.offices (id, organization_id)
+);
+alter table ogevia.cover_notification_office_audience enable row level security;
+revoke all on ogevia.cover_notification_office_audience from public;
+-- the office a shift is coordinated by (optional; one-office agencies need none)
+alter table ogevia.shifts add column coordinating_office_id uuid;
+alter table ogevia.shifts add constraint shifts_coordinating_office_fk foreign key (coordinating_office_id, organization_id) references ogevia.offices (id, organization_id);
+-- one row per published alert: the shift, the office, the SERVICE city used, who sent it (null = the scheduled run) and how many people were told
+create table ogevia.cover_alerts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references ogevia.organizations(id),
+  shift_id uuid not null references ogevia.shifts(id),
+  office_id uuid not null,
+  service_city text not null check (length(btrim(service_city)) between 1 and 80),
+  sent_by uuid references ogevia.app_users(id),
+  recipients integer not null check (recipients >= 0),
+  dedupe_key text not null,
+  created_at timestamptz not null default now(),
+  unique (organization_id, dedupe_key),
+  foreign key (office_id, organization_id) references ogevia.offices (id, organization_id)
+);
+alter table ogevia.cover_alerts enable row level security;
+revoke all on ogevia.cover_alerts from public;
 alter table ogevia.cover_notification_settings enable row level security;
 revoke all on ogevia.cover_notification_settings from public;
 
@@ -27,7 +64,7 @@ create table ogevia.user_notifications (
   organization_id uuid not null references ogevia.organizations(id),
   recipient_user_id uuid not null references ogevia.app_users(id),
   category text not null check (category in ('cover_shift')),
-  title text not null check (length(title) between 1 and 120),
+  title text not null check (length(title) between 1 and 200),
   body text not null check (length(body) between 1 and 500),
   link text check (link is null or link ~ '^/[a-z0-9/_-]*$'),
   shift_id uuid references ogevia.shifts(id),
@@ -112,55 +149,103 @@ begin
   if not (ogevia.has_permission(p_organization_id, 'shifts.manage') or ogevia.has_permission(p_organization_id, 'organization.update')) then
     raise exception 'Not allowed' using errcode = 'OGA03';
   end if;
-  return coalesce((select jsonb_build_object('enabled', s.enabled, 'emailEnabled', s.email_enabled, 'autoNotify', s.auto_notify,
-                                             'windowHours', s.window_hours, 'maxRecipients', s.max_recipients)
+  return coalesce((select jsonb_build_object('enabled', s.enabled, 'emailEnabled', s.email_enabled, 'autoNotify', s.auto_notify, 'windowHours', s.window_hours,
+                                             'maxRecipients', s.max_recipients, 'audience', s.audience, 'subjectTemplate', s.subject_template)
                      from ogevia.cover_notification_settings s where s.organization_id = p_organization_id),
-                  jsonb_build_object('enabled', false, 'emailEnabled', false, 'autoNotify', false, 'windowHours', 48, 'maxRecipients', 25));
+                  jsonb_build_object('enabled', false, 'emailEnabled', false, 'autoNotify', false, 'windowHours', 48, 'maxRecipients', 25, 'audience', 'office',
+                                     'subjectTemplate', 'Open shift in {city} | {date} | {time}'));
 end;
 $$;
 
 create function ogevia_api.set_cover_notification_settings(
-  p_organization_id uuid, p_enabled boolean, p_email_enabled boolean, p_auto_notify boolean, p_window_hours integer, p_max_recipients integer, p_reason text)
+  p_organization_id uuid, p_enabled boolean, p_email_enabled boolean, p_auto_notify boolean, p_window_hours integer, p_max_recipients integer,
+  p_audience text, p_subject_template text, p_reason text)
 returns jsonb language plpgsql volatile security definer set search_path = ogevia, pg_temp as $$
 declare
   v_actor uuid := ogevia.require_actor();
   v_before jsonb;
+  v_tpl text := btrim(coalesce(p_subject_template, ''));
 begin
   if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
-  if not ogevia.has_permission(p_organization_id, 'organization.update') then raise exception 'Only the agency owner can change cover-shift notification settings' using errcode = 'OGA03'; end if;
+  if not ogevia.has_permission(p_organization_id, 'organization.update') then raise exception 'Only the agency owner can change open-shift notification settings' using errcode = 'OGA03'; end if;
   if p_enabled is null or p_email_enabled is null or p_auto_notify is null then raise exception 'Choose on or off for each setting' using errcode = 'OGV22'; end if;
   if p_window_hours is null or p_window_hours not between 1 and 336 then raise exception 'The window must be 1 to 336 hours' using errcode = 'OGV22'; end if;
   if p_max_recipients is null or p_max_recipients not between 1 and 200 then raise exception 'Recipients per shift must be 1 to 200' using errcode = 'OGV22'; end if;
+  if p_audience is null or p_audience not in ('office', 'agency') then raise exception 'Choose who is told: the coordinating office or the whole agency' using errcode = 'OGV22'; end if;
+  if length(v_tpl) not between 10 and 120 or position('{city}' in v_tpl) = 0 then raise exception 'The subject must include {city}: the service city is always shown' using errcode = 'OGV22'; end if;
+  if v_tpl ~ '\{(?!city\}|date\}|time\}|service\})' or v_tpl ~ '[\r\n]' then raise exception 'The subject can only use {city}, {date}, {time} and {service}' using errcode = 'OGV22'; end if;
   if p_reason is null or length(btrim(p_reason)) < 3 then raise exception 'A reason is required' using errcode = 'OGV22'; end if;
   v_before := ogevia_api.get_cover_notification_settings(p_organization_id);
-  insert into ogevia.cover_notification_settings (organization_id, enabled, email_enabled, auto_notify, window_hours, max_recipients, updated_by)
-  values (p_organization_id, p_enabled, p_email_enabled, p_auto_notify, p_window_hours, p_max_recipients, v_actor)
+  insert into ogevia.cover_notification_settings (organization_id, enabled, email_enabled, auto_notify, window_hours, max_recipients, audience, subject_template, updated_by)
+  values (p_organization_id, p_enabled, p_email_enabled, p_auto_notify, p_window_hours, p_max_recipients, p_audience, v_tpl, v_actor)
   on conflict (organization_id) do update set enabled = excluded.enabled, email_enabled = excluded.email_enabled, auto_notify = excluded.auto_notify,
-    window_hours = excluded.window_hours, max_recipients = excluded.max_recipients, updated_by = v_actor, updated_at = now();
+    window_hours = excluded.window_hours, max_recipients = excluded.max_recipients, audience = excluded.audience, subject_template = excluded.subject_template, updated_by = v_actor, updated_at = now();
   perform ogevia.write_audit(p_organization_id, 'cover_notification_settings.changed', 'organization', p_organization_id, v_before,
-    jsonb_build_object('enabled', p_enabled, 'emailEnabled', p_email_enabled, 'autoNotify', p_auto_notify, 'windowHours', p_window_hours, 'maxRecipients', p_max_recipients), btrim(p_reason));
+    jsonb_build_object('enabled', p_enabled, 'emailEnabled', p_email_enabled, 'autoNotify', p_auto_notify, 'windowHours', p_window_hours, 'maxRecipients', p_max_recipients,
+                       'audience', p_audience, 'subjectTemplate', v_tpl), btrim(p_reason));
   return ogevia_api.get_cover_notification_settings(p_organization_id);
 end;
 $$;
 
+-- A per-office override of the audience ('office', 'agency' or 'none' = this office never sends open-shift alerts); null removes the override.
+create function ogevia_api.set_cover_office_audience(p_organization_id uuid, p_office_id uuid, p_audience text, p_reason text)
+returns jsonb language plpgsql volatile security definer set search_path = ogevia, pg_temp as $$
+declare v_actor uuid := ogevia.require_actor(); v_before text;
+begin
+  if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
+  if not ogevia.has_permission(p_organization_id, 'organization.update') then raise exception 'Only the agency owner can change an office''s audience' using errcode = 'OGA03'; end if;
+  if not exists (select 1 from ogevia.offices o where o.id = p_office_id and o.organization_id = p_organization_id) then raise exception 'Office not found' using errcode = 'OGN04'; end if;
+  if p_audience is not null and p_audience not in ('office', 'agency', 'none') then raise exception 'Choose the coordinating office, the whole agency or nobody' using errcode = 'OGV22'; end if;
+  if p_reason is null or length(btrim(p_reason)) < 3 then raise exception 'A reason is required' using errcode = 'OGV22'; end if;
+  select a.audience into v_before from ogevia.cover_notification_office_audience a where a.office_id = p_office_id;
+  if p_audience is null then delete from ogevia.cover_notification_office_audience where office_id = p_office_id;
+  else
+    insert into ogevia.cover_notification_office_audience (office_id, organization_id, audience, updated_by) values (p_office_id, p_organization_id, p_audience, v_actor)
+    on conflict (office_id) do update set audience = excluded.audience, updated_by = v_actor, updated_at = now();
+  end if;
+  perform ogevia.write_audit(p_organization_id, 'cover_office_audience.changed', 'offices', p_office_id, jsonb_build_object('audience', v_before), jsonb_build_object('audience', p_audience), btrim(p_reason));
+  return jsonb_build_object('audience', p_audience);
+end;
+$$;
+
+create function ogevia_api.list_cover_office_audiences(p_organization_id uuid)
+returns table (office_id uuid, office_name text, audience_override text)
+language plpgsql stable security definer set search_path = ogevia, pg_temp as $$
+begin
+  perform ogevia.require_actor();
+  if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
+  if not (ogevia.has_permission(p_organization_id, 'organization.update') or ogevia.has_permission(p_organization_id, 'shifts.manage')) then raise exception 'Not allowed' using errcode = 'OGA03'; end if;
+  return query select o.id, o.name::text, a.audience::text from ogevia.offices o left join ogevia.cover_notification_office_audience a on a.office_id = o.id
+    where o.organization_id = p_organization_id and o.is_active order by lower(o.name);
+end;
+$$;
+
+-- The client's SERVICE address as the alert needs it: the service city (the service-ZIP record's city, else the client's own city) and the service ZIP. Never the office's.
+create function ogevia.cover_service_address(p_organization_id uuid, p_client_id uuid)
+returns table (city text, zip text) language sql stable set search_path = ogevia, pg_temp as $$
+  select coalesce(nullif(btrim(z.city), ''), nullif(btrim(c.city), ''))::text, nullif(btrim(z.zip), '')::text
+    from ogevia.clients c left join ogevia.client_service_zip z on z.client_id = c.id
+   where c.id = p_client_id and c.organization_id = p_organization_id;
+$$;
+
 -- ---------------------------------------------------------------------------------------------------------------------------------------
--- Creating the notifications for one shift (shared by the office button and the scheduled run)
+-- Publishing the alert for one shift (shared by the office button and the scheduled run). p_sender = the person who published (null for the scheduled run).
 -- ---------------------------------------------------------------------------------------------------------------------------------------
-create function ogevia.cover_notify(p_organization_id uuid, p_shift_id uuid)
+create function ogevia.cover_notify(p_organization_id uuid, p_shift_id uuid, p_office_id uuid default null, p_sender uuid default null)
 returns jsonb language plpgsql volatile set search_path = ogevia, pg_temp as $$
 declare
   v_set ogevia.cover_notification_settings%rowtype;
   v_s ogevia.shifts%rowtype;
   v_org ogevia.organizations%rowtype;
-  v_service text;
+  v_service text; v_city text; v_zip text;
   v_called uuid[];
   v_rec record;
   v_pref ogevia.notification_preferences%rowtype;
+  v_offices uuid[]; v_office uuid; v_office_name text; v_aud text;
   v_in_app boolean; v_email boolean;
-  v_nid uuid; v_did uuid;
-  v_key text;
+  v_nid uuid; v_did uuid; v_key text;
   v_sent integer := 0; v_existing integer := 0; v_queued integer := 0; v_skipped integer := 0; v_considered integer := 0;
-  v_title text; v_body text;
+  v_title text; v_body text; v_date text; v_time text; v_t0 text; v_t1 text; v_m0 text; v_m1 text;
 begin
   select * into v_set from ogevia.cover_notification_settings where organization_id = p_organization_id;
   if v_set.organization_id is null or not v_set.enabled then return jsonb_build_object('state', 'disabled'); end if;
@@ -172,15 +257,45 @@ begin
   if exists (select 1 from ogevia.service_visits v where v.scheduled_shift_id = v_s.id and v.status not in ('voided', 'corrected')) then
     return jsonb_build_object('state', 'not_needed');
   end if;
+
+  -- 1. the SERVICE address must be complete (city AND ZIP): staff complete it on the client record. The office's city is never used in its place.
+  select a.city, a.zip into v_city, v_zip from ogevia.cover_service_address(p_organization_id, v_s.client_id) a;
+  if v_city is null or v_zip is null then
+    return jsonb_build_object('state', 'address_incomplete', 'clientId', v_s.client_id,
+      'missing', (select coalesce(jsonb_agg(m), '[]'::jsonb) from unnest(array[case when v_city is null then 'city' end, case when v_zip is null then 'zip' end]) m where m is not null));
+  end if;
+
+  -- 2. the coordinating office: one office = that office; several = the one assigned to the shift, else the one the sender selected; otherwise the sender must choose
+  select coalesce(array_agg(o.id order by lower(o.name)), '{}') into v_offices from ogevia.offices o where o.organization_id = p_organization_id and o.is_active;
+  if cardinality(v_offices) = 1 then v_office := v_offices[1];
+  elsif v_s.coordinating_office_id is not null and v_s.coordinating_office_id = any (v_offices) then v_office := v_s.coordinating_office_id;
+  elsif p_office_id is not null and p_office_id = any (v_offices) then
+    v_office := p_office_id;
+    if p_sender is not null then update ogevia.shifts set coordinating_office_id = v_office, updated_at = now() where id = v_s.id; end if;   -- the shift now has its office
+  else
+    return jsonb_build_object('state', 'office_required',
+      'offices', (select coalesce(jsonb_agg(jsonb_build_object('officeId', o.id, 'name', o.name) order by lower(o.name)), '[]'::jsonb) from ogevia.offices o where o.id = any (v_offices)));
+  end if;
+  select o.name into v_office_name from ogevia.offices o where o.id = v_office;
+
+  -- 3. the audience: the office's override, else the agency setting
+  select coalesce((select a.audience from ogevia.cover_notification_office_audience a where a.office_id = v_office), v_set.audience) into v_aud;
+  if v_aud = 'none' then return jsonb_build_object('state', 'office_audience_off', 'office', v_office_name); end if;
+
   select * into v_org from ogevia.organizations where id = p_organization_id;
   select sv.name into v_service from ogevia.services sv where sv.id = v_s.service_id;
   select coalesce(array_agg(e.original_caregiver_record_id), '{}') into v_called
     from ogevia.shift_coverage_events e where e.shift_id = v_s.id and e.event_type = 'called_out' and e.original_caregiver_record_id is not null;
   v_key := 'cover:' || v_s.id::text || ':' || floor(extract(epoch from v_s.starts_at))::bigint::text;
-  v_title := 'A shift needs cover';
-  v_body := coalesce(v_service, 'A shift') || ' on ' || to_char(v_s.starts_at at time zone v_org.timezone, 'Dy Mon FMDD') || ', '
-            || to_char(v_s.starts_at at time zone v_org.timezone, 'FMHH12:MI AM') || ' to ' || to_char(v_s.ends_at at time zone v_org.timezone, 'FMHH12:MI AM')
-            || '. Open Ogevia to ask for it. The office confirms who works it.';
+
+  -- subject: the agency's template; {city} is required by the setting, so the service city is in every format. Date and time are the agency's local ones.
+  v_date := to_char(v_s.starts_at at time zone v_org.timezone, 'Dy, Mon FMDD');
+  v_t0 := to_char(v_s.starts_at at time zone v_org.timezone, 'FMHH12:MI'); v_t1 := to_char(v_s.ends_at at time zone v_org.timezone, 'FMHH12:MI');
+  v_m0 := to_char(v_s.starts_at at time zone v_org.timezone, 'AM'); v_m1 := to_char(v_s.ends_at at time zone v_org.timezone, 'AM');
+  v_time := case when v_m0 = v_m1 then v_t0 || '–' || v_t1 || ' ' || v_m1 else v_t0 || ' ' || v_m0 || '–' || v_t1 || ' ' || v_m1 end;
+  v_title := replace(replace(replace(replace(v_set.subject_template, '{city}', v_city), '{date}', v_date), '{time}', v_time), '{service}', coalesce(v_service, 'Shift'));
+  v_body := coalesce(v_service, 'A shift') || ' · ' || v_date || ', ' || v_time || E'\nService city: ' || v_city || E'\nCoordinating office: ' || v_office_name
+            || E'\nOpen Ogevia to ask for it. The office confirms who works it.';
 
   for v_rec in
     select cr.id as record_id, cr.linked_user_id as user_id
@@ -189,6 +304,9 @@ begin
     join ogevia.organization_memberships m on m.organization_id = cr.organization_id and m.user_id = cr.linked_user_id and m.status = 'active' and m.role = 'caregiver'
     where cr.organization_id = p_organization_id and cr.deleted_at is null and cr.linked_user_id is not null and cr.status in ('ready', 'active')
       and not (cr.id = any (v_called))
+      and (p_sender is null or cr.linked_user_id <> p_sender)                       -- the person who sent the alert never receives it
+      and (v_aud = 'agency' or exists (select 1 from ogevia.office_assignments oa     -- EXISTS: a caregiver in several offices (or twice) is one row
+                                        where oa.organization_id = p_organization_id and oa.caregiver_record_id = cr.id and oa.office_id = v_office))
       and exists (select 1 from ogevia.caregiver_assignments ca
                    where ca.organization_id = p_organization_id and ca.caregiver_user_id = cr.linked_user_id and ca.client_id = v_s.client_id
                      and (v_s.service_id is null or ca.service_id = v_s.service_id) and ca.is_active
@@ -208,6 +326,7 @@ begin
     select * into v_pref from ogevia.notification_preferences p where p.organization_id = p_organization_id and p.user_id = v_rec.user_id and p.category = 'cover_shift';
     v_in_app := coalesce(v_pref.in_app, true); v_email := coalesce(v_pref.email, true) and v_set.email_enabled;
     if not v_in_app and not v_email then v_skipped := v_skipped + 1; continue; end if;
+    v_nid := null;
     insert into ogevia.user_notifications (organization_id, recipient_user_id, category, title, body, link, shift_id, dedupe_key, in_app)
     values (p_organization_id, v_rec.user_id, 'cover_shift', v_title, v_body, '/schedule', v_s.id, v_key, v_in_app)
     on conflict (organization_id, recipient_user_id, dedupe_key) do nothing
@@ -221,26 +340,30 @@ begin
     end if;
   end loop;
   if v_sent > 0 then
-    -- counts only: no name, address or contact detail enters the audit trail
+    insert into ogevia.cover_alerts (organization_id, shift_id, office_id, service_city, sent_by, recipients, dedupe_key)
+    values (p_organization_id, v_s.id, v_office, v_city, p_sender, v_sent, v_key || ':' || gen_random_uuid()::text);
+    -- counts and the office only: no name, address, ZIP or contact detail enters the audit trail
     perform ogevia.write_audit(p_organization_id, 'cover_notification.created', 'shifts', v_s.id, null,
-      jsonb_build_object('notified', v_sent, 'emailQueued', v_queued, 'alreadyNotified', v_existing, 'notEligible', v_skipped), null);
+      jsonb_build_object('notified', v_sent, 'emailQueued', v_queued, 'alreadyNotified', v_existing, 'notEligible', v_skipped, 'officeId', v_office, 'audience', v_aud), null);
   end if;
-  return jsonb_build_object('state', 'done', 'notified', v_sent, 'emailQueued', v_queued, 'alreadyNotified', v_existing, 'notEligible', v_skipped);
+  return jsonb_build_object('state', 'done', 'notified', v_sent, 'emailQueued', v_queued, 'alreadyNotified', v_existing, 'notEligible', v_skipped,
+                            'serviceCity', v_city, 'office', v_office_name, 'subject', v_title);
 end;
 $$;
 
-create function ogevia_api.notify_cover_shift(p_organization_id uuid, p_shift_id uuid)
+create function ogevia_api.notify_cover_shift(p_organization_id uuid, p_shift_id uuid, p_office_id uuid default null)
 returns jsonb language plpgsql volatile security definer set search_path = ogevia, pg_temp as $$
+declare v_actor uuid := ogevia.require_actor();
 begin
-  perform ogevia.require_actor();
   if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
   if not ogevia.has_permission(p_organization_id, 'shifts.manage') then raise exception 'Only a scheduler or manager can notify caregivers' using errcode = 'OGA03'; end if;
   perform pg_advisory_xact_lock(hashtextextended('cover_notify:' || p_shift_id::text, 0));
-  return ogevia.cover_notify(p_organization_id, p_shift_id);
+  return ogevia.cover_notify(p_organization_id, p_shift_id, p_office_id, v_actor);
 end;
 $$;
 
--- The scheduled run (no signed-in person): agencies with auto-notify on, then one agency at a time. Counts only.
+-- The scheduled run (no signed-in person, so no sender): agencies with auto-notify on, then one agency at a time. Counts only. A shift that cannot be published (no office chosen,
+-- incomplete service address, office audience off) is counted under `blocked` and left for a person.
 create function ogevia_api.system_cover_notify_orgs()
 returns setof uuid language sql stable security definer set search_path = ogevia, pg_temp as $$
   select s.organization_id from ogevia.cover_notification_settings s
@@ -252,23 +375,26 @@ create function ogevia_api.system_cover_notify_org(p_organization_id uuid)
 returns jsonb language plpgsql volatile security definer set search_path = ogevia, pg_temp as $$
 declare
   v_set ogevia.cover_notification_settings%rowtype;
-  v_shift uuid; v_r jsonb; v_shifts integer := 0; v_notified integer := 0;
+  v_shift uuid; v_r jsonb; v_shifts integer := 0; v_notified integer := 0; v_blocked jsonb := '{}'::jsonb;
 begin
   select * into v_set from ogevia.cover_notification_settings where organization_id = p_organization_id and enabled and auto_notify;
-  if v_set.organization_id is null then return jsonb_build_object('shifts', 0, 'notified', 0); end if;
+  if v_set.organization_id is null then return jsonb_build_object('shifts', 0, 'notified', 0, 'blocked', '{}'::jsonb); end if;
   for v_shift in
     select s.id from ogevia.shifts s
     where s.organization_id = p_organization_id and s.status = 'scheduled' and s.starts_at > now() and s.starts_at <= now() + make_interval(hours => v_set.window_hours)
       and ogevia.shift_coverage_state(s) = 'needs_coverage' and not ogevia.shift_is_care_request(s.id)
       and not exists (select 1 from ogevia.user_notifications n where n.organization_id = p_organization_id and n.shift_id = s.id
                        and n.dedupe_key = 'cover:' || s.id::text || ':' || floor(extract(epoch from s.starts_at))::bigint::text)
-    order by s.starts_at limit 50
+    order by s.starts_at limit 200
   loop
     perform pg_advisory_xact_lock(hashtextextended('cover_notify:' || v_shift::text, 0));
-    v_r := ogevia.cover_notify(p_organization_id, v_shift);
+    v_r := ogevia.cover_notify(p_organization_id, v_shift, null, null);
     v_shifts := v_shifts + 1; v_notified := v_notified + coalesce((v_r ->> 'notified')::integer, 0);
+    if v_r ->> 'state' in ('office_required', 'address_incomplete', 'office_audience_off') then
+      v_blocked := jsonb_set(v_blocked, array[v_r ->> 'state'], to_jsonb(coalesce((v_blocked ->> (v_r ->> 'state'))::integer, 0) + 1));
+    end if;
   end loop;
-  return jsonb_build_object('shifts', v_shifts, 'notified', v_notified);
+  return jsonb_build_object('shifts', v_shifts, 'notified', v_notified, 'blocked', v_blocked);
 end;
 $$;
 
@@ -440,10 +566,13 @@ end;
 $$;
 
 revoke all on function ogevia.user_notifications_guard() from public;
-revoke all on function ogevia.cover_notify(uuid, uuid) from public;
+revoke all on function ogevia.cover_notify(uuid, uuid, uuid, uuid) from public;
+revoke all on function ogevia.cover_service_address(uuid, uuid) from public;
 revoke all on function ogevia_api.get_cover_notification_settings(uuid) from public;
-revoke all on function ogevia_api.set_cover_notification_settings(uuid, boolean, boolean, boolean, integer, integer, text) from public;
-revoke all on function ogevia_api.notify_cover_shift(uuid, uuid) from public;
+revoke all on function ogevia_api.set_cover_notification_settings(uuid, boolean, boolean, boolean, integer, integer, text, text, text) from public;
+revoke all on function ogevia_api.set_cover_office_audience(uuid, uuid, text, text) from public;
+revoke all on function ogevia_api.list_cover_office_audiences(uuid) from public;
+revoke all on function ogevia_api.notify_cover_shift(uuid, uuid, uuid) from public;
 revoke all on function ogevia_api.system_cover_notify_orgs() from public;
 revoke all on function ogevia_api.system_cover_notify_org(uuid) from public;
 revoke all on function ogevia_api.list_user_notifications(uuid, text, text, integer, timestamptz) from public;
@@ -454,8 +583,10 @@ revoke all on function ogevia_api.list_cover_notification_history(uuid, integer)
 revoke all on function ogevia_api.system_email_claim(integer) from public;
 revoke all on function ogevia_api.system_email_record(uuid, text, text, text) from public;
 grant execute on function ogevia_api.get_cover_notification_settings(uuid) to ogevia_app;
-grant execute on function ogevia_api.set_cover_notification_settings(uuid, boolean, boolean, boolean, integer, integer, text) to ogevia_app;
-grant execute on function ogevia_api.notify_cover_shift(uuid, uuid) to ogevia_app;
+grant execute on function ogevia_api.set_cover_notification_settings(uuid, boolean, boolean, boolean, integer, integer, text, text, text) to ogevia_app;
+grant execute on function ogevia_api.set_cover_office_audience(uuid, uuid, text, text) to ogevia_app;
+grant execute on function ogevia_api.list_cover_office_audiences(uuid) to ogevia_app;
+grant execute on function ogevia_api.notify_cover_shift(uuid, uuid, uuid) to ogevia_app;
 grant execute on function ogevia_api.system_cover_notify_orgs() to ogevia_app;
 grant execute on function ogevia_api.system_cover_notify_org(uuid) to ogevia_app;
 grant execute on function ogevia_api.list_user_notifications(uuid, text, text, integer, timestamptz) to ogevia_app;
@@ -471,3 +602,6 @@ create policy readonly_select on ogevia.user_notifications for select to ogevia_
 create policy readonly_select on ogevia.notification_preferences for select to ogevia_readonly using (true);
 create policy readonly_select on ogevia.notification_deliveries for select to ogevia_readonly using (true);
 create policy readonly_select on ogevia.notification_delivery_events for select to ogevia_readonly using (true);
+grant select on table ogevia.cover_notification_office_audience, ogevia.cover_alerts to ogevia_readonly;
+create policy readonly_select on ogevia.cover_notification_office_audience for select to ogevia_readonly using (true);
+create policy readonly_select on ogevia.cover_alerts for select to ogevia_readonly using (true);

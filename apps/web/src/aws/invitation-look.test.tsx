@@ -21,7 +21,7 @@ function renderOffices(opts: { on: boolean; perms?: string[] }) {
       case "/v1/me": return json(200, { memberships: [{ organizationId: ORG, organizationSlug: "a", organizationName: "Synthetic Care Co", organizationTimezone: "America/Los_Angeles", role: "owner", permissions: opts.perms ?? ["organization.update", "visits.read"] }], profile: { displayName: "Synthetic Person" } });
       case "/v1/branding": return json(200, { branding: { organizationId: ORG, displayName: "Synthetic Care Co", accentColor: null, logoSha256: null } });
       case "/v1/offices": return json(200, { offices: [{ officeId: NORTH, name: "North Office", isActive: true, clientCount: 0 }] });
-      case "/v1/office-branding": return opts.on ? json(200, { offices: [{ office_id: NORTH, office_name: "North Office", accent_color: "#14532d", logo_url: null, support_email: null }] }) : (() => { throw new TypeError("Failed to fetch"); })();
+      case "/v1/office-branding": return opts.on ? json(200, { offices: [{ officeId: NORTH, officeName: "North Office", accentColor: "#14532d", logoUrl: null, supportEmail: null }] }) : (() => { throw new TypeError("Failed to fetch"); })();
       default: return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
   });

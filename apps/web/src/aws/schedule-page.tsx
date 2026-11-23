@@ -320,14 +320,21 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
     { label: "History", action: "history" },
   ];
   const canNotify = notifyAvailable && editable && s.coverageState === "needs_coverage" && future;
-  async function notifyCaregivers() {
+  type AlertResult = { state: string; notified?: number; alreadyNotified?: number; subject?: string; office?: string; clientId?: string; missing?: string[]; offices?: Array<{ officeId: string; name: string }> };
+  const [alertBlock, setAlertBlock] = useState<AlertResult | null>(null);
+  const [alertOffice, setAlertOffice] = useState("");
+  async function notifyCaregivers(officeId?: string) {
     setNotifying(true);
     try {
-      const r = await api.post<{ result: { state: string; notified?: number; alreadyNotified?: number } }>(`/v1/shifts/${s.shiftId}/notify-cover`, { organizationId: activeOrganizationId }, { idempotencyKey: newIdempotencyKey() });
+      const r = await api.post<{ result: AlertResult }>(`/v1/shifts/${s.shiftId}/notify-cover`, { organizationId: activeOrganizationId, ...(officeId ? { officeId } : {}) }, { idempotencyKey: newIdempotencyKey() });
       const x = r.result;
-      onDone(x.state === "disabled" ? "Cover-shift notifications are off. The agency Administrator can turn them on in Notifications."
+      // Two states need a person: choose the coordinating office (several offices, none assigned to the shift) or complete the client's service address (city and ZIP).
+      if (x.state === "office_required" || x.state === "address_incomplete") { setAlertBlock(x); setAlertOffice(""); return; }
+      setAlertBlock(null);
+      onDone(x.state === "disabled" ? "Open-shift alerts are off. The agency Administrator can turn them on in Notifications."
         : x.state === "not_needed" ? "This shift does not need cover any more, so nobody was notified."
-        : (x.notified ?? 0) > 0 ? `${x.notified} caregiver${x.notified === 1 ? " was" : "s were"} notified.`
+        : x.state === "office_audience_off" ? `Alerts are turned off for ${x.office ?? "this office"} (Notifications settings), so nobody was notified.`
+        : (x.notified ?? 0) > 0 ? `${x.notified} caregiver${x.notified === 1 ? " was" : "s were"} notified: ${x.subject ?? ""}`
         : (x.alreadyNotified ?? 0) > 0 ? "Eligible caregivers were already notified about this shift." : "No eligible caregiver to notify for this shift.");
     } catch (cause) { onDone(cause instanceof Error ? cause.message : "Could not notify caregivers. Nothing was sent."); }
     finally { setNotifying(false); }
@@ -347,7 +354,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 whitespace-nowrap md:min-h-7 md:py-0" {...(primary.action === "assign" ? { "aria-label": `Assign caregiver to shift for ${shiftLabel}` } : {})} onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
       {items.length === 1 && !primary ? <button type="button" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8" onClick={() => pick(items[0]!.action)}>{items[0]!.label}</button> : (
         <QuickActionMenu label="More actions" className="[&>button]:min-h-11 [&>button]:min-w-11 md:[&>button]:min-h-7 md:[&>button]:min-w-7">
-          {canNotify ? <button type="button" disabled={notifying} className="block min-h-11 w-full px-3 text-left text-slate-900 hover:bg-slate-50 md:min-h-10" onClick={() => void notifyCaregivers()}>Notify caregivers</button> : null}
+          {canNotify ? <button type="button" disabled={notifying} className="block min-h-11 w-full px-3 text-left text-slate-900 hover:bg-slate-50 md:min-h-10" onClick={() => void notifyCaregivers()}>Send open-shift alert</button> : null}
           {items.map((i) => <button key={i.action} type="button" className={`block min-h-11 w-full px-3 text-left hover:bg-slate-50 md:min-h-10 ${i.danger ? "text-red-800" : "text-slate-900"}`} onClick={() => pick(i.action)}>{i.label}</button>)}
         </QuickActionMenu>
       )}
@@ -370,6 +377,27 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
   ) : action ? <ShiftActions s={s} action={action} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} /> : null;
   const tone = highlight ? "bg-sky-50 outline outline-2 outline-slate-900" : "";
   // The shift's change forms open in the side drawer (full screen on a phone) so the list does not move under the person's hands.
+  const alertDrawer = (
+    <Drawer open={alertBlock !== null} title="Open-shift alert" onClose={() => setAlertBlock(null)}>
+      {alertBlock?.state === "office_required" ? (
+        <div className="space-y-3 text-sm" data-testid="alert-office">
+          <p>This agency has more than one office and this shift has none assigned. Choose the office that coordinates it. The alert goes to that office's audience and names it.</p>
+          {(alertBlock.offices ?? []).length === 0 ? <p role="alert" className="text-red-700">There is no active office. Add one in Settings → Offices first.</p> : (
+            <label className="block font-semibold">Coordinating office
+              <select className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-base" value={alertOffice} onChange={(e) => setAlertOffice(e.target.value)} data-testid="alert-office-select">
+                <option value="">Choose an office</option>{(alertBlock.offices ?? []).map((o) => <option key={o.officeId} value={o.officeId}>{o.name}</option>)}
+              </select>
+            </label>)}
+          <Button type="button" disabled={!alertOffice || notifying} onClick={() => void notifyCaregivers(alertOffice)}>{notifying ? "Sending…" : "Send the alert"}</Button>
+        </div>
+      ) : alertBlock?.state === "address_incomplete" ? (
+        <div className="space-y-3 text-sm" data-testid="alert-address">
+          <p role="alert" className="text-red-800">This client's service address is missing the {(alertBlock.missing ?? []).map((m) => (m === "zip" ? "ZIP code" : m)).join(" and ")}. The alert is not sent until it is complete: caregivers are told the service city, never the office's.</p>
+          <Link className="inline-flex min-h-[44px] items-center font-semibold underline" to={`/clients/${alertBlock.clientId}#details`} onClick={() => setAlertBlock(null)}>Open the client record to complete it</Link>
+        </div>
+      ) : null}
+    </Drawer>
+  );
   const formsDrawer = (
     <Drawer open={action !== null && forms !== null} title={action ? `${ACTION_TITLE[action]}: ${shiftLabel}` : "Shift"} onClose={() => setAction(null)}>
       <dl data-testid="shift-drawer-summary" className="mb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
@@ -400,6 +428,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
           </div>
         </details>
         {formsDrawer}
+        {alertDrawer}
       </li>
     );
   }
@@ -416,6 +445,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       </tr>
       {hasNotes ? <tr><td colSpan={COLS + (withDate ? 1 : 0)} className="space-y-0 pb-0.5 pl-2 text-xs">{notes}</td></tr> : null}
       {formsDrawer}
+      {alertDrawer}
     </tbody>
   );
 }

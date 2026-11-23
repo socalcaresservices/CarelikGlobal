@@ -9,7 +9,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 
-interface Row { office_id: string; office_name: string; accent_color: string | null; logo_url: string | null; support_email: string | null }
+interface Row { officeId: string; officeName: string; accentColor: string | null; logoUrl: string | null; supportEmail: string | null }
 const inputClass = "mt-1 block w-full rounded-lg border border-og-line bg-og-card px-3 py-2 text-base";
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const sample = (company: string, d: { color: string; logo: string; mail: string; office: string }, kind: "invite" | "reset") => {
@@ -36,16 +36,16 @@ export function InvitationLook({ companyName }: { companyName: string }) {
   if (!q.isSuccess) return null;   // switch off (or not loaded): no controls
   const offices = q.data;
   if (offices.length === 0) return null;
-  const current = offices.find((o) => o.office_id === officeId) ?? offices[0]!;
-  const d = draft ?? { color: current.accent_color ?? "", logo: current.logo_url ?? "", mail: current.support_email ?? "" };
+  const current = offices.find((o) => o.officeId === officeId) ?? offices[0]!;
+  const d = draft ?? { color: current.accentColor ?? "", logo: current.logoUrl ?? "", mail: current.supportEmail ?? "" };
   const canEdit = hasPermission("organization.update");
-  const preview = sample(companyName, { ...d, office: current.office_name }, kind);
+  const preview = sample(companyName, { ...d, office: current.officeName }, kind);
   const invalid = (d.color && !HEX.test(d.color)) ? "Colour must look like #0F5F66." : (d.logo && !/^https:\/\//.test(d.logo)) ? "The logo must be an https address." : null;
   async function save() {
     setNote(null);
     if (invalid) { setNote({ ok: false, text: invalid }); return; }
     try {
-      await api.post(`/v1/offices/${current.office_id}/branding`, { organizationId: activeOrganizationId, accentColor: d.color || null, logoUrl: d.logo || null, supportEmail: d.mail || null }, { idempotencyKey: newIdempotencyKey() });
+      await api.post(`/v1/offices/${current.officeId}/branding`, { organizationId: activeOrganizationId, accentColor: d.color || null, logoUrl: d.logo || null, supportEmail: d.mail || null }, { idempotencyKey: newIdempotencyKey() });
       setDraft(null); await queryClient.invalidateQueries({ queryKey: ["office-branding"] }); setNote({ ok: true, text: "Saved. New invitations for this office's caregivers use this look." });
     } catch (cause) { setNote({ ok: false, text: cause instanceof Error ? cause.message : "Could not save. Nothing changed." }); }
   }
@@ -56,8 +56,8 @@ export function InvitationLook({ companyName }: { companyName: string }) {
       <div className="mt-2 grid gap-3 md:grid-cols-2">
         <div className="space-y-1">
           <label className="text-sm">Office
-            <select className={inputClass} value={current.office_id} onChange={(e) => { setOfficeId(e.target.value); setDraft(null); setNote(null); }} data-testid="look-office">
-              {offices.map((o) => <option key={o.office_id} value={o.office_id}>{o.office_name}</option>)}
+            <select className={inputClass} value={current.officeId} onChange={(e) => { setOfficeId(e.target.value); setDraft(null); setNote(null); }} data-testid="look-office">
+              {offices.map((o) => <option key={o.officeId} value={o.officeId}>{o.officeName}</option>)}
             </select>
           </label>
           <label className="text-sm">Accent colour<input className={inputClass} value={d.color} placeholder="#0F5F66" disabled={!canEdit} onChange={(e) => setDraft({ ...d, color: e.target.value })} data-testid="look-color" /></label>

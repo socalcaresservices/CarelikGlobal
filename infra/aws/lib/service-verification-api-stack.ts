@@ -356,6 +356,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/notification-preferences", feature: "notifications" },
   { method: apigw.HttpMethod.POST, path: "/v1/notification-preferences", feature: "notifications" },
   { method: apigw.HttpMethod.GET, path: "/v1/cover-notification-settings", feature: "notifications" },
+  { method: apigw.HttpMethod.GET, path: "/v1/cover-office-audiences", feature: "notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/cover-audience", feature: "notifications" },
   { method: apigw.HttpMethod.POST, path: "/v1/cover-notification-settings", feature: "notifications" },
   { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/notify-cover", feature: "notifications" },
   { method: apigw.HttpMethod.GET, path: "/v1/cover-notification-history", feature: "notifications" },
@@ -713,7 +715,7 @@ export class ServiceVerificationApiStack extends Stack {
         timeout: Duration.seconds(10),
         role: emailRole,
         logGroup: emailLogGroup,
-        environment: { SES_FROM: notificationEmail.from, ...(notificationEmail.configurationSet ? { SES_CONFIGURATION_SET: notificationEmail.configurationSet } : {}) },
+        environment: { SES_FROM: notificationEmail.from, ...(notificationEmail.replyTo ? { SES_REPLY_TO: notificationEmail.replyTo } : {}), ...(notificationEmail.configurationSet ? { SES_CONFIGURATION_SET: notificationEmail.configurationSet } : {}) },
       });
       emailHandler.node.addDependency(emailPolicy);
       Validations.of(emailHandler).acknowledge({
@@ -771,6 +773,7 @@ export class ServiceVerificationApiStack extends Stack {
         NODE_EXTRA_CA_CERTS: "/var/runtime/ca-cert.pem",
         IDENTITY_FUNCTION_NAME: identityFunctionName(config),
         ...(config.features.invitationBranding && config.auth.invitationEmail ? { INVITATION_BRANDING: "on" } : {}),
+        ...(config.features.notifications ? { COVER_ALERT_ADDRESS_RULES: "on" } : {}),
         ...(notificationEmail ? { EMAIL_FUNCTION_NAME: emailFunctionName(config), APP_ORIGIN: customOriginsFor(config)[0] ?? "https://app.invalid" } : {}),
       },
     });

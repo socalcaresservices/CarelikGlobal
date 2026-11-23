@@ -8,8 +8,8 @@ export interface CenterItem { id: string; category: "cover_shift"; title: string
 export interface CenterList { asOf: string; unread: number; items: CenterItem[] }
 export type CenterState = "inbox" | "unread" | "archived" | "all";
 export interface Prefs { coverShift: { inApp: boolean; email: boolean }; emailAvailable: boolean }
-export interface CoverSettings { enabled: boolean; emailEnabled: boolean; autoNotify: boolean; windowHours: number; maxRecipients: number }
-export interface HistoryRow { notification_id: string; shift_id: string | null; caregiver_code: string | null; created_at: string; in_app: boolean; read_at: string | null; email_status: string | null; email_attempts: number | null; email_error: string | null; email_sent_at: string | null }
+export interface CoverSettings { enabled: boolean; emailEnabled: boolean; autoNotify: boolean; windowHours: number; maxRecipients: number; audience: "office" | "agency"; subjectTemplate: string }
+export interface HistoryRow { notificationId: string; shiftId: string | null; caregiverCode: string | null; createdAt: string; inApp: boolean; readAt: string | null; emailStatus: string | null; emailAttempts: number | null; emailError: string | null; emailSentAt: string | null }
 
 export const CENTER_REFRESH_MS = 60_000;
 

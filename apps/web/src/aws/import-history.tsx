@@ -7,7 +7,7 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 
-interface Batch { batch_id: string; kind: "people" | "clients"; file_name: string | null; row_count: number; created_count: number; duplicate_count: number; created_at: string; created_by_name: string | null; can_roll_back: boolean; rolled_back_at: string | null; rolled_back_reason: string | null }
+interface Batch { batchId: string; kind: "people" | "clients"; fileName: string | null; rowCount: number; createdCount: number; duplicateCount: number; createdAt: string; createdByName: string | null; canRollBack: boolean; rolledBackAt: string | null; rolledBackReason: string | null }
 
 export function ImportHistory({ kind }: { kind: "people" | "clients" }) {
   const api = useAwsApi();
@@ -37,17 +37,17 @@ export function ImportHistory({ kind }: { kind: "people" | "clients" }) {
       <h3 className="font-semibold text-og-ink">Earlier imports</h3>
       <ul className="space-y-2">
         {list.map((b) => (
-          <li key={b.batch_id} className="rounded-md border border-og-line bg-og-card p-2" data-testid="import-batch">
-            <p className="font-medium">{b.file_name ?? "File"} · {new Date(b.created_at).toLocaleDateString()}{b.created_by_name ? ` · ${b.created_by_name}` : ""}</p>
-            <p className="text-og-sub">{b.created_count} created, {b.duplicate_count} skipped of {b.row_count} rows{b.rolled_back_at ? ` · Rolled back ${new Date(b.rolled_back_at).toLocaleDateString()}: ${b.rolled_back_reason}` : ""}</p>
-            {b.can_roll_back ? (
-              target === b.batch_id ? (
+          <li key={b.batchId} className="rounded-md border border-og-line bg-og-card p-2" data-testid="import-batch">
+            <p className="font-medium">{b.fileName ?? "File"} · {new Date(b.createdAt).toLocaleDateString()}{b.createdByName ? ` · ${b.createdByName}` : ""}</p>
+            <p className="text-og-sub">{b.createdCount} created, {b.duplicateCount} skipped of {b.rowCount} rows{b.rolledBackAt ? ` · Rolled back ${new Date(b.rolledBackAt).toLocaleDateString()}: ${b.rolledBackReason}` : ""}</p>
+            {b.canRollBack ? (
+              target === b.batchId ? (
                 <div className="mt-1 space-y-1">
                   <label className="block">Reason<input className="mt-1 block w-full rounded-lg border border-og-line px-3 py-2 text-base" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="rollback-reason" /></label>
                   <p className="text-xs text-og-sub">Only works if nobody has used these records yet. All of them become Inactive, or none do. Nothing is deleted.</p>
-                  <div className="flex gap-2"><Button disabled={busy} onClick={() => void rollback(b.batch_id)}>{busy ? "Rolling back…" : "Roll back this import"}</Button><Button variant="secondary" onClick={() => { setTarget(null); setNote(null); }}>Cancel</Button></div>
+                  <div className="flex gap-2"><Button disabled={busy} onClick={() => void rollback(b.batchId)}>{busy ? "Rolling back…" : "Roll back this import"}</Button><Button variant="secondary" onClick={() => { setTarget(null); setNote(null); }}>Cancel</Button></div>
                 </div>
-              ) : <button type="button" className="mt-1 inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" onClick={() => { setTarget(b.batch_id); setNote(null); }}>Roll back…</button>
+              ) : <button type="button" className="mt-1 inline-flex min-h-[44px] items-center font-semibold underline md:min-h-[32px]" onClick={() => { setTarget(b.batchId); setNote(null); }}>Roll back…</button>
             ) : null}
           </li>
         ))}

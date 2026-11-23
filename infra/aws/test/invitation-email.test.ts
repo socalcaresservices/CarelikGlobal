@@ -76,6 +76,15 @@ describe("the dedicated pool and the invitation settings", () => {
     off.resourceCountIs("AWS::Lambda::Function", 0);
     expect((Object.values(off.findResources("AWS::Cognito::UserPool"))[0]!.Properties as any).LambdaConfig).toBeUndefined();
   });
+  it("Reply-To is configuration only: the default sender keeps Cognito's From and gains the reply address; an SES sender gains it too; a bad one is refused; the template is unchanged", () => {
+    const withReply = prdWith({ companyName: "SoCal Care Services", replyTo: "admin.ogevia@gmail.com" });
+    expect(withReply.EmailConfiguration).toEqual({ EmailSendingAccount: "COGNITO_DEFAULT", ReplyToEmailAddress: "admin.ogevia@gmail.com" });
+    expect(withReply.AdminCreateUserConfig.InviteMessageTemplate.EmailMessage).toBe(prdWith({ companyName: "SoCal Care Services" }).AdminCreateUserConfig.InviteMessageTemplate.EmailMessage);
+    const arn = "arn:aws:ses:us-west-2:123456789012:identity/ogevia.com";
+    expect(prdWith({ companyName: "X Care", replyTo: "support@ogevia.com", sender: { from: "Ogevia <support@ogevia.com>", sesIdentityArn: arn } }).EmailConfiguration)
+      .toEqual({ EmailSendingAccount: "DEVELOPER", From: "Ogevia <support@ogevia.com>", SourceArn: arn, ReplyToEmailAddress: "support@ogevia.com" });
+    expect(() => prdWith({ companyName: "X Care", replyTo: "not an address" })).toThrow(/replyTo/);
+  });
   it("an SES sender switches the pool to the developer account with the verified identity", () => {
     const arn = "arn:aws:ses:us-west-2:123456789012:identity/ogevia.com";
     const pool = prdWith({ companyName: "SoCal Care Services", sender: { from: "SoCal Care Services <no-reply@ogevia.com>", sesIdentityArn: arn } });

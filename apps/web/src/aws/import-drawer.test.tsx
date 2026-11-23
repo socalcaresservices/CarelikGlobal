@@ -83,13 +83,13 @@ describe("import drawer", () => {
 });
 
 describe("import history and rollback (0115)", () => {
-  const BATCH = { batch_id: "bbbbbbbb-0000-4000-8000-000000000001", kind: "people", file_name: "people.csv", row_count: 3, created_count: 2, duplicate_count: 1, created_at: "2026-12-01T17:00:00Z", created_by_name: "Olivia Owner", can_roll_back: true, rolled_back_at: null, rolled_back_reason: null };
-  const OLD = { ...BATCH, batch_id: "bbbbbbbb-0000-4000-8000-000000000002", file_name: "early.csv", can_roll_back: false };
-  const DONE = { ...BATCH, batch_id: "bbbbbbbb-0000-4000-8000-000000000003", file_name: "wrong.csv", can_roll_back: false, rolled_back_at: "2026-12-02T10:00:00Z", rolled_back_reason: "Wrong file" };
+  const BATCH = { batchId: "bbbbbbbb-0000-4000-8000-000000000001", kind: "people", fileName: "people.csv", rowCount: 3, createdCount: 2, duplicateCount: 1, createdAt: "2026-12-01T17:00:00Z", createdByName: "Olivia Owner", canRollBack: true, rolledBackAt: null, rolledBackReason: null };
+  const OLD = { ...BATCH, batchId: "bbbbbbbb-0000-4000-8000-000000000002", fileName: "early.csv", canRollBack: false };
+  const DONE = { ...BATCH, batchId: "bbbbbbbb-0000-4000-8000-000000000003", fileName: "wrong.csv", canRollBack: false, rolledBackAt: "2026-12-02T10:00:00Z", rolledBackReason: "Wrong file" };
   const withHistory = (imports: unknown[], rollback: () => Response = () => json(200, { result: { state: "rolled_back", records: 2 } })) => ({
     ...base(() => json(200, PREVIEW)),
     "GET /v1/imports": () => json(200, { imports }),
-    [`POST /v1/imports/${BATCH.batch_id}/rollback`]: rollback,
+    [`POST /v1/imports/${BATCH.batchId}/rollback`]: rollback,
   });
   it("lists earlier imports, offers rollback only where it is possible, needs a reason, and reports the result", async () => {
     const { calls } = renderAws("/staff", PERMS, withHistory([BATCH, OLD, DONE]), "organization_owner");

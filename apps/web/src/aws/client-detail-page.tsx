@@ -1,6 +1,7 @@
 import { ClientQrCard } from "./client-qr";
 import { HoursBreakdown } from "@/components/hours-breakdown";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNotificationCenter } from "./notification-center-data";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { agencyMonth, useAgencyClock } from "./agency-clock";
@@ -47,7 +48,9 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   const api = useAwsApi();
   const refresh = useRefreshClient();
   const { activeOrganizationId } = useOrganization();
-  const initial = { first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" };
+  const rules = useNotificationCenter().available;   // open-shift alerts are on: the service address needs a city AND a ZIP code
+  const savedZip = useQuery({ queryKey: ["aws-client-zip", c.clientId], enabled: rules, retry: false, queryFn: async () => ((await api.get<{ location: { zip?: string | null } | null }>(`/v1/clients/${encodeURIComponent(c.clientId)}/zip`, { organizationId: activeOrganizationId })).location?.zip ?? "") });
+  const initial = { first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", zip: "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" };
   const [form, setForm] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [dupConfirmed, setDupConfirmed] = useState(false);
@@ -55,17 +58,19 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   const dupes = useDuplicateClients(nameChanged && editing ? form.first : "", nameChanged && editing ? form.last : "", c.clientId);
   const [state, setState] = useState<{ busy: boolean; error: string | null; done: boolean }>({ busy: false, error: null, done: false });
   const key = useRef(newIdempotencyKey());
-  useEffect(() => setForm({ first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" }),
-    [c.legalFirstName, c.legalLastName, c.city, c.clientTypeId, c.caregiverDisplayCode]);
+  useEffect(() => setForm({ first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", zip: savedZip.data ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" }),
+    [c.legalFirstName, c.legalLastName, c.city, c.clientTypeId, c.caregiverDisplayCode, savedZip.data]);
   const set = (k: keyof typeof form) => (v: string) => { setForm((f) => ({ ...f, [k]: v })); key.current = newIdempotencyKey(); setState((s) => ({ ...s, done: false })); };
   async function save() {
     if (!form.first.trim() || !form.last.trim()) return setState({ busy: false, error: "Enter the client's first and last name.", done: false });
     if (nameChanged && (dupes.data ?? []).some((m) => m.match === "same_name") && !dupConfirmed) return setState({ busy: false, error: "A client with this name already exists. Confirm it is a different person, or change the name.", done: false });
+    if (rules && !form.city.trim()) return setState({ busy: false, error: "Enter the city of the service address.", done: false });
+    if (rules && !/^[0-9]{5}$/.test(form.zip.trim())) return setState({ busy: false, error: "Enter the 5-digit ZIP code of the service address.", done: false });
     setState({ busy: true, error: null, done: false });
     try {
       await api.post(`/v1/clients/${encodeURIComponent(c.clientId)}/details`, {
         organizationId: activeOrganizationId, firstName: form.first.trim(), lastName: form.last.trim(),
-        city: form.city.trim() || null, clientTypeId: form.type || null, caregiverLabel: form.label.trim() || null,
+        city: form.city.trim() || null, ...(rules ? { serviceZip: form.zip.trim() } : {}), clientTypeId: form.type || null, caregiverLabel: form.label.trim() || null,
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       await refresh();
@@ -107,7 +112,8 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="edit-first" className="block text-sm font-medium text-slate-700">First name</label><input id="edit-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="edit-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="edit-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
-        <div><label htmlFor="edit-city" className="block text-sm font-medium text-slate-700">City (optional)</label><input id="edit-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
+        <div><label htmlFor="edit-city" className="block text-sm font-medium text-slate-700">{rules ? "City of the service address" : "City (optional)"}</label><input id="edit-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
+        {rules ? <div><label htmlFor="edit-zip" className="block text-sm font-medium text-slate-700">ZIP code of the service address</label><input id="edit-zip" value={form.zip} maxLength={5} inputMode="numeric" autoComplete="off" onChange={(e) => set("zip")(e.target.value.replace(/\D/g, ""))} className={inputClass} /></div> : null}
         <ClientTypeField id="edit-type" value={form.type} onChange={set("type")} />
         <div className="sm:col-span-2"><label htmlFor="edit-label" className="block text-sm font-medium text-slate-700">Label caregivers see instead of {c.clientCode} (optional)</label><input id="edit-label" value={form.label} maxLength={40} autoComplete="off" onChange={(e) => set("label")(e.target.value)} className={inputClass} /></div>
         {nameChanged ? <DuplicateWarning matches={dupes.data} confirmed={dupConfirmed} onConfirm={setDupConfirmed} /> : null}

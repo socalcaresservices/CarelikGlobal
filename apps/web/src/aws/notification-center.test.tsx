@@ -17,7 +17,7 @@ const item = (id: string, state: "unread" | "read" | "archived", n: number) => (
 function renderAt(path: string, opts: { perms: string[]; on?: boolean; role?: string; emailAvailable?: boolean; settings?: Record<string, unknown> }) {
   const posts: Array<{ path: string; body: any }> = [];
   const gets: string[] = [];
-  const store = { items: [item(N1, "unread", 1), item(N2, "read", 2)], prefs: { inApp: true, email: true }, settings: { enabled: false, emailEnabled: false, autoNotify: false, windowHours: 48, maxRecipients: 25, ...(opts.settings ?? {}) } };
+  const store = { items: [item(N1, "unread", 1), item(N2, "read", 2)], prefs: { inApp: true, email: true }, settings: { enabled: false, emailEnabled: false, autoNotify: false, windowHours: 48, maxRecipients: 25, audience: "office", subjectTemplate: "Open shift in {city} | {date} | {time}", ...(opts.settings ?? {}) } };
   const on = opts.on ?? true;
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -31,7 +31,7 @@ function renderAt(path: string, opts: { perms: string[]; on?: boolean; role?: st
         return json(200, { changed: 1 });
       }
       if (url.pathname === "/v1/notification-preferences") { store.prefs = { inApp: body.inApp, email: body.email }; return json(200, { preferences: { coverShift: store.prefs, emailAvailable: true } }); }
-      if (url.pathname === "/v1/cover-notification-settings") { store.settings = { enabled: body.enabled, emailEnabled: body.emailEnabled, autoNotify: body.autoNotify, windowHours: body.windowHours, maxRecipients: body.maxRecipients }; return json(200, { settings: store.settings }); }
+      if (url.pathname === "/v1/cover-notification-settings") { store.settings = { enabled: body.enabled, emailEnabled: body.emailEnabled, autoNotify: body.autoNotify, windowHours: body.windowHours, maxRecipients: body.maxRecipients, audience: body.audience, subjectTemplate: body.subjectTemplate } as typeof store.settings; return json(200, { settings: store.settings }); }
       return json(200, { status: "ok" });
     }
     gets.push(url.pathname + url.search);
@@ -46,9 +46,10 @@ function renderAt(path: string, opts: { perms: string[]; on?: boolean; role?: st
       }
       case "/v1/notification-preferences": return on ? json(200, { preferences: { coverShift: store.prefs, emailAvailable: opts.emailAvailable ?? true } }) : (() => { throw new TypeError("Failed to fetch"); })();
       case "/v1/cover-notification-settings": return on ? json(200, { settings: store.settings }) : json(404, {});
+      case "/v1/cover-office-audiences": return on ? json(200, { offices: [{ officeId: "o1", officeName: "Temecula Office", audienceOverride: null }, { officeId: "o2", officeName: "Corona Office", audienceOverride: "none" }] }) : (() => { throw new TypeError("Failed to fetch"); })();
       case "/v1/cover-notification-history": return on ? json(200, { history: [
-        { notification_id: "h1", shift_id: null, caregiver_code: "CG-AAAA0001", created_at: "2026-12-01T17:00:00Z", in_app: true, read_at: null, email_status: "sent", email_attempts: 1, email_error: null, email_sent_at: "x" },
-        { notification_id: "h2", shift_id: null, caregiver_code: "CG-AAAA0002", created_at: "2026-12-01T17:00:00Z", in_app: true, read_at: "x", email_status: "failed", email_attempts: 5, email_error: "throttling_exception", email_sent_at: null }] }) : json(404, {});
+        { notificationId: "h1", shiftId: null, caregiverCode: "CG-AAAA0001", createdAt: "2026-12-01T17:00:00Z", inApp: true, readAt: null, emailStatus: "sent", emailAttempts: 1, emailError: null, emailSentAt: "x" },
+        { notificationId: "h2", shiftId: null, caregiverCode: "CG-AAAA0002", createdAt: "2026-12-01T17:00:00Z", inApp: true, readAt: "x", emailStatus: "failed", emailAttempts: 5, emailError: "throttling_exception", emailSentAt: null }] }) : json(404, {});
       case "/v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0 }, issues: [] });
       default: return json(404, { error: { code: "not_found", message: "No such endpoint." } });
     }
@@ -143,8 +144,22 @@ describe("notification centre (office)", () => {
     expect(posts.some((p) => p.path === "/v1/cover-notification-settings")).toBe(false);
     fireEvent.change(screen.getByTestId("set-reason"), { target: { value: "Pilot with two caregivers" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(posts).toContainEqual({ path: "/v1/cover-notification-settings", body: { organizationId: ORG, enabled: true, emailEnabled: true, autoNotify: false, windowHours: 48, maxRecipients: 25, reason: "Pilot with two caregivers" } }));
+    await waitFor(() => expect(posts).toContainEqual({ path: "/v1/cover-notification-settings", body: { organizationId: ORG, enabled: true, emailEnabled: true, autoNotify: false, windowHours: 48, maxRecipients: 25, audience: "office", subjectTemplate: "Open shift in {city} | {date} | {time}", reason: "Pilot with two caregivers" } }));
   });
+  it("the owner picks the audience and the subject (the service city must stay in it; a preview shows the result) and sets a per-office override", async () => {
+    const { posts } = renderAt("/notifications", { perms: STAFF, role: "owner" });
+    fireEvent.click(await screen.findByTestId("set-enabled", {}, { timeout: 15000 }));
+    fireEvent.change(screen.getByTestId("set-audience"), { target: { value: "agency" } });
+    fireEvent.change(screen.getByTestId("set-subject"), { target: { value: "{service} in {city} | {time}" } });
+    expect(screen.getByText(/Preview: Personal care in Winchester \| 1:30–5:00 PM/)).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("set-reason"), { target: { value: "Whole agency for the pilot" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(posts.find((p) => p.path === "/v1/cover-notification-settings")?.body).toMatchObject({ audience: "agency", subjectTemplate: "{service} in {city} | {time}" }));
+    const group = await screen.findByTestId("office-audiences");
+    expect(within(group).getByLabelText("Audience for Corona Office")).toHaveValue("none");
+    fireEvent.change(within(group).getByLabelText("Audience for Temecula Office"), { target: { value: "agency" } });
+    await waitFor(() => expect(posts).toContainEqual({ path: "/v1/offices/o1/cover-audience", body: expect.objectContaining({ audience: "agency" }) }));
+  }, 40000);
   it("a manager who is not the owner sees the history but no settings controls; the history is sortable and never shows an address", async () => {
     renderAt("/notifications", { perms: ["shifts.manage", "visits.read"], role: "manager" });
     const table = await screen.findByRole("table", { name: "Cover-shift notification history" }, { timeout: 15000 });

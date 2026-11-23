@@ -116,6 +116,9 @@ function Preferences() {
   );
 }
 
+/** A sample of the subject the template makes (the real one uses the shift's service city, date and time). */
+const previewSubject = (t: string) => t.replace("{city}", "Winchester").replace("{date}", "Fri, Nov 27").replace("{time}", "1:30–5:00 PM").replace("{service}", "Personal care");
+
 const STATUS_WORD: Record<string, string> = { queued: "Waiting to send", sending: "Sending", retry: "Will retry", sent: "Sent", failed: "Failed", skipped: "Not sent" };
 
 function OfficeSection() {
@@ -125,12 +128,13 @@ function OfficeSection() {
   const isOwner = hasPermission("organization.update");
   const settings = useQuery({ queryKey: ["cover-settings", activeOrganizationId], queryFn: async () => (await api.get<{ settings: CoverSettings }>("/v1/cover-notification-settings", { organizationId: activeOrganizationId })).settings, enabled: !!activeOrganizationId, retry: false });
   const history = useQuery({ queryKey: ["cover-history", activeOrganizationId], queryFn: async () => (await api.get<{ history: HistoryRow[] }>("/v1/cover-notification-history", { organizationId: activeOrganizationId })).history, enabled: !!activeOrganizationId && hasPermission("shifts.manage"), retry: false });
+  const audiences = useQuery({ queryKey: ["cover-office-audiences", activeOrganizationId], queryFn: async () => (await api.get<{ offices: Array<{ officeId: string; officeName: string; audienceOverride: "office" | "agency" | "none" | null }> }>("/v1/cover-office-audiences", { organizationId: activeOrganizationId })).offices, enabled: !!activeOrganizationId, retry: false });
   const [draft, setDraft] = useState<CoverSettings | null>(null);
   const [reason, setReason] = useState("");
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const { rows, sort } = useSortedRows(history.data ?? [], {
-    when: { get: (r) => r.created_at, kind: "date" }, caregiver: { get: (r) => r.caregiver_code }, inApp: { get: (r) => (r.in_app ? (r.read_at ? "Read" : "Unread") : "Hidden") },
-    email: { get: (r) => (r.email_status ? STATUS_WORD[r.email_status] ?? r.email_status : "Off") }, attempts: { get: (r) => r.email_attempts, kind: "number" },
+    when: { get: (r) => r.createdAt, kind: "date" }, caregiver: { get: (r) => r.caregiverCode }, inApp: { get: (r) => (r.inApp ? (r.readAt ? "Read" : "Unread") : "Hidden") },
+    email: { get: (r) => (r.emailStatus ? STATUS_WORD[r.emailStatus] ?? r.emailStatus : "Off") }, attempts: { get: (r) => r.emailAttempts, kind: "number" },
   });
   if (settings.isError || !settings.data) return settings.isLoading ? null : <p role="alert" className="text-sm text-red-700">Cover-shift settings could not be loaded.</p>;
   const s = draft ?? settings.data;
@@ -140,6 +144,14 @@ function OfficeSection() {
     try {
       await api.post("/v1/cover-notification-settings", { organizationId: activeOrganizationId, ...s, reason: reason.trim() }, { idempotencyKey: newIdempotencyKey() });
       setDraft(null); setReason(""); await queryClient.invalidateQueries({ queryKey: ["cover-settings"] }); await queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+      setNote({ ok: true, text: "Saved." });
+    } catch (cause) { setNote({ ok: false, text: message(cause, "Could not save. Nothing changed.") }); }
+  }
+  async function setOverride(officeId: string, audience: "office" | "agency" | "none" | null) {
+    setNote(null);
+    try {
+      await api.post(`/v1/offices/${officeId}/cover-audience`, { organizationId: activeOrganizationId, audience, reason: "Changed in Notifications settings" }, { idempotencyKey: newIdempotencyKey() });
+      await queryClient.invalidateQueries({ queryKey: ["cover-office-audiences"] });
       setNote({ ok: true, text: "Saved." });
     } catch (cause) { setNote({ ok: false, text: message(cause, "Could not save. Nothing changed.") }); }
   }
@@ -157,6 +169,29 @@ function OfficeSection() {
             <label className="text-sm">Automatic window (hours before the shift)<input className={inputClass} inputMode="numeric" value={s.windowHours} onChange={(e) => setDraft({ ...s, windowHours: num(e.target.value, 1, 336, s.windowHours) })} /></label>
             <label className="text-sm">Most caregivers per shift<input className={inputClass} inputMode="numeric" value={s.maxRecipients} onChange={(e) => setDraft({ ...s, maxRecipients: num(e.target.value, 1, 200, s.maxRecipients) })} /></label>
           </div>
+          <label className="block text-sm">Who is told
+            <select className={inputClass} value={s.audience} onChange={(e) => setDraft({ ...s, audience: e.target.value as "office" | "agency" })} data-testid="set-audience">
+              <option value="office">Caregivers of the coordinating office</option><option value="agency">Every eligible caregiver of the agency</option>
+            </select>
+          </label>
+          <label className="block text-sm">Subject line
+            <input className={inputClass} value={s.subjectTemplate} onChange={(e) => setDraft({ ...s, subjectTemplate: e.target.value })} data-testid="set-subject" />
+            <span className="text-xs text-og-sub">Must include {"{city}"} (the service city). Also available: {"{date}"}, {"{time}"}, {"{service}"}. Preview: {previewSubject(s.subjectTemplate)}</span>
+          </label>
+          {audiences.data && audiences.data.length > 0 ? (
+            <fieldset className="space-y-1" data-testid="office-audiences">
+              <legend className="text-sm font-semibold text-og-ink">Per office (overrides the setting above)</legend>
+              {audiences.data.map((o) => (
+                <label key={o.officeId} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="w-44">{o.officeName}</span>
+                  <select className="rounded-lg border border-og-line bg-og-card px-2 py-1" aria-label={`Audience for ${o.officeName}`} value={o.audienceOverride ?? ""}
+                    onChange={(e) => void setOverride(o.officeId, e.target.value === "" ? null : (e.target.value as "office" | "agency" | "none"))}>
+                    <option value="">Use the setting</option><option value="office">Its own caregivers</option><option value="agency">Whole agency</option><option value="none">Nobody (no alerts)</option>
+                  </select>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
           {draft ? (
             <div className="flex flex-wrap items-end gap-2">
               <label className="text-sm">Reason for the change<input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} data-testid="set-reason" /></label>
@@ -179,11 +214,11 @@ function OfficeSection() {
                 <SortTh sort={sort} column="inApp" className="py-1 pr-3">In the app</SortTh><SortTh sort={sort} column="email" className="py-1 pr-3">Email</SortTh><SortTh sort={sort} column="attempts" kind="number" className="py-1">Attempts</SortTh>
               </tr></thead>
               <tbody>{rows.map((r) => (
-                <tr key={r.notification_id} className="border-t border-og-line">
-                  <td className="py-1 pr-3 whitespace-nowrap">{formatNumericDate(r.created_at)} {formatClockTime(r.created_at)}</td><td className="py-1 pr-3">{r.caregiver_code ?? "—"}</td>
-                  <td className="py-1 pr-3">{r.in_app ? (r.read_at ? "Read" : "Unread") : "Hidden by preference"}</td>
-                  <td className="py-1 pr-3">{r.email_status ? STATUS_WORD[r.email_status] ?? r.email_status : "Off"}{r.email_error ? <span className="block text-xs text-og-sub">{r.email_error.replace(/_/g, " ")}</span> : null}</td>
-                  <td className="py-1">{r.email_attempts ?? "—"}</td>
+                <tr key={r.notificationId} className="border-t border-og-line">
+                  <td className="py-1 pr-3 whitespace-nowrap">{formatNumericDate(r.createdAt)} {formatClockTime(r.createdAt)}</td><td className="py-1 pr-3">{r.caregiverCode ?? "—"}</td>
+                  <td className="py-1 pr-3">{r.inApp ? (r.readAt ? "Read" : "Unread") : "Hidden by preference"}</td>
+                  <td className="py-1 pr-3">{r.emailStatus ? STATUS_WORD[r.emailStatus] ?? r.emailStatus : "Off"}{r.emailError ? <span className="block text-xs text-og-sub">{r.emailError.replace(/_/g, " ")}</span> : null}</td>
+                  <td className="py-1">{r.emailAttempts ?? "—"}</td>
                 </tr>))}</tbody>
             </table></div>
           ) : null}

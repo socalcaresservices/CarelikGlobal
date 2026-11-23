@@ -10,7 +10,7 @@ export interface EmailRequest { to?: unknown; subject?: unknown; text?: unknown;
 export type EmailResponse = { ok: true; messageId: string } | { ok: false; error: string; transient: boolean };
 type Ses = Pick<SESv2Client, "send">;
 
-export function createEmailHandler(ses: Ses, from: string, configurationSet?: string, log: (line: string) => void = console.log) {
+export function createEmailHandler(ses: Ses, from: string, configurationSet?: string, log: (line: string) => void = console.log, replyTo?: string) {
   const outcome = (r: EmailResponse) => { log(JSON.stringify({ action: "send", outcome: r.ok ? "ok" : r.error })); return r; };
   return async function handler(event: EmailRequest): Promise<EmailResponse> {
     const to = typeof event?.to === "string" ? event.to.trim() : "";
@@ -24,6 +24,7 @@ export function createEmailHandler(ses: Ses, from: string, configurationSet?: st
       const out = await ses.send(new SendEmailCommand({
         FromEmailAddress: from,
         Destination: { ToAddresses: [to] },
+        ...(replyTo ? { ReplyToAddresses: [replyTo] } : {}),
         Content: { Simple: { Subject: { Data: subject, Charset: "UTF-8" }, Body: { Text: { Data: text, Charset: "UTF-8" }, ...(html ? { Html: { Data: html, Charset: "UTF-8" } } : {}) } } },
         ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),
       }));

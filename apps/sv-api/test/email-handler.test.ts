@@ -27,4 +27,11 @@ describe("email Lambda", () => {
     expect(await mk("MailFromDomainNotVerifiedException")(ok)).toMatchObject({ transient: false });
     expect(JSON.stringify(await mk("MessageRejected")(ok))).not.toContain("person@");
   });
+  it("adds the configured Reply-To to the message and omits it when none is configured", async () => {
+    const sent: any[] = [];
+    const mk = (replyTo?: string) => createEmailHandler(ses(async (c) => { sent.push(c.input); return { MessageId: "m" }; }), "Ogevia <scheduling@example.invalid>", undefined, () => {}, replyTo);
+    await mk("admin@example.invalid")(ok); await mk()(ok);
+    expect(sent[0].ReplyToAddresses).toEqual(["admin@example.invalid"]); expect(sent[1]).not.toHaveProperty("ReplyToAddresses");
+  });
 });
+
