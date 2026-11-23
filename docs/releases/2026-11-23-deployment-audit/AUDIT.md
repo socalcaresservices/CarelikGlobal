@@ -41,7 +41,7 @@ The Nov 15 go-live document is NOT in the repository: `docs/releases/2026-11-20-
 | 31 | Save-to-phone help on the public care request page | NO | 1bd7f28a (branch claude/peaceful-clarke-uw8l1h) | IMPLEMENTED BUT NOT DEPLOYED (the commit is not in c7691b63 and not on main) |
 
 ## A. Features live in production
-Items 1-16, 18, 20-27 above. Production state: ledger 111 rows (0112 last), 276 routes, web at c7691b63, API code equal in source trees to TEST code at 7fca7784.
+Items 1-16, 18, 20-27 above. Production state per the operator output: ledger 111 rows (0112 last), web at c7691b63, nine routes added in each of the two releases (the route total of 276 is 258 recorded before the Offices release plus 9 plus 9; it was not re-counted), API code equal in source trees to TEST code at 7fca7784.
 
 ## B. Completed but not yet deployed
 - Item 29 staff bulk import (switch OFF, routes absent).
