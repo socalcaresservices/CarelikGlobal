@@ -63,3 +63,6 @@ Approved by the owner for TEST only. Claude cannot run it: the build container h
 4. Rollback (reverse order 0116 -> 0113): `OGEVIA_DEPLOY_APPROVAL=<ref> bash TEST_PENDING_LEDGER.sh rollback 0116`.
 5. This only creates tables and functions. The new features stay OFF: no route exists until a separate TEST deploy turns a switch on.
 6. Not part of this runbook: the TEST ledger is read, not assumed. If `probe` reports prerequisites missing (0091, 0105, 0106, 0110, 0111), stop and report the line it printed.
+
+### TEST migration status (2026-11-23)
+Owner ran `TEST_PENDING_LEDGER.sh` in TEST through `TEST_DB_SESSION.sh`, one migration at a time, with RDS snapshot `ogevia-test-rt2-pre-0113` as the backup gate. Reported by the owner (output pasted in chat, not independently observed by Claude): 0113 applied and verified (60/60 checks), 0114 (14/14), 0115 (11/11), 0116 (19/19); TEST ledger 111/0112 -> 115/0116. Scope of the check: objects, grants, definer/search_path and ledger rows only. Not yet verified in TEST: any behaviour of the new functions, the API routes, the web screens, SES sending, the Cognito trigger. All feature switches remain OFF; no TEST deploy has happened. Keep the snapshot until TEST acceptance; it is the TEST rollback point (the `down` scripts are the other).
