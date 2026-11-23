@@ -72,7 +72,7 @@ beforeAll(async () => {
   migSha = /migrations set sha256: ([0-9a-f]{64})/.exec(b.stdout)![1]!; rollSha = /rollback set sha256:\s+([0-9a-f]{64})/.exec(b.stdout)![1]!;
   await root(async (c) => { for (const n of ["ogevia_prd", "ogevia_sv_test"]) { await c.query(`drop database if exists ${n} with (force)`); await c.query(`create database ${n}`); } });
   await buildTo0046("ogevia_prd");
-  const t = await dbClient("ogevia_sv_test"); try { await migrate(t); } finally { await t.end(); }
+  const t = await dbClient("ogevia_sv_test"); try { await migrate(t, undefined, { upTo: "0085" }); } finally { await t.end(); } // the approved release is 0001-0085; later migrations belong to a later package
 });
 afterAll(async () => { await root(async (c) => { for (const n of ["ogevia_prd", "ogevia_sv_test"]) await c.query(`drop database if exists ${n} with (force)`); }); });
 
