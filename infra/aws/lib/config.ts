@@ -123,6 +123,20 @@ export interface OgeviaEnvironmentConfig {
       /** Managed-login domain prefix, globally unique in the region: https://<prefix>.auth.<region>.amazoncognito.com */
       readonly domainPrefix: string;
     };
+    /**
+     * Phase 7.2 (stabilization): branded invitation email for the DEDICATED pool. ABSENT = Cognito's default invitation email and the
+     * Cognito default sender, exactly as live today (the synthesized pool is unchanged). Present = the pool's invitation message uses
+     * lib/invitation-email.ts, and `sender` (optional) switches sending to a verified Amazon SES identity. Not enabled anywhere; enabling it
+     * changes the production pool's message settings (an in-place update, no replacement) and needs the owner's approval and a verified SES identity.
+     */
+    readonly invitationEmail?: {
+      readonly companyName: string;
+      readonly logoUrl?: string;
+      readonly accentColor?: string;
+      readonly supportEmail?: string;
+      /** SES sender: `from` as "Name <address>" and the ARN of the verified SES identity in this region. Both or neither. */
+      readonly sender?: { readonly from: string; readonly sesIdentityArn: string };
+    };
   };
   /**
    * Permanent hostnames (applied live 2026-10-23, Netlify DNS CNAMEs to the distribution). The CloudFront URL keeps working as a fallback.

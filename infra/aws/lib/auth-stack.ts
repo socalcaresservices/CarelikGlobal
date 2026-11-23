@@ -1,6 +1,7 @@
 import { CfnOutput, RemovalPolicy, Stack, Token, Validations, type StackProps } from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import type { Construct } from "constructs";
+import { assertCognitoTemplate, renderInvitationEmail } from "./invitation-email.js";
 import { assertAuthConfig, type OgeviaEnvironmentConfig, customOriginsFor } from "./config.js";
 
 export interface ProductionAuthStackProps extends StackProps {
@@ -40,6 +41,15 @@ export class ProductionAuthStack extends Stack {
       throw new Error("The production web origin must be a bare https origin");
     }
 
+    // Branded invitation (OFF unless config.auth.invitationEmail is set): the pool then carries the rendered message and, optionally, an SES sender.
+    const invite = config.auth.invitationEmail;
+    let inviteMessage: { emailSubject: string; emailMessage: string } | undefined;
+    if (invite) {
+      const rendered = renderInvitationEmail({ companyName: invite.companyName, signInUrl: Token.isUnresolved(webOrigin) ? "https://app.ogevia.com" : webOrigin, ...(invite.logoUrl ? { logoUrl: invite.logoUrl } : {}), ...(invite.accentColor ? { accentColor: invite.accentColor } : {}), ...(invite.supportEmail ? { supportEmail: invite.supportEmail } : {}) });
+      assertCognitoTemplate(rendered);
+      inviteMessage = { emailSubject: rendered.subject, emailMessage: rendered.html };
+      if (invite.sender && !/^arn:aws:ses:[a-z0-9-]+:\d{12}:identity\/.+$/.test(invite.sender.sesIdentityArn)) throw new Error("invitation email: sender.sesIdentityArn must be an SES identity ARN");
+    }
     this.userPool = new cognito.CfnUserPool(this, "UserPool", {
       userPoolName: `ogevia-${config.envName}`,
       deletionProtection: "ACTIVE",
@@ -48,7 +58,7 @@ export class ProductionAuthStack extends Stack {
       autoVerifiedAttributes: ["email"],
       mfaConfiguration: "ON",
       enabledMfas: ["SOFTWARE_TOKEN_MFA"],
-      adminCreateUserConfig: { allowAdminCreateUserOnly: true },
+      adminCreateUserConfig: { allowAdminCreateUserOnly: true, ...(inviteMessage ? { inviteMessageTemplate: inviteMessage } : {}) },
       policies: {
         passwordPolicy: {
           minimumLength: 12,
@@ -62,7 +72,7 @@ export class ProductionAuthStack extends Stack {
         signInPolicy: { allowedFirstAuthFactors: ["PASSWORD"] },
       },
       accountRecoverySetting: { recoveryMechanisms: [{ name: "verified_email", priority: 1 }] },
-      emailConfiguration: { emailSendingAccount: "COGNITO_DEFAULT" },
+      emailConfiguration: invite?.sender ? { emailSendingAccount: "DEVELOPER", from: invite.sender.from, sourceArn: invite.sender.sesIdentityArn } : { emailSendingAccount: "COGNITO_DEFAULT" },
       schema: [{ name: "email", attributeDataType: "String", required: true, mutable: true }],
       userAttributeUpdateSettings: { attributesRequireVerificationBeforeUpdate: ["email"] },
     });
