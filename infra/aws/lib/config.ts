@@ -293,7 +293,7 @@ const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
   existing: PRODUCTION_FOUNDATION,
   envName: "prd",
-  features: { staffManagement: true, signInOverride: true, bulkImport: false, staffDuplicates: false },   // production: staffManagement approved 2026-10-25 with migration 0086 (docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md). signInOverride: owner request 2026-11-15, needs migration 0103 (in the production ledger since 2026-11-11) and adds exactly two routes; see docs/releases/2026-11-15-signin-override-production/. bulkImport and staffDuplicates stay off.
+  features: { staffManagement: true, signInOverride: true, bulkImport: false, staffDuplicates: false, requestCleanup: true, offices: true, officeAssignments: true, assignmentHistory: true },   // production: staffManagement approved 2026-10-25 with migration 0086 (docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md). signInOverride: owner request 2026-11-15, needs migration 0103 (in the production ledger since 2026-11-11) and adds exactly two routes; see docs/releases/2026-11-15-signin-override-production/. bulkImport and staffDuplicates stay off.
   customDomains: { hostnames: ["app.ogevia.com", "admin.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
   // Separate sign-in from the pilot: a dedicated user pool and client (lib/auth-stack.ts). `existing.cognitoUserPoolId` and
   // `auth.appClientId` are inherited from PROD only so they can be NAMED as forbidden for production; its API never accepts them.

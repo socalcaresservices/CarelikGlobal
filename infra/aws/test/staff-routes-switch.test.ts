@@ -34,6 +34,10 @@ describe("staffManagement route switch", () => {
     expect(testOnly).toEqual(["POST /v1/imports/{kind}"]);
     const prodKeys = have.map((r) => r.key).sort();
     for (const k of testOnly) expect(prodKeys.includes(k), `${k} must not be in production`).toBe(false);
-    expect(routeKeys("prod").map((r) => r.key).filter((k) => !testOnly.includes(k)).sort()).toEqual(prodKeys);
+    // Production also has the release switches ON (request cleanup, offices, office assignments, assignment history: the live state since 2026-11-21/22); TEST patches them per release.
+    const released = SERVICE_VERIFICATION_ROUTES.filter((r) => ["requestCleanup", "offices", "officeAssignments", "assignmentHistory"].includes(r.feature ?? "")).map((r) => `${r.method} ${r.path}`);
+    expect(released.length).toBe(18);
+    for (const k of released) expect(prodKeys.includes(k), `${k} must be in production`).toBe(true);
+    expect(routeKeys("prod").map((r) => r.key).filter((k) => !testOnly.includes(k)).sort()).toEqual(prodKeys.filter((k) => !released.includes(k)));
   });
 });
