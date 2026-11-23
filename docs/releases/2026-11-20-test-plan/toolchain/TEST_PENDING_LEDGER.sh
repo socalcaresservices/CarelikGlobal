@@ -4,7 +4,7 @@
 # ogevia_meta.schema_migrations in the same transaction; rollback removes the row in the same transaction).
 #
 #   TEST_PENDING_LEDGER.sh probe    <0113|0114|0115|0116>   read-only: identity, ledger, prerequisites, target absent
-#   TEST_PENDING_LEDGER.sh apply    <migration>             needs OGEVIA_DEPLOY_APPROVAL + OGEVIA_TEST_BACKUP (+ .sha256)
+#   TEST_PENDING_LEDGER.sh apply    <migration>             needs OGEVIA_DEPLOY_APPROVAL + a backup: OGEVIA_TEST_SNAPSHOT=<fresh RDS snapshot id of ogevia-postgres> or OGEVIA_TEST_BACKUP=<dump> (+ .sha256)
 #   TEST_PENDING_LEDGER.sh verify   <migration>             read-only: ledger row with the file's checksum, VERIFY_PENDING.sql all true
 #   TEST_PENDING_LEDGER.sh rollback <migration>             needs OGEVIA_DEPLOY_APPROVAL; runs the down script + removes the row atomically
 #
@@ -66,11 +66,23 @@ case "$MODE" in
   apply)
     require_approval
     [[ -z "$MISSING" && "$HAS_ROW" == 0 ]] || stop "prerequisites missing or $MIG already recorded; run probe"
-    BK="${OGEVIA_TEST_BACKUP:-}"
-    [[ -n "$BK" && -s "$BK" && -f "$BK.sha256" ]] || stop "set OGEVIA_TEST_BACKUP to a NON-EMPTY TEST logical backup (with its .sha256) taken for this release"
-    [[ "$(stat -c %s "$BK")" -ge 100000 ]] || stop "the backup is smaller than 100 kB; a real TEST dump is larger. Check that pg_dump finished"
-    if command -v pg_restore >/dev/null; then pg_restore --list "$BK" >/dev/null 2>&1 || stop "the backup is not a readable pg_dump custom-format archive"; fi
-    (cd "$(dirname "$BK")" && sha256sum --check --status "$(basename "$BK").sha256") || stop "backup checksum does not match"
+    # Backup gate: EITHER an RDS snapshot of the TEST instance (OGEVIA_TEST_SNAPSHOT=<snapshot id>) OR a logical dump (OGEVIA_TEST_BACKUP=<file>).
+    SNAP="${OGEVIA_TEST_SNAPSHOT:-}"; BK="${OGEVIA_TEST_BACKUP:-}"
+    if [[ -n "$SNAP" ]]; then
+      command -v aws >/dev/null && command -v jq >/dev/null || stop "the snapshot check needs the aws CLI and jq"
+      [[ "$SNAP" =~ ^[A-Za-z][A-Za-z0-9-]{0,254}$ ]] || stop "the snapshot id looks wrong"
+      INFO="$(AWS_PAGER='' aws --region us-west-2 --cli-connect-timeout 5 --cli-read-timeout 30 rds describe-db-snapshots --db-snapshot-identifier "$SNAP" --query 'DBSnapshots[0].{status:Status,instance:DBInstanceIdentifier,created:SnapshotCreateTime,type:SnapshotType}' --output json 2>/dev/null)" || stop "cannot read snapshot $SNAP (wrong id, region or permissions)"
+      [[ "$(jq -r .instance <<<"$INFO")" == ogevia-postgres ]] || stop "snapshot $SNAP is not a snapshot of the TEST instance ogevia-postgres"
+      [[ "$(jq -r .status <<<"$INFO")" == available ]] || stop "snapshot $SNAP is not available yet (status $(jq -r .status <<<"$INFO")); wait for it to finish"
+      CREATED="$(jq -r .created <<<"$INFO")"; AGE=$(( $(date +%s) - $(date -d "$CREATED" +%s 2>/dev/null || echo 0) ))
+      [[ "$AGE" -ge -300 && "$AGE" -le 86400 ]] || stop "snapshot $SNAP is older than 24 hours (or has no creation time); take a fresh one for this release"
+      echo "backup gate: RDS snapshot $SNAP of ogevia-postgres, available, taken $((AGE/60)) min ago"
+    else
+      [[ -n "$BK" && -s "$BK" && -f "$BK.sha256" ]] || stop "set OGEVIA_TEST_SNAPSHOT to a fresh available snapshot of ogevia-postgres, or OGEVIA_TEST_BACKUP to a NON-EMPTY dump (with its .sha256)"
+      [[ "$(stat -c %s "$BK")" -ge 100000 ]] || stop "the backup is smaller than 100 kB; a real TEST dump is larger. Check that pg_dump finished"
+      if command -v pg_restore >/dev/null; then pg_restore --list "$BK" >/dev/null 2>&1 || stop "the backup is not a readable pg_dump custom-format archive"; fi
+      (cd "$(dirname "$BK")" && sha256sum --check --status "$(basename "$BK").sha256") || stop "backup checksum does not match"
+    fi
     verify_sql absent || stop "pre-check failed"
     set +e
     psql -X -v ON_ERROR_STOP=1 -1 \
