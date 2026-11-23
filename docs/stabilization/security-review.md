@@ -6,16 +6,16 @@ Tool: `pnpm audit` (registry advisory data at the time of the run, 2026-11-23; t
 ## Before and after
 | Scope | Before | After |
 |---|---|---|
-| Production dependencies (`pnpm audit --prod`) | 5 advisories: 2 high (react-router; zod), 3 moderate (qs ×3) | **0** |
-| All dependencies including dev | 53 (2 low, 23 moderate, 24 high, 4 critical) | 21 (8 moderate, 9 high, 4 critical) — every one dev-only (below) |
+| Production dependencies (`pnpm audit --prod`) | 5 advisories: 2 high (react-router; zod), 3 moderate (qs ×3) | **0** (re-run after the final change set; see validation-report.md) |
+| All dependencies including dev | 53 (2 low, 23 moderate, 24 high, 4 critical) | see validation-report.md; remaining are dev-only (below) |
 
 ## The named items
 | Item | Finding | Action | Breaking change |
 |---|---|---|---|
 | react-router (web) | 7.18.1: high, "RSC mode CSRF bypass allows action execution" (≥7.12.0 <7.18.2). **Not reachable**: the web app uses the data-router/BrowserRouter model, not RSC mode (INFERRED from imports) | `react-router-dom` `^7.1.1` → `^7.18.6` (resolved 7.18.6) | None (same major) |
-| zod | 3.25.76 (web, shared): high, memory exhaustion validating oversized constrained collections (fixed in 4.x) | `zod` `^3.24.1` → `^4.6.7` in `apps/web` and `packages/shared` | Major. `packages/shared` (13 files) and `apps/web/src/env.ts` compile unchanged; shared suite 118/118 pass. `@hookform/resolvers` 3.x is **not used** with zod anywhere (grep), so its zod-4 incompatibility does not apply. Full gate results: `validation-report.md` |
+| zod | 3.25.76 (web, shared): high, memory exhaustion validating oversized constrained collections (fixed in 4.x) | `zod` `^3.24.1` → `^4.6.7` in `apps/web` and `packages/shared` | Major (does it enter the API bundle? The release-discovery gate still passes, so the API bundle is byte-identical). `packages/shared` (13 files) and `apps/web/src/env.ts` compile unchanged; shared suite 118/118 pass. `@hookform/resolvers` 3.x is **not used** with zod anywhere (grep), so its zod-4 incompatibility does not apply. Full gate results: `validation-report.md` |
 | qs | 6.15.3 via `stripe@18.5.0` (apps/netlify-functions): 3 moderate DoS | root `pnpm.overrides` `"qs@<6.16.1": "^6.16.1"` (resolved 6.17.1) | None expected; netlify-functions is the legacy Supabase/Stripe path |
-| Safe in-range updates | outdated | `pnpm update -r` within declared ranges: @aws-sdk 3.1144→3.1175 (sv-api), jose 6.2.18, @tanstack/react-query 5.108.3, react-hook-form 7.92, supabase-js 2.119.2, vite 6.4.6, TypeScript 5.9.3, tsx, vitest 2.1.9, tailwind patch levels, postcss | Minor/patch only |
+| In-range updates (@aws-sdk, jose, TypeScript, vitest…) | **Tried and reverted.** `pnpm update -r` changed the API Lambda bundle (AWS SDK 3.1144→3.1175), which broke the pinned production release-discovery gate (`prd-release-discovery.db.test.ts`: "the RELEASE code asset key is 79e0…, not the pinned eab9…"; 5 failures; with the upgrade reverted the same file passes 31/31 — computed both ways). A bundle change means a new production API deploy, which is a release decision, not a stabilization side effect | None. Revisit as a planned API release with its own `cdk diff` |
 | Deliberately NOT upgraded | `aws-cdk-lib` 2.272 → 2.278, `aws-cdk` and `cdk-nag` 3.1: a CDK library change can alter synthesized templates for a pinned, production-aligned stack; needs a `cdk diff` against production by the owner's operator. `@types/react`/`react` 19, `@eslint/js` 10, `@types/node` 26, `@testing-library/jest-dom` 8, `@hookform/resolvers` 7, `@netlify/functions` 6: major upgrades with no security need | Leave; revisit as a planned task |
 
 ## Remaining advisories (all dev-time, none in a deployed bundle)
