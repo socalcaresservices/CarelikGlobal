@@ -1,3 +1,4 @@
+import type { OfficeLook } from "@carelik/shared";
 import { ApiError } from "./errors";
 
 /**
@@ -18,15 +19,15 @@ import { ApiError } from "./errors";
  */
 export interface IdentityAdmin {
   /** Creates the sign-in (Cognito emails the invitation) or finds the existing one. */
-  invite(email: string): Promise<{ sub: string; existingAccount: boolean }>;
+  invite(email: string, look?: OfficeLook): Promise<{ sub: string; existingAccount: boolean }>;
   /** Re-sends the invitation email to a person who has not set their password yet. */
-  resend(email: string): Promise<void>;
+  resend(email: string, look?: OfficeLook): Promise<void>;
   /** Switches a sign-in off or on in Cognito. `sub` is the person's Cognito identifier. Disabled people cannot sign in; nothing is deleted. */
   setEnabled(sub: string, enabled: boolean): Promise<void>;
 }
 
 export type IdentityRequest =
-  | { action: "invite" | "resend"; email: string }
+  | { action: "invite" | "resend"; email: string; look?: OfficeLook }
   | { action: "disable" | "enable"; sub: string };
 export type IdentityResponse =
   | { ok: true; sub?: string; existingAccount?: boolean }
@@ -67,13 +68,13 @@ export function lambdaIdentityAdmin(invoke: (request: IdentityRequest) => Promis
     return response;
   };
   return {
-    async invite(email) {
-      const r = await call({ action: "invite", email });
+    async invite(email, look) {
+      const r = await call({ action: "invite", email, ...(look && Object.keys(look).length ? { look } : {}) });
       if (typeof r.sub !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(r.sub)) throw identityError("failed");
       return { sub: r.sub, existingAccount: r.existingAccount === true };
     },
-    async resend(email) {
-      await call({ action: "resend", email });
+    async resend(email, look) {
+      await call({ action: "resend", email, ...(look && Object.keys(look).length ? { look } : {}) });
     },
     async setEnabled(sub, enabled) {
       await call({ action: enabled ? "enable" : "disable", sub });
@@ -85,8 +86,8 @@ export function lambdaIdentityAdmin(invoke: (request: IdentityRequest) => Promis
 export class MemoryIdentityAdmin implements IdentityAdmin {
   readonly users = new Map<string, { sub: string; confirmed: boolean }>();
   readonly calls: IdentityRequest[] = [];
-  async invite(email: string) {
-    this.calls.push({ action: "invite", email });
+  async invite(email: string, look?: OfficeLook) {
+    this.calls.push({ action: "invite", email, ...(look ? { look } : {}) });
     const existing = this.users.get(email);
     if (existing) return { sub: existing.sub, existingAccount: existing.confirmed };
     const sub = crypto.randomUUID();
@@ -98,8 +99,8 @@ export class MemoryIdentityAdmin implements IdentityAdmin {
     this.calls.push({ action: enabled ? "enable" : "disable", sub });
     if (enabled) this.disabled.delete(sub); else this.disabled.add(sub);
   }
-  async resend(email: string) {
-    this.calls.push({ action: "resend", email });
+  async resend(email: string, look?: OfficeLook) {
+    this.calls.push({ action: "resend", email, ...(look ? { look } : {}) });
     const u = this.users.get(email);
     if (!u) throw identityError("not_found");
     if (u.confirmed) throw identityError("already_set_up");

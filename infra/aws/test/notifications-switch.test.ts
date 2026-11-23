@@ -47,7 +47,7 @@ describe("notifications release switch", () => {
     expect((fn.Properties as any).VpcConfig).toBeUndefined();
     expect((fn.Properties as any).Environment.Variables).toEqual({ SES_FROM: "SoCal Care <no-reply@ogevia.com>" });
     const stmts = Object.values(t.findResources("AWS::IAM::ManagedPolicy")).flatMap((p) => (p.Properties as any).PolicyDocument.Statement as any[]);
-    const ses = stmts.filter((s) => [].concat(s.Action).includes("ses:SendEmail"));
+    const ses = stmts.filter((s) => ([] as string[]).concat(s.Action).includes("ses:SendEmail"));
     expect(ses).toHaveLength(1); expect(ses[0].Resource).toEqual(ARN);
     expect(stmts.some((s) => s.Sid === "InvokeNotificationEmail")).toBe(true);
     const handler = Object.values(t.findResources("AWS::Lambda::Function")).find((f) => (f.Properties as any).Description === "Ogevia Service Verification API")!;
@@ -62,5 +62,18 @@ describe("notifications release switch", () => {
   it("refuses a malformed sender or identity", () => {
     expect(() => api({ ...withCfg(ENVIRONMENTS.prd, true), notificationEmail: { from: "not an address", sesIdentityArn: ARN } } as OgeviaEnvironmentConfig)).toThrow(/notificationEmail.from/);
     expect(() => api({ ...withCfg(ENVIRONMENTS.prd, true), notificationEmail: { from: "a@b.co", sesIdentityArn: "arn:aws:s3:::x" } } as OgeviaEnvironmentConfig)).toThrow(/SES identity ARN/);
+  });
+});
+
+describe("invitation branding release switch (0114)", () => {
+  const BR = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "invitationBranding").map((r) => `${r.method} ${r.path}`).sort();
+  it("marks exactly the two office-branding routes, OFF today, and with the switch on they require a JWT and nothing else changes", () => {
+    expect(BR).toEqual(["GET /v1/office-branding", "POST /v1/offices/{officeId}/branding"]);
+    for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
+      expect(base.features.invitationBranding ?? false).toBe(false);
+      const off = routeKeys(api(base)); const on = routeKeys(api({ ...base, features: { ...base.features, invitationBranding: true } } as OgeviaEnvironmentConfig));
+      for (const k of BR) { expect(off.map((r) => r.RouteKey)).not.toContain(k); expect(on.find((r) => r.RouteKey === k)).toMatchObject({ AuthorizationType: "JWT" }); }
+      expect(on.length).toBe(off.length + 2);
+    }
   });
 });

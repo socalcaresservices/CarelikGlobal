@@ -90,7 +90,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -340,6 +340,9 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/people-facets", feature: "officeAssignments" },
   { method: apigw.HttpMethod.GET, path: "/v1/assignment-history", feature: "assignmentHistory" },
   // Release Train 2 (0113): cover-shift notifications and the notification centre. OFF unless features.notifications.
+  // Release Train 2 (0114): each office's look for invitation emails. OFF unless features.invitationBranding.
+  { method: apigw.HttpMethod.GET, path: "/v1/office-branding", feature: "invitationBranding" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/branding", feature: "invitationBranding" },
   { method: apigw.HttpMethod.GET, path: "/v1/notification-center", feature: "notifications" },
   { method: apigw.HttpMethod.POST, path: "/v1/notification-center/mark", feature: "notifications" },
   { method: apigw.HttpMethod.GET, path: "/v1/notification-preferences", feature: "notifications" },
@@ -759,6 +762,7 @@ export class ServiceVerificationApiStack extends Stack {
         // Lambda Node.js 20+: adds the Amazon RDS CA bundle for verified TLS.
         NODE_EXTRA_CA_CERTS: "/var/runtime/ca-cert.pem",
         IDENTITY_FUNCTION_NAME: identityFunctionName(config),
+        ...(config.features.invitationBranding && config.auth.invitationEmail ? { INVITATION_BRANDING: "on" } : {}),
         ...(notificationEmail ? { EMAIL_FUNCTION_NAME: emailFunctionName(config), APP_ORIGIN: customOriginsFor(config)[0] ?? "https://app.invalid" } : {}),
       },
     });

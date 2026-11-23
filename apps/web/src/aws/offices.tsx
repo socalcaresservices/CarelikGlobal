@@ -11,6 +11,7 @@ import { HelpLine } from "./ui/help-line";
 import { CA_COUNTIES } from "./ca-counties";
 import { AssignmentHistory, ClientServiceCountyControl, OfficeAssignmentsControl } from "./office-assignments";
 import { useOffices } from "./offices-data";
+import { InvitationLook } from "./invitation-look";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -19,7 +20,7 @@ const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py
 export function OfficesPage() {
   const api = useAwsApi();
   const queryClient = useQueryClient();
-  const { activeOrganizationId, hasPermission } = useOrganization();
+  const { activeOrganizationId, activeOrganization, hasPermission } = useOrganization();
   const { offices, available, loading } = useOffices();
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<{ id: string; kind: "edit" | "retire"; text: string; address: string; city: string; zip: string; county: string } | null>(null);
@@ -138,6 +139,7 @@ export function OfficesPage() {
               ))}
             </ul>
           )}
+          <InvitationLook companyName={activeOrganization?.displayName ?? "Your agency"} />
         </>
       ) : null}
       {state.error ? <p role="alert" className="text-sm text-red-700">{state.error}</p> : null}

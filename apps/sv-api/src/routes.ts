@@ -7,6 +7,7 @@ import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportPa
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
 import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
+import { sanitizeOfficeLook, type OfficeLook } from "@carelik/shared";
 import type { IdentityAdmin } from "./identity";
 import {
   date,
@@ -308,6 +309,18 @@ function exportFilename(report: ReportKey, p: ExportParams): string {
 
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
+/**
+ * Release Train 2 (0114): the caregiver's office look for the invitation email. Only when INVITATION_BRANDING=on (set by CDK together with the Cognito trigger), and it
+ * can never block an invitation: any failure (for example 0114 not applied) means the company look.
+ */
+async function invitationLook(tx: (work: (db: Queryable) => Promise<unknown>) => Promise<unknown>, org: string, caregiverRecordId: string): Promise<OfficeLook | undefined> {
+  if (process.env.INVITATION_BRANDING !== "on") return undefined;
+  try {
+    const raw = await tx(async (db) => (await first(db, "select ogevia_api.get_invitation_look($1,$2) as r", [org, caregiverRecordId])).r);
+    const look = sanitizeOfficeLook(raw);
+    return Object.keys(look).length > 0 ? look : undefined;
+  } catch { return undefined; }
+}
 
 /**
  * Route table keyed by the API Gateway routeKey. Every route here MUST also be
@@ -1040,7 +1053,7 @@ export const ROUTES: Record<string, Route> = {
       const email = text(body.email, "email", 254, { required: true })!;
       const normalized = await tx(async (db) =>
         ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
-      const signIn = await identity.invite(normalized);
+      const signIn = await identity.invite(normalized, await invitationLook(tx, org, record));
       const [invitation] = await tx((db) =>
         rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
       return { invitation };
@@ -1055,7 +1068,7 @@ export const ROUTES: Record<string, Route> = {
       const org = uuid(body.organizationId, "organizationId");
       const email = await tx(async (db) =>
         ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
-      await identity.resend(email);
+      await identity.resend(email, await invitationLook(tx, org, record));
       const sendCount = await tx(async (db) =>
         ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
       return { invitation: { sendCount } };
@@ -2157,13 +2170,13 @@ export const ROUTES: Record<string, Route> = {
       if (!invited) {
         const normalized = await tx(async (db) =>
           ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
-        const signIn = await identity.invite(normalized);
+        const signIn = await identity.invite(normalized, await invitationLook(tx, org, record));
         const [invitation] = await tx((db) =>
           rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
         return { invitation };
       }
       const resendTo = await tx(async (db) => ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
-      await identity.resend(resendTo);
+      await identity.resend(resendTo, await invitationLook(tx, org, record));
       const sendCount = await tx(async (db) => ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
       return { invitation: { sendCount } };
     },
@@ -3712,6 +3725,21 @@ export const ROUTES: Record<string, Route> = {
   "GET /v1/cover-notification-history": {
     mutating: false,
     handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_cover_notification_history($1,50)", [orgParam(event)])) }),
+  },
+
+  // 0114 (pending, behind the `invitationBranding` release switch): each office's look for sign-in invitation emails. The look is applied by the Cognito custom-message trigger.
+  "GET /v1/office-branding": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ offices: await tx((db) => rows(db, "select * from ogevia_api.list_office_branding($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/offices/{officeId}/branding": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { branding: await tx(async (db) => (await first(db, "select ogevia_api.set_office_branding($1,$2,$3,$4,$5) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), text(body.accentColor, "accentColor", 7), text(body.logoUrl, "logoUrl", 300), text(body.supportEmail, "supportEmail", 254)])).r) };
+    },
   },
 
   "POST /v1/caregivers/{caregiverRecordId}/color": {
