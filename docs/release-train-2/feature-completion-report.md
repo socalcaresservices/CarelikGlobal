@@ -71,3 +71,7 @@ Fixes found by the gates: sweeps needed values for the new routes; the merge rou
 - Merge does not move related records because a staff profile has none (INFERRED from the schema); caregivers are resolved in Care Team, never here.
 - Ops readiness depends on the existing functions' permission rules; it adds no new data.
 - Migrations 0113–0116 are **pending** (not in any ledger). Applying them is a production change needing the owner's approval and a snapshot (see `deployment-plan.md`).
+
+
+## Addendum 2026-11-23: open shifts and automatic texting (mock sender)
+See `docs/release-train-2/open-shift-sms.md` for the brief-by-brief table, the texting rules, the evidence, what is not verified, and what sender setup needs. Summary: the existing board, request, withdrawal, office-only confirmation and concurrency control were verified and tested; the replacement-call-out round, client-cancellation stop, "Filled" notices, the board/alert matching and the office queue preselection were missing and are fixed; texting is built and tested with a mock sender only (migration 0117, switch `openShiftSms`, both OFF; migration not applied anywhere).
