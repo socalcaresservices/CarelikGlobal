@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { ServiceVerificationBackendContext, type ServiceVerificationBackend } from "@/lib/sv-backend";
 import { ServiceVerificationReportsPage } from "./service-verification-reports-page";
+import { getAgencyTimeZone } from "@/lib/service-verification";
 
 vi.mock("@/providers/organization-provider", () => ({ useOrganization: vi.fn() }));
 vi.mock("@/lib/supabase", () => ({ supabase: { rpc: vi.fn(), from: vi.fn() } }));
@@ -74,15 +75,21 @@ describe("Authorised hours above the calendar", () => {
   });
 
   it("updates when the client changes and when the month changes (the summary is requested for that client and month)", async () => {
+    // The page opens on the agency's CURRENT month. The month the test switches to must therefore be a different one on every calendar day:
+    // the month after the current one, never a fixed month (a fixed '2026-11' equalled the current month on 2026-11-01 and the test failed).
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: getAgencyTimeZone(), year: "numeric", month: "2-digit" }).formatToParts(new Date());
+    const [cy, cm] = [Number(parts.find((x) => x.type === "year")!.value), Number(parts.find((x) => x.type === "month")!.value)];
+    const after = new Date(Date.UTC(cy, cm, 1)); // cm is 1-based, so this is the first day of the next month
+    const OTHER = `${after.getUTCFullYear()}-${String(after.getUTCMonth() + 1).padStart(2, "0")}`;
     const fn = vi.fn(async (_org: string, clientId: string | null, monthStart: string) => clientId === C1
-      ? [row(C1, "s-resp", "Respite", "l1", monthStart.startsWith("2026-11") ? 1200 : 2400)]
+      ? [row(C1, "s-resp", "Respite", "l1", monthStart.startsWith(OTHER) ? 1200 : 2400)]
       : [row(C2, "s-resp", "Respite", "l3", 600)]);
     setup(fn as never);
     await choose(C1);
     expect(await screen.findByText(line("Respite — Authorised: 40 h"))).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Calendar month"), { target: { value: "2026-11" } });
+    fireEvent.change(screen.getByLabelText("Calendar month"), { target: { value: OTHER } });
     expect(await screen.findByText(line("Respite — Authorised: 20 h"))).toBeInTheDocument();
-    expect(fn).toHaveBeenCalledWith(ORG, C1, "2026-11-01");
+    expect(fn).toHaveBeenCalledWith(ORG, C1, `${OTHER}-01`);
     fireEvent.change(screen.getByLabelText("Calendar client"), { target: { value: C2 } });
     expect(await screen.findByText(line("Respite — Authorised: 10 h"))).toBeInTheDocument();
     expect(screen.queryByText(line("Respite — Authorised: 20 h"))).toBeNull();

@@ -24,6 +24,7 @@
     "harness:serve": "tsx local-harness/serve.ts",
     "harness:smoke": "tsx local-harness/smoke.ts",
     "harness:seed-extra": "tsx local-harness/seed-extra.ts",
+    "harness:seed-today": "tsx local-harness/seed-today.ts",
     "harness:seed-scenario": "tsx local-harness/seed-scenario.ts"
   },
   "dependencies": {

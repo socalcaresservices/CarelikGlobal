@@ -100,7 +100,8 @@ describe("details are read-only until edited; a same-name client needs a confirm
     expect(ro).toHaveTextContent("Synthetic Client Alpha");
     expect(screen.queryByLabelText("First name")).not.toBeInTheDocument();
     fireEvent.click(within(ro).getByRole("button", { name: "Edit details" }));
-    expect(await screen.findByTestId("edit-impact")).toHaveTextContent("recorded in the client");
+    expect(await screen.findByTestId("edit-impact")).toBeInTheDocument();
+    expect(screen.getByTestId("page-help-panel")).toHaveTextContent("recorded in the client");
     fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Maria" } });
     fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "Dup" } });
     const warn = await screen.findByTestId("duplicate-warning");

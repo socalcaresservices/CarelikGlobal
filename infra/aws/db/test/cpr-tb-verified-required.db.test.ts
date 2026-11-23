@@ -74,8 +74,9 @@ beforeAll(async () => {
   await deliver(recs.P!, tb, { issued: await add(-1), expires: null, verify: null });
   await deliver(recs.E!, cpr, { issued: await add(-400), expires: await add(-1), verify: "verified" }); // verified, but expired yesterday
   await deliver(recs.E!, tb, { issued: await add(-5), expires: null, verify: "verified" });
-  // all three are new hires INSIDE the 14-day period (the old grace made a pending or missing document "not blocking")
-  await db.admin.query("update ogevia.caregiver_records set hire_date = $2::date - 3 where id = any($1::uuid[])", [[recs.P, recs.M, recs.E], today]);
+  // 0086: all three were hired long ago, PAST the agency's CPR/TB due date (30 days by default), so a pending, missing or expired document is what this suite tests.
+  // Inside the period a missing or uploaded document is a warning with a due date (see the last describe block).
+  await db.admin.query("update ogevia.caregiver_records set hire_date = $2::date - 60 where id = any($1::uuid[])", [[recs.P, recs.M, recs.E], today]);
   for (const r of Object.values(recs)) await baseline(r);
   // everything except CPR/TB is in order for every caregiver: approved background clearance and an approved service (so only the documents decide the outcome)
   await db.admin.query("insert into ogevia.caregiver_background_checks (caregiver_record_id, organization_id, status, result, evidence_note, verified_by, verified_at) values ($1,$2,'completed','approved','Synthetic fixture clearance',$3,now())", [recs.E, w.orgA, w.ownerA.userId]);
@@ -222,10 +223,15 @@ describe("enforcement ACTIVE (a synthetic agency only): pending is exactly as bl
   });
 });
 
-describe("what the 14-day period still does (unchanged): it delays only the automatic compliance hold", () => {
-  it("a new hire inside the 14 days with a missing document has no hold and is shown as inside the period, yet is not assignable while enforcement is active", async () => {
-    const snap = (await call(w.managerA, "select ogevia_api.get_caregiver_compliance($1,$2) as c", [w.orgA, recs.M]))[0].c;
-    expect(snap).toMatchObject({ inGrace: true, hold: null });
-    expect((await evaluate(recs.M!, await add(11))).outcome).toBe("blocked");
+describe("0086: inside the agency's due-date period a missing or uploaded CPR/TB is a warning, not a block (enforcement ON)", () => {
+  it("a new hire 3 days into the 30-day period with nothing uploaded is allowed with a pending CPR/TB and its due date; past the due date it is blocked again", async () => {
+    await db.admin.query("update ogevia.caregiver_records set hire_date = $2::date - 3 where id = $1", [recs.M, today]);
+    const ev = await evaluate(recs.M!, await add(11));
+    expect(ev.outcome).not.toBe("blocked");
+    expect(cprRow(ev)).toMatchObject({ status: "pending", code: "missing" });
+    expect(cprRow(ev).message).toContain(`Due ${await add(27)}`); // hire date + 30
+    expect(await createShift(await add(11), recs.M!)).toHaveLength(1);
+    await db.admin.query("update ogevia.caregiver_records set hire_date = $2::date - 31 where id = $1", [recs.M, today]);
+    expect((await evaluate(recs.M!, await add(12))).outcome).toBe("blocked"); // the 30th day was yesterday
   });
 });

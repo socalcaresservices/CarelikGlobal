@@ -10,6 +10,7 @@ import { prepareLogoFile } from "./document-file";
 import { HelpLine } from "./ui/help-line";
 import { MyReadiness } from "./readiness/caregiver-readiness";
 import { useLogo, useAwsApi, useBranding, useMyDisplayName, useSetMyDisplayName, type Branding } from "./aws-workspace";
+import { InfoTip } from "./ui/info-tip";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -248,7 +249,7 @@ function LogoSettings() {
         <Button type="button" disabled={state.busy} onClick={() => void upload()}>{state.busy ? "Saving…" : "Save logo"}</Button>
         {logo.data ? <Button type="button" variant="secondary" disabled={state.busy} onClick={() => void remove()}>Remove logo</Button> : null}
       </div>
-      <p className="text-xs text-slate-500">Stored privately; only people in your agency can see it. It appears in the sidebar and on printed reports.</p>
+      <InfoTip label="Help">Stored privately; only people in your agency can see it. It appears in the sidebar and on printed reports.</InfoTip>
     </Card>
   );
 }

@@ -1,6 +1,7 @@
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
+import { orderBillingSubmissionItems } from "@carelik/auth/export-order";
 import { Button, Card, PageHeader, StatusBadge } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
@@ -183,6 +184,9 @@ export function BillingPage() {
     },
     enabled: !!expandedSubmissionId && canReadFinancial,
   });
+
+  // One documented order (client, service, service date) for the screen and its CSV.
+  const submissionItems = useMemo(() => orderBillingSubmissionItems(submissionItemsQuery.data ?? []), [submissionItemsQuery.data]);
 
   function openApprove(row: ReadyVisitRow) {
     setApprovingVisitId(row.visit_id);
@@ -654,12 +658,12 @@ export function BillingPage() {
                           type="button"
                           variant="secondary"
                           disabled={
-                            (submissionItemsQuery.data ?? []).length === 0
+                            submissionItems.length === 0
                           }
                           onClick={() =>
                             exportSubmissionCsv(
                               submission,
-                              submissionItemsQuery.data ?? [],
+                              submissionItems,
                             )
                           }
                         >
@@ -670,7 +674,7 @@ export function BillingPage() {
                         <p className="mt-2 text-sm text-slate-500">Loading…</p>
                       ) : (
                         <ul className="mt-2 divide-y divide-slate-100">
-                          {(submissionItemsQuery.data ?? []).map((item) => (
+                          {submissionItems.map((item) => (
                             <li
                               key={item.item_id}
                               className="flex items-center justify-between py-1.5 text-sm"

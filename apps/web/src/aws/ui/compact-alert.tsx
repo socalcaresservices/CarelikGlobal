@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { cn } from "@carelik/ui";
 
 const TONES = {
-  warn: "border-amber-600 bg-amber-50 text-amber-900",
-  danger: "border-red-700 bg-red-50 text-red-800",
+  warn: "border-2 border-orange-500 bg-og-alert text-og-ink",
+  danger: "border-2 border-red-600 bg-og-alert text-og-ink",
   info: "border-og-line bg-og-page text-og-ink",
 } as const;
 const ICON = { warn: "⚠", danger: "●", info: "ⓘ" } as const;

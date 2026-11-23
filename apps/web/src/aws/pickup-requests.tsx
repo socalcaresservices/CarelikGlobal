@@ -8,8 +8,10 @@ import { useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { Hint } from "./hint";
 import { clientLabel } from "./name-label";
+import { refreshAfterShiftChange } from "./shift-refresh";
+import { schedulingRefusal } from "./scheduling-refusal";
 
-const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
+const message = schedulingRefusal;
 
 /** 0063: a caregiver's request for an open shift. Nothing is assigned until this person confirms; the server re-checks everything at that moment. */
 export interface PickupRequest {
@@ -54,9 +56,7 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
       setBusy(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["aws-pickups"] }),
-        queryClient.invalidateQueries({ queryKey: ["aws-shifts"] }),
-        queryClient.invalidateQueries({ queryKey: ["attention-overview"] }),
-        queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] }),
+        refreshAfterShiftChange(queryClient),
       ]);
     }
   }

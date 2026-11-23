@@ -14,7 +14,7 @@ function files(dir: string): string[] {
 }
 // Comments are stripped so prose like "never localStorage" does not count as use.
 const stripComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-const sources = files(root).map((path) => ({ path: relative(root, path), text: stripComments(readFileSync(path, "utf8")) }));
+const sources = files(root).map((path) => ({ path: relative(root, path).replaceAll("\\", "/"), text: stripComments(readFileSync(path, "utf8")) }));
 
 describe("auth package static security", () => {
   it("scans real source files", () => {

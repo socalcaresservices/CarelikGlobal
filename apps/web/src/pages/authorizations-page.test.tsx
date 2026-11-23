@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { AuthorizationsPage } from "./authorizations-page";
+import { captureCsvDownload } from "@/test/csv-capture";
 
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: vi.fn(),
@@ -449,4 +450,26 @@ describe("AuthorizationsPage", () => {
       "33333333-3333-4333-8333-333333333333",
     );
   });
+
+  it("exports the authorizations in the order shown on screen, including a chosen sort", async () => {
+    mockedUseOrganization.mockReturnValue({ ...baseOrganization(), hasPermission: vi.fn((permission: string) => permission === "authorizations.read") });
+    const row = (n: number, client: string) => ({
+      id: `33333333-3333-4333-8333-33333333333${n}`, client_id: CLIENT_ID, client_name: client, service_id: SERVICE_ID, service_name: "Personal care",
+      payer: "Medicaid", authorization_number: `AUTH-${n}`, max_monthly_hours: 20, period_start: "2026-07-01", period_end: "2027-06-30", notes: null,
+      hours_used_this_month: 5, hours_scheduled_this_month: 5
+    });
+    mockedRpc.mockResolvedValue({ data: [row(1, "Mia Lopez"), row(2, "Zed Park"), row(3, "Amy Chen")], error: null } as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Zed Park")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Client" }));
+    fireEvent.click(screen.getByRole("button", { name: "Client" }));
+    const shown = screen.getAllByRole("row").slice(1).map((r) => r.textContent ?? "");
+    const cap = captureCsvDownload();
+    fireEvent.click(screen.getByRole("button", { name: "Export filtered CSV" }));
+    const csv = (await cap.rows()).slice(1);
+    cap.restore();
+    expect(csv.map((r) => r[0])).toEqual(["Zed Park", "Mia Lopez", "Amy Chen"]);
+    csv.forEach((r, i) => expect(shown[i]).toContain(r[0]));
+  });
+
 });

@@ -6,11 +6,12 @@ import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { caregiverName, useCaregivers } from "./care-team-admin";
+import { useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
 import { outageNumber } from "./continuity-pack";
 import { formatDateOnly } from "@/lib/service-verification";
 import { Hint } from "./hint";
+import { CaregiverPicker } from "./caregiver-picker";
 
 
 /**
@@ -94,11 +95,8 @@ function EntryForm({ onDone }: { onDone: (text: string) => void }) {
           <option value="">Choose a service</option>
           {(services.data ?? []).map((s) => <option key={s.serviceId} value={s.serviceId}>{s.name} ({s.code})</option>)}
         </select></div>
-      <div className="sm:col-span-2"><label htmlFor="ov-caregiver" className="block text-sm font-medium text-slate-700">Caregiver</label>
-        <select id="ov-caregiver" value={f.caregiverRecordId} onChange={(e) => set("caregiverRecordId", e.target.value)} className={inputClass}>
-          <option value="">Choose the caregiver</option>
-          {(caregivers.data ?? []).map((c) => <option key={c.caregiverRecordId} value={c.caregiverRecordId}>{nameWithCode(caregiverName(c), c.caregiverCode, c.duplicateName)}</option>)}
-        </select></div>
+      <div className="sm:col-span-2"><CaregiverPicker id="ov-caregiver" label="Caregiver" className={inputClass} value={f.caregiverRecordId} placeholder="Choose the caregiver"
+          onChange={(v) => set("caregiverRecordId", v)} caregivers={caregivers.data ?? []} /></div>
       <div><label htmlFor="ov-in" className="block text-sm font-medium text-slate-700">Time In (as written)</label>
         <input id="ov-in" type="time" value={f.timeIn} onChange={(e) => set("timeIn", e.target.value)} className={inputClass} /></div>
       <div><label htmlFor="ov-out" className="block text-sm font-medium text-slate-700">Time Out (as written)</label>
@@ -200,7 +198,7 @@ export function OutageVisitsPage() {
       </Card>
       <Card className="p-3"><h2 className="mb-2 text-base font-semibold">Enter a record</h2><EntryForm onDone={setDone} /></Card>
       <details className="rounded-xl border border-slate-200 bg-og-card p-3">
-        <summary className="min-h-[32px] cursor-pointer text-base font-semibold">Close a number that was not used</summary>
+        <summary className="min-h-[44px] md:min-h-[32px] cursor-pointer text-base font-semibold">Close a number that was not used</summary>
         <div className="mt-2"><NotUsedForm onDone={setDone} /></div>
       </details>
     </div>

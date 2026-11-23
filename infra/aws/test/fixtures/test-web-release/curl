@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+# TEST DOUBLE for infra/aws/test/test-web-release.test.ts. Simulates a TEST and a PROD site bucket on local disk. Never talks to AWS.
+import os,sys,shutil
+a=sys.argv[1:]; T=os.environ["MOCK_T"]; m=os.environ.get("MOCK_MODE","ok")
+open(T+"/calls.log","a").write("curl "+" ".join(a)+"\n")
+out="/dev/null"; w=False; url=""
+i=0
+while i<len(a):
+    if a[i]=="-o": out=a[i+1]; i+=1
+    elif a[i]=="-w": w=True; i+=1
+    elif a[i]=="-m": i+=1
+    elif a[i].startswith("http"): url=a[i]
+    i+=1
+host=url.split("/")[2]; path="/"+"/".join(url.split("/")[3:])
+code=200; body=None
+if "execute-api" in host: code=401; body=b'{"message":"Unauthorized"}'
+else:
+    b="prd-bucket" if host.startswith("d3l4") else "test-bucket"
+    rel="index.html" if path=="/" else path.lstrip("/")
+    f=f"{T}/s3/{b}/{rel}"
+    if rel=="config.json" and m=="live_prod_label": body=b'{"VITE_SV_API_BASE_URL":"https://s0epy5rgzb.execute-api.us-west-2.amazonaws.com","VITE_APP_ENV":"production"}'
+    elif rel=="config.json" and m=="live_other_api": body=b'{"VITE_SV_API_BASE_URL":"https://zk527zk4ua.execute-api.us-west-2.amazonaws.com"}'
+    elif rel=="config.json" and m=="live_test_label": body=b'{"VITE_SV_API_BASE_URL":"https://s0epy5rgzb.execute-api.us-west-2.amazonaws.com","VITE_APP_ENV":"test"}'
+    elif m=="stale_cache" and rel=="index.html": body=b'<html>OLD TEST INDEX <script src="/assets/index-OLD.js"></script></html>'
+    elif os.path.isfile(f): body=open(f,"rb").read()
+    else: code=404; body=b"not found"
+if out!="/dev/null": open(out,"wb").write(body or b"")
+if w: sys.stdout.write(str(code))
+sys.exit(0)

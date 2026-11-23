@@ -18,6 +18,16 @@ import type { AwsApiClient } from "@/lib/aws-api";
 import { resolveEnvironmentMarker } from "@/aws/environment";
 import { formatClockTime, formatVisitDate, toPacificWallTime } from "@/lib/service-verification";
 
+// jsdom has no layout, so ResponsiveContainer would render nothing: give the chart a fixed size so the series colours can be read.
+vi.mock("recharts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("recharts")>();
+  const React = await import("react");
+  return {
+    ...real,
+    ResponsiveContainer: ({ children }: { children: React.ReactElement }) =>
+      React.createElement("div", { style: { width: 600, height: 300 } }, React.cloneElement(children, { width: 600, height: 300 } as never)),
+  };
+});
 vi.mock("@/providers/organization-provider", () => ({
   useOrganization: vi.fn(),
 }));
@@ -202,6 +212,17 @@ describe("ServiceVerificationReportsPage", () => {
       reservedOk: true, visitsOk: true, balanceOk: true, differenceMinutes: 0, ...o,
     });
 
+    it("the full-chain report lists rows in the documented order (client code, service, period), the same order the server-made file uses", async () => {
+      const post = vi.fn() as unknown as AwsApiClient["post"];
+      const rows = [chainRow({ clientCode: "TEST-C10", serviceCode: "ATC", serviceName: "Attendant" }), chainRow({ clientCode: "TEST-C02", serviceCode: "RSP", serviceName: "Respite" }), chainRow({ clientCode: "TEST-C02", serviceCode: "ATC", serviceName: "Attendant" })];
+      const getRows = vi.fn(async () => ({ rows })) as unknown as AwsApiClient["get"];
+      renderAws(["visits.read", "billing.visits.read", "reports.export"], post, getRows);
+      const section = await screen.findByTestId("monthly-chain");
+      await within(section).findByText("Client TEST-C10 · Attendant");
+      const order = within(section).getAllByRole("row").map((r) => r.textContent ?? "").map((t) => /TEST-C(\d+)\D*(ATC|RSP|Attendant|Respite)/.exec(t)).filter(Boolean).map((m) => `${m![1]}`);
+      expect(order.slice(0, 3)).toEqual(["02", "02", "10"]);
+    });
+
     it("the full-chain report shows every stage and a passing check; Export CSV is the server's own recorded export", async () => {
       const createObjectURL = vi.fn(() => "blob:x");
       Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
@@ -238,9 +259,29 @@ describe("ServiceVerificationReportsPage", () => {
       const post = vi.fn() as unknown as AwsApiClient["post"];
       renderAws(["visits.read", "billing.visits.read"], post, get);
       await screen.findByRole("columnheader", { name: "Hours left" });
-      expect(screen.queryByRole("button", { name: "CSV" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Export CSV" })).not.toBeInTheDocument();
       expect(await screen.findByText(/Your role can read this report but not export it\./)).toBeInTheDocument();
       expect(post).not.toHaveBeenCalled();
+    });
+
+    it("Export CSV sits in the action row next to Print / PDF, not inside the report", async () => {
+      const post = vi.fn() as unknown as AwsApiClient["post"];
+      renderAws(["visits.read", "billing.visits.read", "reports.export", "clients.names.read"], post, get);
+      await screen.findByRole("columnheader", { name: "Hours left" });
+      const print = screen.getByRole("button", { name: "Print / PDF" });
+      expect(within(print.parentElement!).getByRole("button", { name: "Export CSV" })).toBeInTheDocument();
+    });
+
+    it("a monthly report is chosen by month, with only the filters its data honours: Client and Service, no Date range, Caregiver, Status or Location", async () => {
+      const post = vi.fn() as unknown as AwsApiClient["post"];
+      renderAws(["visits.read", "billing.visits.read", "clients.names.read"], post, get);
+      await screen.findByRole("columnheader", { name: "Hours left" });
+      expect(screen.getByLabelText("Month")).toHaveAttribute("type", "month");
+      expect(screen.queryByLabelText("Date range")).toBeNull();
+      expect(screen.queryByLabelText("Start date")).toBeNull();
+      expect(screen.getByLabelText("Client")).toBeInTheDocument();
+      expect(screen.getByLabelText("Service")).toBeInTheDocument();
+      for (const gone of ["Caregiver", "Status", "Location"]) expect(screen.queryByLabelText(gone)).toBeNull();
     });
 
     it("an exporter's click asks the SERVER to make the file; the browser saves exactly what the server returned and does not say it was delivered", async () => {
@@ -251,7 +292,7 @@ describe("ServiceVerificationReportsPage", () => {
       const post = vi.fn(async () => ({ exportId: "e1", filename: "monthly-service-reconciliation-2026-10.csv", csv: "server,made", rowCount: 1, byteCount: 11 })) as unknown as AwsApiClient["post"];
       renderAws(["visits.read", "billing.visits.read", "reports.export", "clients.names.read"], post, get);
       await screen.findByRole("columnheader", { name: "Hours left" });
-      fireEvent.click(screen.getAllByRole("button", { name: "CSV" })[0]!);
+      fireEvent.click(screen.getAllByRole("button", { name: "Export CSV" })[0]!);
       await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
       expect(saved).toEqual(["11"]); // the bytes the server returned, not a file built from the page
       expect(post).toHaveBeenCalledWith("/v1/exports", expect.objectContaining({ organizationId: ORG_ID, report: "monthly_service_reconciliation", params: expect.objectContaining({ clientId: null }) }));
@@ -266,7 +307,7 @@ describe("ServiceVerificationReportsPage", () => {
       const post = vi.fn(async () => { throw new Error("You do not have permission to export reports"); }) as unknown as AwsApiClient["post"];
       renderAws(["visits.read", "reports.export"], post, get);
       await screen.findByRole("columnheader", { name: "Hours left" });
-      fireEvent.click(screen.getAllByRole("button", { name: "CSV" })[0]!);
+      fireEvent.click(screen.getAllByRole("button", { name: "Export CSV" })[0]!);
       expect(await screen.findByRole("alert")).toHaveTextContent("You do not have permission to export reports");
       expect(createObjectURL).not.toHaveBeenCalled();
     });
@@ -327,7 +368,7 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/^Action needed$/);
+    await openReport(/^Visits to review$/);
 
     const card = (await screen.findByText("Incomplete visits (2)")).closest("div")!;
     const items = within(card).getAllByRole("listitem");
@@ -369,7 +410,7 @@ describe("ServiceVerificationReportsPage", () => {
     };
 
     renderPage();
-    await openReport(/^Action needed$/);
+    await openReport(/^Visits to review$/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
 
     // Only the date is pre-filled (Time In's Pacific date); the time must be entered.
@@ -511,7 +552,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
 
     renderPage();
-    await openReport(/^Action needed$/);
+    await openReport(/^Visits to review$/);
     fireEvent.click(await screen.findByRole("button", { name: "Close visit" }));
     const wall = toPacificWallTime(ago(60));
     fireEvent.change(screen.getByLabelText("Time Out date"), { target: { value: wall.date } });
@@ -638,7 +679,7 @@ describe("ServiceVerificationReportsPage", () => {
     } as never);
 
     renderPage();
-    await openReport(/^Action needed$/);
+    await openReport(/^Visits to review$/);
     expect(await screen.findByText("Missing Time Out")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close visit" })).not.toBeInTheDocument();
   });
@@ -794,6 +835,25 @@ describe("ServiceVerificationReportsPage", () => {
     expect(await screen.findByText("Replaced by a correction")).toBeInTheDocument();
   });
 
+  it("the Reports chart follows the palette chosen on the Dashboard (Primary colors here), not fixed colours", async () => {
+    localStorage.setItem("ogevia.dashboard.palette", "primary");
+    try {
+      mockedUseOrganization.mockReturnValue({
+        activeOrganizationId: ORG_ID,
+        activeOrganization: { displayName: "Acme Care" },
+        hasPermission: vi.fn(() => true),
+      } as never);
+      mockOrgLetterhead();
+      mockedRpc.mockResolvedValue({ data: [visitRow], error: null } as never);
+      const { container } = renderPage();
+      expect(await screen.findByLabelText("Filtered hours chart")).toBeInTheDocument();
+      await waitFor(() => expect(container.querySelectorAll(".recharts-legend-icon").length).toBeGreaterThan(1));
+      const swatches = Array.from(container.querySelectorAll(".recharts-legend-icon")).map((n) => n.getAttribute("fill"));
+      expect(swatches).toEqual(["#1D4ED8", "#DC2626"]);   // Primary colors: worked hours use the first colour, billable hours the second
+      expect(swatches).not.toContain("#4f46e5");            // the old fixed colour
+    } finally { localStorage.removeItem("ogevia.dashboard.palette"); }
+  });
+
   it("shows manager filters, charts, and a caregiver-hours sheet", async () => {
     mockedUseOrganization.mockReturnValue({
       activeOrganizationId: ORG_ID,
@@ -851,7 +911,7 @@ describe("ServiceVerificationReportsPage", () => {
     );
     expect(screen.getByText("Staff link copied")).toBeInTheDocument();
     expect(
-      screen.getByText(/can only see clients and services assigned to them/i),
+      screen.getByText(/sees only their assigned clients and services/i),
     ).toBeInTheDocument();
   });
 
@@ -920,7 +980,7 @@ describe("ServiceVerificationReportsPage", () => {
       filter_date_to: "2026-08-31",
       filter_status: null,
     });
-    expect(screen.getByRole("button", { name: /Print calendar/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Print / PDF" })).toBeEnabled();
   });
 
   it("shows exception visits flagged for review, correction, or over-authorization, but not a plain signed visit", async () => {
@@ -945,7 +1005,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
 
-    await openReport(/^Action needed$/);
+    await openReport(/^Visits to review$/);
 
     await waitFor(() =>
       expect(screen.getByText("Exception visits")).toBeInTheDocument(),
@@ -1070,12 +1130,12 @@ describe("ServiceVerificationReportsPage", () => {
       expect(screen.getByLabelText("Client")).toBeInTheDocument(),
     );
 
-    // Custom range: the date-range dropdown reveals From and To.
+    // Custom range: the start and end dates are always in the filter bar; typing one switches the range to Custom.
     fireEvent.change(screen.getByLabelText("Date range"), { target: { value: "custom" } });
-    fireEvent.change(screen.getByLabelText("From"), {
+    fireEvent.change(screen.getByLabelText("Start date"), {
       target: { value: "2026-08-01" },
     });
-    fireEvent.change(screen.getByLabelText("To"), {
+    fireEvent.change(screen.getByLabelText("End date"), {
       target: { value: "2026-08-31" },
     });
 
@@ -1284,7 +1344,7 @@ describe("ServiceVerificationReportsPage", () => {
 
     renderPage();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Print / Save as PDF" }),
+      await screen.findByRole("button", { name: "Print / PDF" }),
     );
 
     expect(printSpy).toHaveBeenCalled();
@@ -1333,7 +1393,7 @@ describe("ServiceVerificationReportsPage", () => {
     renderPageWithLocation();
     await openReport(/^Client monthly calendar$/);
     expect(screen.getByTestId("location")).toHaveTextContent("/service-verification/reports?view=calendar");
-    await openReport(/^Action needed$/);
+    await openReport(/^Visits to review$/);
     expect(screen.getByTestId("location")).toHaveTextContent("?view=exceptions");
     await openReport(/^Visit records$/);
     // This (Supabase-path) test backend opens on Visits overview, so the visit list is the explicit view here;
@@ -1405,5 +1465,42 @@ describe("ServiceVerificationReportsPage", () => {
     await screen.findByLabelText("Report");
     const css = Array.from(document.querySelectorAll("style")).map((e) => e.textContent ?? "").find((t) => t.includes("@top-left")) ?? "";
     expect(css).not.toMatch(/TEST|not verified/);
+  });
+});
+
+
+describe("ServiceVerificationReportsPage: one filter bar", () => {
+  it("a date-range report has Date range, Start date and End date and no Month; Clear Filters appears only once something is filtered and puts everything back", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Client")).toBeInTheDocument());
+    expect(screen.getByLabelText("Date range")).toBeInTheDocument();
+    expect(screen.getByLabelText("Start date")).toBeInTheDocument();
+    expect(screen.getByLabelText("End date")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Month")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear Filters" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Date range"), { target: { value: "month" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Clear Filters" }));
+    expect((screen.getByLabelText("Date range") as HTMLSelectElement).value).toBe("all");
+    expect((screen.getByLabelText("Start date") as HTMLInputElement).value).toBe("");
+    expect(screen.queryByRole("button", { name: "Clear Filters" })).toBeNull();
+  });
+
+  it("typing a start date switches the range to Custom, and a start after the end is refused with a message", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Client")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2026-08-20" } });
+    expect((screen.getByLabelText("Date range") as HTMLSelectElement).value).toBe("custom");
+    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-08-01" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Start date must be on or before the end date.");
+  });
+
+  it("the client calendar has Calendar client and Calendar month in the bar, and Print / PDF waits for a client", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Client")).toBeInTheDocument());
+    await openReport(/^Client monthly calendar/);
+    expect(await screen.findByLabelText("Calendar month")).toBeInTheDocument();
+    expect(screen.getByLabelText("Calendar client")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Print / PDF" })).toBeDisabled();
+    expect(screen.queryByLabelText("Date range")).toBeNull();
   });
 });

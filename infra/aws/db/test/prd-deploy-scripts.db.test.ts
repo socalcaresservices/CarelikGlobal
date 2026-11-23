@@ -26,6 +26,13 @@ const url = (database: string, user?: string) => {
   if (user) u.username = user;
   return u.toString();
 };
+// A client for a login other than the admin. It is built from explicit fields, never from a connection string: the pg client lets a
+// password in the connection string override the `password` option, so with OGEVIA_TEST_DATABASE_URL=postgres://postgres:<pw>@...
+// (the form docs/TESTING_AND_RELEASE_PROCESS.md section 3.1 gives) the login would be offered the admin's password and be refused.
+const loginClient = (database: string, user: string, password: string) => {
+  const u = new URL(ADMIN_URL);
+  return new pg.Client({ host: u.hostname, port: u.port ? Number(u.port) : 5432, database, user, password });
+};
 const psqlFile = (database: string, file: string) =>
   execFileSync("psql", [url(database), "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", join(DIR, file)], { encoding: "utf8" });
 // Variables arrive on stdin exactly as deploy-production.sh sends them (never argv).
@@ -109,7 +116,7 @@ describe("production deployment SQL (runbook order)", () => {
   });
 
   it("the production login acts as ogevia_app and nothing more", async () => {
-    const c = new pg.Client({ connectionString: url(PRD, PRD_LOGIN), password: PRD_PASSWORD });
+    const c = loginClient(PRD, PRD_LOGIN, PRD_PASSWORD);
     await c.connect();
     try {
       await c.query("begin");
@@ -130,11 +137,11 @@ describe("production deployment SQL (runbook order)", () => {
       await c.query(`grant connect on database ${TEST_DB} to ${TEST_LOGIN}`);
     });
     // Control: it does reach its own database...
-    const own = new pg.Client({ connectionString: url(TEST_DB, TEST_LOGIN), password: TEST_PASSWORD });
+    const own = loginClient(TEST_DB, TEST_LOGIN, TEST_PASSWORD);
     await own.connect();
     await own.end();
     // ...and is refused by production.
-    const prd = new pg.Client({ connectionString: url(PRD, TEST_LOGIN), password: TEST_PASSWORD });
+    const prd = loginClient(PRD, TEST_LOGIN, TEST_PASSWORD);
     await expect(prd.connect()).rejects.toThrow(/permission denied for database/);
     // The shared ogevia_app role itself cannot be used to log in at all.
     expect((await admin("postgres", (c) => c.query("select rolcanlogin from pg_roles where rolname = 'ogevia_app'"))).rows[0].rolcanlogin).toBe(false);

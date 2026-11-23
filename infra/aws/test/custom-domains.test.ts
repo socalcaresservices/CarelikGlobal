@@ -40,6 +40,14 @@ describe.each(["prd", "prod"] as const)("permanent hostnames (%s)", (env) => {
     for (const o of customOriginsFor(cfg)) expect(origins).toContain(o);
     expect(origins).toContain("WebDistribution");
   });
+
+  it("API CORS lists no origin twice (API Gateway rejects duplicates)", () => {
+    for (const e of ["prd", "prod"] as const) {
+      const api = Object.values(synth(e, "-ServiceVerificationApi")!.findResources("AWS::ApiGatewayV2::Api"))[0]!;
+      const list = (api.Properties.CorsConfiguration.AllowOrigins as unknown[]).map((o) => JSON.stringify(o));
+      expect(new Set(list).size).toBe(list.length);
+    }
+  });
 });
 
 describe("assertCustomDomains", () => {

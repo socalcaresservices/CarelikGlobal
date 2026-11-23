@@ -8,10 +8,10 @@ export interface DatabaseSecretStackProps extends StackProps {
 }
 
 /**
- * Production application-database credential (env=prd only).
+ * Dedicated application-database credential (production, or explicit isolated TEST).
  *
  * Deployed FIRST and alone, so the database step can read the generated
- * password into shell memory and set it on the `ogevia_prd_app` login BEFORE
+ * password into shell memory and set it on the dedicated application login BEFORE
  * the Lambda that uses it exists. Nothing else in this stack, and the Lambda is
  * not created until the database is provisioned, migrated and verified.
  *
@@ -19,7 +19,7 @@ export interface DatabaseSecretStackProps extends StackProps {
  *   in source, a template, an output, or a log. CloudFormation does not
  *   regenerate it on later updates.
  * - Distinct from the test slice's `ogevia/database/app`: the login it holds
- *   (ogevia_prd_app) is granted CONNECT on ogevia_prd only.
+ *   is explicitly granted CONNECT only on its reviewed target database.
  * - RETAIN: deleting the stack never deletes the credential.
  */
 export class DatabaseSecretStack extends Stack {
@@ -30,8 +30,8 @@ export class DatabaseSecretStack extends Stack {
     const { config } = props;
     assertDatabaseConfig(config);
     const db = config.database;
-    if (db.purpose !== "production" || !db.appLogin || !db.appSecretName) {
-      throw new Error("DatabaseSecretStack is only for the production environment");
+    if ((db.purpose !== "production" && !db.isolatedTest) || !db.appLogin || !db.appSecretName) {
+      throw new Error("DatabaseSecretStack requires a dedicated production or isolated TEST credential");
     }
 
     this.appSecret = new secretsmanager.Secret(this, "AppDatabaseSecret", {

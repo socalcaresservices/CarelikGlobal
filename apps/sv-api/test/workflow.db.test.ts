@@ -55,11 +55,11 @@ describe("caregiver workflow: login → client → service → start → end →
     expect(r.body.memberships[0]).toMatchObject({ organizationId: w.orgA, role: "caregiver", permissions: ["availability.manage_own", "caregiver_services.read_own", "documents.manage_own", "experience.report_own"] });
   });
 
-  it("lists only assigned clients, by code, without names or payer identifiers", async () => {
+  it("lists only assigned clients without payer identifiers", async () => {
     const r = await call("GET /v1/clients/assigned", w.caregiverA1, { query: { organizationId: w.orgA } });
     expect(r.status).toBe(200);
     expect(r.body.clients.map((c: any) => c.clientId).sort()).toEqual([w.clientA1, fresh.client].sort());
-    expect(Object.keys(r.body.clients[0]).sort()).toEqual(["activeServiceCount", "clientCode", "clientId", "nextScheduledEndsAt", "nextScheduledServiceId", "nextScheduledStartsAt"]);
+    expect(Object.keys(r.body.clients[0]).sort()).toEqual(["activeServiceCount", "clientCode", "clientId", "clientName", "nextScheduledEndsAt", "nextScheduledServiceId", "nextScheduledStartsAt"]);
   });
 
   it("lists the authorized service with its monthly minutes", async () => {
@@ -653,7 +653,7 @@ describe("agency logo and restricted client names (0020) through the API", () =>
     expect((await call("POST /v1/branding/logo/clear", w.managerA, { body: { organizationId: w.orgA } })).status).toBe(403);
   });
 
-  it("client names: managers set and read them; caregivers and other agencies never get them", async () => {
+  it("client names: managers see directory names; caregivers see only assigned client names", async () => {
     const set = await call("POST /v1/clients/{clientId}/legal-name", w.managerA, { path: { clientId: fresh.client }, body: { organizationId: w.orgA, firstName: "Synthetic", lastName: "Calendar Client" } });
     expect(set.status, JSON.stringify(set.body)).toBe(200);
     const m = await call("GET /v1/clients/directory", w.managerA, { query: { organizationId: w.orgA } });
@@ -661,7 +661,7 @@ describe("agency logo and restricted client names (0020) through the API", () =>
     expect((await call("GET /v1/clients/directory", w.caregiverA1, { query: { organizationId: w.orgA } })).body.clients).toEqual([]);
     expect((await call("GET /v1/clients/directory", w.managerB, { query: { organizationId: w.orgA } })).body.clients).toEqual([]);
     const assigned = await call("GET /v1/clients/assigned", w.caregiverA1, { query: { organizationId: w.orgA } });
-    expect(JSON.stringify(assigned.body)).not.toContain("Calendar Client");
+    expect(assigned.body.clients.find((c: { clientId: string }) => c.clientId === fresh.client)).toMatchObject({ clientName: "Synthetic Calendar Client" });
     const cg = await call("POST /v1/clients/{clientId}/legal-name", w.caregiverA1, { path: { clientId: fresh.client }, body: { organizationId: w.orgA, firstName: "X", lastName: "Y" } });
     expect(cg.status).toBe(403);
   });
@@ -752,7 +752,8 @@ describe("client and authorization administration (0022) through the API", () =>
     expect(asManager.status).toBe(200);
     expect(asManager.body.client.authorizations).toHaveLength(2);
     expect(asManager.body.client.authorizations.map((a: any) => a.hourlyRateCents)).toEqual([null, null]);
-    expect(JSON.stringify(asManager.body)).not.toMatch(/3000|4000/);
+    // The rate values must not appear as rate fields. (A plain substring search for "3000" or "4000" over the whole JSON also matches random IDs and timestamps by chance, which made this test fail about one run in ten.)
+    expect(JSON.stringify(asManager.body)).not.toMatch(/"(hourlyRateCents|hourlyRate|rate)[A-Za-z]*":\s*(3000|4000)\b/);
 
     // History is untouched: version 1 is byte-for-byte what it was, now superseded.
     const after = await history();
@@ -862,6 +863,8 @@ describe("caregiver invitations and planned assignments (0025) through the API",
     const assignments = await call("GET /v1/assignments", w.managerA, { query: { organizationId: w.orgA, caregiverRecordId: record } });
     expect(assignments.body.assignments[0]).toMatchObject({ grantsAccess: true });
 
+    expect((await call("POST /v1/caregivers/{caregiverRecordId}/invitation/resend", w.managerA, { path, body: { organizationId: w.orgA } })).status).toBe(409); // 0086: a minute between sends
+    await db.admin.query("update ogevia.caregiver_invitations set last_sent_at = now() - interval '2 minutes' where caregiver_record_id = $1", [record]);
     const resent = await call("POST /v1/caregivers/{caregiverRecordId}/invitation/resend", w.managerA, { path, body: { organizationId: w.orgA } });
     expect(resent.status, JSON.stringify(resent.body)).toBe(200);
     expect(resent.body).toEqual({ invitation: { sendCount: 2 } });

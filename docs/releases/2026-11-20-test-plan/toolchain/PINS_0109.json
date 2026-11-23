@@ -1,0 +1,42 @@
+{
+  "apiRoutes": {
+    "switchOff": 259,
+    "switchOn": 262
+  },
+  "applicationCommit": "3f5fe4081374678e9261282a7c41e72a6062b0f6",
+  "expectedLedger": {
+    "after": "108/0109",
+    "before": "107/0107"
+  },
+  "migration0109": {
+    "downSha256": "6df70db755d29341e8960c998528c9108096a466e34d7316dc3b181e522355bb",
+    "upSha256": "2c0ebb9e91e5a88d52f4cd323a82c7b691fb85197c74f80ca98ee774642cd25b"
+  },
+  "pendingUx0103to0107": {
+    "count": 5,
+    "setSha256": "ef7535f15a5caf6d9f315b1d91f44f59d915e1155a0d276a67484d2a1df8ee1e"
+  },
+  "pnpmLockSha256": "8bcc5a445284d84ddef2885544c09d6219356f537e62468c9e40d931fcd8b267",
+  "releasedMigrations": {
+    "count": 88,
+    "setSha256": "e353d9225b4d0d428f28fd9907d64ac4072429ac8946351fe1ff8bb89f66923c"
+  },
+  "toolchainSha256": {
+    "2026-11-10-ux-redesign-test/toolchain/OPERATOR_TEST_DB.sh": "20c1ff63b57ea3d8a490904128f7ffa80531f907889aab68d5cff7b9c258ff7f",
+    "PRD_0109_RELEASE.sh": "b0177d239e63722c137e49b912b7c33b43f757ec4693aec5c042995aebb209b0",
+    "TEST-requestCleanup-on.patch": "f39895c812c09325edf1182d67332c0b17ba24791dcfb850ae3db03d15c359c0",
+    "TEST_0109_LEDGER.sh": "bca46d9dee4e68cfd5febd79b7b610f8a16f215f2f22ec5c7676f2189e503756",
+    "TEST_DB_SESSION.sh": "7bc6c91e5f54cca3d559b5c8d716c16b40ffed95d44bc2f233a2bb69aa4ad585",
+    "TEST_H2A_COMPARE.sh": "05ded127d8d913ae1c7e2a7d504983d3ddf7933e389ac70b152e71a904252454",
+    "TEST_H2B_DEPLOY.sh": "3aca95fdc656d4aec4ae880953a142fdda26f6ed21db6b1fb3ff6a2b9568a8b1",
+    "TEST_H2C_ENABLE.sh": "af4435410172b628742a1b24551d7bd5a1c7d5f0b73d2dc2e831576507953db1",
+    "TEST_INVENTORY.sh": "26d01b08303106f0ce5a2defc1b80188bb0d0ff1e6261d70ec530cd1d56f647c",
+    "VERIFY_0109.sql": "41ca6477b008b6c0cf3df01f3a32590a389873c44b08d018a2171936757fafdb",
+    "check_inventory.py": "525e51ebac59012e598e5f9df6880d509affb61e4bf9721c6edb38ea02b6101e",
+    "diff_gate_0109.py": "3baec37949ab20dd3497bcf282d202fda7c2211b6dea49403e9217bcb3dbb32b",
+    "infra/aws/scripts/production-0109-release.py": "3c9c49bba3b1551a77951a2d46d83e2eef2ae5d381908c67247de7c0918ec9b2",
+    "infra/aws/scripts/production-request-cleanup-routes-deploy.sh": "c84a9a6a2b520427fcd988fd46d8b7d4076a101c5e9404746aed4a5d25448bfe",
+    "infra/aws/scripts/production-request-cleanup-routes-release.py": "f4bf9ee75c33d9173a329fce3f7d37713024aaf5d34dc3e03e463f839e36b221",
+    "infra/aws/scripts/production-web-release.sh": "850eaf13d4498e02f5982ace56932ef3f8eec9db9fdacc617f657cc29f82e4ad"
+  }
+}

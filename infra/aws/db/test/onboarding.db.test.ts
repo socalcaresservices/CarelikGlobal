@@ -40,12 +40,14 @@ describe("defaults and the pipeline", () => {
   it("every agency has the standard checklist; an applicant needs it, an existing caregiver does not", async () => {
     for (const org of [w.orgA, w.orgB]) {
       const keys = (await db.admin.query("select requirement_key from ogevia.onboarding_requirements where organization_id = $1 order by sort_order", [org])).rows.map((r) => r.requirement_key);
-      expect(keys).toEqual(["background_check", "training", "cpr", "tb", "clearance"]);
+      expect(keys).toEqual(["training"]); // 0086: a NEW agency starts with the one onboarding item left; an existing agency keeps its older rows, set inactive (see caregiver-readiness.db.test.ts)
+      const active = (await db.admin.query("select requirement_key from ogevia.onboarding_requirements where organization_id = $1 and is_active order by sort_order", [org])).rows.map((r) => r.requirement_key);
+      expect(active).toEqual(["training"]); // 0086: background check, documents and clearance moved to their canonical sources / Approve for work
     }
     const id = await create();
     const o = await onboarding(w.managerA, id);
-    expect(o).toMatchObject({ status: "applicant", onboardingRequired: true, done: 0, total: 5, complete: false });
-    expect(o.items.map((i: any) => [i.key, i.state])).toEqual([["background_check", "outstanding"], ["training", "outstanding"], ["cpr", "outstanding"], ["tb", "outstanding"], ["clearance", "outstanding"]]);
+    expect(o).toMatchObject({ status: "applicant", onboardingRequired: true, done: 0, total: 1, complete: false });
+    expect(o.items.map((i: any) => [i.key, i.state])).toEqual([["training", "outstanding"]]);
     const legacy = (await db.admin.query("select id from ogevia.caregiver_records where linked_user_id = $1", [w.caregiverA1.userId])).rows[0].id;
     expect(await onboarding(w.managerA, legacy)).toMatchObject({ onboardingRequired: false });
   });
@@ -54,64 +56,44 @@ describe("defaults and the pipeline", () => {
     const id = await create();
     for (const s of ["interview", "offer", "onboarding", "pending_documents"]) await setStatus(w.managerA, id, s);
     const row = (await call(w.managerA, "select * from ogevia_api.list_onboarding_overview($1)", [w.orgA])).find((r) => r.caregiver_record_id === id);
-    expect(row).toMatchObject({ status: "pending_documents", onboarding_required: true, done: 0, total: 5 });
-    expect(row.outstanding.map((x: any) => x.label)).toEqual(["Background check cleared", "Required training completed", "CPR certificate current", "TB clearance current", "Compliance clearance"]);
+    expect(row).toMatchObject({ status: "pending_documents", onboarding_required: true, done: 0, total: 1 });
+    expect(row.outstanding.map((x: any) => x.label)).toEqual(["Required training completed"]);
     const listed = (await call(w.managerA, "select * from ogevia_api.list_caregivers($1)", [w.orgA])).find((r) => r.caregiver_record_id === id);
-    expect(listed).toMatchObject({ status: "pending_documents", onboarding_required: true, onboarding_done: 0, onboarding_total: 5 });
+    expect(listed).toMatchObject({ status: "pending_documents", onboarding_required: true, onboarding_done: 0, onboarding_total: 1 });
   });
 
   it("someone returning from Inactive starts the checklist; an Approved or Active person moved back a stage does not", async () => {
     const legacy = (await db.admin.query("select id from ogevia.caregiver_records where linked_user_id = $1", [w.caregiverA2.userId])).rows[0].id;
     await setStatus(w.managerA, legacy, "pending_documents");
     expect(await onboarding(w.managerA, legacy)).toMatchObject({ onboardingRequired: false });
-    await setStatus(w.managerA, legacy, "active");
+    await db.admin.query("update ogevia.caregiver_records set status = 'active' where id = $1", [legacy]); // 0086: Active is not set by the picker
     await setStatus(w.managerA, legacy, "inactive");
     await setStatus(w.managerA, legacy, "onboarding");
     expect(await onboarding(w.managerA, legacy)).toMatchObject({ onboardingRequired: true, done: 0 });
-    await expectPgError(setStatus(w.managerA, legacy, "ready"), "OGC09", /Onboarding is not complete/);
+    await expectPgError(setStatus(w.managerA, legacy, "ready"), "OGC09", /Use Approve for work/);
   });
 });
 
 describe("approval and assignment gates", () => {
-  it("cannot be Approved or assigned until every required item is satisfied; the last step is compliance clearance", async () => {
+  it("cannot be assigned until required training is done; Approved is only reached through Approve for work, which names what is missing", async () => {
     const id = await create("applicant", "Gate");
-    await expectPgError(setStatus(w.managerA, id, "ready"), "OGC09", /Onboarding is not complete: Background check cleared, Required training completed, CPR certificate current, TB clearance current, Compliance clearance/);
-    await expectPgError(setStatus(w.managerA, id, "active"), "OGC09", /Onboarding is not complete/);
-    await expectPgError(call(w.ownerA, "select * from ogevia_api.create_assignment($1,$2,$3,$4,$5::date,null,null)", [w.orgA, id, w.clientA1, w.serviceA, today]), "OGR30", /Onboarding is not complete/);
-
-    const bg = await record(w.managerA, id, "background_check", "complete", { on: today, note: "Cleared (synthetic)" });
-    expect(stateOf(bg, "background_check")).toBe("done");
+    await expectPgError(setStatus(w.managerA, id, "ready"), "OGC09", /Use Approve for work/);
+    await expectPgError(setStatus(w.managerA, id, "active"), "OGC09", /Use Approve for work/);
+    await expectPgError(call(w.managerA, "select ogevia_api.approve_caregiver_for_work($1,$2,null)", [w.orgA, id]), "OGC09", /Cannot approve yet\. Waiting on: Background check, Required training, App sign-in/);
+    await expectPgError(call(w.ownerA, "select * from ogevia_api.create_assignment($1,$2,$3,$4,$5::date,null,null)", [w.orgA, id, w.clientA1, w.serviceA, today]), "OGR30", /Onboarding is not complete: Required training completed/);
+    // 0086: the background check, documents and clearance are no longer onboarding items (their sources are the background-check record, the documents and Approve for work)
+    for (const k of ["background_check", "cpr", "tb", "clearance"]) await expectPgError(record(w.managerA, id, k, "complete", { on: today }), "OGN04", /Requirement not found/);
     await record(w.managerA, id, "training", "complete", { on: today, exp: await add(365) });
-    // clearance comes last
-    await expectPgError(record(w.managerA, id, "clearance"), "OGC09", /comes last.*CPR certificate current, TB clearance current/);
-    // documents are evaluated from the real records, not typed in
-    await expectPgError(record(w.managerA, id, "cpr"), "OGV22", /uploading and approving/);
-    expect((await onboarding(w.managerA, id)).items.find((i: any) => i.key === "cpr")).toMatchObject({ state: "outstanding", detail: "Document type not set up" });
-    await call(w.ownerA, "select ogevia_api.set_document_work_requirement($1,'cpr',$2,'Agency policy')", [w.orgA, cprType]);
-    await call(w.ownerA, "select ogevia_api.set_document_work_requirement($1,'tb',$2,'Agency policy')", [w.orgA, tbType]);
-    await call(w.ownerA, "select ogevia_api.set_requirement_policy($1,'cpr','document_expiry',null,'Per agency policy')", [w.orgA]);
-    await call(w.ownerA, "select ogevia_api.set_requirement_policy($1,'tb','document_expiry',null,'Per agency policy')", [w.orgA]);
-    expect((await onboarding(w.managerA, id)).items.find((i: any) => i.key === "cpr")).toMatchObject({ state: "outstanding", detail: "No document uploaded" });
-    await verifiedDocument(id, cprType, await add(400));
-    await verifiedDocument(id, tbType, await add(20));
-    const almost = await onboarding(w.managerA, id);
-    expect(almost).toMatchObject({ done: 4, total: 5, complete: false });
-    expect(almost.items.find((i: any) => i.key === "tb")).toMatchObject({ state: "done", expiringSoon: true });
-    await record(w.managerA, id, "clearance", "complete", { on: today });
-    expect(await onboarding(w.managerA, id)).toMatchObject({ done: 5, total: 5, complete: true });
-
+    expect(await onboarding(w.managerA, id)).toMatchObject({ done: 1, total: 1, complete: true });
     await call(w.ownerA, "select * from ogevia_api.create_assignment($1,$2,$3,$4,$5::date,null,null)", [w.orgA, id, w.clientA1, w.serviceA, today]);
-    await setStatus(w.managerA, id, "ready");
-    expect((await db.admin.query("select status from ogevia.caregiver_records where id = $1", [id])).rows[0].status).toBe("ready");
+    // still not approvable: background check and app sign-in are hard requirements
+    await expectPgError(call(w.managerA, "select ogevia_api.approve_caregiver_for_work($1,$2,null)", [w.orgA, id]), "OGC09", /Waiting on: Background check, App sign-in/);
   });
 
   it("an expired item takes the caregiver out of new scheduling (shift, series), but never out of a visit already in progress", async () => {
     const id = await create("applicant", "Expiry");
-    await record(w.managerA, id, "background_check", "complete", { on: today });
     await record(w.managerA, id, "training", "complete", { on: today, exp: await add(200) });
-    for (const t of [cprType, tbType]) await verifiedDocument(id, t, await add(400));
-    await record(w.managerA, id, "clearance", "complete", { on: today });
-    await setStatus(w.managerA, id, "ready");
+    await db.admin.query("update ogevia.caregiver_records set status = 'ready' where id = $1", [id]); // Approve for work is covered in caregiver-readiness.db.test.ts
     const fresh = (await db.admin.query(`insert into ogevia.clients (organization_id) values ($1) returning id`, [w.orgA])).rows[0].id as string;
     await db.admin.query(`insert into ogevia.client_authorizations (organization_id, client_id, service_id, payer, monthly_authorized_minutes, period_start, period_end)
       values ($1,$2,$3,'SYNTHETIC-PAYER',6000,$4::date - 30,$4::date + 400)`, [w.orgA, fresh, w.serviceA, today]);
@@ -140,7 +122,7 @@ describe("recording rules, permissions, audit and isolation", () => {
   it("waiving and reopening need a reason; clearance cannot be waived; long notes and future dates are refused", async () => {
     const id = await create();
     await expectPgError(record(w.managerA, id, "training", "waive"), "OGV22", /reason/i);
-    await expectPgError(record(w.managerA, id, "clearance", "waive", { reason: "Synthetic" }), "OGV22", /cannot be waived/);
+    await expectPgError(record(w.managerA, id, "clearance", "waive", { reason: "Synthetic" }), "OGN04", /Requirement not found/); // 0086: retired in favour of Approve for work
     await expectPgError(record(w.managerA, id, "training", "complete", { note: "x".repeat(201) }), "OGV22", /200 characters/);
     await expectPgError(record(w.managerA, id, "training", "complete", { on: await add(3) }), "OGV22", /future/);
     await expectPgError(record(w.managerA, id, "training", "complete", { on: today, exp: await add(-10) }), "OGV22", /expiry/i);
@@ -163,9 +145,9 @@ describe("recording rules, permissions, audit and isolation", () => {
     await expectPgError(record(w.managerB, id, "training", "complete", {}, w.orgA), "OGN04");
     await expectPgError(call(w.managerB, "select * from ogevia_api.list_onboarding_overview($1)", [w.orgA]), "OGN04");
     await call(w.managerA, "select ogevia_api.set_onboarding_requirement($1,'orientation','Agency orientation','training',true,null,null,true,'Agency policy (synthetic)')", [w.orgA]);
-    expect((await onboarding(w.managerA, id)).total).toBe(6);
+    expect((await onboarding(w.managerA, id)).total).toBe(2);
     await call(w.managerA, "select ogevia_api.set_onboarding_requirement($1,'orientation',null,null,false,null,null,true,'Optional for now (synthetic)')", [w.orgA]);
-    expect((await onboarding(w.managerA, id)).total).toBe(5);
+    expect((await onboarding(w.managerA, id)).total).toBe(1);
     await expectPgError(call(w.managerA, "select ogevia_api.set_onboarding_requirement($1,'orientation',null,null,false,null,null,true,'')", [w.orgA]), "OGV22", /reason/i);
     expect((await db.admin.query("select count(*)::int n from ogevia.onboarding_requirements where organization_id = $1 and requirement_key = 'orientation'", [w.orgB])).rows[0].n).toBe(0);
   });

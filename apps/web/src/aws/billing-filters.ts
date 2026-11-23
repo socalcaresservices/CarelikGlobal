@@ -1,5 +1,6 @@
 import type { BillingReviewRow } from "@/lib/sv-backend";
 import { nameWithCode } from "./name-label";
+import { officeMatches } from "./offices-data";
 import { VISIT_STATUS_LABEL } from "@/lib/service-verification";
 import { APPROVAL_STATUS_LABEL, type ApprovalStatus } from "./billing-format";
 
@@ -16,9 +17,21 @@ export interface BillingFilters {
   service: string; // service name and code
   visitStatus: string; // service visit status
   approval: ApprovalStatus | "";
+  reason: string; // a review reason code (VIS-26: the office can narrow the list to one reason)
+  office: string; // 0110: an office id ("none" = clients with no office); needs the offices release switch
 }
 
-export const NO_FILTERS: BillingFilters = { client: "", caregiver: "", service: "", visitStatus: "", approval: "" };
+export const NO_FILTERS: BillingFilters = { client: "", caregiver: "", service: "", visitStatus: "", approval: "", reason: "", office: "" };
+
+/** Why a visit is held for review, in plain words. An unknown code is shown as its own words, never hidden. */
+export const REVIEW_REASON_LABEL: Record<string, string> = {
+  unscheduled: "Started with no scheduled shift",
+  schedule_variance: "Worked time differs from the schedule",
+  no_client_signature: "No client signature or mark",
+  over_authorization: "Over the monthly authorization",
+  authorization_decreased: "Authorization was decreased",
+};
+export const reviewReasonLabel = (code: string) => REVIEW_REASON_LABEL[code] ?? code.replace(/_/g, " ");
 
 export const clientKey = (r: BillingReviewRow) => r.clientCode ?? r.clientName ?? "";
 export const clientLabel = (r: BillingReviewRow) => (r.clientName ? nameWithCode(r.clientName, r.clientCode, r.clientNameDuplicate) : r.clientCode) ?? "Client";
@@ -27,14 +40,17 @@ export const serviceKey = (r: BillingReviewRow) => (r.serviceName ? `${r.service
 
 export const activeFilterCount = (f: BillingFilters) => Object.values(f).filter(Boolean).length;
 
-export function applyBillingFilters(rows: BillingReviewRow[], f: BillingFilters, approvalOf: (r: BillingReviewRow) => ApprovalStatus): BillingReviewRow[] {
+/** officeOf gives the office ids of a row's client, primary first (undefined or empty = none). Without it an office choice is ignored. */
+export function applyBillingFilters(rows: BillingReviewRow[], f: BillingFilters, approvalOf: (r: BillingReviewRow) => ApprovalStatus, officeOf?: (r: BillingReviewRow) => string | readonly string[] | undefined): BillingReviewRow[] {
   return rows.filter(
     (r) =>
       (!f.client || clientKey(r) === f.client) &&
       (!f.caregiver || caregiverKey(r) === f.caregiver) &&
       (!f.service || serviceKey(r) === f.service) &&
       (!f.visitStatus || r.visitStatus === f.visitStatus) &&
-      (!f.approval || approvalOf(r) === f.approval),
+      (!f.approval || approvalOf(r) === f.approval) &&
+      (!f.reason || (r.reviewReasons ?? []).includes(f.reason)) &&
+      (!officeOf || officeMatches(f.office, officeOf(r))),
   );
 }
 
@@ -49,5 +65,6 @@ export function filterOptions(rows: BillingReviewRow[], approvalOf: (r: BillingR
     services: distinct(rows.map((r) => [serviceKey(r), serviceKey(r)])),
     visitStatuses: distinct(rows.map((r) => [r.visitStatus, VISIT_STATUS_LABEL[r.visitStatus] ?? r.visitStatus])),
     approvals: distinct(rows.map((r) => [approvalOf(r), APPROVAL_STATUS_LABEL[approvalOf(r)]])),
+    reasons: distinct(rows.flatMap((r) => (r.reviewReasons ?? []).map((code): [string, string] => [code, reviewReasonLabel(code)]))),
   };
 }

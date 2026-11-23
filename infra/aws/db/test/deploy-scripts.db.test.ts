@@ -42,12 +42,13 @@ afterAll(async () => {
   await root.connect();
   await root.query(`drop database if exists ${DB} with (force)`);
   await root.query(`drop role if exists ${APP_USER}`);
+  await root.query("drop role if exists ogevia_test_app");
   await root.end();
 });
 
 describe("test-slice deployment SQL (runbook order)", () => {
   it("00 creates the separate test database, idempotently", () => {
-    psql("postgres", "00_create_test_database.sql");
+    psql("postgres", "00_create_test_database.sql", { fresh_only: "true" });
     psql("postgres", "00_create_test_database.sql");
   });
 
@@ -60,6 +61,23 @@ describe("test-slice deployment SQL (runbook order)", () => {
     } finally {
       await client.end();
     }
+  });
+
+  it("isolated cutover refuses an existing database or login and never changes their contents/password", async () => {
+    const root = new pg.Client({ connectionString: url(DB) });
+    await root.connect();
+    try {
+      const before = (await root.query("select version, checksum from ogevia_meta.schema_migrations order by version")).rows;
+      expect(() => psql("postgres", "00_create_test_database.sql", { fresh_only: "true" })).toThrow();
+      expect((await root.query("select version, checksum from ogevia_meta.schema_migrations order by version")).rows).toEqual(before);
+      const vars = { isolated_test: "true", app_user: "ogevia_test_app", app_password: APP_PASSWORD };
+      expect(() => psql("postgres", "01_app_login_role.sql", vars)).toThrow();
+      psql(DB, "01_app_login_role.sql", vars);
+      const password = (await root.query("select rolpassword from pg_authid where rolname='ogevia_test_app'")).rows[0].rolpassword;
+      expect(() => psql(DB, "01_app_login_role.sql", { ...vars, app_password: "differentSyntheticPassword" })).toThrow();
+      expect((await root.query("select rolpassword from pg_authid where rolname='ogevia_test_app'")).rows[0].rolpassword).toBe(password);
+      expect((await root.query("select rolcanlogin, rolinherit, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls, rolreplication from pg_roles where rolname='ogevia_test_app'")).rows[0]).toEqual({ rolcanlogin: true, rolinherit: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolbypassrls: false, rolreplication: false });
+    } finally { await root.end(); }
   });
 
   it("01 creates an unprivileged NOINHERIT login in ogevia_app, idempotently", async () => {

@@ -25,3 +25,4 @@ cdk.synth.out/
 
 # Local development harness: certificates and the web build
 infra/aws/local-harness/.local/
+preview-dist

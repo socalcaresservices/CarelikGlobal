@@ -1,3 +1,41 @@
+import { useState } from "react";
+
+export type DashboardChartStyle = "current" | "pie" | "bar" | "treemap";
+export const DASHBOARD_PALETTES = {
+  care: { name: "Care blue", colors: ["#235AE7", "#14B8A6", "#73A9FF", "#182B54"] },
+  mono: { name: "Blue shades", colors: ["#244986", "#3B72BB", "#68A4E8", "#A7CEF5"] },
+  primary: { name: "Primary colors", colors: ["#1D4ED8", "#DC2626", "#EAB308", "#16A34A"] },
+  brand: { name: "Ogevia", colors: ["#032393", "#00CCBB", "#7577F5", "#FDAC02"] },
+} as const;
+export type DashboardPalette = keyof typeof DASHBOARD_PALETTES;
+const styleKey = "ogevia.dashboard.chartStyle";
+const paletteKey = "ogevia.dashboard.palette";
+
+function read(key: string) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+export function useDashboardAppearance() {
+  const [chartStyle, setChartStyle] = useState<DashboardChartStyle>(() => {
+    const saved = read(styleKey);
+    if (saved === "dot") return "treemap";
+    return saved === "current" || saved === "pie" || saved === "bar" ? saved : "treemap";
+  });
+  const [palette, setPalette] = useState<DashboardPalette>(() => {
+    const saved = read(paletteKey);
+    return saved !== null && Object.hasOwn(DASHBOARD_PALETTES, saved) ? (saved as DashboardPalette) : "care";
+  });
+  function chooseStyle(value: DashboardChartStyle) {
+    setChartStyle(value);
+    try { localStorage.setItem(styleKey, value); } catch { /* Browser storage is optional. */ }
+  }
+  function choosePalette(value: DashboardPalette) {
+    setPalette(value);
+    try { localStorage.setItem(paletteKey, value); } catch { /* Browser storage is optional. */ }
+  }
+  return { chartStyle, palette, chooseStyle, choosePalette, colors: DASHBOARD_PALETTES[palette].colors };
+}
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@carelik/auth";
 import { useOrganization } from "@/providers/organization-provider";

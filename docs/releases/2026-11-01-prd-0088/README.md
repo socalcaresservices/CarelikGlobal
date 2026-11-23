@@ -1,0 +1,7 @@
+# Production release 0086-0088: package folder (DRAFT, NOT APPROVED)
+
+**Nothing in this folder authorizes or performs a deployment.** Status 2026-11-01 14:40 UTC: design written (`PRD_DEPLOYMENT_DESIGN.md`); the production database script is built and tested locally (`STELLA_PRD_DB.sh`, `rehearse_local.sh`, `mock_aws_test.sh`; design section 10); the production deploy script is built and tested locally (`STELLA_PRD_DEPLOY.sh`, `diff_gate_prd0088.py`, `mock_aws_test_deploy.sh`; design section 11). Every mutating mode refuses while a pin placeholder remains. The pilot release is recorded in `docs/releases/2026-10-30-caregiver-readiness/DEPLOYED_RECORD_0088_TEST.md`; the production baseline is `docs/aws/PRODUCTION_BASELINE_2026-11-01.md`.
+
+Phase E package and runbook written 2026-11-01 15:11 UTC: `PHASE_E_PACKAGE.md` (E1 to E8 and an UNSIGNED decision record), `PRD_RUNBOOK.md` (the Operator's steps, the read-only dry run first), `CHECKLIST.md`. Still open before any GO: the commit and window, the BAA confirmation, the launch scope, the TEST gaps, and the read-only dry run.
+
+Read-only production dry run approved by the owner (2026-11-01 15:16 UTC): filled, restricted copies of the two scripts and their pins are in `dryrun/` (`DRYRUN_PINS.md`). The release scripts above remain unfilled drafts.

@@ -1,0 +1,487 @@
+{
+ "Description": "Ogevia prod - private encrypted visit signature/evidence storage (FUTURE, Phase 5; not deployed)",
+ "Resources": {
+  "EvidenceDataKey1214FC2B": {
+   "Type": "AWS::KMS::Key",
+   "Properties": {
+    "Description": "Ogevia prod - encrypts visit signature/evidence objects",
+    "EnableKeyRotation": true,
+    "KeyPolicy": {
+     "Statement": [
+      {
+       "Action": "kms:*",
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":iam::300094796789:root"
+          ]
+         ]
+        }
+       },
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prod"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "approved-synthetic-pin-ref-1"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "5"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-EvidenceStorage/EvidenceDataKey/Resource"
+   }
+  },
+  "EvidenceDataKeyAlias14BD2023": {
+   "Type": "AWS::KMS::Alias",
+   "Properties": {
+    "AliasName": "alias/ogevia/prod/evidence",
+    "TargetKeyId": {
+     "Fn::GetAtt": [
+      "EvidenceDataKey1214FC2B",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-EvidenceStorage/EvidenceDataKey/Alias/Resource"
+   }
+  },
+  "EvidenceAccessLogBucket4A7C0DCE": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "OwnershipControls": {
+     "Rules": [
+      {
+       "ObjectOwnership": "BucketOwnerPreferred"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prod"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "approved-synthetic-pin-ref-1"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "5"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-EvidenceStorage/EvidenceAccessLogBucket/Resource"
+   }
+  },
+  "EvidenceAccessLogBucketPolicy0FF95428": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "EvidenceAccessLogBucket4A7C0DCE"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "EvidenceAccessLogBucket4A7C0DCE",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "EvidenceAccessLogBucket4A7C0DCE",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "NumericLessThan": {
+         "s3:TlsVersion": 1.2
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "EvidenceAccessLogBucket4A7C0DCE",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "EvidenceAccessLogBucket4A7C0DCE",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:PutObject",
+       "Condition": {
+        "ArnLike": {
+         "aws:SourceArn": {
+          "Fn::GetAtt": [
+           "SignatureEvidenceBucketA9D09C93",
+           "Arn"
+          ]
+         }
+        },
+        "StringEquals": {
+         "aws:SourceAccount": "300094796789"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "logging.s3.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "EvidenceAccessLogBucket4A7C0DCE",
+            "Arn"
+           ]
+          },
+          "/signature-evidence/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-EvidenceStorage/EvidenceAccessLogBucket/Policy/Resource"
+   }
+  },
+  "SignatureEvidenceBucketA9D09C93": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "BucketKeyEnabled": true,
+       "ServerSideEncryptionByDefault": {
+        "KMSMasterKeyID": {
+         "Fn::GetAtt": [
+          "EvidenceDataKey1214FC2B",
+          "Arn"
+         ]
+        },
+        "SSEAlgorithm": "aws:kms"
+       }
+      }
+     ]
+    },
+    "BucketName": "ogevia-prod-signature-evidence-300094796789-us-west-2",
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 7
+       },
+       "Id": "abort-incomplete-multipart-uploads",
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "LoggingConfiguration": {
+     "DestinationBucketName": {
+      "Ref": "EvidenceAccessLogBucket4A7C0DCE"
+     },
+     "LogFilePrefix": "signature-evidence/"
+    },
+    "OwnershipControls": {
+     "Rules": [
+      {
+       "ObjectOwnership": "BucketOwnerEnforced"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prod"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "approved-synthetic-pin-ref-1"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "5"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-EvidenceStorage/SignatureEvidenceBucket/Resource"
+   }
+  },
+  "SignatureEvidenceBucketPolicyE33260A9": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "SignatureEvidenceBucketA9D09C93"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "SignatureEvidenceBucketA9D09C93",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SignatureEvidenceBucketA9D09C93",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "NumericLessThan": {
+         "s3:TlsVersion": 1.2
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "SignatureEvidenceBucketA9D09C93",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "SignatureEvidenceBucketA9D09C93",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-EvidenceStorage/SignatureEvidenceBucket/Policy/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/zPSMzI30jNQTCwv1k1OydbNyUzSqw4uSUzO1kksL46vzs4t1qv2Tq3UcU7LA1GOOZmJxSAOmFGrU2ysV+1UmpydWgIShLIgVEB+TmZyJUIYwq+trdXJy09J1csq1i8zMtIzAtmeVZyZqVtUmleSmZuqFwShAXIKKsSaAAAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-EvidenceStorage/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "ExportsOutputFnGetAttEvidenceDataKey1214FC2BArn327AE822": {
+   "Value": {
+    "Fn::GetAtt": [
+     "EvidenceDataKey1214FC2B",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "Ogevia-prod-EvidenceStorage:ExportsOutputFnGetAttEvidenceDataKey1214FC2BArn327AE822"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}
