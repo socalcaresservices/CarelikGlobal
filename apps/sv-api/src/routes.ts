@@ -2141,10 +2141,10 @@ export const ROUTES: Record<string, Route> = {
       const resolutions = body.resolutions === undefined || body.resolutions === null ? {}
         : typeof body.resolutions === "object" && !Array.isArray(body.resolutions) && Object.values(body.resolutions as Record<string, unknown>).every((v) => v === "keep" || v === "duplicate") ? body.resolutions
         : (() => { throw new ApiError(400, "bad_request", "resolutions must choose keep or duplicate for each field."); })();
-      return {
-        result: await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles_v2($1,$2,$3,$4,$5::jsonb) as r", [
-          uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason, JSON.stringify(resolutions)])).r),
-      };
+      // `result` stays the plain state string ("merged" / "already_merged") as in 0106; the link id (for the undo) is additive.
+      const r = await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles_v2($1,$2,$3,$4,$5::jsonb) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason, JSON.stringify(resolutions)])).r) as { state: string; linkId?: string };
+      return { result: r.state, linkId: r.linkId ?? null };
     },
   },
 
