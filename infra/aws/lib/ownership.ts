@@ -74,6 +74,8 @@ export const ALLOWED_RESOURCE_COST_CLASS: Readonly<Record<string, CostClass>> =
     "AWS::SNS::Topic": "USAGE",
     "AWS::SNS::TopicPolicy": "FREE",
     "AWS::CloudWatch::Alarm": "FIXED",
+    // 0086: log metric filters that turn the Open Shifts worker's per-run counts into alarmable metrics (free; the 3 alarms above are the cost).
+    "AWS::Logs::MetricFilter": "FREE",
     "AWS::CDK::Metadata": "FREE",
     // 0055: the 15-minute caregiver-compliance run. EventBridge scheduled rules have no charge; the Lambda cost is far below any
     // billing threshold. Deploying it is a YELLOW action that needs the owner's approval.

@@ -117,6 +117,9 @@ beforeAll(async () => {
   if (!ids.clientVersionId) ids.clientVersionId = randomUUID();
   const openShift = (await q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'14:00'::time,'16:00'::time,null,$5)", [A, f.client, f.service, tomorrow, randomUUID()]))[0].shift_id as string;
   ids.openShiftId = openShift;
+  ids.shiftRef = (await db.admin.query("select public_ref from ogevia.shifts where id = $1", [openShift])).rows[0].public_ref as string; // 0086: the board addresses a shift by its opaque reference
+  ids.jobId = (await db.admin.query("insert into ogevia.notification_jobs (organization_id, purpose, shift_id, recipient_kind, recipient_caregiver_record_id, dedupe_key, status) values ($1,'callout_receipt',$2,'caregiver',$3,$4,'failed') returning id", [A, openShift, (await db.admin.query('select id from ogevia.caregiver_records where organization_id = $1 limit 1', [A])).rows[0].id, `sweep|${randomUUID()}`])).rows[0].id as string;
+  ids.contactId = (await q(w.ownerA, "select ogevia_api.upsert_office_contact($1,null,'Synthetic contact','+13105550177',null,true,false,false,true) as id", [A]))[0].id as string;
   await make(w.caregiverA1, "POST /v1/shifts/{shiftId}/pickup", {}, { shiftId: openShift });
   const pk = await make(w.managerA, "GET /v1/shift-pickups");
   const firstId = (o: any, keys: string[]): string | undefined => { for (const v of Object.values(o ?? {})) { if (Array.isArray(v) && v[0]) { for (const k of keys) if (v[0][k]) return v[0][k]; } } return undefined; };
@@ -209,7 +212,7 @@ const FIXED: Record<string, unknown> = {
   windows: [{ weekday: 1, start_local: "09:00", end_local: "17:00" }], effectiveFrom: dayPlus(3), baseVersion: 0, expectedCount: 1, expectedAffectedShifts: 0, outageNumber: 1234, days: [7, 3],
   ids: [], confirmedTagIds: [], requirements: [], tagIds: [], userIds: [], accentColor: "#0a7c86", addressState: "CA", fileBase64: syntheticPng().toString("base64"), contentType: "image/png",
   timeIn: new Date(Date.now() - 2 * 3_600_000).toISOString(), timeOut: new Date(Date.now() - 3_600_000).toISOString(), weekdays: [1, 3], onConflict: "refuse", paperConfirmation: "verbal",
-  expiresInDays: 7, startsOn: dayPlus(3), endsOn: dayPlus(24), fromDate: dayPlus(10), signerRole: "client", urgentHours: 24,
+  expiresInDays: 7, cities: [{ city: "Winchester", state: "CA" }], optIn: true, startsOn: dayPlus(3), endsOn: dayPlus(24), fromDate: dayPlus(10), signerRole: "client", urgentHours: 24,
 };
 function valueFor(route: string, name: string, block: string, org: string): unknown {
   if (name === "organizationId") return org;
@@ -422,7 +425,8 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
 
   it("caregiver A2: every GET answer is the stranger's answer (nothing) except her own scoped data, and none shows another caregiver's visit, shift, record, approval, authorization, document, hold or name", async () => {
     const OWN_SCOPE = ["GET /v1/appearance", "GET /v1/attention", "GET /v1/branding", "GET /v1/clients/assigned", "GET /v1/document-types", "GET /v1/experience-tags", "GET /v1/experience/me",
-      "GET /v1/notification-settings", "GET /v1/notifications", "GET /v1/work-hour-policy"];
+      "GET /v1/notification-settings", "GET /v1/notifications", "GET /v1/work-hour-policy",
+      "GET /v1/open-shift-board/{shiftRef}"]; // 0086: the caregiver's own landing for an opening: member answer "unavailable"; the stranger is refused outright
     const o = ids;
     const forbidden: Record<string, string> = { [o.visitId!]: "A1's signed visit", [o.lateVisitId!]: "A1's second visit", [o.caregiverRecordId!]: "A1's Care Team record", [o.userId!]: "A1's user id",
       [o.assignmentId!]: "A1's assignment", [o.confirmationRequestId!]: "A3's confirmation request", [o.billingApprovalId!]: "billing approval", [o.adjustmentId!]: "rounding adjustment",
@@ -462,7 +466,7 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
     // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only
     expect(got).toEqual([
       "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
-      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
+      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notification-jobs/{jobId}/requeue", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
       "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel"]);
     // billing reads: the scheduler holds no billing permission, so they are the stranger's (empty) answer
     for (const route of ["GET /v1/billing-approvals", "GET /v1/billing-review", "GET /v1/billing-rounding/policies", "GET /v1/billing-rounding/preview", "GET /v1/accounts", "GET /v1/continuity/status"]) {

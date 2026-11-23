@@ -166,6 +166,31 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/shift-pickups" },
   { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/confirm" },
   { method: apigw.HttpMethod.POST, path: "/v1/shift-pickups/{requestId}/decline" },
+  // 0086: Open Shifts board, coverage queue, SMS consent, agency settings. JWT like every staff route.
+  { method: apigw.HttpMethod.GET, path: "/v1/open-shift-board" },
+  { method: apigw.HttpMethod.GET, path: "/v1/open-shift-board/{shiftRef}" },
+  { method: apigw.HttpMethod.POST, path: "/v1/open-shift-board/{shiftRef}/request" },
+  { method: apigw.HttpMethod.POST, path: "/v1/open-shift-board/{shiftRef}/withdraw" },
+  { method: apigw.HttpMethod.GET, path: "/v1/my-open-shift-requests" },
+  { method: apigw.HttpMethod.GET, path: "/v1/my-sms-consent" },
+  { method: apigw.HttpMethod.POST, path: "/v1/my-sms-consent" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/post-coverage" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/unpost-coverage" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/service-city" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shifts/{shiftId}/coverage-status" },
+  { method: apigw.HttpMethod.GET, path: "/v1/coverage-queue" },
+  { method: apigw.HttpMethod.GET, path: "/v1/coverage-queue/{shiftId}/requests" },
+  { method: apigw.HttpMethod.POST, path: "/v1/coverage-requests/{requestId}/confirm" },
+  { method: apigw.HttpMethod.GET, path: "/v1/open-shift-report" },
+  { method: apigw.HttpMethod.GET, path: "/v1/coverage-alerts" },
+  { method: apigw.HttpMethod.GET, path: "/v1/open-shift-audit" },
+  { method: apigw.HttpMethod.POST, path: "/v1/notification-jobs/{jobId}/requeue" },
+  { method: apigw.HttpMethod.GET, path: "/v1/open-shift-settings" },
+  { method: apigw.HttpMethod.POST, path: "/v1/open-shift-settings" },
+  { method: apigw.HttpMethod.GET, path: "/v1/office-contacts" },
+  { method: apigw.HttpMethod.POST, path: "/v1/office-contacts" },
+  { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/coverage-cities" },
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/coverage-cities" },
   { method: apigw.HttpMethod.GET, path: "/v1/shifts-to-reconcile" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/{visitId}/authorization-review" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/authorization-review/resolve" },
@@ -707,6 +732,23 @@ export class ServiceVerificationApiStack extends Stack {
         new targets.LambdaFunction(this.handler, {
           event: events.RuleTargetInput.fromObject({ "ogevia-task": "compliance-sweep" }),
           retryAttempts: 1,
+        }),
+      ],
+    });
+
+    // Open Shifts text messages (0086). Defined DISABLED: enabling it is the owner's go-live step for SMS (a verified sender per agency, SMS_TRANSPORT and
+    // APP_ORIGIN set on the function, an approved transport package, and each agency's own switch; the database re-checks every one at send time).
+    // It invokes the SAME handler with a constant payload API Gateway can never produce. While it is disabled nothing is planned, claimed or sent; the board,
+    // requests, office queue and in-app status do not depend on it. A disabled rule is also the first emergency switch (see OFFICE_RUNBOOK / DEPLOYMENT).
+    // Cost: scheduled EventBridge rules are free; 288 invocations a day are far below any Lambda charge.
+    new events.Rule(this, "CoverageSms", {
+      description: "Open Shifts: expires and plans coverage rounds, then sends the claimed text messages. DISABLED until the owner approves SMS go-live.",
+      enabled: false,
+      schedule: events.Schedule.rate(Duration.minutes(5)),
+      targets: [
+        new targets.LambdaFunction(this.handler, {
+          event: events.RuleTargetInput.fromObject({ "ogevia-task": "coverage-sms" }),
+          retryAttempts: 0,
         }),
       ],
     });

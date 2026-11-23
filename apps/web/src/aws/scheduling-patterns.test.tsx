@@ -74,6 +74,8 @@ function fakeApi() {
         return json(201, { series: { seriesId: SERIES, created: 3, skipped: 0, reservedMinutes: 360, generatedThrough: today } });
       case `POST /v1/shifts/${CANCELLED}/makeup`:
         return json(201, { makeup: { shiftId: "new", startsAt: "x", endsAt: "y", reservedMinutes: 60, remainingMinutes: "300", unmadeMinutesAfter: 60 } });
+      case "GET /v1/coverage-queue":
+        return json(200, { items: coverageItems });
       case "GET /v1/shift-pickups":
         return json(200, { requests: pickupRequests });
       case "POST /v1/shift-pickups/pr-1/confirm":
@@ -102,6 +104,7 @@ function fakeApi() {
 let policyApplies = false;
 let partialPreview = false;
 let pickupRequests: unknown[] = [];
+let coverageItems: unknown[] = [];
 function renderAt(path: string) {
   const api = fakeApi();
   const auth = {
@@ -216,41 +219,15 @@ describe("Scheduling page", () => {
     }
   });
 
-  it("the office sees caregiver requests for open shifts, what would block each, and confirms or declines; nothing is assigned by the request", async () => {
-    pickupRequests = [{ requestId: "pr-1", shiftId: "s-1", requestedAt: later(-1), startsAt: later(30), endsAt: later(32), minutes: 120, clientCode: "CL-1", serviceName: "Personal care",
-      caregiverRecordId: CG1, caregiverCode: "CG-1", caregiverName: "Synthetic Caregiver One", blockers: ["Over the daily hour limit."] }];
+  it("the Schedule page points the office to the Coverage queue when caregivers have asked for open shifts", async () => {
+    coverageItems = [{ shiftId: "s-1", requestCount: 2 }];
     try {
-      const api = renderAt("/schedule");
+      renderAt("/schedule");
       const panel = await screen.findByTestId("pickup-requests");
-      expect(panel).toHaveTextContent("Caregiver requests for open shifts (1)");
-      expect(panel).toHaveTextContent("Nobody is assigned until you confirm");
-      expect(panel).toHaveTextContent("Asked by Synthetic Caregiver One (CG-1)");
-      expect(within(panel).getByRole("note")).toHaveTextContent("Would be refused now: Over the daily hour limit.");
-      fireEvent.click(within(panel).getByRole("button", { name: "Decline" }));
-      fireEvent.click(within(panel).getByRole("button", { name: "Decline request" }));
-      expect(await within(panel).findByRole("alert")).toHaveTextContent("Reason missing. Say why you are declining.");
-      fireEvent.change(within(panel).getByLabelText("Reason for declining"), { target: { value: "Synthetic: someone closer" } });
-      fireEvent.click(within(panel).getByRole("button", { name: "Decline request" }));
-      expect(await screen.findByText("Request declined. The shift is still open.")).toBeInTheDocument();
-      expect(api.calls.find((c) => c.path === "/v1/shift-pickups/pr-1/decline")!.body).toEqual({ organizationId: ORG, reason: "Synthetic: someone closer" });
+      expect(panel).toHaveTextContent("Caregiver requests for open shifts (2)");
+      expect(within(panel).getByRole("link", { name: "Coverage queue" })).toHaveAttribute("href", "/schedule/coverage");
     } finally {
-      pickupRequests = [];
-    }
-  });
-
-  it("confirming sends the confirmation with an idempotency key and says who is now assigned", async () => {
-    pickupRequests = [{ requestId: "pr-1", shiftId: "s-1", requestedAt: later(-1), startsAt: later(30), endsAt: later(32), minutes: 120, clientCode: "CL-1", serviceName: null,
-      caregiverRecordId: CG1, caregiverCode: "CG-1", caregiverName: "Synthetic Caregiver One", blockers: [] }];
-    try {
-      const api = renderAt("/schedule");
-      const panel = await screen.findByTestId("pickup-requests");
-      expect(within(panel).getByText(/No problem found right now/)).toBeInTheDocument();
-      fireEvent.click(within(panel).getByRole("button", { name: "Confirm assignment" }));
-      expect(await screen.findByText(/Synthetic Caregiver One is now assigned to the shift/)).toBeInTheDocument();
-      const post = api.calls.find((c) => c.path === "/v1/shift-pickups/pr-1/confirm")!;
-      expect(post.body).toEqual({ organizationId: ORG });
-    } finally {
-      pickupRequests = [];
+      coverageItems = [];
     }
   });
 });

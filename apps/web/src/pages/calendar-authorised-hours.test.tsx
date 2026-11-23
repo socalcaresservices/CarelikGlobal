@@ -56,6 +56,9 @@ const choose = async (id: string) => {
 };
 afterEach(() => cleanup());
 
+// A month that is never the one the calendar opens on: next month (this test once hard-coded 2026-11, which became the current month).
+const OTHER_MONTH = (() => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })();
+
 describe("Authorised hours above the calendar", () => {
   it("shows each service on its own line for the selected client: 'Respite — Authorised: 40 h', 'Personal Care — Authorised: 12.5 h'; services are not combined; nothing sits inside a day cell", async () => {
     const fn = vi.fn(async (_org: string, clientId: string | null) => clientId === C1
@@ -75,14 +78,14 @@ describe("Authorised hours above the calendar", () => {
 
   it("updates when the client changes and when the month changes (the summary is requested for that client and month)", async () => {
     const fn = vi.fn(async (_org: string, clientId: string | null, monthStart: string) => clientId === C1
-      ? [row(C1, "s-resp", "Respite", "l1", monthStart.startsWith("2026-11") ? 1200 : 2400)]
+      ? [row(C1, "s-resp", "Respite", "l1", monthStart.startsWith(OTHER_MONTH) ? 1200 : 2400)]
       : [row(C2, "s-resp", "Respite", "l3", 600)]);
     setup(fn as never);
     await choose(C1);
     expect(await screen.findByText(line("Respite — Authorised: 40 h"))).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Calendar month"), { target: { value: "2026-11" } });
+    fireEvent.change(screen.getByLabelText("Calendar month"), { target: { value: OTHER_MONTH } });
     expect(await screen.findByText(line("Respite — Authorised: 20 h"))).toBeInTheDocument();
-    expect(fn).toHaveBeenCalledWith(ORG, C1, "2026-11-01");
+    expect(fn).toHaveBeenCalledWith(ORG, C1, `${OTHER_MONTH}-01`);
     fireEvent.change(screen.getByLabelText("Calendar client"), { target: { value: C2 } });
     expect(await screen.findByText(line("Respite — Authorised: 10 h"))).toBeInTheDocument();
     expect(screen.queryByText(line("Respite — Authorised: 20 h"))).toBeNull();

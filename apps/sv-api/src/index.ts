@@ -8,6 +8,7 @@ import { createHandler } from "./handler";
 import { lambdaIdentityAdmin, unavailableIdentityAdmin, type IdentityRequest, type IdentityResponse } from "./identity";
 import type { HttpApiEvent } from "./http";
 import { isComplianceSweepEvent, runComplianceSweep } from "./scheduled";
+import { isCoverageSmsEvent, MockSmsTransport, runCoverageSms, type SmsTransport } from "./sms";
 
 export { createHandler } from "./handler";
 export { ROUTE_KEYS, ROUTES } from "./routes";
@@ -16,6 +17,7 @@ export { signatureObjectKey } from "./evidence";
 export { MemoryEvidenceStore } from "./evidence";
 export { MemoryIdentityAdmin } from "./identity";
 export { COMPLIANCE_SWEEP_TASK, isComplianceSweepEvent, runComplianceSweep } from "./scheduled";
+export { COVERAGE_SMS_TASK, isCoverageSmsEvent, runCoverageSms, MockSmsTransport, awsEndUserMessagingTransport, smsSegments, SmsTransportError } from "./sms";
 
 let handlerInstance: ReturnType<typeof createHandler> | null = null;
 
@@ -32,6 +34,18 @@ export async function handler(event: HttpApiEvent | Record<string, unknown>) {
     const config = loadConfig();
     dbInstance ??= secretsManagerPool(config, new SecretsManagerClient({ region: config.region }));
     return runComplianceSweep({ db: dbInstance, dbSetRole: config.dbSetRole });
+  }
+  if (isCoverageSmsEvent(event)) {
+    const config = loadConfig();
+    dbInstance ??= secretsManagerPool(config, new SecretsManagerClient({ region: config.region }));
+    return runCoverageSms({
+      db: dbInstance,
+      dbSetRole: config.dbSetRole,
+      transport: process.env.SMS_EMERGENCY_DISABLE?.trim() === "true" ? new MockSmsTransport() : smsTransportFromEnv(),
+      appOrigin: process.env.APP_ORIGIN?.trim() ?? "",
+      emergencyDisable: process.env.SMS_EMERGENCY_DISABLE?.trim() === "true",
+      allowlist: process.env.SMS_ALLOWLIST ? new Set(process.env.SMS_ALLOWLIST.split(",").map((n) => n.trim()).filter(Boolean)) : undefined,
+    });
   }
   if (!handlerInstance) {
     const config = loadConfig();
@@ -57,4 +71,15 @@ function invokeIdentity(lambda: LambdaClient, functionName: string) {
     if (out.FunctionError || !out.Payload) return { ok: false, error: "failed" };
     return JSON.parse(new TextDecoder().decode(out.Payload)) as IdentityResponse;
   };
+}
+
+/**
+ * SMS_TRANSPORT: "mock" (TEST: nothing leaves the process) or unset/"off" (no text is ever sent; claimed jobs are not claimed at all because the run stops here).
+ * The AWS End User Messaging transport is deliberately not wired: it needs the @aws-sdk/client-pinpoint-sms-voice-v2 package and the owner's approval of a
+ * verified sender per agency (see docs/releases/2026-11-23-open-shifts-sms). Until then a production run fails closed.
+ */
+function smsTransportFromEnv(): SmsTransport {
+  const mode = process.env.SMS_TRANSPORT?.trim() ?? "off";
+  if (mode === "mock") return new MockSmsTransport();
+  throw new Error("SMS transport is not enabled in this environment.");
 }

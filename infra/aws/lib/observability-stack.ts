@@ -2,6 +2,7 @@ import { Duration, Stack, Validations, type StackProps } from "aws-cdk-lib";
 import type * as apigw from "aws-cdk-lib/aws-apigatewayv2";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
+import * as logs from "aws-cdk-lib/aws-logs";
 import type * as lambda from "aws-cdk-lib/aws-lambda";
 import * as sns from "aws-cdk-lib/aws-sns";
 import type { Construct } from "constructs";
@@ -118,6 +119,24 @@ export class ObservabilityStack extends Stack {
       GT,
       "Service Verification API returned 5xx responses",
     );
+
+    // Open Shifts text messages (0086): the worker writes one flat JSON line per run (apps/sv-api/src/sms.ts). Metric filters turn the counts into metrics.
+    // Alarm messages carry metric names only. These stay quiet until the scheduled run exists (treat missing data as not breaching).
+    const handlerLogs = logs.LogGroup.fromLogGroupName(this, "HandlerLogs", `/aws/lambda/${handler.functionName}`);
+    const sms = (id: string, metricName: string, pattern: string, description: string) => {
+      new logs.MetricFilter(this, `${id}Filter`, {
+        logGroup: handlerLogs,
+        metricNamespace: "Ogevia/OpenShifts",
+        metricName,
+        filterPattern: logs.FilterPattern.literal(pattern),
+        metricValue: "1",
+        defaultValue: 0,
+      });
+      add(id, new cloudwatch.Metric({ namespace: "Ogevia/OpenShifts", metricName, statistic: "Sum", ...fiveMinutes }), 1, GT, description);
+    };
+    sms("SmsJobsFailed", "SmsJobsFailedOrUnknown", '{ $.task = "coverage-sms" && ($.failed > 0 || $.unknown > 0) }', "Open Shifts: text messages failed or have an unknown outcome");
+    sms("SmsReceiptsMissing", "SmsReceiptsMissing", '{ $.task = "coverage-sms" && $.staleAccepted > 0 }', "Open Shifts: accepted texts with no delivery receipt after 24 hours");
+    sms("UrgentShiftsUnfilled", "UrgentShiftsUnfilled", '{ $.task = "coverage-sms" && $.urgentUnfilled > 0 }', "Open Shifts: a shift starting within the urgent window has no caregiver");
 
     const rds = (metricName: string, statistic: string) =>
       new cloudwatch.Metric({

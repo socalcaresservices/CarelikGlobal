@@ -129,7 +129,7 @@ describe("route map: the menu shows each destination only to the roles that hold
   it("manager: main order Home, Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports, Settings with the moved items under their parents", async () => {
     renderAt("/", "manager");
     expect(await linkNames()).toEqual([
-      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
+      "Home", "Schedule", "Coverage", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
       "Caregivers", "Recruiting", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
     ]);
     expect(await sectionNames(screen.getByRole("navigation", { name: "Main" }))).toEqual(["Visits", "Settings"]);
@@ -158,7 +158,7 @@ describe("route map: the menu shows each destination only to the roles that hold
 
   it("caregiver keeps the simple list: Verify visit, My shifts, Availability, My documents, Appearance", async () => {
     renderAt("/my-shifts", "caregiver");
-    expect((await linkNames()).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Verify visit"]);
+    expect((await linkNames()).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Open shifts", "Verify visit"]);
   });
 
   it("no queue appears twice: Visits to review exists once (under Approvals) and Visit records once (under Visits)", async () => {

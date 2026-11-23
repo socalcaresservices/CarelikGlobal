@@ -58,8 +58,10 @@ export interface MigrateResult {
 export async function migrate(
   client: ClientBase,
   log: (line: string) => void = () => {},
+  options: { readonly upTo?: string } = {},
 ): Promise<MigrateResult> {
-  const migrations = loadMigrations();
+  // upTo: stop after this version (used by release rehearsals that reproduce an earlier approved release); the default applies everything.
+  const migrations = loadMigrations().filter((m) => options.upTo === undefined || m.version <= options.upTo);
   await client.query("select pg_advisory_lock($1)", [RUNNER_LOCK_KEY]);
   try {
     await client.query(`
