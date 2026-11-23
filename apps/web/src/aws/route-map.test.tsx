@@ -122,61 +122,66 @@ describe("route map: every mapped route is reachable by its authorised role", ()
   });
 });
 
-const linkNames = async () => within(await screen.findByRole("navigation", { name: "Main" })).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""));
-const sectionNames = async (nav: HTMLElement) => within(nav).queryAllByTestId("nav-section").map((e) => e.textContent);
+const openAllSections = (nav: HTMLElement) => { for (const b of Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="section"][aria-expanded="false"]'))) fireEvent.click(b); };
+const linkNames = async () => {
+  const nav = await screen.findByRole("navigation", { name: "Main" });
+  openAllSections(nav);   // a group is closed until the page moves into it or the person opens it
+  return within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""));
+};
+const sectionNames = async (nav: HTMLElement) => within(nav).queryAllByTestId("nav-section").map((e) => e.querySelector("button")?.textContent?.replace(/\d+$/, "") ?? e.textContent?.replace(/\d+$/, ""));
 
 describe("route map: the menu shows each destination only to the roles that hold its permission", () => {
-  it("manager: main order Home, Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports, Settings with the moved items under their parents", async () => {
+  it("manager: the agreed groups; the related pages are sidebar items and there is no strip of tabs", async () => {
     renderAt("/", "manager");
-    expect(await linkNames()).toEqual([
-      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
-      "Caregivers", "Recruiting", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
-    ]);
-    expect(await sectionNames(screen.getByRole("navigation", { name: "Main" }))).toEqual(["Visits", "Settings"]);
+    expect(await linkNames()).toEqual(["Dashboard", "Clients", "Authorization changes", "Caregivers", "Recruiting", "Documents", "Schedule", "Calendar", "Requests", "Reports", "Billing", "Visits", "Visits to review", "Outage records", "Agency Settings", "Continuity"]);
+    expect(await sectionNames(screen.getByRole("navigation", { name: "Main" }))).toEqual(["Dashboard", "Clients", "Staff", "Scheduling", "Operations", "Settings"]);
+    expect(screen.queryByRole("navigation", { name: "Section tabs" })).toBeNull();
   });
 
-  it("scheduler (shifts.manage, care_requests.read, no billing, no documents): sees Schedule and Shift requests, never Services, Accounts, Documents, Recruiting", async () => {
+  it("scheduler (shifts.manage, care_requests.read, no billing, no documents): sees Schedule with Requests under it, never Services, Accounts, Documents, Recruiting", async () => {
     renderAt("/", "scheduler");
     const names = await linkNames();
     expect(names).toContain("Schedule");
-    expect(names).toContain("Shift requests");
+    expect(names).toContain("Requests");
     expect(names).toContain("Authorization changes"); // shifts.manage may open the Authorization changes screen
-    for (const hidden of ["Services", "Accounts", "Documents", "Recruiting", "Continuity pack", "Approvals", "Caregivers"]) expect(names).not.toContain(hidden);
+    for (const hidden of ["Agency Settings", "Accounts", "Caregivers", "Billing", "Documents", "Recruiting", "Continuity", "Outage records"]) expect(names).not.toContain(hidden);
   });
 
-  it("owner also sees Settings as a link to Branding and Accounts under it; the manager sees Settings only as a label", async () => {
+  it("owner also sees Branding as Agency Settings and Accounts under Roles & Permissions; the manager sees neither", async () => {
     renderAt("/", "organization_owner");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav).getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings/branding");
+    openAllSections(nav);
+    expect(within(nav).getByRole("link", { name: "Agency Settings" }).getAttribute("href")).toBe("/settings/branding");
     expect(within(nav).getByRole("link", { name: "Accounts" }).getAttribute("href")).toBe("/accounts");
     cleanup();
     renderAt("/", "manager");
     const nav2 = await screen.findByRole("navigation", { name: "Main" });
-    expect(within(nav2).queryByRole("link", { name: "Settings" })).toBeNull();
+    openAllSections(nav2);
+    expect(within(nav2).getByRole("link", { name: "Agency Settings" }).getAttribute("href")).toBe("/settings/services");
     expect(within(nav2).queryByRole("link", { name: "Accounts" })).toBeNull();
   });
 
-  it("caregiver keeps the simple list: Verify visit, My shifts, Availability, My documents, Appearance", async () => {
+  it("caregiver: My Schedule, Verify Visit, Availability and My documents, nothing else", async () => {
     renderAt("/my-shifts", "caregiver");
-    expect((await linkNames()).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Verify visit"]);
+    expect(await linkNames()).toEqual(["My Schedule", "Verify Visit", "Availability", "My documents"]);
   });
 
-  it("no queue appears twice: Visits to review exists once (under Approvals) and Visit records once (under Visits)", async () => {
+  it("no destination appears twice in the sidebar", async () => {
     renderAt("/", "manager");
     const names = await linkNames();
-    for (const once of ["Visits to review", "Visit records", "Verify visit", "Approvals"]) expect(names.filter((n) => n === once)).toHaveLength(1);
+    expect(new Set(names).size).toBe(names.length);
   });
 
-  it("the new links open the new addresses", async () => {
+  it("the links open the existing addresses", async () => {
     renderAt("/", "manager");
     const nav = await screen.findByRole("navigation", { name: "Main" });
+    openAllSections(nav);
     const href = (name: string) => within(nav).getByRole("link", { name }).getAttribute("href");
-    expect(href("Shift requests")).toBe("/schedule/shift-requests");
-    expect(href("Services")).toBe("/settings/services");
+    expect(href("Requests")).toBe("/schedule/shift-requests");
+    expect(href("Calendar")).toBe("/service-verification/reports?view=calendar");
     expect(href("Authorization changes")).toBe("/authorization-impacts");
-    expect(href("Monthly calendar")).toBe("/service-verification/reports?view=calendar");
-    fireEvent.click(within(nav).getByRole("link", { name: "Services" }));
+    fireEvent.click(within(nav).getByRole("link", { name: "Agency Settings" }));
     await waitFor(() => expect(screen.getByTestId("page")).toHaveTextContent("services"));
-    await waitFor(() => expect(within(nav).getByRole("link", { name: "Services" })).toHaveAttribute("aria-current", "page"));
+    await waitFor(() => expect(within(nav).getByRole("link", { name: "Agency Settings" })).toHaveAttribute("aria-current", "page"));
   });
 });

@@ -9,6 +9,7 @@ import { useServices } from "./client-admin";
 import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { HelpLine } from "./ui/help-line";
 import { clientLabel } from "./name-label";
+import { InfoTip } from "./ui/info-tip";
 
 
 /**
@@ -97,7 +98,7 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
       {preview.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {preview.isError ? <p role="alert" className="text-sm text-red-700">{message(preview.error, "Rounding could not be loaded.")}</p> : null}
       {note ? <p role={note.ok ? "status" : "alert"} className={`text-sm ${note.ok ? "text-emerald-800" : "text-red-700"}`}>{note.text}</p> : null}
-      {preview.data && units.length === 0 ? <p className="text-sm text-slate-500">No rounding policy applies to visits in this range (default: no rounding).</p> : null}
+      {preview.data && units.length === 0 ? <InfoTip label="Help">No rounding policy applies to visits in this range (default: no rounding).</InfoTip> : null}
       <ul aria-label="Rounding by visit or day" className="space-y-1">
         {units.map((u) => {
           const approved = u.state === "approved" || u.state === "approved_under_earlier_policy";
@@ -117,7 +118,7 @@ export function RoundingSection({ from, to, refreshKey }: { from: string; to: st
                   <div><dt className="text-xs text-slate-500">Billing adjustment</dt><dd>{approved ? `${signed(u.adjustedMinutes ?? 0)} min` : `${signed(u.adjustmentMinutes)} min`}</dd></div>
                   <div><dt className="text-xs text-slate-500">Proposed billable</dt><dd>{approved ? `${u.adjustedProposedMinutes} min` : `${u.proposedMinutes} min`}{!approved && u.proposedUnits ? ` · ${u.proposedUnits} units` : ""}</dd></div>
                 </dl>
-                {u.cappedByAuthorization && !approved ? <p className="mt-1 text-xs font-medium text-amber-800">Limited by the authorization: rounding may not exceed the authorized minutes.</p> : null}
+                {u.cappedByAuthorization && !approved ? <InfoTip label="Help">Limited by the authorization: rounding may not exceed the authorized minutes.</InfoTip> : null}
                 {u.state === "approved_under_earlier_policy" ? <p className="mt-1 text-xs text-slate-600">Approved under policy v{u.adjustedPolicyVersion}. It is not recalculated; void it to apply the current policy.</p> : null}
                 {canApprove ? (
                   <div className="mt-1">

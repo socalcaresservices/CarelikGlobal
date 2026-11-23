@@ -12,6 +12,29 @@ export class ApiRequestError extends Error {
   }
 }
 
+/**
+ * Routes that exist only where a release switch is on (infra/aws/lib/service-verification-api-stack.ts, `feature:`; the list is checked against that file by a test).
+ * Where a switch is off the route does not exist, API Gateway answers 404 WITHOUT the cross-origin headers, and the browser reports a failed request, not a 404.
+ * For these paths only, a failed request is checked against a request that must work (`GET /v1/me`): if the API answers that, the route is not there, which is not a connection problem.
+ */
+export const SWITCHED_PATHS: readonly RegExp[] = [
+  /^\/v1\/care-notifications\/read$/, /^\/v1\/documents\/[^/]+\/cancel$/, /^\/v1\/document-types\/[^/]+\/retire$/,
+  /^\/v1\/offices(\/|$)/, /^\/v1\/client-offices$/, /^\/v1\/clients\/[^/]+\/office$/,
+  /^\/v1\/people-facets$/, /^\/v1\/assignment-history$/, /^\/v1\/clients\/[^/]+\/(offices|service-county)$/, /^\/v1\/caregivers\/[^/]+\/(offices|service-counties|color)$/,
+  /^\/v1\/staff\/duplicates$/, /^\/v1\/staff\/[^/]+\/merge$/, /^\/v1\/imports\/[^/]+$/,
+  /^\/v1\/caregivers\/[^/]+\/signin-override$/, /^\/v1\/signin-overrides$/,
+  /^\/v1\/reports\/missing-visits$/, /^\/v1\/shifts\/[^/]+\/missing-visit$/, /^\/v1\/business-documents$/, /^\/v1\/checkin$/, /^\/v1\/clients\/[^/]+\/qr-card$/,
+];
+export const isSwitchedPath = (path: string) => SWITCHED_PATHS.some((re) => re.test(path));
+
+const defaultCode = (status: number) => (status === 401 ? "unauthenticated" : status === 403 ? "forbidden" : status === 429 ? "rate_limited" : status >= 500 ? "server_error" : "http_error");
+const defaultMessage = (status: number) =>
+  status === 401 ? "Your session has ended. Please sign in again."
+  : status === 403 ? "You do not have permission to do this."
+  : status === 429 ? "Too many requests. Wait a moment and try again."
+  : status >= 500 ? "Ogevia had a problem completing that. Try again in a moment; if it keeps happening, tell the office."
+  : "The request failed. Please try again.";
+
 export interface AwsApiClient {
   get<T>(path: string, query?: Record<string, string | null | undefined>): Promise<T>;
   post<T>(path: string, body: unknown, options?: { idempotencyKey?: string }): Promise<T>;
@@ -25,6 +48,16 @@ export function createAwsApiClient(options: {
 }): AwsApiClient {
   const base = options.baseUrl.replace(/\/+$/, "");
   const doFetch = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+
+  /** True when the API answers an always-present route (any HTTP status counts: it was reached). */
+  async function apiAnswers(token: string | null): Promise<boolean> {
+    try {
+      await doFetch(new URL(`${base}/v1/me`, window.location.origin).toString(), { method: "GET", headers: token ? { accept: "application/json", authorization: `Bearer ${token}` } : { accept: "application/json" }, credentials: "omit", cache: "no-store" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   async function request<T>(method: "GET" | "POST", path: string, init: { query?: Record<string, string | null | undefined>; body?: unknown; idempotencyKey?: string }): Promise<T> {
     const token = options.getAccessToken ? await options.getAccessToken() : null;
@@ -45,6 +78,7 @@ export function createAwsApiClient(options: {
         cache: "no-store",
       });
     } catch {
+      if (isSwitchedPath(path) && (await apiAnswers(token))) throw new ApiRequestError(404, "not_available", "This is not available in this environment yet.");
       throw new ApiRequestError(0, "network_error", "Could not reach Ogevia. Check your connection and try again.");
     }
     let payload: unknown = null;
@@ -55,7 +89,8 @@ export function createAwsApiClient(options: {
     }
     if (!response.ok) {
       const err = (payload as { error?: { code?: string; message?: string } } | null)?.error;
-      throw new ApiRequestError(response.status, err?.code ?? "http_error", err?.message ?? "The request failed. Please try again.");
+      // The server's own safe message (business rules, permissions) always wins. API Gateway's own answers (expired token, throttling, a crashed function) carry no such message.
+      throw new ApiRequestError(response.status, err?.code ?? defaultCode(response.status), err?.message ?? defaultMessage(response.status));
     }
     return payload as T;
   }

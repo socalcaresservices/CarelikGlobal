@@ -6,7 +6,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAttentionCounts, useAwsApi } from "./aws-workspace";
 import { useAgencyClock } from "./agency-clock";
 import { useHomeIssues } from "./home-data";
-import { DISPLAY_LABEL, filterOptions, monthGrid, NO_FILTERS, stateOfShift, type CalendarView, type ShiftFilters } from "./schedule-model";
+import { ACTIVE_FILTERS, DISPLAY_LABEL, filterOptions, monthGrid, stateOfShift, type CalendarView, type ShiftFilters } from "./schedule-model";
 import type { Shift } from "./schedule-page";
 import { ShortHelp } from "./help-text";
 import { useCaregivers } from "./care-team-admin";
@@ -86,13 +86,13 @@ export function SchedulingOverview() {
   );
 }
 
-export function FilterBar({ shifts, filters, onChange }: { shifts: Shift[]; filters: ShiftFilters; onChange: (f: ShiftFilters) => void }) {
+export function FilterBar({ shifts, filters, onChange, hidden = 0 }: { shifts: Shift[]; filters: ShiftFilters; onChange: (f: ShiftFilters) => void; hidden?: number }) {
   const [open, setOpen] = useState(false);
-  const active = Object.values(filters).filter(Boolean).length;
+  const active = [filters.caregiver, filters.client, filters.service, filters.state].filter(Boolean).length + (filters.show === "active" ? 0 : 1);
   const o = open ? filterOptions(shifts) : null;
-  const sel = (label: string, key: keyof ShiftFilters, opts: Array<[string, string]>, extra?: Array<[string, string]>) => (
+  const sel = (label: string, key: "caregiver" | "client" | "service" | "state", opts: Array<[string, string]>, extra?: Array<[string, string]>) => (
     <label className="text-xs font-medium text-slate-600">{label}
-      <select value={filters[key]} onChange={(e) => onChange({ ...filters, [key]: e.target.value })} className="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 md:min-h-9">
+      <select value={filters[key as "caregiver" | "client" | "service" | "state"]} onChange={(e) => onChange({ ...filters, [key]: e.target.value })} className="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 md:min-h-9">
         <option value="">All</option>{[...(extra ?? []), ...opts].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>
     </label>
@@ -101,10 +101,19 @@ export function FilterBar({ shifts, filters, onChange }: { shifts: Shift[]; filt
     <div className={open ? "basis-full space-y-2" : "space-y-2"} data-testid="shift-filters">
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-slate-900 underline md:min-h-[32px]">{open ? "Hide filters" : active ? `Filters (${active} on)` : "Filters"}</button>
-        {active > 0 ? <Button type="button" variant="secondary" className="min-h-11" onClick={() => onChange(NO_FILTERS)}>Clear filters</Button> : null}
+        {active > 0 ? <Button type="button" variant="secondary" className="min-h-11" onClick={() => onChange(ACTIVE_FILTERS)}>Clear filters</Button> : null}
       </div>
+      {filters.show === "active" && hidden > 0 ? (
+        <p className="text-sm text-slate-600" data-testid="history-hint">{hidden} finished {hidden === 1 ? "shift is" : "shifts are"} kept in History (cancelled, or completed before today).{" "}
+          <button type="button" className="font-medium text-slate-900 underline" onClick={() => onChange({ ...filters, show: "history" })}>Show History</button></p>
+      ) : null}
       {o ? (
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+          <label className="text-xs font-medium text-slate-600">Show
+            <select value={filters.show} onChange={(e) => onChange({ ...filters, show: e.target.value as ShiftFilters["show"] })} className="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-og-card px-2 py-1 text-sm text-slate-900 md:min-h-9">
+              <option value="active">Active schedule</option><option value="history">History (cancelled and completed)</option><option value="all">Everything</option>
+            </select>
+          </label>
           {sel("Caregiver", "caregiver", o.caregivers, [["open", "No caregiver"]])}
           {sel("Client", "client", o.clients)}
           {sel("Service", "service", o.services)}

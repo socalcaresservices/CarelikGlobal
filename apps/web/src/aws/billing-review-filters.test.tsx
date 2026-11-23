@@ -20,7 +20,7 @@ const row = (n: number, o: Record<string, unknown>) => ({
 const ROWS = [
   row(1, {}),
   row(2, { clientCode: "C-2", clientName: "Client Two", caregiverName: "Sam B", serviceCode: "T1019", serviceName: "Personal Care" }),
-  row(3, { visitStatus: "administrator_review", reviewState: "needs_review", clientCode: "C-2", clientName: "Client Two", caregiverName: "Pat A" }),
+  row(3, { visitStatus: "administrator_review", reviewState: "needs_review", clientCode: "C-2", clientName: "Client Two", caregiverName: "Pat A", reviewReasons: ["unscheduled"] }),
   row(4, {}), // approved below
 ];
 const APPROVALS = [{ billingApprovalId: "cccccccc-0000-4000-8000-000000000001", visitId: ROWS[3]!.visitId, visitNumber: "V-4", serviceDate: "2026-10-05", approvedMinutes: 60,
@@ -99,6 +99,18 @@ describe("Billing review filters", () => {
     expect(seen.filter((s) => s.startsWith("/v1/billing-review"))).toHaveLength(1);
   });
 
+  it("filters by review reason from the page: the choice lists only reasons that exist, and clearing restores every visit", async () => {
+    renderPage();
+    await screen.findByText("4 visits in this date range");
+    const select = screen.getByLabelText("Review reason") as HTMLSelectElement;
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["All review reasons", "Started with no scheduled shift"]);
+    pick("Review reason", "unscheduled");
+    await waitFor(() => expect(tableRows()).toHaveLength(1));
+    expect(await screen.findByText("Showing 1 of 4 visits in this date range")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    await waitFor(() => expect(tableRows()).toHaveLength(4));
+  });
+
   it("no match: says so, offers Clear filters, and the records are untouched", async () => {
     renderPage();
     await screen.findByText("4 visits in this date range");
@@ -124,5 +136,35 @@ describe("applyBillingFilters (pure)", () => {
     const o = filterOptions(rows, approvalOf as never);
     expect(o.clients.map(([k]) => k)).toEqual(["C-1", "C-2"]);
     expect(o.approvals.map(([k]) => k).sort()).toEqual(["approved_for_billing", "ready_for_review"]);
+  });
+});
+
+describe("Review reason filter (VIS-26: the office narrows the list to one reason)", () => {
+  const approvalOf = () => "ready_for_review" as never;
+  const rows = [
+    row(1, { reviewReasons: ["unscheduled", "no_client_signature"] }),
+    row(2, { reviewReasons: ["over_authorization"] }),
+    row(3, { reviewReasons: [] }),
+    row(4, {}), // an older server that sends no reasons at all
+  ] as never[];
+
+  it("offers only the reasons present in the loaded rows, in plain words, A-Z", () => {
+    expect(filterOptions(rows, approvalOf).reasons).toEqual([
+      ["unscheduled", "Started with no scheduled shift"],
+      ["no_client_signature", "No client signature or mark"],
+      ["over_authorization", "Over the monthly authorization"],
+    ].sort((a, b) => a[1]!.localeCompare(b[1]!)));
+  });
+
+  it("shows only visits that carry the chosen reason, and every visit when none is chosen", () => {
+    expect(applyBillingFilters(rows, { ...NO_FILTERS, reason: "no_client_signature" }, approvalOf).map((r) => (r as { visitNumber: string }).visitNumber)).toEqual(["V-1"]);
+    expect(applyBillingFilters(rows, { ...NO_FILTERS, reason: "over_authorization" }, approvalOf)).toHaveLength(1);
+    expect(applyBillingFilters(rows, NO_FILTERS, approvalOf)).toHaveLength(4);
+  });
+
+  it("combines with the other filters and shows an unknown reason code in its own words", () => {
+    const unknown = [row(5, { reviewReasons: ["new_server_reason"], caregiverName: "Pat A" }), row(6, { reviewReasons: ["new_server_reason"], caregiverName: "Sam B" })] as never[];
+    expect(filterOptions(unknown, approvalOf).reasons).toEqual([["new_server_reason", "new server reason"]]);
+    expect(applyBillingFilters(unknown, { ...NO_FILTERS, reason: "new_server_reason", caregiver: "Sam B" }, approvalOf)).toHaveLength(1);
   });
 });

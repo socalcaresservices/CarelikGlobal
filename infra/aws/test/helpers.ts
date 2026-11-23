@@ -8,8 +8,8 @@ const cdkJsonContext = (
   }
 ).context;
 
-export function newApp(): App {
-  return new App({ context: cdkJsonContext });
+export function newApp(options: { pathMetadata?: boolean } = {}): App {
+  return new App({ context: cdkJsonContext, ...options });
 }
 
 export type CfnResource = {

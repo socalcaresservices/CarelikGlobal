@@ -1,3 +1,4 @@
+import { ClientQrCard } from "./client-qr";
 import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,8 @@ import { linkClass } from "./ui-classes";
 import { CompactAlert } from "./ui/compact-alert";
 import { SummarySection } from "./ui/summary-section";
 import { actionBtn, actionBtnPrimary } from "./ui-classes";
+import { InfoTip } from "./ui/info-tip";
+import { ClientOfficeControl } from "./offices";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -77,6 +80,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
     return (
       <SummarySection title="Details" summary={`City: ${c.city ?? "—"} · Type: ${c.clientTypeName ?? "—"} · Code: ${c.clientCode} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
         <p className="text-sm text-slate-700">Name and contact changes are made by the office.</p>
+        <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>
       </SummarySection>
     );
   }
@@ -90,6 +94,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
           <div><dt className="text-xs text-slate-600">Client code</dt><dd>{c.clientCode}</dd></div>
           <div><dt className="text-xs text-slate-600">Caregivers see</dt><dd>{c.caregiverDisplayCode ?? c.clientCode}</dd></div>
         </dl>
+        <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>
         <button type="button" className={`mt-2 ${actionBtn}`} onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
         {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Saved. The change is in the client&apos;s history.</p> : null}
       </SummarySection>
@@ -98,7 +103,7 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   return (
     <Card className="p-3" id="details">
       <h2 className="text-base font-semibold text-slate-950">Edit details</h2>
-      <p className="mt-1 text-xs text-slate-600" data-testid="edit-impact">Changes are recorded in the client&apos;s history. Changing the type can change which caregivers match a care request.</p>
+      <span data-testid="edit-impact"><InfoTip label="Help">Changes are recorded in the client&apos;s history. Changing the type can change which caregivers match a care request.</InfoTip></span>
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="edit-first" className="block text-sm font-medium text-slate-700">First name</label><input id="edit-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="edit-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="edit-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
@@ -450,7 +455,7 @@ export function ClientDetailPage() {
       <DetailsCard c={c} canManage={canManage} />
       {hasPermission("matching.read") ? <ClientExperience clientId={c.clientId} /> : null}
       {hasPermission("matching.manage") ? <MatchingLocation clientId={c.clientId} /> : null}
-      {canManage ? <StatusCard c={c} /> : null}
+      {canManage ? <><StatusCard c={c} /><ClientQrCard key={c.clientId} clientId={c.clientId} /></> : null}
       <div id="history"><ClientHistoryCard clientId={c.clientId} /></div>
     </div>
   );

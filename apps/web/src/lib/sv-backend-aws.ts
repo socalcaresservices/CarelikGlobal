@@ -11,6 +11,7 @@ import type {
   CorrectionHistoryReportRow,
   MonthlyApprovalSummaryRow,
   MonthlyServiceSummaryRow,
+  MissingScheduledVisit,
   ServiceVerificationBackend,
   VisitCorrectionRow,
   VisitReportRow,
@@ -36,15 +37,24 @@ export interface AwsMembership {
   permissions: string[];
 }
 
+/** A staff invitation waiting for this person to accept it (0087). It grants nothing until accepted. */
+export interface AwsPendingInvitation {
+  organizationId: string;
+  organizationName: string;
+  role: string;
+}
+
 export interface AwsMe {
   memberships: AwsMembership[];
+  /** Invitations to other agencies awaiting this person's acceptance; empty on a server that does not have them. */
+  pendingInvitations: AwsPendingInvitation[];
   /** The signed-in person's own name; null when they have not set one (never invented). */
   displayName: string | null;
 }
 
 export async function fetchMe(api: AwsApiClient): Promise<AwsMe> {
-  const me = await api.get<{ memberships: AwsMembership[]; profile?: { displayName: string | null } }>("/v1/me");
-  return { memberships: me.memberships, displayName: me.profile?.displayName ?? null };
+  const me = await api.get<{ memberships: AwsMembership[]; pendingInvitations?: AwsPendingInvitation[]; profile?: { displayName: string | null } }>("/v1/me");
+  return { memberships: me.memberships, pendingInvitations: me.pendingInvitations ?? [], displayName: me.profile?.displayName ?? null };
 }
 
 export function createAwsServiceVerificationBackend(
@@ -177,6 +187,20 @@ export function createAwsServiceVerificationBackend(
     },
     async correctVisit({ visitId, timeIn, timeOut, reason, idempotencyKey }) {
       await api.post(`/v1/visits/${enc(visitId)}/corrections`, { timeIn, timeOut, reason }, { idempotencyKey });
+    },
+    async listMissingScheduledVisits(organizationId, filters) {
+      const result = await api.get<{ missingVisits: MissingScheduledVisit[] }>("/v1/reports/missing-visits", {
+        organizationId, from: filters.dateFrom, to: filters.dateTo, clientId: filters.clientId,
+        serviceId: filters.serviceId, caregiverUserId: filters.caregiverUserId,
+      });
+      return result.missingVisits;
+    },
+    async listMissingVisitReasonLabels(organizationId) {
+      return (await api.get<{ reasonLabels: { label: string; visits: number }[] }>("/v1/reports/missing-visits", { organizationId, reasonLabels: "true" })).reasonLabels;
+    },
+    async recordMissingScheduledVisit({ organizationId, shiftId, timeIn, timeOut, reason, reasonLabel, idempotencyKey }) {
+      const result = await api.post<{ visitId: string }>(`/v1/shifts/${enc(shiftId)}/missing-visit`, { organizationId, timeIn, timeOut, reason, reasonLabel }, { idempotencyKey });
+      return result.visitId;
     },
     async closeMissedVisit({ visitId, timeOut, reason, idempotencyKey }) {
       await api.post(`/v1/visits/${enc(visitId)}/close`, { timeOut, reason }, { idempotencyKey });

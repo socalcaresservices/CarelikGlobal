@@ -1,0 +1,780 @@
+{
+ "Description": "Ogevia prod - CloudFront + private S3 web hosting and test-slice Cognito app client (Phase 6; not deployed)",
+ "Resources": {
+  "WebLogBucket13C9A72B": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "ExpirationInDays": 90,
+       "Id": "expire-web-logs",
+       "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 30
+       },
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "OwnershipControls": {
+     "Rules": [
+      {
+       "ObjectOwnership": "BucketOwnerPreferred"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prod"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "approved-synth-only-0001"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "6"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/WebLogBucket/Resource"
+   }
+  },
+  "WebLogBucketPolicyB82CB008": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "WebLogBucket13C9A72B"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WebLogBucket13C9A72B",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WebLogBucket13C9A72B",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "NumericLessThan": {
+         "s3:TlsVersion": 1.2
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WebLogBucket13C9A72B",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WebLogBucket13C9A72B",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:PutObject",
+       "Condition": {
+        "ArnLike": {
+         "aws:SourceArn": {
+          "Fn::GetAtt": [
+           "WebSiteBucketA8FEB80D",
+           "Arn"
+          ]
+         }
+        },
+        "StringEquals": {
+         "aws:SourceAccount": "300094796789"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "logging.s3.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "WebLogBucket13C9A72B",
+            "Arn"
+           ]
+          },
+          "/site-bucket/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/WebLogBucket/Policy/Resource"
+   }
+  },
+  "WebSiteBucketA8FEB80D": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "Id": "expire-old-builds",
+       "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 30
+       },
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "LoggingConfiguration": {
+     "DestinationBucketName": {
+      "Ref": "WebLogBucket13C9A72B"
+     },
+     "LogFilePrefix": "site-bucket/"
+    },
+    "OwnershipControls": {
+     "Rules": [
+      {
+       "ObjectOwnership": "BucketOwnerEnforced"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prod"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "approved-synth-only-0001"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "6"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ],
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/WebSiteBucket/Resource"
+   }
+  },
+  "WebSiteBucketPolicyAF0D7445": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "WebSiteBucketA8FEB80D"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WebSiteBucketA8FEB80D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WebSiteBucketA8FEB80D",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "NumericLessThan": {
+         "s3:TlsVersion": 1.2
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "WebSiteBucketA8FEB80D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "WebSiteBucketA8FEB80D",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": "s3:GetObject",
+       "Condition": {
+        "StringEquals": {
+         "AWS:SourceArn": {
+          "Fn::Join": [
+           "",
+           [
+            "arn:",
+            {
+             "Ref": "AWS::Partition"
+            },
+            ":cloudfront::",
+            {
+             "Ref": "AWS::AccountId"
+            },
+            ":distribution/",
+            {
+             "Ref": "WebDistribution59C46482"
+            }
+           ]
+          ]
+         }
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "cloudfront.amazonaws.com"
+       },
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          {
+           "Fn::GetAtt": [
+            "WebSiteBucketA8FEB80D",
+            "Arn"
+           ]
+          },
+          "/*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/WebSiteBucket/Policy/Resource"
+   }
+  },
+  "SecurityHeadersE66B69D3": {
+   "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+   "Properties": {
+    "ResponseHeadersPolicyConfig": {
+     "Comment": "Ogevia web security headers",
+     "CustomHeadersConfig": {
+      "Items": [
+       {
+        "Header": "Permissions-Policy",
+        "Override": true,
+        "Value": "camera=(), microphone=(), geolocation=(), payment=()"
+       }
+      ]
+     },
+     "Name": "OgeviaprodWebHostingSecurityHeaders8832CFB2",
+     "SecurityHeadersConfig": {
+      "ContentSecurityPolicy": {
+       "ContentSecurityPolicy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.execute-api.us-west-2.amazonaws.com https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com; form-action 'self' https://us-west-2849ayz5j7.auth.us-west-2.amazoncognito.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests",
+       "Override": true
+      },
+      "ContentTypeOptions": {
+       "Override": true
+      },
+      "FrameOptions": {
+       "FrameOption": "DENY",
+       "Override": true
+      },
+      "ReferrerPolicy": {
+       "Override": true,
+       "ReferrerPolicy": "no-referrer"
+      },
+      "StrictTransportSecurity": {
+       "AccessControlMaxAgeSec": 31536000,
+       "IncludeSubdomains": true,
+       "Override": true
+      }
+     }
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/SecurityHeaders/Resource"
+   }
+  },
+  "SpaRewrite1C145184": {
+   "Type": "AWS::CloudFront::Function",
+   "Properties": {
+    "AutoPublish": true,
+    "FunctionCode": "\nfunction handler(event) {\n  var request = event.request;\n  var uri = request.uri;\n  if (uri === \"/\" || uri.lastIndexOf(\".\") <= uri.lastIndexOf(\"/\")) {\n    request.uri = \"/index.html\";\n  }\n  return request;\n}",
+    "FunctionConfig": {
+     "Comment": "SPA route rewrite to /index.html",
+     "Runtime": "cloudfront-js-2.0"
+    },
+    "Name": "us-west-2OgeviaprodWebHostingSpaRewriteA319FDBD",
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prod"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "approved-synth-only-0001"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "6"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/SpaRewrite/Resource"
+   }
+  },
+  "WebDistributionOrigin1S3OriginAccessControl83AD2F73": {
+   "Type": "AWS::CloudFront::OriginAccessControl",
+   "Properties": {
+    "OriginAccessControlConfig": {
+     "Name": "OgeviaprodWebHostingWebDistrOrigin1S3OriginAccessControl2CB35884",
+     "OriginAccessControlOriginType": "s3",
+     "SigningBehavior": "always",
+     "SigningProtocol": "sigv4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/WebDistribution/Origin1/S3OriginAccessControl/Resource"
+   }
+  },
+  "WebDistribution59C46482": {
+   "Type": "AWS::CloudFront::Distribution",
+   "Properties": {
+    "DistributionConfig": {
+     "Aliases": [
+      "demo.ogevia.com"
+     ],
+     "Comment": "Ogevia prod web (test slice)",
+     "DefaultCacheBehavior": {
+      "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+      "Compress": true,
+      "FunctionAssociations": [
+       {
+        "EventType": "viewer-request",
+        "FunctionARN": {
+         "Fn::GetAtt": [
+          "SpaRewrite1C145184",
+          "FunctionARN"
+         ]
+        }
+       }
+      ],
+      "ResponseHeadersPolicyId": {
+       "Ref": "SecurityHeadersE66B69D3"
+      },
+      "TargetOriginId": "OgeviaprodWebHostingWebDistributionOrigin1EB7AE644",
+      "ViewerProtocolPolicy": "redirect-to-https"
+     },
+     "DefaultRootObject": "index.html",
+     "Enabled": true,
+     "HttpVersion": "http2and3",
+     "IPV6Enabled": true,
+     "Logging": {
+      "Bucket": {
+       "Fn::GetAtt": [
+        "WebLogBucket13C9A72B",
+        "RegionalDomainName"
+       ]
+      },
+      "Prefix": "cloudfront/"
+     },
+     "Origins": [
+      {
+       "DomainName": {
+        "Fn::GetAtt": [
+         "WebSiteBucketA8FEB80D",
+         "RegionalDomainName"
+        ]
+       },
+       "Id": "OgeviaprodWebHostingWebDistributionOrigin1EB7AE644",
+       "OriginAccessControlId": {
+        "Fn::GetAtt": [
+         "WebDistributionOrigin1S3OriginAccessControl83AD2F73",
+         "Id"
+        ]
+       },
+       "S3OriginConfig": {
+        "OriginAccessIdentity": ""
+       }
+      }
+     ],
+     "PriceClass": "PriceClass_100",
+     "ViewerCertificate": {
+      "AcmCertificateArn": "arn:aws:acm:us-east-1:300094796789:certificate/bfc4e928-f387-4804-a8d6-6eb351cfb526",
+      "MinimumProtocolVersion": "TLSv1.2_2021",
+      "SslSupportMethod": "sni-only"
+     }
+    },
+    "Tags": [
+     {
+      "Key": "environment",
+      "Value": "prod"
+     },
+     {
+      "Key": "managed-by",
+      "Value": "cdk"
+     },
+     {
+      "Key": "ogevia:deployment-status",
+      "Value": "approved-synth-only-0001"
+     },
+     {
+      "Key": "ogevia:ownership",
+      "Value": "cdk-future"
+     },
+     {
+      "Key": "ogevia:planned-phase",
+      "Value": "6"
+     },
+     {
+      "Key": "project",
+      "Value": "ogevia"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/WebDistribution/Resource"
+   }
+  },
+  "TestSliceAppClient": {
+   "Type": "AWS::Cognito::UserPoolClient",
+   "Properties": {
+    "AccessTokenValidity": 60,
+    "AllowedOAuthFlows": [
+     "code"
+    ],
+    "AllowedOAuthFlowsUserPoolClient": true,
+    "AllowedOAuthScopes": [
+     "openid",
+     "email"
+    ],
+    "AuthSessionValidity": 3,
+    "CallbackURLs": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "https://",
+        {
+         "Fn::GetAtt": [
+          "WebDistribution59C46482",
+          "DomainName"
+         ]
+        },
+        "/auth/callback"
+       ]
+      ]
+     },
+     "https://demo.ogevia.com/auth/callback"
+    ],
+    "ClientName": "ogevia-web-prod-test-slice",
+    "EnableTokenRevocation": true,
+    "ExplicitAuthFlows": [
+     "ALLOW_REFRESH_TOKEN_AUTH",
+     "ALLOW_USER_SRP_AUTH"
+    ],
+    "GenerateSecret": false,
+    "IdTokenValidity": 60,
+    "LogoutURLs": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "https://",
+        {
+         "Fn::GetAtt": [
+          "WebDistribution59C46482",
+          "DomainName"
+         ]
+        },
+        "/"
+       ]
+      ]
+     },
+     "https://demo.ogevia.com/"
+    ],
+    "PreventUserExistenceErrors": "ENABLED",
+    "RefreshTokenValidity": 12,
+    "SupportedIdentityProviders": [
+     "COGNITO"
+    ],
+    "TokenValidityUnits": {
+     "AccessToken": "minutes",
+     "IdToken": "minutes",
+     "RefreshToken": "hours"
+    },
+    "UserPoolId": "us-west-2_849AYz5J7"
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/TestSliceAppClient"
+   }
+  },
+  "TestSliceManagedLogin": {
+   "Type": "AWS::Cognito::ManagedLoginBranding",
+   "Properties": {
+    "ClientId": {
+     "Ref": "TestSliceAppClient"
+    },
+    "UseCognitoProvidedValues": true,
+    "UserPoolId": "us-west-2_849AYz5J7"
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/TestSliceManagedLogin"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/3VQTU/DMAz9LdzTgLIDZ1aEOICYOnFGWeJGXoM9xQkTivLfUVvEOMDpffg9WbbR5tbomyt7ls75qYt40HWfrZuUPctblY2u2+ImyKof6ZutsOOI7vNir7opF7n4MTFlXQeQE5PAI1gPSS6VvwcPhVxGpjnxw+9RcsJDWcR+85IwIN05ByI9U04c5/g/9u9yU44DYWZd+5FeBdKOOfYRgZbrni3ZAP6JA9I2WfJIoTU1gHBJDpYtJZ9KborYgz7K9Ycx2sz/OwpilwplfAc9rPgFRE56hlwBAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "Ogevia-prod-WebHosting/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "WebOrigin": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Fn::GetAtt": [
+        "WebDistribution59C46482",
+        "DomainName"
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  "DistributionId": {
+   "Value": {
+    "Ref": "WebDistribution59C46482"
+   }
+  },
+  "SiteBucketName": {
+   "Value": {
+    "Ref": "WebSiteBucketA8FEB80D"
+   }
+  },
+  "TestAppClientId": {
+   "Value": {
+    "Ref": "TestSliceAppClient"
+   }
+  },
+  "ExportsOutputRefTestSliceAppClient5EA2F71F": {
+   "Value": {
+    "Ref": "TestSliceAppClient"
+   },
+   "Export": {
+    "Name": "Ogevia-prod-WebHosting:ExportsOutputRefTestSliceAppClient5EA2F71F"
+   }
+  },
+  "ExportsOutputFnGetAttWebDistribution59C46482DomainNameC09D0E36": {
+   "Value": {
+    "Fn::GetAtt": [
+     "WebDistribution59C46482",
+     "DomainName"
+    ]
+   },
+   "Export": {
+    "Name": "Ogevia-prod-WebHosting:ExportsOutputFnGetAttWebDistribution59C46482DomainNameC09D0E36"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

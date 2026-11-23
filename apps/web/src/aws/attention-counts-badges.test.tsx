@@ -3,7 +3,7 @@
 // billing approval (Ready for Approval) apart; red follows the server's Critical number, not the colour of an item; the Scheduling page agrees with its badge and
 // puts a running unfilled shift in "Unfilled" but never an ended one.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -73,34 +73,45 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 /** The badge on the sidebar link with this accessible name (links read "Label5"), or null. */
 async function badgeOn(label: RegExp) {
   const nav = await screen.findByRole("navigation", { name: "Main" });
+  for (const b of Array.from(nav.querySelectorAll<HTMLElement>('[data-nav-level="section"][aria-expanded="false"]'))) fireEvent.click(b);   // a group is closed until the page moves into it
   const link = within(nav).getAllByRole("link").find((a) => label.test((a.textContent ?? "").replace(/\d+$/, "")));
   if (!link) throw new Error(`no sidebar link ${label}`);
   const b = within(link).queryByTestId("nav-badge");
   return b ? { n: Number(b.textContent), red: b.className.includes("bg-red-100") } : null;
 }
-
 describe("sidebar badges are the server's counts", () => {
-  it("someone who may bill: Caregivers 2, Scheduling 3 (red: the server says 1 is Critical), Approvals shows Ready for Approval 4, Visits to review shows exception review 5; none is a sum", async () => {
-    renderAt("/schedule", BILL, COUNTS);
+  it("someone who may bill: Caregivers 2, Schedule 3 (red: the server says 1 is Critical), Billing shows Ready for Approval 4, the Visits to review item shows exception review 5; none is a sum", async () => {
+    renderAt("/billing-review", BILL, COUNTS);
     await waitFor(async () => expect(await badgeOn(/^Schedule$/)).toEqual({ n: 3, red: true }));
     expect(await badgeOn(/^Caregivers$/)).toEqual({ n: 2, red: false }); // amber: nothing Critical, even though documents are shown as overdue elsewhere
-    expect(await badgeOn(/^Approvals$/)).toEqual({ n: 4, red: false }); // billing approval only; not 4 + 5
+    expect(await badgeOn(/^Billing$/)).toEqual({ n: 4, red: false }); // billing approval only; not 4 + 5
+    expect(await badgeOn(/^Billing$/)).toEqual({ n: 4, red: false });
     expect(await badgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }); // exception review only
   });
 
-  it("someone who may not bill: the Approvals link opens exception review, so its badge is exception review (5) and Ready for Approval appears nowhere", async () => {
-    renderAt("/schedule", NO_BILL, { ...COUNTS, approvals: { exceptions: { count: 5, critical: 0 }, readyForApproval: null } });
-    await waitFor(async () => expect(await badgeOn(/^Approvals$/)).toEqual({ n: 5, red: false }));
+  it("a closed group with work waiting in two places shows a dot, never a sum of unlike counts", async () => {
+    renderAt("/schedule", BILL, COUNTS);
+    const nav = await screen.findByRole("navigation", { name: "Main" });
+    const operations = await waitFor(() => { const s = within(nav).getAllByTestId("nav-section").find((e) => e.querySelector("button")?.textContent?.startsWith("Operations")); if (!s || !s.querySelector('[data-testid="nav-badge"]')) throw new Error("no badge yet"); return s; });
+    const badge = operations.querySelector('[data-testid="nav-badge"]')!;
+    expect(badge.textContent).toBe("•");
+    expect(badge).toHaveAttribute("aria-label", "Items waiting");
+  });
+
+  it("someone who may not bill: Visits to review is exception review (5), there is no Billing, and Ready for Approval appears nowhere", async () => {
+    renderAt("/service-verification/reports?view=exceptions", NO_BILL, { ...COUNTS, approvals: { exceptions: { count: 5, critical: 0 }, readyForApproval: null } });
+    await waitFor(async () => expect(await badgeOn(/^Visits to review$/)).toEqual({ n: 5, red: false }));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).queryByRole("link", { name: /Visits to review/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /Billing/ })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Section tabs" })).toBeNull();
   });
 
   it("a count the person may not see is null: no badge, never a zero; a zero count shows no badge either", async () => {
-    renderAt("/schedule", BILL, { ...COUNTS, caregivers: null, scheduling: { count: 0, critical: 0 }, approvals: { exceptions: null, readyForApproval: 0 } });
+    renderAt("/billing-review", BILL, { ...COUNTS, caregivers: null, scheduling: { count: 0, critical: 0 }, approvals: { exceptions: null, readyForApproval: 0 } });
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument());
     await waitFor(async () => expect(await badgeOn(/^Caregivers$/)).toBeNull());
     expect(await badgeOn(/^Schedule$/)).toBeNull();
-    expect(await badgeOn(/^Approvals$/)).toBeNull();
+    expect(await badgeOn(/^Billing$/)).toBeNull();
     expect(await badgeOn(/^Visits to review$/)).toBeNull();
   });
 
@@ -122,10 +133,8 @@ describe("Scheduling: the badge, the overview figure and the lists agree; past s
     shift("past2", -30, -28, "needs_coverage", "missed"),
   ];
 
-  it("the 'Need action now' figure equals the sidebar badge; 'Unfilled' lists the running and the later shifts (3), not the two ended ones", async () => {
+  it("the sidebar badge shows the server's count; 'Unfilled' lists the running and the later shifts (3), not the two ended ones", async () => {
     renderAt("/schedule", BILL, { ...COUNTS, scheduling: { count: 2, critical: 1 } }, SHIFTS);
-    const overview = await screen.findByTestId("scheduling-now");
-    expect(overview).toHaveTextContent("2");
     await waitFor(async () => expect((await badgeOn(/^Schedule$/))?.n).toBe(2));
     expect(await screen.findByRole("heading", { name: "Unfilled (3)" })).toBeInTheDocument();
     const section = screen.getByRole("heading", { name: "Unfilled (3)" }).closest("section")!;
@@ -134,12 +143,10 @@ describe("Scheduling: the badge, the overview figure and the lists agree; past s
     expect(screen.getAllByText("Missed: no visit record").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("'Unfilled only' hides the ended shifts (they are Missed, not uncovered)", async () => {
-    renderAt("/schedule", BILL, COUNTS, SHIFTS);
+  it("coverage view hides ended shifts and retains the unfilled list", async () => {
+    renderAt("/schedule?coverage=1", BILL, COUNTS, SHIFTS);
     await screen.findByRole("heading", { name: "Unfilled (3)" });
-    const box = screen.getByRole("checkbox", { name: /Unfilled only/ });
-    box.click();
-    await waitFor(() => expect(screen.getByText(/No other shift is unfilled this week\./)).toBeInTheDocument());
+    expect(screen.getByRole("heading", { name: "Coverage date range" })).toBeInTheDocument();
     expect(screen.queryAllByText("Missed: no visit record")).toHaveLength(0);
   });
 

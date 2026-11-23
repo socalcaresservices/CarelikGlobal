@@ -42,10 +42,10 @@ function fakeApi(role: "organization_owner" | "manager") {
       case "GET /v1/accounts":
         return json(200, { accounts: [
           { userId: ME, displayName: "Synthetic Admin", role: "organization_owner", accountStatus: "active", caregiverRecordId: null, caregiverCode: null, isSelf: true },
-          { userId: CG, displayName: "Synthetic Caregiver", role: "caregiver", accountStatus: status[CG], caregiverRecordId: "r1", caregiverCode: "CG-1", isSelf: false },
-          { userId: INV, displayName: "Synthetic Invitee", role: "caregiver", accountStatus: status[INV], caregiverRecordId: "r2", caregiverCode: "CG-2", isSelf: false },
+          { userId: CG, displayName: "Synthetic Caregiver", role: "caregiver", accountStatus: status[CG], caregiverRecordId: "r1", caregiverCode: "CG-1", isSelf: false, workStatus: "active", readinessMet: 5, readinessTotal: 5, hasContact: true },
+          { userId: INV, displayName: "Synthetic Invitee", role: "caregiver", accountStatus: status[INV], caregiverRecordId: "r2", caregiverCode: "CG-2", isSelf: false, workStatus: "not_ready", readinessMet: 2, readinessTotal: 5, hasContact: true },
           { userId: OFF, displayName: "Synthetic Former", role: "caregiver", accountStatus: status[OFF], caregiverRecordId: "r3", caregiverCode: "CG-3", isSelf: false },
-          { userId: null, displayName: "Synthetic Newcomer", role: "caregiver", accountStatus: "setup_required", caregiverRecordId: REC, caregiverCode: "CG-4", isSelf: false },
+          { userId: null, displayName: "Synthetic Newcomer", role: "caregiver", accountStatus: "setup_required", caregiverRecordId: REC, caregiverCode: "CG-4", isSelf: false, workStatus: "not_ready", readinessMet: 0, readinessTotal: 5, hasContact: false },
         ] });
       default:
         return json(404, { error: { code: "not_found", message: "No such endpoint." } });
@@ -79,8 +79,8 @@ afterEach(() => vi.clearAllMocks());
 describe("Accounts", () => {
   it("shows the four statuses in plain words, never Cognito terms, and no password or email", async () => {
     renderAt("/accounts", "organization_owner");
-    expect(await screen.findByText("Synthetic Caregiver (CG-1)")).toBeInTheDocument();
-    for (const label of ["Active", "Invitation Pending", "Disabled", "Account Setup Required"]) expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Synthetic Caregiver")).toBeInTheDocument();
+    for (const label of ["Active", "Invitation Pending", "Disabled", "Account Setup Required"]) expect(screen.getAllByText("Sign-in: " + label).length).toBeGreaterThan(0);
     expect(screen.getByText(/Must set a password at the first sign-in/)).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Sign-in accounts" }).textContent).not.toMatch(/FORCE_CHANGE_PASSWORD|CONFIRMED|RESET_REQUIRED|@|password:/i);
     expect(screen.getByText(/Passwords are never shown here/)).toBeInTheDocument();
@@ -91,14 +91,14 @@ describe("Accounts", () => {
 
   it("you cannot disable yourself: your own row has no button; the others do", async () => {
     renderAt("/accounts", "organization_owner");
-    await screen.findByText("Synthetic Caregiver (CG-1)");
+    await screen.findByText("Synthetic Caregiver");
     expect(screen.getAllByRole("button", { name: "Disable account…" })).toHaveLength(2); // the caregiver and the invitee, not yourself
     expect(screen.getAllByRole("button", { name: "Enable account…" })).toHaveLength(1);
   });
 
   it("disable needs a reason, posts it for that person only, then shows the result", async () => {
     const api = renderAt("/accounts", "organization_owner");
-    await screen.findByText("Synthetic Caregiver (CG-1)");
+    await screen.findByText("Synthetic Caregiver");
     fireEvent.click(screen.getAllByRole("button", { name: "Disable account…" })[0]!);
     const group = await screen.findByRole("group", { name: "Disable account" });
     const go = within(group).getByRole("button", { name: "Disable account" });
@@ -113,7 +113,7 @@ describe("Accounts", () => {
 
   it("enable posts to the enable route; a server failure is shown in words and nothing is claimed done", async () => {
     const api = renderAt("/accounts", "organization_owner");
-    await screen.findByText("Synthetic Former (CG-3)");
+    await screen.findByText("Synthetic Former");
     fireEvent.click(screen.getByRole("button", { name: "Enable account…" }));
     const group = await screen.findByRole("group", { name: "Enable account" });
     fireEvent.change(within(group).getByLabelText("Reason"), { target: { value: "FAIL" } });
@@ -131,5 +131,22 @@ describe("Accounts", () => {
     expect(await screen.findByText(/Only an administrator can manage sign-in accounts/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Accounts" })).toBeNull();
     expect(api.calls.some((c) => c.path === "/v1/accounts")).toBe(false); // the page does not even ask
+  });
+
+  it("shows sign-in status separately from work readiness and offers invitation actions when appropriate", async () => {
+    renderAt("/accounts", "organization_owner");
+    const invitee = (await screen.findByText(/Synthetic Invitee/)).closest("li")!;
+    expect(within(invitee).getByText("Not ready")).toBeInTheDocument();
+    expect(within(invitee).getByText(/2 of 5 done/)).toBeInTheDocument();
+    expect(within(invitee).getByText("Sign-in: Invitation Pending")).toBeInTheDocument();
+    expect(within(invitee).getByRole("button", { name: "Send sign-in link" })).toBeInTheDocument();
+    const newcomer = screen.getByText(/Synthetic Newcomer/).closest("li")!;
+    expect(within(newcomer).getByRole("link", { name: "Add email" })).toHaveAttribute("href", expect.stringMatching(/^\/care-team\//));
+    const active = screen.getByText(/Synthetic Caregiver/).closest("li")!;
+    expect(within(active).getByText("Active")).toBeInTheDocument(); // work readiness
+    expect(within(active).getByText("Sign-in: Active")).toBeInTheDocument();
+    expect(within(active).queryByText(/sign-in link|Add email/i)).not.toBeInTheDocument();
+    // a staff member who is not a caregiver keeps the account status
+    expect(within(screen.getByText(/Synthetic Admin — you/).closest("li")!).getByText("Sign-in: Active")).toBeInTheDocument();
   });
 });

@@ -54,7 +54,7 @@ function RevokeForm({ approval, onDone }: { approval: ServiceApproval; onDone: (
       <label className="block text-sm font-medium text-slate-800">Reason for revoking
         <textarea value={reason} onChange={(e) => { setReason(e.target.value); key.current = newIdempotencyKey(); }} rows={2} maxLength={500} className={inputClass} />
       </label>
-      <p className="text-xs text-slate-600">Past visits, shifts and billing approvals are unchanged. Affected future work is flagged for review.</p>
+      <InfoTip label="Help">Past visits, shifts and billing approvals are unchanged. Affected future work is flagged for review.</InfoTip>
       {revoke.isError ? <p role="alert" className="text-sm text-red-700">{actionError(revoke.error, "The approval could not be revoked.")}</p> : null}
       <Button type="submit" variant="danger" disabled={revoke.isPending || reason.trim().length < 3}>{revoke.isPending ? "Revoking…" : "Revoke approval"}</Button>
     </form>

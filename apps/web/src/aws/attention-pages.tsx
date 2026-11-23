@@ -173,7 +173,7 @@ export function VisitQueuePage() {
     <ul className="divide-y divide-og-line rounded-og border border-og-line bg-og-card">
       {rows.map((r) => (
         <li key={r.label}>
-          <Link to={r.to} className="flex min-h-[32px] items-center justify-between gap-3 px-3 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-og-link">
+          <Link to={r.to} className="flex min-h-[44px] md:min-h-[32px] items-center justify-between gap-3 px-3 py-1 text-sm [@media(pointer:coarse)]:min-h-[44px] hover:bg-og-page focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-og-link">
             <span className="text-og-ink">{r.label}</span>
             <span className="flex items-center gap-2">
               {r.chip && r.count > 0 ? <StatusChip tone={r.chip.tone}>{r.chip.word}</StatusChip> : null}

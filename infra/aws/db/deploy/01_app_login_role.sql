@@ -1,3 +1,21 @@
+\set ON_ERROR_STOP on
+\if :{?isolated_test}
+\else
+  \set isolated_test false
+\endif
+\if :isolated_test
+begin;
+select current_database() = 'ogevia_sv_test' and :'app_user' = 'ogevia_test_app' as target_ok \gset
+\if :target_ok
+\else
+  do $$ begin raise exception 'Isolated login provisioning refuses this database or role'; end $$;
+\endif
+-- CREATE deliberately refuses an existing role; never rotate legacy/production credentials.
+select format('create role %I login noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls password %L', :'app_user', :'app_password') \gexec
+select format('grant ogevia_app to %I', :'app_user') \gexec
+select format('grant connect on database ogevia_sv_test to %I', :'app_user') \gexec
+commit;
+\else
 -- TEST SLICE / step 2 of 3 (after `db:migrate` has applied 0001-0009 to
 -- ogevia_sv_test). Run as the RDS master user connected to ogevia_sv_test:
 --
@@ -37,3 +55,5 @@ begin
   end if;
 end
 $$;
+
+\endif

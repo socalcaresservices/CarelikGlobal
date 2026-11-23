@@ -316,6 +316,13 @@ else
       ACTTXT="enforcement table not present (the schema predates it)"
     fi
     say "$ACTTXT"
+    if [[ "${OGEVIA_PRD_READ_COUNTS:-}" == 1 ]]; then
+      # Opt-in, counts only (no names, no identifiers): shows whether the database holds only a handful of synthetic rows or real activity. Read-only select.
+      COUNTS=$(RO -d "$DB_EXPECT" -c "select t.name || ': ' || case when to_regclass('ogevia.' || t.name) is null then 'table not present' else (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from ogevia.%I', t.name), false, true, '')))[1]::text end from (values ('organizations'), ('app_users'), ('organization_memberships'), ('audit_events'), ('caregiver_records'), ('clients'), ('shifts'), ('service_visits')) as t(name)") || { rc=$?; stop "cannot read the table counts$(tm $rc)"; }
+      say "table row counts (counts only):"; say "$COUNTS"
+      AUDR=$(RO -d "$DB_EXPECT" -c "select case when to_regclass('ogevia.audit_events') is null then 'audit_events not present' else (xpath('/row/r/text()', query_to_xml('select coalesce(min(occurred_at)::text, ''none'') || '' to '' || coalesce(max(occurred_at)::text, ''none'') as r from ogevia.audit_events', false, true, '')))[1]::text end") || { rc=$?; stop "cannot read the audit date range$(tm $rc)"; }
+      say "audit events span: $AUDR"
+    fi
     LEDGER_TEXT="RESULT for $ARG ($DB_EXPECT): ledger summary: $SUMMARY; $ACTTXT. Five newest ledger rows:"$'\n'"$ROWS"$'\n'"(Report only: no expected version was checked. Send this output to Claude.)"
   fi
 fi

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
@@ -10,6 +10,8 @@ import { actionError } from "./format";
 import { SummarySection } from "../ui/summary-section";
 import { InfoTip } from "../ui/info-tip";
 import { CompactAlert } from "../ui/compact-alert";
+import { SortButton, SortTh } from "../ui/sort-th";
+import { useSortedRows } from "../ui/table-sort";
 
 
 export interface ReadinessStatus {
@@ -45,6 +47,27 @@ function RequiredDocumentsSetup() {
   const [saved, setSaved] = useState(false);
   const key = useRef(newIdempotencyKey());
   const rows = setup.data ?? [];
+  const [standard, setStandard] = useState<{ busy: boolean; error: string | null; note: string | null }>({ busy: false, error: null, note: null });
+  const standardNeeded = rows.length > 0 && rows.some((r) => !r.documentTypeId);
+  // R7: creates (or finds) two document types named CPR and TB, by name only, and preselects them below. It invents no validity period: the administrator
+  // still chooses how long each stays valid and gives a reason before anything is saved. The types are created with no expiry requirement.
+  const createStandardTypes = async () => {
+    setStandard({ busy: true, error: null, note: null });
+    try {
+      const picked: Record<string, string> = {};
+      for (const r of rows) {
+        const name = r.requirement.toUpperCase();
+        const existing = (types.data ?? []).find((t) => t.name.trim().toLowerCase() === name.toLowerCase());
+        picked[r.requirement] = existing?.documentTypeId ?? (await api.post<{ documentTypeId: string }>("/v1/document-types", { organizationId: activeOrganizationId, name, requiresExpiry: false }, { idempotencyKey: newIdempotencyKey() })).documentTypeId;
+      }
+      await qc.invalidateQueries({ queryKey: ["aws-document-types"] });
+      setDraft((d) => Object.fromEntries(rows.map((r) => [r.requirement, { ...(d[r.requirement] ?? { basis: r.validityBasis ?? "", days: r.validityDays ? String(r.validityDays) : "" }), typeId: picked[r.requirement]! }])));
+      setSaved(false);
+      setStandard({ busy: false, error: null, note: "CPR and TB are ready to choose below. Now choose how long each stays valid, add a reason and Save. Nothing is set until you save." });
+    } catch (cause) {
+      setStandard({ busy: false, error: actionError(cause, "The document types could not be created."), note: null });
+    }
+  };
   const value = (r: SetupRow) => draft[r.requirement] ?? { typeId: r.documentTypeId ?? "", basis: r.validityBasis ?? "", days: r.validityDays ? String(r.validityDays) : "" };
   const patch = (r: SetupRow, p: Partial<{ typeId: string; basis: string; days: string }>) => { key.current = newIdempotencyKey(); setSaved(false); setDraft((d) => ({ ...d, [r.requirement]: { ...value(r), ...p } })); };
   const save = useMutation({
@@ -64,6 +87,13 @@ function RequiredDocumentsSetup() {
   return (
     <form className="space-y-2" aria-label="Required documents" onSubmit={(e) => { e.preventDefault(); if (reason.trim().length >= 3 && !save.isPending) save.mutate(); }}>
       <p className="flex items-center gap-1.5 text-xs text-slate-700">Choose which document type is the CPR record and which is TB, and how long each stays valid.<InfoTip>Ogevia does not assume a period; until both are set, the requirement is reported as setup incomplete.</InfoTip></p>
+      {standardNeeded ? (
+        <div className="space-y-1">
+          <Button type="button" variant="secondary" disabled={standard.busy} onClick={() => void createStandardTypes()}>{standard.busy ? "Creating…" : "Use standard CPR and TB"}</Button>
+          {standard.error ? <p role="alert" className="text-sm text-red-700">{standard.error}</p> : null}
+          {standard.note ? <p role="status" className="text-sm text-slate-800" data-testid="standard-note">{standard.note}</p> : null}
+        </div>
+      ) : null}
       {rows.map((r) => {
         const v = value(r);
         return (
@@ -151,6 +181,73 @@ export function ReadinessCard() {
   const sc = s.serviceChecks;
   // One line for the collapsed card: setup gaps, document gaps, missing hours, services to review, booked shifts and standing assignments that would not pass.
   const needAttention = [!s.setupComplete, s.caregivers.withDocumentGaps > 0, s.caregivers.availabilityNotProvided > 0, s.caregivers.servicePairsToReview > 0, s.affectedShiftsCount > 0, s.futureWork.standingAssignmentsNeedingDocuments > 0].filter(Boolean).length;
+  // Each readiness issue is one row; the table can be sorted by Issue, Affected (the count) or Status with the shared sort (the table itself is ReadinessIssues).
+  const issueRows = [
+    { id: "setup", issue: "Document setup (CPR and TB rules)", count: s.setupComplete ? 0 : s.setupGaps.length, status: s.setupComplete ? "Set" : "Setup incomplete" },
+    { id: "documents", issue: "CPR or TB missing or expired", count: s.caregivers.withDocumentGaps, status: s.enforcementActive ? "Active" : "Report only" },
+    { id: "availability", issue: "Availability not provided", count: s.caregivers.availabilityNotProvided, status: s.enforcementActive ? "Active" : "Report only" },
+    { id: "services", issue: "Service approvals to review", count: s.caregivers.servicePairsToReview, status: sc.state === "On" ? "On" : "Off" },
+    { id: "booked", issue: "Booked shifts that would not pass today's document or hours checks", count: s.affectedShiftsCount, status: s.enforcementActive ? "Needs attention" : "Would block if activated" },
+    { id: "standing", issue: "Standing assignments that need documents", count: s.futureWork.standingAssignmentsNeedingDocuments, status: s.enforcementActive ? "Needs attention" : "Report only" },
+  ];
+  const issueNodes: Record<string, React.ReactNode> = {
+      setup: (
+              <ReadinessRow
+                issue="Document setup (CPR and TB rules)"
+                affected={s.setupComplete ? "None" : plural(s.setupGaps.length, "rule", "rules")}
+                status={s.setupComplete ? { label: "Set", tone: "ok" } : { label: "Setup incomplete", tone: "bad" }}
+                action={canManage || hasPermission("documents.requirements.manage")
+                  ? <button type="button" className="min-h-[44px] text-left font-medium text-og-accent underline md:min-h-[28px]" aria-expanded={showSetup} onClick={() => setShowSetup((x) => !x)}>{showSetup ? "Close setup" : "Set up required documents"}</button>
+                  : <span className="text-slate-600">Ask an administrator</span>}
+                help={s.setupComplete ? "CPR and TB rules are set." : (
+                  <ul className="list-disc pl-5">
+                    {s.setupGaps.map((g) => <li key={g.code}>{g.requirement.toUpperCase()}: {g.gap === "type_not_set" ? "document type not chosen" : "validity rule not set"} (setup incomplete)</li>)}
+                  </ul>
+                )}
+              />
+      ),
+      documents: (
+              <ReadinessRow
+                issue="CPR or TB missing or expired"
+                affected={`${s.caregivers.withDocumentGaps} of ${plural(s.caregivers.readyOrActive, "caregiver", "caregivers")}`}
+                status={s.enforcementActive ? { label: "Active", tone: "ok" } : { label: "Report only", tone: "warn" }}
+                action={<Link to="/documents" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Review documents</Link>}
+                help={s.enforcementActive ? "A caregiver without current CPR and TB cannot be newly assigned or start a visit." : "Current verified CPR and TB are not being required yet. A caregiver without them can still be assigned and can still start visits until the checks are activated."}
+              />
+      ),
+      availability: (
+              <ReadinessRow
+                issue="Availability not provided"
+                affected={plural(s.caregivers.availabilityNotProvided, "caregiver", "caregivers")}
+                status={s.enforcementActive ? { label: "Active", tone: "ok" } : { label: "Report only", tone: "warn" }}
+                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Ask for hours</Link>}
+              />
+      ),
+      services: (
+              <ReadinessRow
+                issue="Service approvals to review"
+                affected={plural(s.caregivers.servicePairsToReview, "caregiver and service pair", "caregiver and service pairs")}
+                status={sc.state === "On" ? { label: "On", tone: "ok" } : { label: "Off", tone: "neutral" }}
+                action={<Link to="/care-team/services-review" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">{sc.action}</Link>}
+              />
+      ),
+      booked: (
+              <ReadinessRow
+                issue="Booked shifts that would not pass today's document or hours checks"
+                affected={`${s.affectedShiftsCount} of ${plural(s.futureWork.scheduledShifts, "future shift", "future shifts")}`}
+                status={s.enforcementActive ? { label: "Needs attention", tone: "bad" } : { label: "Would block if activated", tone: "warn" }}
+                action={<Link to="/schedule" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Open schedule</Link>}
+              />
+      ),
+      standing: (
+              <ReadinessRow
+                issue="Standing assignments that need documents"
+                affected={plural(s.futureWork.standingAssignmentsNeedingDocuments, "assignment", "assignments")}
+                status={s.enforcementActive ? { label: "Needs attention", tone: "bad" } : { label: "Report only", tone: "warn" }}
+                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Open Care Team</Link>}
+              />
+      ),
+  };
   return (
     <SummarySection title="Caregiver readiness"
       status={<span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${s.enforcementActive ? "bg-emerald-100 text-emerald-950" : "bg-amber-100 text-amber-950"}`}>{s.enforcementActive ? "Checks active" : "Report only"}</span>}
@@ -169,63 +266,7 @@ export function ReadinessCard() {
           <CompactAlert summary="Report-only. Readiness checks are NOT active.">Nothing is blocked yet. Caregivers can still be assigned and can still start visits.</CompactAlert>
         ) : null}
         <div>
-          <table className="w-full text-left text-sm max-md:block">
-            <caption className="sr-only">Readiness by issue: affected count, status and next action</caption>
-            <thead className="max-md:hidden">
-              <tr className="text-xs uppercase tracking-wide text-slate-600">
-                <th scope="col" className="py-1 pr-3 font-semibold">Issue</th>
-                <th scope="col" className="py-1 pr-3 font-semibold">Affected</th>
-                <th scope="col" className="py-1 pr-3 font-semibold">Status</th>
-                <th scope="col" className="py-1 font-semibold">Next action</th>
-              </tr>
-            </thead>
-            <tbody className="max-md:block">
-              <ReadinessRow
-                issue="Document setup (CPR and TB rules)"
-                affected={s.setupComplete ? "None" : plural(s.setupGaps.length, "rule", "rules")}
-                status={s.setupComplete ? { label: "Set", tone: "ok" } : { label: "Setup incomplete", tone: "bad" }}
-                action={canManage || hasPermission("documents.requirements.manage")
-                  ? <button type="button" className="min-h-[44px] text-left font-medium text-og-accent underline md:min-h-[28px]" aria-expanded={showSetup} onClick={() => setShowSetup((x) => !x)}>{showSetup ? "Close setup" : "Set up required documents"}</button>
-                  : <span className="text-slate-600">Ask an administrator</span>}
-                help={s.setupComplete ? "CPR and TB rules are set." : (
-                  <ul className="list-disc pl-5">
-                    {s.setupGaps.map((g) => <li key={g.code}>{g.requirement.toUpperCase()}: {g.gap === "type_not_set" ? "document type not chosen" : "validity rule not set"} (setup incomplete)</li>)}
-                  </ul>
-                )}
-              />
-              <ReadinessRow
-                issue="CPR or TB missing or expired"
-                affected={`${s.caregivers.withDocumentGaps} of ${plural(s.caregivers.readyOrActive, "caregiver", "caregivers")}`}
-                status={s.enforcementActive ? { label: "Active", tone: "ok" } : { label: "Report only", tone: "warn" }}
-                action={<Link to="/documents" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Review documents</Link>}
-                help={s.enforcementActive ? "A caregiver without current CPR and TB cannot be newly assigned or start a visit." : "Current verified CPR and TB are not being required yet. A caregiver without them can still be assigned and can still start visits until the checks are activated."}
-              />
-              <ReadinessRow
-                issue="Availability not provided"
-                affected={plural(s.caregivers.availabilityNotProvided, "caregiver", "caregivers")}
-                status={s.enforcementActive ? { label: "Active", tone: "ok" } : { label: "Report only", tone: "warn" }}
-                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Ask for hours</Link>}
-              />
-              <ReadinessRow
-                issue="Service approvals to review"
-                affected={plural(s.caregivers.servicePairsToReview, "caregiver and service pair", "caregiver and service pairs")}
-                status={sc.state === "On" ? { label: "On", tone: "ok" } : { label: "Off", tone: "neutral" }}
-                action={<Link to="/care-team/services-review" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">{sc.action}</Link>}
-              />
-              <ReadinessRow
-                issue="Booked shifts that would not pass today's document or hours checks"
-                affected={`${s.affectedShiftsCount} of ${plural(s.futureWork.scheduledShifts, "future shift", "future shifts")}`}
-                status={s.enforcementActive ? { label: "Needs attention", tone: "bad" } : { label: "Would block if activated", tone: "warn" }}
-                action={<Link to="/schedule" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Open schedule</Link>}
-              />
-              <ReadinessRow
-                issue="Standing assignments that need documents"
-                affected={plural(s.futureWork.standingAssignmentsNeedingDocuments, "assignment", "assignments")}
-                status={s.enforcementActive ? { label: "Needs attention", tone: "bad" } : { label: "Report only", tone: "warn" }}
-                action={<Link to="/care-team" className="inline-flex min-h-[44px] items-center font-medium text-og-accent underline md:min-h-[28px]">Open Care Team</Link>}
-              />
-            </tbody>
-          </table>
+          <ReadinessIssues rows={issueRows} nodes={issueNodes} />
         </div>
         {showSetup ? <div className="pt-1"><RequiredDocumentsSetup /></div> : null}
       </section>
@@ -253,5 +294,33 @@ export function ReadinessCard() {
       ) : null}
     </div>
     </SummarySection>
+  );
+}
+
+/** The readiness issue table with the shared sort. Phones show the same rows as cards, so they get the sort buttons instead of headings. */
+function ReadinessIssues({ rows: input, nodes }: { rows: { id: string; issue: string; count: number; status: string }[]; nodes: Record<string, React.ReactNode> }) {
+  const { rows, sort } = useSortedRows(input, {
+    issue: { get: (r) => r.issue }, affected: { get: (r) => r.count, kind: "number" }, status: { get: (r) => r.status },
+  });
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 md:hidden" role="group" aria-label="Sort the readiness issues by">
+        <span>Sort by</span><SortButton sort={sort} column="issue">Issue</SortButton><SortButton sort={sort} column="affected" kind="number">Affected</SortButton><SortButton sort={sort} column="status">Status</SortButton>
+      </div>
+      <table className="w-full text-left text-sm max-md:block">
+        <caption className="sr-only">Readiness by issue: affected count, status and next action</caption>
+        <thead className="max-md:hidden">
+          <tr className="text-xs uppercase tracking-wide text-slate-600">
+            <SortTh sort={sort} column="issue" className="py-1 pr-3 font-semibold">Issue</SortTh>
+            <SortTh sort={sort} column="affected" kind="number" className="py-1 pr-3 font-semibold">Affected</SortTh>
+            <SortTh sort={sort} column="status" className="py-1 pr-3 font-semibold">Status</SortTh>
+            <th scope="col" className="py-1 font-semibold">Next action</th>
+          </tr>
+        </thead>
+        <tbody className="max-md:block">
+          {rows.map((r) => <React.Fragment key={r.id}>{nodes[r.id]}</React.Fragment>)}
+        </tbody>
+      </table>
+    </>
   );
 }

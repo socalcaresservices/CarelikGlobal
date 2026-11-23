@@ -96,7 +96,7 @@ export function AssignmentChecks({ input, onReady, outcome, note }: { input: Ass
       {outcome ? <p className={`text-xs ${OUTCOME_TONE[result.tone]}`}>{result.text}</p> : note ? <p className="text-xs text-slate-600">{note}</p> : null}
       {shown.length > 0 ? <ul className="space-y-1">{shown.map(row)}</ul> : null}
       <details>
-        <summary className="inline-flex min-h-[32px] cursor-pointer items-center text-sm text-og-accent underline">Details</summary>
+        <summary className="inline-flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center text-sm text-og-accent underline">Details</summary>
         <ul className="mt-1 space-y-1">{rows.filter((r) => !shown.includes(r)).map(row)}</ul>
         {ev.outcome === "warning" && ev.wouldBlockAfterActivation ? <p className="mt-1 text-xs text-slate-600">Warnings do not block today. They will block assignment and new visits once readiness checks are activated{rows.some((r) => r.g.key === "service" && r.o.state === "would_block") ? " and Service checks are On" : ""}.</p> : null}
       </details>

@@ -17,6 +17,17 @@ export const issueClient = (i: Pick<ActionIssue, "clientName" | "clientCode" | "
   i.clientName ? nameWithCode(i.clientName, i.clientCode, i.duplicateName) : i.clientCode;
 export const issueCaregiver = (i: Pick<ActionIssue, "caregiverName" | "caregiverCode" | "caregiverDuplicateName">): string | null =>
   i.caregiverName ? nameWithCode(i.caregiverName, i.caregiverCode, i.caregiverDuplicateName) : i.caregiverCode;
+/** Reasons about the caregiver (their documents or a hold), not the client: the row names the caregiver first. */
+const CAREGIVER_REASONS = new Set(["documents_not_current", "compliance_hold", "in_progress_on_hold"]);
+/** Who a dashboard row is about: the caregiver for caregiver reasons and document/caregiver issues, otherwise the client. `other` is the client named beside a caregiver row. */
+export function issueSubject(i: Pick<ActionIssue, "reason" | "kind" | "clientName" | "clientCode" | "duplicateName" | "caregiverName" | "caregiverCode" | "caregiverDuplicateName">): { main: string | null; other: string | null } {
+  const caregiver = issueCaregiver(i);
+  if (caregiver && (CAREGIVER_REASONS.has(i.reason) || i.kind === "document" || i.kind === "caregiver")) {
+    const client = issueClient(i);
+    return { main: caregiver, other: client };
+  }
+  return { main: issueClient(i), other: null };
+}
 export interface IssueList {
   asOf: string; matching: number; limit: number; offset: number;
   counts: { total: number; critical: number; urgent: number; routine: number; actionNeeded: number; byQueue: Record<string, number> };
@@ -32,6 +43,7 @@ export const KIND_LABEL: Record<string, string> = { authorization: "Over limit",
 
 /** Where the primary action goes, with the issue's context in the link. Permissions are still enforced by the server on every request. */
 export function issueDestination(i: ActionIssue): { to: string; label: string } {
+  if (i.kind === "business_document") return { to: "/business-compliance", label: "Review renewals" };
   const visit = i.visitId ?? i.entityId;
   switch (i.action) {
     case "assign_caregiver": return { to: `/schedule?coverage=1&shift=${i.shiftId ?? i.entityId}${i.deadline ? `&at=${encodeURIComponent(i.deadline)}` : ""}`, label: "Choose a caregiver" };
@@ -50,6 +62,7 @@ export function issueDestination(i: ActionIssue): { to: string; label: string } 
 
 /** The row's reason in a few words; the full recommended sentence stays in the row for screen readers and as the tooltip. */
 const REASON_PHRASE: Record<string, string> = {
+  business_document_renewal: "Renewal due",
   uncovered_open: "No caregiver", uncovered_called_out: "Called out", compliance_hold: "Caregiver on hold", documents_not_current: "Document not current", missing_clock_out: "Still open",
   in_progress_on_hold: "Visit on hold", pending_confirmation: "Awaiting confirmation", confirmation_overdue: "Confirmation overdue", needs_review: "Needs review", late_response: "Late response",
   ready_for_approval: "Ready to approve", authorization_decreased: "Authorization lowered", pending_pickup: "Pickup requested", expired: "Expired", overdue: "Overdue", review_overdue: "Review overdue",

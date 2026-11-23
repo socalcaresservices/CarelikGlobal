@@ -88,6 +88,7 @@ export const okChecks = () => [
 export function fakeApi(opts: FakeOptions) {
   const calls: Call[] = [];
   const state = {
+    createdTypes: [] as Array<{ documentTypeId: string; name: string; requiresExpiry: boolean; isActive: boolean }>,
     availability: { ...baseAvailability(), ...(opts.availability ?? {}) } as Record<string, any>,
     readiness: { ...baseReadiness(), ...(opts.readiness ?? {}) } as Record<string, any>,
     evaluation: { startsAt: "2026-10-14T16:00:00+00:00", endsAt: "2026-10-14T18:00:00+00:00", ready: true, wouldBlockAfterActivation: false, outcome: "allowed", summary: "Allowed", checks: okChecks(), ...(opts.evaluation ?? {}) } as Record<string, any>,
@@ -143,6 +144,7 @@ export function fakeApi(opts: FakeOptions) {
       case `POST /v1/clients/${CLIENT}/zip`:
         return json(200, { saved: true });
       case "GET /v1/location-data":
+        if (url.searchParams.has("suggestZip")) return json(200, { city: url.searchParams.get("suggestZip") === "92595" ? "Wildomar" : null });
         return json(200, { status: { distanceDataLoaded: false } });
       case "POST /v1/experience-tags":
         return json(201, { tagId: SVC });
@@ -189,7 +191,12 @@ export function fakeApi(opts: FakeOptions) {
           { requirement: "cpr", documentTypeId: null, documentTypeName: null, validityBasis: null, validityDays: null, complete: false, gap: "type_not_set" },
           { requirement: "tb", documentTypeId: null, documentTypeName: null, validityBasis: null, validityDays: null, complete: false, gap: "type_not_set" }] } });
       case "GET /v1/document-types":
-        return json(200, { types: [{ documentTypeId: "dt1", name: "CPR card", requiresExpiry: true, isActive: true }, { documentTypeId: "dt2", name: "TB result", requiresExpiry: false, isActive: true }] });
+        return json(200, { types: [{ documentTypeId: "dt1", name: "CPR card", requiresExpiry: true, isActive: true }, { documentTypeId: "dt2", name: "TB result", requiresExpiry: false, isActive: true }, ...state.createdTypes] });
+      case "POST /v1/document-types": {
+        const id = `dt-${String(body.name).toLowerCase()}`;
+        state.createdTypes.push({ documentTypeId: id, name: String(body.name), requiresExpiry: !!body.requiresExpiry, isActive: true });
+        return json(201, { documentTypeId: id });
+      }
       case "POST /v1/document-requirements/type":
       case "POST /v1/document-requirements/policy":
         return json(200, { saved: true });

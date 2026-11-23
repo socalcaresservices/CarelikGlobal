@@ -18,7 +18,7 @@ const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 100000);
-  today = await orgToday(db);
+  today = process.env.OGEVIA_TEST_TODAY ?? await orgToday(db); // OGEVIA_TEST_TODAY=YYYY-MM-DD only moves the month anchor, to prove the dates below do not depend on the calendar day the suite runs
   recA1 = (await admin("select id from ogevia.caregiver_records where linked_user_id = $1", [w.caregiverA1.userId])).rows[0].id;
 });
 afterAll(async () => db?.drop());
@@ -160,7 +160,7 @@ describe("extend and change return their rejected dates too", () => {
     const r = await create(fx, { from: m, to: null, days: ALL_DAYS }); // open-ended
     expect(r.created).toBe(9); // 6 h a month = 3 shifts a month; the series is scheduled through the end of the second month after its first date (three months)
     expect(r.rejected.length).toBe(r.skipped);
-    const ext = (await q(w.managerA, "select * from ogevia_api.extend_shift_series($1,$2,$3::date,'save_valid',$4)", [w.orgA, r.series_id, addDays(m, 120), randomUUID()]))[0];
+    const ext = (await q(w.managerA, "select * from ogevia_api.extend_shift_series($1,$2,$3::date,'save_valid',$4)", [w.orgA, r.series_id, addDays(monthStart(6), -1), randomUUID()]))[0]; // through the LAST DAY of the next month (the fourth), whatever its length: 'm + 120 days' lands on the first of the fifth month when the fourth has 30 or fewer days
     expect(ext.created).toBe(3); // the next month holds three more
     expect(ext.rejected.length).toBe(ext.skipped);
     expect(ext.skipped).toBeGreaterThan(0);

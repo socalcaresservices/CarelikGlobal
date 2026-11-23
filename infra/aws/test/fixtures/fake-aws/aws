@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+# A fake AWS CLI for production-signin-override-deploy.test.ts: just enough of CloudFormation, S3, Lambda, API Gateway and Logs to run the deploy script offline.
+# State lives in $FAKE: live.json (the "deployed" template), s3/, cs/ (change sets), calls.log (every call). Nothing here talks to the network.
+import json, os, shutil, sys
+S = os.environ["FAKE"]
+a, i = sys.argv[1:], 0
+args = []
+while i < len(a):
+    if a[i] in ("--cli-connect-timeout", "--cli-read-timeout"): i += 2; continue
+    args.append(a[i]); i += 1
+with open(S + "/calls.log", "a") as f: f.write(" ".join(args) + "\n")
+opt = lambda n: args[args.index(n) + 1] if n in args else None
+live = lambda: json.load(open(S + "/live.json"))
+svc, cmd = args[0], args[1]
+out = lambda x: print(x if isinstance(x, str) else json.dumps(x))
+ROUTE = "AWS::ApiGatewayV2::Route"
+if svc == "sts": out(os.environ.get("FAKE_ACCOUNT", "300094796789"))
+elif svc == "cloudformation":
+    if cmd == "describe-stacks":
+        q = opt("--query") or ""
+        out(os.environ.get("FAKE_STATUS", "UPDATE_COMPLETE") if "StackStatus" in q else ["QrEncryptionKey0102"])
+    elif cmd == "get-template": out(live())
+    elif cmd == "describe-stack-resources":
+        pass  # the real call returns only the first 100 of this stack's ~270 resources, so the Lambda and the API are NOT in it: it prints nothing here
+    elif cmd == "list-stack-resources":
+        q = opt("--query") or ""
+        out("Ogevia-prd-ServiceVerificationApi-Handler886CB40B-FAKE" if "Handler" in q else os.environ.get("FAKE_API_ID", "zk527zk4ua"))
+    elif cmd == "create-change-set":
+        key = opt("--template-url").split(".amazonaws.com/", 1)[1]
+        new = json.load(open(S + "/s3/" + key)); cur = live()
+        changes = []
+        for rid in sorted(set(cur["Resources"]) | set(new["Resources"])):
+            x, y = cur["Resources"].get(rid), new["Resources"].get(rid)
+            if x is None: act, t = "Add", y["Type"]
+            elif y is None: act, t = "Remove", x["Type"]
+            elif x != y: act, t = "Modify", x["Type"]
+            else: continue
+            changes.append({"ResourceChange": {"LogicalResourceId": rid, "ResourceType": t, "Action": act, "Replacement": "False", "Scope": ["Properties"]}})
+        if os.environ.get("FAKE_EXTRA_CHANGE"):
+            changes.append({"ResourceChange": {"LogicalResourceId": "Handler886CB40B", "ResourceType": "AWS::Lambda::Function", "Action": "Modify", "Replacement": "False"}})
+        os.makedirs(S + "/cs", exist_ok=True); name = opt("--change-set-name")
+        json.dump({"Status": "CREATE_COMPLETE", "ExecutionStatus": "AVAILABLE", "Changes": changes}, open(S + "/cs/" + name + ".json", "w"))
+        shutil.copy(S + "/s3/" + key, S + "/cs/" + name + ".template.json"); out({})
+    elif cmd == "describe-change-set": out(open(S + "/cs/" + opt("--change-set-name") + ".json").read())
+    elif cmd == "execute-change-set":
+        if not os.environ.get("FAKE_EXECUTE_NOOP"): shutil.copy(S + "/cs/" + opt("--change-set-name") + ".template.json", S + "/live.json")
+    elif cmd == "wait":
+        if args[2] == "stack-update-complete" and os.environ.get("FAKE_WAIT_FAIL"): sys.exit(255)
+    elif cmd == "delete-change-set": open(S + "/deleted-" + opt("--change-set-name"), "w").close()
+elif svc == "lambda": out(os.environ.get("FAKE_HANDLER_LINE", "FAKESHA=\togevia_prd\tprd").replace("FAKESHA=", "98e84618f6eeaf6472985db06db9132cf39d887d296d38301ee0137e3a6e991c"))
+elif svc == "s3" and cmd == "cp":
+    key = args[3].split("/", 3)[3]; os.makedirs(os.path.dirname(S + "/s3/" + key), exist_ok=True); shutil.copy(args[2], S + "/s3/" + key)
+elif svc == "apigatewayv2":
+    print("\t".join(r["Properties"]["AuthorizationType"] for r in live()["Resources"].values() if r["Type"] == ROUTE and "signin-override" in r["Properties"]["RouteKey"]))
+elif svc == "logs": out(os.environ.get("FAKE_LOGS", ""))

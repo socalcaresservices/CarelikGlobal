@@ -41,7 +41,7 @@ function IssueCard({ issue }: { issue: ActionIssue }) {
     <li data-testid="issue-card" data-issue-key={issue.issueKey} title={issue.recommendedAction} className={`border-l-4 px-2 py-0 ${tone === "red" ? "border-l-red-700" : tone === "amber" ? "border-l-amber-600" : "border-l-slate-400"}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0 md:grid md:min-h-[32px] md:grid-cols-[5.5rem_minmax(0,1fr)_9.5rem_auto]">
         <span><StatusChip tone={tone}>{TONE[tone].word}</StatusChip></span>
-        <p className="min-w-0 flex-1 basis-[10rem] truncate text-sm font-semibold text-og-ink">
+        <p className="min-w-0 flex-1 basis-[10rem] break-words text-sm font-semibold text-og-ink">
           {KIND_LABEL[issue.kind] ?? issue.kind}{who ? ` · ${who}` : ""}{phrase ? <span className="font-normal text-og-sub"> · {phrase}</span> : null}
           <span className="sr-only"> {issue.recommendedAction}</span>
         </p>
@@ -62,7 +62,7 @@ function IssueCard({ issue }: { issue: ActionIssue }) {
                 id: String(n), when: `${formatNumericDate(e.occurredAt)} ${formatClockTime(e.occurredAt)}`, who: e.observedByName,
                 summary: `${e.event.replace(/_/g, " ")}${e.severity ? ` (${e.severity})` : ""}`,
               }))} />
-              <p className="mt-0.5">Times are when the change was first seen by the system, not necessarily when it happened.</p>
+              <InfoTip label="Help">Times are when the change was first seen by the system, not necessarily when it happened.</InfoTip>
             </>
           )}
         </div>
@@ -236,7 +236,7 @@ export function ActionNeededPage() {
             return g.routine ? (
               <section key={g.queue} aria-label={QUEUE_LABEL[g.queue] ?? g.queue}>
                 <details data-testid={`routine-group-${g.queue}`}>
-                  <summary className="flex min-h-[32px] cursor-pointer items-center gap-1.5 [@media(pointer:coarse)]:min-h-[44px]">{head}<span className="text-xs text-og-link underline">Show</span></summary>
+                  <summary className="flex min-h-[44px] md:min-h-[32px] cursor-pointer items-center gap-1.5 [@media(pointer:coarse)]:min-h-[44px]">{head}<span className="text-xs text-og-link underline">Show</span></summary>
                   <div className="pt-0.5">{list}</div>
                 </details>
               </section>
@@ -253,9 +253,9 @@ export function ActionNeededPage() {
       <DeadlineSettings />
       <NotificationSettingsCard />
       <Disclosure summary="How this list is built">
-        <p>Each problem has one stable identity, so it is the same issue on Home, Scheduling and here; two problems on one visit stay two issues. Nothing here assigns anyone, approves a visit or sends a bill.</p>
-        <p className="mt-1">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline. Routine: waiting inside its deadline; routine queues are never added to the action total.</p>
-        <p className="mt-1">Over the monthly authorization is Urgent, never Critical by itself: all worked time is kept and paid, the time over the limit is not billed, and it clears when hours are back within the authorization.</p>
+        <InfoTip label="Help">Each problem has one stable identity, so it is the same issue on Home, Scheduling and here; two problems on one visit stay two issues. Nothing here assigns anyone, approves a visit or sends a bill.</InfoTip>
+        <InfoTip label="Help">Critical: care is blocked now, or an uncovered shift has started. Urgent: inside the follow-up window or past a deadline. Routine: waiting inside its deadline; routine queues are never added to the action total.</InfoTip>
+        <InfoTip label="Help">Over the monthly authorization is Urgent, never Critical by itself: all worked time is kept and paid, the time over the limit is not billed, and it clears when hours are back within the authorization.</InfoTip>
       </Disclosure>
     </div>
   );

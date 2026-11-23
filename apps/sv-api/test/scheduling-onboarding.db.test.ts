@@ -84,27 +84,32 @@ describe("recruiting and onboarding over HTTP", () => {
     expect(made.status).toBe(201);
     const id = made.body.caregiver.caregiverRecordId as string;
     const overview = await call("GET /v1/onboarding/overview", w.managerA, { query: { organizationId: w.orgA } });
-    expect(overview.body.caregivers.find((c: any) => c.caregiverRecordId === id)).toMatchObject({ status: "applicant", onboardingRequired: true, done: 0, total: 5 });
+    expect(overview.body.caregivers.find((c: any) => c.caregiverRecordId === id)).toMatchObject({ status: "applicant", onboardingRequired: true, done: 0, total: 1 });
     const checklist = await call("GET /v1/caregivers/{caregiverRecordId}/onboarding", w.managerA, { path: { caregiverRecordId: id }, query: { organizationId: w.orgA } });
-    expect(checklist.body.onboarding).toMatchObject({ complete: false, done: 0, total: 5 });
+    expect(checklist.body.onboarding).toMatchObject({ complete: false, done: 0, total: 1 });
     expect((await call("GET /v1/caregivers/{caregiverRecordId}/onboarding", w.caregiverA1, { path: { caregiverRecordId: id }, query: { organizationId: w.orgA } })).status).toBe(403);
     expect((await call("GET /v1/caregivers/{caregiverRecordId}/onboarding", w.managerB, { path: { caregiverRecordId: id }, query: { organizationId: w.orgA } })).status).toBe(404);
 
     const approve = await call("POST /v1/caregivers/{caregiverRecordId}/status", w.managerA, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA, status: "ready", reason: "Synthetic approval" } });
     expect(approve.status).toBe(409);
-    expect(approve.body.error.message).toMatch(/Onboarding is not complete: Background check cleared/);
+    expect(approve.body.error.message).toMatch(/Use Approve for work/);
+    // 0086: the one approval step over HTTP names what is missing
+    const direct = await call("POST /v1/caregivers/{caregiverRecordId}/approve", w.managerA, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA } });
+    expect(direct.status).toBe(409);
+    expect(direct.body.error.message).toMatch(/Cannot approve yet\. Waiting on: Background check, Required training, App sign-in/);
 
     const item = (actor: Actor, body: Record<string, unknown>) => call("POST /v1/caregivers/{caregiverRecordId}/onboarding/items", actor, { path: { caregiverRecordId: id }, body: { organizationId: w.orgA, ...body } });
     expect((await item(w.managerA, { requirementKey: "background_check", action: "approve" })).status).toBe(400);
     expect((await item(w.caregiverA1, { requirementKey: "background_check", action: "complete" })).status).toBe(403);
-    const done = await item(w.managerA, { requirementKey: "background_check", action: "complete", completedOn: today, note: "Cleared (synthetic)" });
+    expect((await item(w.managerA, { requirementKey: "background_check", action: "complete", completedOn: today })).status).toBe(404); // 0086: retired as an onboarding item
+    const done = await item(w.managerA, { requirementKey: "training", action: "complete", completedOn: today, note: "Done (synthetic)" });
     expect(done.status).toBe(200);
-    expect(done.body.onboarding).toMatchObject({ done: 1, total: 5 });
-    expect((await item(w.managerA, { requirementKey: "clearance", action: "waive", reason: "Synthetic" })).status).toBe(422);
+    expect(done.body.onboarding).toMatchObject({ done: 1, total: 1 });
+    expect((await item(w.managerA, { requirementKey: "clearance", action: "waive", reason: "Synthetic" })).status).toBe(404);
 
     const reqs = await call("GET /v1/onboarding/requirements", w.managerA, { query: { organizationId: w.orgA } });
-    expect(reqs.body.requirements.map((r: any) => r.requirementKey)).toEqual(["background_check", "training", "cpr", "tb", "clearance"]);
+    expect(reqs.body.requirements.map((r: any) => r.requirementKey)).toEqual(["training"]);
     expect((await call("POST /v1/onboarding/requirements", w.managerA, { body: { organizationId: w.orgA, requirementKey: "orientation", label: "Agency orientation", category: "training", required: true, reason: "Synthetic" } })).status).toBe(200);
-    expect((await call("GET /v1/caregivers/{caregiverRecordId}/onboarding", w.managerA, { path: { caregiverRecordId: id }, query: { organizationId: w.orgA } })).body.onboarding.total).toBe(6);
+    expect((await call("GET /v1/caregivers/{caregiverRecordId}/onboarding", w.managerA, { path: { caregiverRecordId: id }, query: { organizationId: w.orgA } })).body.onboarding.total).toBe(2);
   });
 });

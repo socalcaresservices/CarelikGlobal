@@ -74,11 +74,12 @@ describe("billing states on the Billing review screen", () => {
     expect(text(4)).toContain("Reviewed — not billable");
   });
 
-  it("Approved for Billing says it is not submitted or paid; nothing says billed, submitted or paid as a state", async () => {
+  it("keeps approval distinct from submission and payment and explains it in the info icon", async () => {
     renderPage();
     await screen.findByText("5 visits in this date range");
     const approved = tableRows()[2]!;
-    expect(within(approved).getAllByText(/Not submitted or paid|not submitted or paid/).length).toBeGreaterThan(0);
+    expect(within(approved).queryByText(/not submitted or paid/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Help for this page" }));
     expect(screen.queryByText(/Already Billed/i)).toBeNull();
     for (const label of Object.values(APPROVAL_STATUS_LABEL)) expect(label).not.toMatch(/billed|paid|submitted/i);
     expect(screen.getByText(/approval is not submission or payment/)).toBeInTheDocument();

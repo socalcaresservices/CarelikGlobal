@@ -2,7 +2,7 @@
 // billable minutes (the schedule-variance rule of Wave 1, or over the authorization). Migration 0052 (D2, owner-approved
 // 2026-10-14). Written FIRST: the tests marked "double count" fail on 0051 and pass after 0052. SYNTHETIC data only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ageVisit, api, asActor, createTestDb, freshClient, orgToday, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
+import { ageVisit, api, asActor, createTestDb, freshClient, midMonthAhead, orgToday, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
 let db: TestDb;
 let w: World;
@@ -81,14 +81,33 @@ describe("one bucket: a scheduled visit in review with billable minutes", () => 
   });
 
   it("double count: the freed capacity is real - a new 180-minute shift fits (60 used + 180 <= 300) while the review is open", async () => {
+    // Calendar-independent. A new shift must be in the FUTURE, and it only competes with the 60 used and 130 held minutes if it is in the SAME month as they are. Near
+    // a month end "today + 2" is in the next month, so the old test failed on those days. The scenario is therefore always placed in one fixed future month: the visit
+    // and its held reservation are produced by the real flow, then their agency-local service date is moved (fixture write, triggers off, as `ageVisit` does) into the
+    // month of `day`. Every rule under test is unchanged: the guard reads the month's used minutes (visit service_date) and reserved minutes (reservation service_date).
     const cg = w.caregiverA3;
-    const f = await freshClient(db, w, cg, 300);
-    await reservedShift(cg, f, 130);
-    await run(cg, f, 60);
-    const day = (await db.admin.query("select to_char(($1::date + 2), 'YYYY-MM-DD') d", [await orgToday(db)])).rows[0].d as string;
+    const day = await midMonthAhead(db);
+    const f = await freshClient(db, w, cg, 300, w.orgA, { before: 5, after: 100 });
+    const shift = await reservedShift(cg, f, 130);
+    const { visit } = await run(cg, f, 60);
+    const client = await db.admin.connect();
+    try {
+      await client.query("set session_replication_role = replica");
+      await client.query("update ogevia.service_visits set service_date = $2::date where id = $1", [visit, day]);
+      await client.query("update ogevia.authorization_reservations set service_date = $2::date where shift_id = $1", [shift, day]);
+    } finally {
+      await client.query("reset session_replication_role");
+      client.release();
+    }
+    const inMonth = async () => {
+      const r = (await db.admin.query(
+        "select ogevia.authorization_month_usage($1, $2::date) used, ogevia.authorization_month_reserved($1, $2::date) reserved", [await lineageOf(f.auth), day])).rows[0];
+      return { used: Number(r.used), reserved: Number(r.reserved) };
+    };
+    expect(await inMonth()).toEqual({ used: 60, reserved: 0 }); // before the new shift: the review visit counts once, its 130 held minutes are freed
     const created = await q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'09:00'::time,'12:00'::time,null,null)", [w.orgA, f.client, f.service, day]);
     expect(created[0].shift_id).toBeTruthy();
-    expect(await counted(f)).toEqual({ used: 60, reserved: 180 });
+    expect(await inMonth()).toEqual({ used: 60, reserved: 180 });
     // ... and the cap still holds: 60 used + 180 reserved leaves 60, so a 120-minute shift is refused.
     await expect(q(w.managerA, "select * from ogevia_api.create_shift($1,$2,$3,$4::date,'13:00'::time,'15:00'::time,null,null)", [w.orgA, f.client, f.service, day])).rejects.toThrow();
   });

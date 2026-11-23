@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import type { Queryable } from "@carelik/auth/server";
 import { ApiError } from "./errors";
 import { toCamel } from "./routes";
+import { orderChainRows, orderCorrectionRows, orderMonthlyServiceRows } from "@carelik/auth/export-order";
 
 export const REPORT_KEYS = ["client_service_calendar", "monthly_service_reconciliation", "correction_history", "monthly_chain", "billing_review", "audit_report"] as const;
 export type ReportKey = (typeof REPORT_KEYS)[number];
@@ -70,12 +71,12 @@ export interface Built { csv: string; rowCount: number }
 
 export async function buildReportCsv(db: Queryable, org: string, report: ReportKey, p: ExportParams): Promise<Built> {
   if (report === "monthly_chain") {
-    const data = await rowsOf(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [org, p.monthStart, p.clientId ?? null]);
+    const data = orderChainRows(await rowsOf(db, "select * from ogevia_api.get_monthly_chain_report($1, $2, $3)", [org, p.monthStart, p.clientId ?? null]));
     return { csv: chainCsv(data), rowCount: data.length };
   }
   if (report === "client_service_calendar" || report === "monthly_service_reconciliation") {
     if (report === "client_service_calendar" && !p.clientId) throw new Error("A client is required for the client service calendar.");
-    const summary = await rowsOf(db, "select * from ogevia_api.list_monthly_service_summary($1, $2, $3)", [org, p.monthStart, p.clientId ?? null]);
+    const summary = orderMonthlyServiceRows(await rowsOf(db, "select * from ogevia_api.list_monthly_service_summary($1, $2, $3)", [org, p.monthStart, p.clientId ?? null]));
     const names = await clientNames(db, org);
     const n = withNames(summary, names);
     const recon = report === "monthly_service_reconciliation";
@@ -123,8 +124,8 @@ export async function buildReportCsv(db: Queryable, org: string, report: ReportK
     lines.push(csvCell("Field names only, never values."));
     return { csv: lines.join("\r\n"), rowCount: out.length };
   }
-  const corrections = await rowsOf(db, "select * from ogevia_api.list_correction_history_report($1, $2, $3, $4, $5, $6, $7, $8)",
-    [org, p.dateFrom ?? null, p.dateTo ?? null, p.clientId ?? null, p.serviceId ?? null, p.caregiverUserId ?? null, p.correctedByUserId ?? null, p.status ?? null]);
+  const corrections = orderCorrectionRows(await rowsOf(db, "select * from ogevia_api.list_correction_history_report($1, $2, $3, $4, $5, $6, $7, $8)",
+    [org, p.dateFrom ?? null, p.dateTo ?? null, p.clientId ?? null, p.serviceId ?? null, p.caregiverUserId ?? null, p.correctedByUserId ?? null, p.status ?? null]));
   const names = await clientNames(db, org);
   const n = withNames(corrections, names);
   const snap = (s: Row | null | undefined, k: string) => (s ? (s[k] ?? s[k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)]) : undefined);

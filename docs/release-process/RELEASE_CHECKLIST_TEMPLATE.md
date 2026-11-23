@@ -130,6 +130,7 @@ Defect log:
 | E5 | Evidence index complete (this checklist, test output, screenshots, UAT sign-offs) | ☐ | |
 | E6 | All six gates passed: G1 ☐ G2 ☐ G3 ☐ G4 ☐ G5 ☐ (G6 is this decision) | ☐ | |
 | E7 | Deployment window and Operator named; owner available for post-deploy checks | ☐ | |
+| E8 | **Drift check against the last record** (section 8.1): no unexplained change to code, configuration or infrastructure; explained changes listed: ________ | ☐ | |
 
 ### Decision record
 | Field | Value |
@@ -154,4 +155,6 @@ A GO covers that SHA and that window only.
 | F4 | Owner checks the changed workflows with the owner's own account | ☐ | |
 | F5 | Monitoring period observed (length: ____): no new 5xx, no support reports | ☐ | |
 | F6 | Release marked **deployed** and **accepted**; this folder committed | ☐ | |
+| F8 | **Deployed record** written from pasted evidence and committed (`DEPLOYED_RECORD_PRD.md`). Status: ☐ DEPLOYED - RECORD COMPLETE ☐ DEPLOYED - RECORD INCOMPLETE (nothing redeployed automatically) | ☐ | |
+| F9 | Next release's baseline pointer updated (this record is the baseline) | ☐ | |
 | F7 | Rollback invoked? ☐ no ☐ yes (details, time, result): | | |

@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+# Fake curl: answers 401 when the route exists in the fake live template, 404 when it does not; FAKE_CURL_CODE forces a code.
+import json, os, sys
+url = next(x for x in sys.argv[1:] if x.startswith("https://"))
+keys = {r["Properties"]["RouteKey"] for r in json.load(open(os.environ["FAKE"] + "/live.json"))["Resources"].values() if r["Type"] == "AWS::ApiGatewayV2::Route"}
+post = "-X" in sys.argv
+want = "POST /v1/caregivers/{caregiverRecordId}/signin-override" if post else "GET /v1/signin-overrides"
+print(os.environ.get("FAKE_CURL_CODE") or ("401" if want in keys else "404"), end="")

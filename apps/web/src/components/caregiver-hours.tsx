@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, StatusBadge, usageLabel, usageTone } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
 import { getWeekEnd, getWeekStart } from "@/lib/week";
 
 // Backed by get_caregiver_hours(), a security-definer RPC (see
@@ -83,7 +85,14 @@ export function CaregiverHoursCard() {
     }
   }
 
-  const rows = hoursQuery.data ?? [];
+  const unsorted = hoursQuery.data ?? [];
+  const { rows, sort } = useSortedRows(unsorted, {
+    caregiver: { get: (r) => r.caregiver_name },
+    target: { get: (r) => r.target_hours_per_week, kind: "number" },
+    scheduled: { get: (r) => r.scheduled_hours, kind: "number" },
+    gap: { get: (r) => (r.target_hours_per_week === null ? null : r.target_hours_per_week - r.scheduled_hours), kind: "number" },
+    status: { get: (r) => (r.target_hours_per_week === null ? "No target set" : usageLabel(r.scheduled_hours, r.target_hours_per_week)) },
+  });
   if (!hoursQuery.isLoading && rows.length === 0) return null;
 
   return (
@@ -102,11 +111,11 @@ export function CaregiverHoursCard() {
         <table className="mt-4 w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-              <th className="pb-2 font-medium">Caregiver</th>
-              <th className="pb-2 font-medium">Target</th>
-              <th className="pb-2 font-medium">Scheduled</th>
-              <th className="pb-2 font-medium">Gap</th>
-              <th className="pb-2 font-medium">Status</th>
+              <SortTh sort={sort} column="caregiver" className="pb-2 font-medium">Caregiver</SortTh>
+              <SortTh sort={sort} column="target" kind="number" className="pb-2 font-medium">Target</SortTh>
+              <SortTh sort={sort} column="scheduled" kind="number" className="pb-2 font-medium">Scheduled</SortTh>
+              <SortTh sort={sort} column="gap" kind="number" className="pb-2 font-medium">Gap</SortTh>
+              <SortTh sort={sort} column="status" className="pb-2 font-medium">Status</SortTh>
             </tr>
           </thead>
           <tbody>
