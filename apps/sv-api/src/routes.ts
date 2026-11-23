@@ -2098,15 +2098,41 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // 0116 (same staffDuplicates switch; apply 0116 with 0106): the wizard's preview, the merge with explicit choices for conflicting fields, the merge history and the guarded undo.
+  "GET /v1/staff/merge-preview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { preview: await tx(async (db) => (await first(db, "select ogevia_api.preview_staff_merge($1,$2,$3) as r", [orgParam(event), uuid(query.keepProfileId, "keepProfileId"), uuid(query.duplicateProfileId, "duplicateProfileId")])).r) };
+    },
+  },
+
   "POST /v1/staff/{profileId}/merge": {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       const reason = text(body.reason, "reason", 500, { required: true })!;
+      const resolutions = body.resolutions === undefined || body.resolutions === null ? {}
+        : typeof body.resolutions === "object" && !Array.isArray(body.resolutions) && Object.values(body.resolutions as Record<string, unknown>).every((v) => v === "keep" || v === "duplicate") ? body.resolutions
+        : (() => { throw new ApiError(400, "bad_request", "resolutions must choose keep or duplicate for each field."); })();
       return {
-        result: await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles($1,$2,$3,$4) as r", [
-          uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason])).r),
+        result: await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles_v2($1,$2,$3,$4,$5::jsonb) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason, JSON.stringify(resolutions)])).r),
       };
+    },
+  },
+
+  "GET /v1/staff-merges": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ merges: await tx((db) => rows(db, "select * from ogevia_api.list_staff_merges($1,50)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/staff-merges/{linkId}/undo": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.unmerge_staff_profiles($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).linkId, "linkId"), text(body.reason, "reason", 500, { required: true })])).r) };
     },
   },
 
