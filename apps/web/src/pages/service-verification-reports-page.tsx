@@ -912,6 +912,31 @@ export function ServiceVerificationReportsPage() {
     );
   }, [billable]);
 
+  // Sorting for the caregiver, reconciliation and correction tables (shared pattern). Exports keep their standard order.
+  const { rows: sortedCaregiverRows, sort: caregiverSort } = useSortedRows(caregiverSubtotals, {
+    caregiver: { get: (r) => r.name }, worked: { get: (r) => r.workedMinutes, kind: "number" },
+    billable: { get: (r) => r.billableMinutes, kind: "number" }, visits: { get: (r) => r.visits, kind: "number" },
+  });
+  const { rows: sortedMonthlyRows, sort: monthlySort } = useSortedRows(monthlyServiceRows, {
+    client: { get: (r) => r.clientName }, service: { get: (r) => `${r.serviceCode} ${r.serviceName}` },
+    authorized: { get: (r) => r.authorizedMinutes, kind: "number" }, worked: { get: (r) => r.workedMinutes, kind: "number" },
+    verified: { get: (r) => r.verifiedMinutes, kind: "number" }, billable: { get: (r) => r.billableMinutes, kind: "number" },
+    approved: { get: (r) => approvedByLineage.get(r.authorizationLineageId)?.approvedMinutes ?? 0, kind: "number" },
+    rounding: { get: (r) => r.hoursRoundingMinutes ?? r.adjustmentMinutes ?? 0, kind: "number" },
+    pending: { get: (r) => r.hoursPendingMinutes ?? 0, kind: "number" },
+    reserved: { get: (r) => r.hoursReservedMinutes ?? r.reservedMinutes ?? 0, kind: "number" },
+    left: { get: (r) => r.hoursLeftMinutes ?? r.remainingMinutes, kind: "number" },
+    status: { get: (r) => authorizationStatus(r) }, review: { get: (r) => r.reviewMinutes, kind: "number" },
+    difference: { get: (r) => Math.max(0, r.workedMinutes - r.billableMinutes), kind: "number" },
+  });
+  const { rows: sortedCorrectionRows, sort: correctionSort } = useSortedRows(correctionRows, {
+    visitRef: { get: (r) => r.visitNumber }, client: { get: (r) => r.clientName }, service: { get: (r) => `${r.serviceCode} ${r.serviceName}` },
+    date: { get: (r) => r.serviceDate, kind: "date" }, caregiver: { get: (r) => r.caregiverName },
+    original: { get: (r) => r.beforeSnapshot.workedMinutes, kind: "number" }, corrected: { get: (r) => r.afterSnapshot.workedMinutes, kind: "number" },
+    by: { get: (r) => r.correctedByName }, status: { get: (r) => VISIT_STATUS_LABEL[r.correctedVisitStatus] },
+    reason: { get: (r) => r.reason }, on: { get: (r) => r.createdAt, kind: "date" },
+  });
+
   const clientSubtotals = useMemo(() => {
     const map = new Map<
       string,
@@ -1881,14 +1906,14 @@ export function ServiceVerificationReportsPage() {
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                     <th className="w-10 pb-2 pr-3 text-right font-medium">No.</th>
-                    <th className="pb-2 font-medium">Caregiver</th>
-                    <th className="pb-2 font-medium">Worked</th>
-                    <th className="pb-2 font-medium">Billable</th>
-                    <th className="pb-2 font-medium">Visits</th>
+                    <SortTh sort={caregiverSort} column="caregiver" className="pb-2 font-medium">Caregiver</SortTh>
+                    <SortTh sort={caregiverSort} column="worked" kind="number" className="pb-2 font-medium">Worked</SortTh>
+                    <SortTh sort={caregiverSort} column="billable" kind="number" className="pb-2 font-medium">Billable</SortTh>
+                    <SortTh sort={caregiverSort} column="visits" kind="number" className="pb-2 font-medium">Visits</SortTh>
                   </tr>
                 </thead>
                 <tbody>
-                  {caregiverSubtotals.map((entry, index) => (
+                  {sortedCaregiverRows.map((entry, index) => (
                     <tr key={entry.name} className="border-b border-slate-100">
                       <td className="w-10 py-1 pr-3 text-right tabular-nums text-slate-600" data-testid="row-no">{index + 1}</td>
                       <td className="py-1 font-semibold text-slate-900">
@@ -2242,25 +2267,25 @@ export function ServiceVerificationReportsPage() {
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                     <th className="w-10 pb-2 pr-3 text-right font-medium">No.</th>
-                    <th className="pb-2 pr-3 font-medium">Client</th>
-                    <th className="pb-2 pr-3 font-medium">Service</th>
-                    <th className="pb-2 pr-3 font-medium">Authorized</th>
-                    <th className="pb-2 pr-3 font-medium">Worked</th>
-                    <th className="pb-2 pr-3 font-medium">Verified</th>
-                    <th className="pb-2 pr-3 font-medium">Billable (eligible)</th>
-                    {showApproved ? <th className="pb-2 pr-3 font-medium">Approved</th> : null}
-                    <th className="pb-2 pr-3 font-medium">Rounding</th>
-                    <th className="pb-2 pr-3 font-medium">Pending</th>
-                    <th className="pb-2 pr-3 font-medium">Reserved</th>
-                    <th className="pb-2 pr-3 font-medium">Hours left</th>
-                    <th className="pb-2 pr-3 font-medium">Authorization status</th>
-                    <th className="pb-2 pr-3 font-medium">Needs review</th>
-                    <th className="pb-2 pr-3 font-medium">Difference</th>
+                    <SortTh sort={monthlySort} column="client" className="pb-2 pr-3 font-medium">Client</SortTh>
+                    <SortTh sort={monthlySort} column="service" className="pb-2 pr-3 font-medium">Service</SortTh>
+                    <SortTh sort={monthlySort} column="authorized" kind="number" className="pb-2 pr-3 font-medium">Authorized</SortTh>
+                    <SortTh sort={monthlySort} column="worked" kind="number" className="pb-2 pr-3 font-medium">Worked</SortTh>
+                    <SortTh sort={monthlySort} column="verified" kind="number" className="pb-2 pr-3 font-medium">Verified</SortTh>
+                    <SortTh sort={monthlySort} column="billable" kind="number" className="pb-2 pr-3 font-medium">Billable (eligible)</SortTh>
+                    {showApproved ? <SortTh sort={monthlySort} column="approved" kind="number" className="pb-2 pr-3 font-medium">Approved</SortTh> : null}
+                    <SortTh sort={monthlySort} column="rounding" kind="number" className="pb-2 pr-3 font-medium">Rounding</SortTh>
+                    <SortTh sort={monthlySort} column="pending" kind="number" className="pb-2 pr-3 font-medium">Pending</SortTh>
+                    <SortTh sort={monthlySort} column="reserved" kind="number" className="pb-2 pr-3 font-medium">Reserved</SortTh>
+                    <SortTh sort={monthlySort} column="left" kind="number" className="pb-2 pr-3 font-medium">Hours left</SortTh>
+                    <SortTh sort={monthlySort} column="status" className="pb-2 pr-3 font-medium">Authorization status</SortTh>
+                    <SortTh sort={monthlySort} column="review" kind="number" className="pb-2 pr-3 font-medium">Needs review</SortTh>
+                    <SortTh sort={monthlySort} column="difference" kind="number" className="pb-2 pr-3 font-medium">Difference</SortTh>
                     <th className="pb-2 font-medium">Hours accounting</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlyServiceRows.map((row, index) => {
+                  {sortedMonthlyRows.map((row, index) => {
                     const difference = Math.max(0, row.workedMinutes - row.billableMinutes);
                     return (
                       <tr key={row.authorizationLineageId} className="border-b border-slate-100">
@@ -2407,21 +2432,21 @@ export function ServiceVerificationReportsPage() {
               <table className="w-full text-left text-sm" aria-label="Correction history report">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                    <th className="pb-2 pr-3 font-medium">Visit ref</th>
-                    <th className="pb-2 pr-3 font-medium">Client</th>
-                    <th className="pb-2 pr-3 font-medium">Service</th>
-                    <th className="pb-2 pr-3 font-medium">Date</th>
-                    <th className="pb-2 pr-3 font-medium">Caregiver</th>
-                    <th className="pb-2 pr-3 font-medium">Original</th>
-                    <th className="pb-2 pr-3 font-medium">Corrected</th>
-                    <th className="pb-2 pr-3 font-medium">Corrected by</th>
-                    <th className="pb-2 pr-3 font-medium">Status</th>
-                    <th className="pb-2 pr-3 font-medium">Reason</th>
-                    <th className="pb-2 font-medium">Corrected on</th>
+                    <SortTh sort={correctionSort} column="visitRef" className="pb-2 pr-3 font-medium">Visit ref</SortTh>
+                    <SortTh sort={correctionSort} column="client" className="pb-2 pr-3 font-medium">Client</SortTh>
+                    <SortTh sort={correctionSort} column="service" className="pb-2 pr-3 font-medium">Service</SortTh>
+                    <SortTh sort={correctionSort} column="date" kind="date" className="pb-2 pr-3 font-medium">Date</SortTh>
+                    <SortTh sort={correctionSort} column="caregiver" className="pb-2 pr-3 font-medium">Caregiver</SortTh>
+                    <SortTh sort={correctionSort} column="original" kind="number" className="pb-2 pr-3 font-medium">Original</SortTh>
+                    <SortTh sort={correctionSort} column="corrected" kind="number" className="pb-2 pr-3 font-medium">Corrected</SortTh>
+                    <SortTh sort={correctionSort} column="by" className="pb-2 pr-3 font-medium">Corrected by</SortTh>
+                    <SortTh sort={correctionSort} column="status" className="pb-2 pr-3 font-medium">Status</SortTh>
+                    <SortTh sort={correctionSort} column="reason" className="pb-2 pr-3 font-medium">Reason</SortTh>
+                    <SortTh sort={correctionSort} column="on" kind="date" className="pb-2 font-medium">Corrected on</SortTh>
                   </tr>
                 </thead>
                 <tbody>
-                  {correctionRows.map((row) => (
+                  {sortedCorrectionRows.map((row) => (
                     <tr key={row.correctionId} className="border-b border-slate-100 align-top">
                       <td className="py-1 pr-3 whitespace-nowrap font-mono text-xs">{row.visitNumber ?? "—"}</td>
                       <td className="py-1 pr-3"><ClientCell name={row.clientName} code={row.clientCode} duplicate={row.clientNameDuplicate} /></td>

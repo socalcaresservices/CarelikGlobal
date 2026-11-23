@@ -9,6 +9,8 @@ import { HoursBreakdown } from "@/components/hours-breakdown";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { clientLabel } from "./name-label";
+import { SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 
 export interface ChainRow extends HoursFields {
   clientId: string; clientCode: string; clientName?: string | null; duplicateName?: boolean; serviceId: string; serviceCode: string; serviceName: string; authorizationLineageId: string; authorizationVersion: number | null;
@@ -93,7 +95,17 @@ export function MonthlyChainReport({ month }: { month: string }) {
       setBusy(false);
     }
   }
-  const rows = useMemo(() => orderChainRows(q.data ?? []), [q.data]);
+  const ordered = useMemo(() => orderChainRows(q.data ?? []), [q.data]);
+  // The shared sort (table-sort.ts): with no column chosen the rows keep the standard order that the exported file also uses (R39); a chosen sort is a view choice only.
+  const { rows, sort } = useSortedRows(ordered, {
+    client: { get: (r) => `${clientLabel(r, true)} · ${r.serviceName}` },
+    authorized: { get: (r) => r.authorizedMinutes, kind: "number" }, scheduled: { get: (r) => r.scheduledMinutes, kind: "number" }, held: { get: (r) => r.heldReviewMinutes, kind: "number" },
+    reconcile: { get: (r) => r.needsReconciliationMinutes, kind: "number" }, worked: { get: (r) => r.workedMinutes, kind: "number" }, confirmed: { get: (r) => r.confirmedMinutes, kind: "number" },
+    billable: { get: (r) => r.billableMinutes, kind: "number" }, correction: { get: (r) => r.needsCorrectionMinutes, kind: "number" }, ready: { get: (r) => r.readyForReviewMinutes, kind: "number" },
+    approved: { get: (r) => r.humanApprovedMinutes, kind: "number" }, rounding: { get: (r) => r.hoursRoundingMinutes ?? r.adjustmentMinutes, kind: "number" }, pending: { get: (r) => r.hoursPendingMinutes ?? 0, kind: "number" },
+    reserved: { get: (r) => r.hoursReservedMinutes ?? r.reservedMinutes, kind: "number" }, left: { get: (r) => r.hoursLeftMinutes ?? r.remainingMinutes, kind: "number" },
+    notbillable: { get: (r) => r.hoursWorkedNotBillableMinutes ?? 0, kind: "number" }, checks: { get: (r) => (r.reservedOk && r.visitsOk !== false && r.balanceOk && r.hoursBalanceOk !== false ? 0 : 1), kind: "number" },
+  });
   const failing = rows.filter((r) => !r.reservedOk || r.visitsOk === false || !r.balanceOk);
   return (
     <Card className="mt-2 space-y-2 print:border-none print:p-0" data-testid="monthly-chain">
@@ -119,6 +131,7 @@ export function MonthlyChainReport({ month }: { month: string }) {
           ? <p role="status" className="text-sm font-semibold text-emerald-800" data-testid="chain-checks">All checks pass.</p>
           : <p role="alert" className="text-sm font-semibold text-red-700" data-testid="chain-checks">{failing.length} row{failing.length === 1 ? " does" : "s do"} not add up. The difference is shown on each row; do not rely on those totals.</p>
       ) : null}
+      {rows.length > 0 && sort.key ? <p className="text-xs text-slate-600 print:hidden" data-testid="chain-sorted-note">Sorted view. The exported file keeps the standard order.</p> : null}
       {rows.length > 0 ? (
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Full chain by client and service (scrolls sideways on small screens)">
           <table className="w-full min-w-[1100px] border-collapse text-sm">
@@ -126,23 +139,23 @@ export function MonthlyChainReport({ month }: { month: string }) {
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-600">
                 <th scope="col" className="w-8 py-1 pr-2 text-right">No.</th>
-                <th scope="col" className="py-1 pr-2">Client · service</th>
-                <th scope="col" className="px-2 py-1 text-right">Authorized</th>
-                <th scope="col" className="px-2 py-1 text-right">Scheduled</th>
-                <th scope="col" className="px-2 py-1 text-right">Held (confirming or review)</th>
-                <th scope="col" className="px-2 py-1 text-right">To reconcile</th>
-                <th scope="col" className="px-2 py-1 text-right">Worked</th>
-                <th scope="col" className="px-2 py-1 text-right">Confirmed</th>
-                <th scope="col" className="px-2 py-1 text-right">Billable</th>
-                <th scope="col" className="px-2 py-1 text-right">Needs correction</th>
-                <th scope="col" className="px-2 py-1 text-right">Billing Ready</th>
-                <th scope="col" className="px-2 py-1 text-right">Approved</th>
-                <th scope="col" className="px-2 py-1 text-right">Rounding</th>
-                <th scope="col" className="px-2 py-1 text-right">Pending</th>
-                <th scope="col" className="px-2 py-1 text-right">Reserved</th>
-                <th scope="col" className="px-2 py-1 text-right">Hours left</th>
-                <th scope="col" className="px-2 py-1 text-right">Worked, not billable</th>
-                <th scope="col" className="px-2 py-1 text-right">Checks</th>
+                <SortTh sort={sort} column="client" className="py-1 pr-2">Client · service</SortTh>
+                <SortTh sort={sort} column="authorized" kind="number" className="px-2 py-1 text-right" align="right">Authorized</SortTh>
+                <SortTh sort={sort} column="scheduled" kind="number" className="px-2 py-1 text-right" align="right">Scheduled</SortTh>
+                <SortTh sort={sort} column="held" kind="number" className="px-2 py-1 text-right" align="right">Held (confirming or review)</SortTh>
+                <SortTh sort={sort} column="reconcile" kind="number" className="px-2 py-1 text-right" align="right">To reconcile</SortTh>
+                <SortTh sort={sort} column="worked" kind="number" className="px-2 py-1 text-right" align="right">Worked</SortTh>
+                <SortTh sort={sort} column="confirmed" kind="number" className="px-2 py-1 text-right" align="right">Confirmed</SortTh>
+                <SortTh sort={sort} column="billable" kind="number" className="px-2 py-1 text-right" align="right">Billable</SortTh>
+                <SortTh sort={sort} column="correction" kind="number" className="px-2 py-1 text-right" align="right">Needs correction</SortTh>
+                <SortTh sort={sort} column="ready" kind="number" className="px-2 py-1 text-right" align="right">Billing Ready</SortTh>
+                <SortTh sort={sort} column="approved" kind="number" className="px-2 py-1 text-right" align="right">Approved</SortTh>
+                <SortTh sort={sort} column="rounding" kind="number" className="px-2 py-1 text-right" align="right">Rounding</SortTh>
+                <SortTh sort={sort} column="pending" kind="number" className="px-2 py-1 text-right" align="right">Pending</SortTh>
+                <SortTh sort={sort} column="reserved" kind="number" className="px-2 py-1 text-right" align="right">Reserved</SortTh>
+                <SortTh sort={sort} column="left" kind="number" className="px-2 py-1 text-right" align="right">Hours left</SortTh>
+                <SortTh sort={sort} column="notbillable" kind="number" className="px-2 py-1 text-right" align="right">Worked, not billable</SortTh>
+                <SortTh sort={sort} column="checks" kind="number" className="px-2 py-1 text-right" align="right">Checks</SortTh>
                 <th scope="col" className="py-1 pl-2 text-right">Details</th>
               </tr>
             </thead>

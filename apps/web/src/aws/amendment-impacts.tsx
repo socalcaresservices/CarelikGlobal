@@ -10,6 +10,8 @@ import { useAgencyClock } from "./agency-clock";
 import { PageHeader } from "./ui/page-header";
 import { CompactAlert } from "./ui/compact-alert";
 import { clientLabel } from "./name-label";
+import { SortButton, SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -150,27 +152,64 @@ export function AuthorizationImpactsPage() {
       {q.isLoading ? <p className="text-sm text-og-sub">Loading…</p> : null}
       {q.isError ? <p role="alert" className="text-sm text-red-700">{message(q.error, "Could not load.")}</p> : null}
       {q.data && q.data.length === 0 ? <p className="rounded-og border border-og-line bg-og-card p-3 text-sm text-og-sub" role="status">Nothing to review.</p> : null}
+      <ImpactGroups groups={groups} narrow={narrow} itemRows={itemRows} />
+    </div>
+  );
+}
+
+type ImpactGroup = { key: string; first: AmendmentImpact; items: AmendmentImpact[] };
+
+/** The cards (one per authorization change) and the items under each. Both can be sorted with the shared sort: the cards by client, service, version or when amended; the items by when they happen or what happened. */
+function ImpactGroups({ groups, narrow, itemRows }: { groups: ImpactGroup[]; narrow: boolean; itemRows: (i: AmendmentImpact) => ReactNode }) {
+  const { rows, sort } = useSortedRows(groups, {
+    client: { get: (g) => clientLabel(g.first, true) }, service: { get: (g) => g.first.serviceName },
+    version: { get: (g) => g.first.newVersionNumber, kind: "number" }, amended: { get: (g) => g.first.createdAt, kind: "date" },
+  });
+  return (
+    <>
+      {groups.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600" role="group" aria-label="Sort the authorization changes by">
+          <span>Sort by</span>
+          <SortButton sort={sort} column="client">Client</SortButton><SortButton sort={sort} column="service">Service</SortButton>
+          <SortButton sort={sort} column="version" kind="number">Version</SortButton><SortButton sort={sort} column="amended" kind="date">Amended</SortButton>
+        </div>
+      ) : null}
       <ul className="space-y-3" aria-label="Authorization changes">
-        {groups.map((g) => (
+        {rows.map((g) => (
           <li key={g.key} data-testid="amendment-group">
             <Card className="space-y-2 p-3 text-sm">
               <div>
                 <h2 className="text-base font-semibold text-slate-950">{clientLabel(g.first, true)} · {g.first.serviceName} · version {g.first.newVersionNumber} ({formatDuration(g.first.newMonthlyMinutes)} a month)</h2>
                 <p className="text-xs text-slate-600">Amended by {g.first.amendedByName ?? "an administrator"} on {formatDateOnly(g.first.createdAt.slice(0, 10))}. {g.items.length} {g.items.length === 1 ? "item" : "items"} affected.</p>
               </div>
-              {narrow ? (
-                <ul className="space-y-2" aria-label={`Items affected, ${clientLabel(g.first, true)} version ${g.first.newVersionNumber}`}>{g.items.map((i) => itemRows(i))}</ul>
-              ) : (
-                <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Items affected, {clientLabel(g.first, true)} version {g.first.newVersionNumber}</caption>
-                  <thead className="text-xs text-slate-600"><tr><th scope="col" className="py-1 pl-2 pr-3 font-medium">Affected</th><th scope="col" className="py-1 pr-3 font-medium">What happened</th><th scope="col" className="py-1 pr-2 text-right font-medium">Action</th></tr></thead>
-                  {g.items.map((i) => itemRows(i))}
-                </table>
-              )}
+              <ImpactItems group={g} narrow={narrow} itemRows={itemRows} />
             </Card>
           </li>
         ))}
       </ul>
-    </div>
+    </>
+  );
+}
+
+function ImpactItems({ group: g, narrow, itemRows }: { group: ImpactGroup; narrow: boolean; itemRows: (i: AmendmentImpact) => ReactNode }) {
+  const { rows, sort } = useSortedRows(g.items, {
+    when: { get: (i) => i.shiftStartsAt ?? i.serviceDate, kind: "date" },
+    what: { get: (i) => IMPACT_TEXT[i.impactKind] },
+  });
+  const label = `Items affected, ${clientLabel(g.first, true)} version ${g.first.newVersionNumber}`;
+  if (narrow) {
+    return (
+      <>
+        {g.items.length > 1 ? <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600" role="group" aria-label={`Sort ${label}`}><span>Sort by</span><SortButton sort={sort} column="when" kind="date">Affected</SortButton><SortButton sort={sort} column="what">What happened</SortButton></div> : null}
+        <ul className="space-y-2" aria-label={label}>{rows.map((i) => itemRows(i))}</ul>
+      </>
+    );
+  }
+  return (
+    <table className="w-full text-left text-sm">
+      <caption className="sr-only">{label}</caption>
+      <thead className="text-xs text-slate-600"><tr><SortTh sort={sort} column="when" kind="date" className="py-1 pl-2 pr-3 font-medium">Affected</SortTh><SortTh sort={sort} column="what" className="py-1 pr-3 font-medium">What happened</SortTh><th scope="col" className="py-1 pr-2 text-right font-medium">Action</th></tr></thead>
+      {rows.map((i) => itemRows(i))}
+    </table>
   );
 }

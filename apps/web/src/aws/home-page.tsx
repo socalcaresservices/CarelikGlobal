@@ -16,6 +16,8 @@ import { agencyMonth, useAgencyClock } from "./agency-clock";
 import { Disclosure } from "./ui/disclosure";
 import { CompactAlert } from "./ui/compact-alert";
 import { linkClass } from "./ui-classes";
+import { SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { PageHeader } from "./ui/page-header";
 import { StatusChip } from "./ui/status-chip";
 import { InfoTip } from "./ui/info-tip";
@@ -333,41 +335,7 @@ export function AwsHomePage() {
             {!hoursFolded && chartData.length > 0 ? <Chart title="Worked hours by service" data={chartData} shape="parts-of-whole" unit="worked hours" total={workedLabel} /> : null}
             {!hoursFolded ? <Disclosure summary="Hours by service, and how these are calculated">
               <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Hours by service (scrolls sideways on small screens)">
-                <table className="w-full min-w-[820px] border-collapse text-sm">
-                  <caption className="sr-only">Hours by service for the selected month</caption>
-                  <thead>
-                    <tr className="border-b border-og-line text-left text-xs font-semibold text-og-sub">
-                      <th scope="col" className="py-1 pr-2">Service</th>
-                      <th scope="col" className="px-2 py-1 text-right">Authorized</th>
-                      <th scope="col" className="px-2 py-1 text-right">Billable</th>
-                      <th scope="col" className="px-2 py-1 text-right">Rounding</th>
-                      <th scope="col" className="px-2 py-1 text-right">Pending</th>
-                      <th scope="col" className="px-2 py-1 text-right">Reserved</th>
-                      <th scope="col" className="px-2 py-1 text-right">Hours left</th>
-                      <th scope="col" className="px-2 py-1 text-right">Over limit</th>
-                      <th scope="col" className="px-2 py-1 text-right">Worked</th>
-                      <th scope="col" className="px-2 py-1 text-right">Worked, not billable</th>
-                      <th scope="col" className="py-1 pl-2 text-right">Approved</th>
-                    </tr>
-                  </thead>
-                  <tbody className="font-og-mono tabular-nums text-og-ink">
-                    {rows.map((r) => (
-                      <tr key={r.serviceId} className="border-b border-og-line last:border-0">
-                        <th scope="row" className="py-1 pr-2 text-left font-sans font-semibold">{r.serviceName} <span className="font-normal text-og-sub">({r.serviceCode} · {r.clientCount} {r.clientCount === 1 ? "client" : "clients"})</span></th>
-                        <td className="px-2 py-1 text-right">{hoursLabel(r.authorizedMinutes)}</td>
-                        <td className="px-2 py-1 text-right">{hoursLabel(hasHoursData ? r.hoursBillableMinutes : r.billableMinutes)}</td>
-                        <td className="px-2 py-1 text-right">{hoursLabel(r.hoursRoundingMinutes ?? 0)}</td>
-                        <td className="px-2 py-1 text-right">{hoursLabel(hasHoursData ? r.hoursPendingMinutes : r.reviewMinutes)}</td>
-                        <td className={`px-2 py-1 text-right ${(r.needsReconciliationMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{hoursLabel(hasHoursData ? r.hoursReservedMinutes : (r.reservedMinutes ?? r.scheduledMinutes))}</td>
-                        <td className="px-2 py-1 text-right">{hoursLabel(hasHoursData ? r.hoursLeftMinutes : r.remainingMinutes)}</td>
-                        <td className={`px-2 py-1 text-right ${(hasHoursData ? r.hoursOverLimitMinutes : r.overLimitMinutes) ? "font-semibold text-red-700" : ""}`}>{hoursLabel(hasHoursData ? r.hoursOverLimitMinutes : r.overLimitMinutes)}</td>
-                        <td className="px-2 py-1 text-right">{hoursLabel(r.workedMinutes)}</td>
-                        <td className={`px-2 py-1 text-right ${(r.hoursWorkedNotBillableMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{hoursLabel(r.hoursWorkedNotBillableMinutes ?? 0)}</td>
-                        <td className="py-1 pl-2 text-right">{hoursLabel(r.approvedMinutes)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <HoursByServiceTable rows={rows} hasHoursData={hasHoursData} />
               </div>
               <p className="mt-2">{HOURS_EQUATION_TEXT}</p>
               <p className="mt-1">Across authorizations: Authorized − Billable − Rounding − Pending − Reserved = Hours left − Over limit. {HOURS_TOTAL_NOTE}</p>
@@ -423,5 +391,59 @@ export function AwsHomePage() {
         </div>
       </details>
     </div>
+  );
+}
+
+/** "Hours by service" with the shared sort (each column). Module-level so the hook is not called after the page's early returns. */
+export function HoursByServiceTable({ rows: input, hasHoursData }: { rows: UtilisationRow[]; hasHoursData: boolean }) {
+  const { rows, sort } = useSortedRows(input, {
+    service: { get: (r) => r.serviceName },
+    authorized: { get: (r) => r.authorizedMinutes, kind: "number" },
+    billable: { get: (r) => (hasHoursData ? r.hoursBillableMinutes : r.billableMinutes), kind: "number" },
+    rounding: { get: (r) => r.hoursRoundingMinutes ?? 0, kind: "number" },
+    pending: { get: (r) => (hasHoursData ? r.hoursPendingMinutes : r.reviewMinutes), kind: "number" },
+    reserved: { get: (r) => (hasHoursData ? r.hoursReservedMinutes : (r.reservedMinutes ?? r.scheduledMinutes)), kind: "number" },
+    left: { get: (r) => (hasHoursData ? r.hoursLeftMinutes : r.remainingMinutes), kind: "number" },
+    over: { get: (r) => (hasHoursData ? r.hoursOverLimitMinutes : r.overLimitMinutes), kind: "number" },
+    worked: { get: (r) => r.workedMinutes, kind: "number" },
+    notBillable: { get: (r) => r.hoursWorkedNotBillableMinutes ?? 0, kind: "number" },
+    approved: { get: (r) => r.approvedMinutes, kind: "number" },
+  });
+  return (
+    <table className="w-full min-w-[820px] border-collapse text-sm">
+      <caption className="sr-only">Hours by service for the selected month</caption>
+      <thead>
+        <tr className="border-b border-og-line text-left text-xs font-semibold text-og-sub">
+          <SortTh sort={sort} column="service" className="py-1 pr-2">Service</SortTh>
+          <SortTh sort={sort} column="authorized" kind="number" className="px-2 py-1 text-right" align="right">Authorized</SortTh>
+          <SortTh sort={sort} column="billable" kind="number" className="px-2 py-1 text-right" align="right">Billable</SortTh>
+          <SortTh sort={sort} column="rounding" kind="number" className="px-2 py-1 text-right" align="right">Rounding</SortTh>
+          <SortTh sort={sort} column="pending" kind="number" className="px-2 py-1 text-right" align="right">Pending</SortTh>
+          <SortTh sort={sort} column="reserved" kind="number" className="px-2 py-1 text-right" align="right">Reserved</SortTh>
+          <SortTh sort={sort} column="left" kind="number" className="px-2 py-1 text-right" align="right">Hours left</SortTh>
+          <SortTh sort={sort} column="over" kind="number" className="px-2 py-1 text-right" align="right">Over limit</SortTh>
+          <SortTh sort={sort} column="worked" kind="number" className="px-2 py-1 text-right" align="right">Worked</SortTh>
+          <SortTh sort={sort} column="notBillable" kind="number" className="px-2 py-1 text-right" align="right">Worked, not billable</SortTh>
+          <SortTh sort={sort} column="approved" kind="number" className="py-1 pl-2 text-right" align="right">Approved</SortTh>
+        </tr>
+      </thead>
+      <tbody className="font-og-mono tabular-nums text-og-ink">
+                    {rows.map((r) => (
+                      <tr key={r.serviceId} className="border-b border-og-line last:border-0">
+                        <th scope="row" className="py-1 pr-2 text-left font-sans font-semibold">{r.serviceName} <span className="font-normal text-og-sub">({r.serviceCode} · {r.clientCount} {r.clientCount === 1 ? "client" : "clients"})</span></th>
+                        <td className="px-2 py-1 text-right">{hoursLabel(r.authorizedMinutes)}</td>
+                        <td className="px-2 py-1 text-right">{hoursLabel(hasHoursData ? r.hoursBillableMinutes : r.billableMinutes)}</td>
+                        <td className="px-2 py-1 text-right">{hoursLabel(r.hoursRoundingMinutes ?? 0)}</td>
+                        <td className="px-2 py-1 text-right">{hoursLabel(hasHoursData ? r.hoursPendingMinutes : r.reviewMinutes)}</td>
+                        <td className={`px-2 py-1 text-right ${(r.needsReconciliationMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{hoursLabel(hasHoursData ? r.hoursReservedMinutes : (r.reservedMinutes ?? r.scheduledMinutes))}</td>
+                        <td className="px-2 py-1 text-right">{hoursLabel(hasHoursData ? r.hoursLeftMinutes : r.remainingMinutes)}</td>
+                        <td className={`px-2 py-1 text-right ${(hasHoursData ? r.hoursOverLimitMinutes : r.overLimitMinutes) ? "font-semibold text-red-700" : ""}`}>{hoursLabel(hasHoursData ? r.hoursOverLimitMinutes : r.overLimitMinutes)}</td>
+                        <td className="px-2 py-1 text-right">{hoursLabel(r.workedMinutes)}</td>
+                        <td className={`px-2 py-1 text-right ${(r.hoursWorkedNotBillableMinutes ?? 0) > 0 ? "font-semibold text-amber-900" : ""}`}>{hoursLabel(r.hoursWorkedNotBillableMinutes ?? 0)}</td>
+                        <td className="py-1 pl-2 text-right">{hoursLabel(r.approvedMinutes)}</td>
+                      </tr>
+                    ))}
+      </tbody>
+    </table>
   );
 }

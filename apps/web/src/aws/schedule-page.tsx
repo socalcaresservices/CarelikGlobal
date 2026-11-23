@@ -28,6 +28,8 @@ import { ACTIVE_FILTERS, applyFilters, DISPLAY_BADGE, DISPLAY_LABEL, hasFilters,
 import { FilterBar, MonthGrid, ReplacementSuggestions, ViewTabs } from "./schedule-views";
 import { Drawer } from "./ui/drawer";
 import { InfoTip } from "./ui/info-tip";
+import { SortButton, SortTh } from "./ui/sort-th";
+import { useSortedRows } from "./ui/table-sort";
 import { CaregiverPicker } from "./caregiver-picker";
 import { CaregiverMarker } from "./office-assignments";
 import { refreshAfterShiftChange } from "./shift-refresh";
@@ -403,12 +405,39 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
 /** hideHeader: a later day table keeps its column headers for screen readers but does not repeat them on screen (one visible header per page section). */
 function ShiftList({ shifts, canManage, onDone, focusShift, autoAssign, withDate = false, label, hideHeader = false }: { shifts: Shift[]; canManage: boolean; onDone: (text: string) => void; focusShift: string | null; autoAssign: boolean; withDate?: boolean; label: string; hideHeader?: boolean }) {
   const narrow = useIsNarrow();
-  const rows = shifts.map((s) => <ShiftRow key={s.shiftId} s={s} canManage={canManage} onDone={onDone} highlight={s.shiftId === focusShift} autoAssign={s.shiftId === focusShift && autoAssign} withDate={withDate} />);
-  if (narrow) return <ul aria-label={label} className="space-y-1.5">{rows}</ul>;
+  // Every day list and the unfilled list sort with the shared pattern (Time / Client / When / Service / Caregiver / Status). Without a choice the list keeps the server's time order.
+  const { rows: ordered, sort } = useSortedRows(shifts, {
+    time: { get: (x) => x.startsAt, kind: "date" },
+    client: { get: (x) => x.clientName ?? x.clientCode },
+    service: { get: (x) => x.serviceName },
+    caregiver: { get: (x) => x.caregiverName },
+    reason: { get: (x) => x.lastCalloutReason },
+    status: { get: (x) => stateOfShift(x) },
+  });
+  // A later day table keeps its headings for screen readers only, so those are plain headings; visible headings sort.
+  const th = (fallback: "client" | "time" | "service" | "caregiver" | "reason" | "status", text: string, cls: string, kind?: "date", override?: "client" | "time") => {
+    const column = override ?? fallback;
+    return hideHeader ? <th scope="col" className={cls}>{text}</th> : <SortTh sort={sort} column={column} {...(kind ? { kind } : {})} className={cls}>{text}</SortTh>;
+  };
+  const rows = ordered.map((s) => <ShiftRow key={s.shiftId} s={s} canManage={canManage} onDone={onDone} highlight={s.shiftId === focusShift} autoAssign={s.shiftId === focusShift && autoAssign} withDate={withDate} />);
+  if (narrow) return (
+    <>
+      {!hideHeader && shifts.length > 1 ? <div className="mb-1 flex flex-wrap items-center gap-3 text-xs text-slate-600" role="group" aria-label={`Sort ${label} by`}><span>Sort by</span><SortButton sort={sort} column="time" kind="date">Time</SortButton><SortButton sort={sort} column="client">Client</SortButton><SortButton sort={sort} column="status">Status</SortButton></div> : null}
+      <ul aria-label={label} className="space-y-1.5">{rows}</ul>
+    </>
+  );
   return (
     <table aria-label={label} className="w-full border-collapse text-left text-sm">
       <thead className={hideHeader ? "sr-only" : "text-xs font-semibold uppercase tracking-wide text-slate-600"}>
-        <tr><th scope="col" className="py-1 pl-2 pr-3">{withDate ? "Client" : "Time"}</th><th scope="col" className="py-1 pr-3">{withDate ? "When" : "Client"}</th><th scope="col" className="py-1 pr-3">Service</th><th scope="col" className="py-1 pr-3">Caregiver</th>{withDate ? <th scope="col" className="py-1 pr-3">Call-out reason</th> : null}<th scope="col" className="py-1 pr-3">Status</th><th scope="col" className="py-1 pr-2 text-right"><span className="sr-only">Actions</span></th></tr>
+        <tr>
+          {th("client", withDate ? "Client" : "Time", "py-1 pl-2 pr-3", withDate ? undefined : "date", withDate ? "client" : "time")}
+          {th(withDate ? "time" : "client", withDate ? "When" : "Client", "py-1 pr-3", withDate ? "date" : undefined)}
+          {th("service", "Service", "py-1 pr-3")}
+          {th("caregiver", "Caregiver", "py-1 pr-3")}
+          {withDate ? th("reason", "Call-out reason", "py-1 pr-3") : null}
+          {th("status", "Status", "py-1 pr-3")}
+          <th scope="col" className="py-1 pr-2 text-right"><span className="sr-only">Actions</span></th>
+        </tr>
       </thead>
       {rows}
     </table>
