@@ -11,7 +11,7 @@ Date: 2026-11-23 · STATUS: **NEEDS HUMAN INPUT** (nothing new built in this bra
 | Notification preferences | Agency-level only (in-app urgency) | Per caregiver `caregiver_sms_consent(+events)`, per office contact preferences, quiet hours, monthly limit, on-call routing |
 | Audit logging | In-app: notification rows | Audit event on every transition; `notification_jobs` append-style records; receipt reconciliation |
 | Retry handling | n/a | Job table with unique key (agency+purpose|round|recipient), claim/send/record, unknown/transient outcomes, re-queue panel |
-Migration 0086 on that branch is 1,946 lines and **collides with the production ledger's 0086**-number space only in the sense that production already has 0001–0112; it must be renumbered (0113+).
+Migration `0086_open_shifts_board_and_sms.sql` on that branch (1,946 lines) uses a number the release lineage already uses for a different migration (0086 staff management), and the ledger is at 0112, so it must be renumbered to 0113 or later.
 
 ## 2. Why I did not port it blind in this pass
 - It was branched from `main` (466f8ac9) before 339 release commits; `git merge` conflicts in 11 files (computed in Phase 1) including `routes.ts`, the CDK stack and nav, files the release lineage rewrote.
