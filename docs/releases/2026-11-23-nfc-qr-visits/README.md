@@ -50,7 +50,7 @@ Status words: **WORKING (local)** = built and passing the tests listed below aga
 
 ## 3. Decisions for the owner (only the ones that matter)
 
-1. **Re-pin at merge.** `infra/aws/test/release-pins.test.ts` fails 3 tests on any application change ("application files changed since the pinned commit"). It is the repository's release tripwire and is left red on purpose: re-pinning here would conflict with the other branch's re-pin and changes what a TEST release deploys. At merge run the same "Re-pin to …" step earlier commits used. No other test fails.
+1. **Re-pinned on this branch (owner decision 2026-11-23, option 1)** to cb37560 (`PINS_0109.json`, `PINS_0110.json`, `PINNED` in `release-pins.test.ts`), so CI is green here. When this merges with the other branch, re-pin once more to the merged application commit (same `release_pins.py generate` step); expect a trivial conflict in those three files.
 2. **Secure-link signing page:** convert to stroke-validated signing like the phone (recommended, small), or leave the accepted TEST page as is for the pilot.
 3. **Correction approval:** the person who requests a correction cannot approve it (recommended; a one-person agency needs a second reviewer or the existing direct correction).
 4. **Caregivers see the expected place as city and ZIP, not the street** (matches the R23 privacy decision). Staff see the full address.
@@ -80,7 +80,7 @@ Shared files touched (small, for merge): `apps/sv-api/src/routes.ts` (import, `V
 | `apps/web` full | 160 files, **1,440 passed** (22 new: pad, label page, signing, reports, inventory, print sheet) |
 | `infra/aws` unit (`pnpm test`) | 900 passed, **3 failed = the release-pin tripwire (section 3, item 1)**; the new switch test (3) passes: 29 routes, OFF in every environment, JWT-only when on, nothing else changes |
 | `pnpm typecheck` (7 packages), `pnpm build`, web `eslint` | clean / exit 0 |
-| **`pnpm test:all` (the release gate)** | **FAILED, as expected, in step 1 only**: the 3 release-pin tests (section 3, item 1) and 11 tests skipped in `operator-prd-tarball.test.ts` because this clone is shallow (the pinned code commit is not in it; not caused by this change). Steps 2 and 3 (database and API suites) passed in full. The gate is not passed until the re-pin is done and the suite is run in a full clone. |
+| **`pnpm test:all` (the release gate)** | **Failed in step 1 before the re-pin** (3 release-pin tests; now re-pinned and passing, 5/5) and, in this shallow clone only, 11 tests skipped in `operator-prd-tarball.test.ts` because this clone is shallow (the pinned code commit is not in it; not caused by this change). Steps 2 and 3 (database and API suites) passed in full. The gate is not passed until the re-pin is done and the suite is run in a full clone. |
 | Rollback | the down script removes every 0120 object, leaves visits/confirmations/audit rows untouched, and the migration re-applies (tested) |
 
 The sweep and the null-safety review found two real defects in the first draft, both fixed and covered: an open shift (no caregiver) was readable by any caregiver (NULL in an `or` chain read as "allowed"), and agency settings were readable by caregivers.
