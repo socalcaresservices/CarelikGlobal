@@ -126,11 +126,11 @@ describe("sidebar: expanded", () => {
     expect(within(nav).getAllByText(/^(HOME|MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["WORK", "SETUP"]);
     // Main order: Home, Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports, Settings; related pages beneath their parent.
     expect(within(nav).getAllByRole("link").map((a) => a.textContent?.replace(/\d+$/, ""))).toEqual([
-      "Home", "Schedule", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
+      "Home", "Schedule", "Coverage", "Shift requests", "Monthly calendar", "Visit records", "Verify visit", "Approvals", "Visits to review", "Clients", "Authorization changes",
       "Caregivers", "Recruiting", "Documents", "Reports", "Services", "Continuity pack", "Outage records", "Appearance",
     ]);
     expect(hrefs(nav)).toEqual({
-      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Shift requests": "/schedule/shift-requests", "Authorization changes": "/authorization-impacts",
+      "Home": "/", "Verify visit": "/service-verification", "Schedule": "/schedule", "Coverage": "/schedule/coverage", "Shift requests": "/schedule/shift-requests", "Authorization changes": "/authorization-impacts",
       "Visit records": "/service-verification/reports", "Reports": "/service-verification/reports?view=overview",
       "Visits to review": "/service-verification/reports?view=exceptions", "Monthly calendar": "/service-verification/reports?view=calendar",
       "Approvals": "/billing-review", "Clients": "/clients", "Caregivers": "/care-team", "Recruiting": "/care-team/recruiting", "Documents": "/documents", "Services": "/settings/services",
@@ -161,7 +161,7 @@ describe("sidebar: expanded", () => {
   it("caregiver: only the caregiver links under MY WORK (and Appearance, which every person may set for themselves)", async () => {
     renderAt("/service-verification", "caregiver");
     const nav = await screen.findByRole("navigation", { name: "Main" });
-    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Verify visit"]);
+    expect(Object.keys(hrefs(nav)).sort()).toEqual(["Appearance", "Availability", "My documents", "My shifts", "Open shifts", "Verify visit"]);
     expect(within(nav).getAllByText(/^(MY WORK|WORK|SETUP)$/).map((e) => e.textContent)).toEqual(["MY WORK", "SETUP"]);
   });
 

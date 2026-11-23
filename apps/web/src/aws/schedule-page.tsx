@@ -8,9 +8,9 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { caregiverName, useCaregivers } from "./care-team-admin";
 import { clientName, useClients, useServices } from "./client-admin";
-import { formatDuration } from "@/lib/service-verification";
 import { useAgencyClock } from "./agency-clock";
 import { RecurringSeriesForm, RejectedDates, RescheduleForm, SeriesList } from "./recurring-schedule";
+import { OpenShiftsEntry } from "./open-shifts-page";
 import { PickupRequestsPanel } from "./pickup-requests";
 import { ReconcileShiftsPanel } from "./reconcile-shifts";
 import { useShiftsToReconcile } from "./reconcile-data";
@@ -503,88 +503,6 @@ export function SchedulePage() {
   );
 }
 
-interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
-
-/** Wave 1 (G09), changed by 0063: open shifts the caregiver is assigned to. Asking sends a request; the office confirms one caregiver. */
-function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
-  const api = useAwsApi();
-  const queryClient = useQueryClient();
-  const { activeOrganizationId } = useOrganization();
-  const { when, time } = useAgencyClock();
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<{ shiftId: string; text: string } | null>(null);
-  // One key per shift, so a double tap or a retry is the same request.
-  const keys = useRef(new Map<string, string>());
-  const open = useQuery({
-    queryKey: ["aws-open-shifts", activeOrganizationId],
-    queryFn: async () => (await api.get<{ shifts: OpenShift[] }>("/v1/open-shifts", { organizationId: activeOrganizationId })).shifts,
-    enabled: !!activeOrganizationId,
-  });
-  async function pickUp(shiftId: string) {
-    if (busyId) return;
-    if (!keys.current.has(shiftId)) keys.current.set(shiftId, newIdempotencyKey());
-    setBusyId(shiftId);
-    setError(null);
-    try {
-      await api.post(`/v1/shifts/${encodeURIComponent(shiftId)}/pickup`, { organizationId: activeOrganizationId }, { idempotencyKey: keys.current.get(shiftId)! });
-      keys.current.delete(shiftId);
-      onPicked("Request sent. The office will confirm it. The shift is not yours until they do.");
-    } catch (cause) {
-      keys.current.delete(shiftId);
-      setError({ shiftId, text: message(cause, "The request was not sent. Check your connection and try again.") });
-    } finally {
-      setBusyId(null);
-      // Whatever happened, show the true state: someone else may have been confirmed.
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] }),
-        queryClient.invalidateQueries({ queryKey: ["aws-my-shifts"] }),
-      ]);
-    }
-  }
-  async function withdraw(shiftId: string) {
-    if (busyId) return;
-    setBusyId(shiftId);
-    setError(null);
-    try {
-      await api.post(`/v1/shifts/${encodeURIComponent(shiftId)}/pickup/withdraw`, { organizationId: activeOrganizationId });
-      onPicked("Request withdrawn.");
-    } catch (cause) {
-      setError({ shiftId, text: message(cause, "The request was not withdrawn. Try again.") });
-    } finally {
-      setBusyId(null);
-      await queryClient.invalidateQueries({ queryKey: ["aws-open-shifts"] });
-    }
-  }
-  if (open.isError) return <p role="alert" className="text-sm text-red-700">Open shifts could not be loaded. Refresh the page.</p>;
-  if (!open.data || open.data.length === 0) return null;
-  return (
-    <section aria-labelledby="open-shifts-heading" className="space-y-2">
-      <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can ask for</h2>
-      <Hint details="The office confirms one caregiver, and the shift appears in your list once it does." show>Asking does not give you the shift.</Hint>
-      <ul className="space-y-1.5">
-        {open.data.map((s) => (
-          <li key={s.shiftId} className="rounded-lg border border-sky-200 bg-sky-50 p-2">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <div className="min-w-0">
-                <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
-                <p className="text-sm text-slate-800">Client {s.clientCode}{s.serviceName ? ` · ${s.serviceName}` : ""} · {formatDuration(s.minutes)}</p>
-              </div>
-              {s.myRequestStatus === "requested" ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span data-testid="requested-badge" className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-900">Requested — waiting for the office</span>
-                  <Button type="button" variant="secondary" className="min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void withdraw(s.shiftId)}>Withdraw request</Button>
-                </div>
-              ) : (
-                <Button type="button" className="min-h-11" disabled={busyId !== null} loading={busyId === s.shiftId} onClick={() => void pickUp(s.shiftId)}>Request this shift</Button>
-              )}
-            </div>
-            {error?.shiftId === s.shiftId ? <p role="alert" className="mt-1 text-sm text-red-700">{error.text}</p> : null}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 /** Caregiver: upcoming shifts (next 14 days) and "I can't make it". */
 export function MyShiftsPage() {
@@ -618,7 +536,7 @@ export function MyShiftsPage() {
     <div className="max-w-xl space-y-3">
       <h1 className="text-xl font-semibold text-slate-950">My shifts</h1>
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
-      <OpenShiftsSection onPicked={(text) => setState({ busy: false, error: null, done: text })} />
+      <OpenShiftsEntry />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {shifts.isError ? <p role="alert" className="text-sm text-red-700">{(shifts.error as Error).message}</p> : null}
       {shifts.data && shifts.data.length === 0 ? <p className="text-sm text-slate-600">No shifts in the next two weeks.</p> : null}

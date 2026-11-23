@@ -14,6 +14,7 @@ const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const CLIENT = "cccccccc-0000-4000-8000-000000000001";
 const SERVICE = "dddddddd-0000-4000-8000-000000000001";
 const VISIT = "eeeeeeee-0000-4000-8000-000000000001";
+const REF = "99999999-0000-4000-8000-000000000009";
 const SHIFT = "55555555-0000-4000-8000-000000000001";
 const SUB = "11111111-2222-4333-8444-555555555555";
 type Call = { method: string; path: string; headers: Record<string, string>; body: Record<string, unknown> | null };
@@ -24,6 +25,7 @@ interface Opts { scheduled?: boolean; startNeedsReason?: boolean; pickup?: "ok" 
 function fakeApi(role: Role, opts: Opts = {}) {
   const calls: Call[] = [];
   let visit: Record<string, unknown> | null = null;
+  let boardShifts: Array<Record<string, unknown>> = [{ shiftRef: REF, serviceCity: "Winchester", startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", timezone: "America/Los_Angeles", myRequestStatus: null, totalCount: "1" }];
   let openShifts: Array<Record<string, unknown>> = [{ shiftId: SHIFT, startsAt: "2026-10-20T16:00:00Z", endsAt: "2026-10-20T18:00:00Z", minutes: 120, clientCode: "C-104", serviceName: "Respite Care", coverageState: "needs_coverage" }];
   let rules = [{ version: 0, minutes: 15, source: "system_default", effectiveFrom: null, changedByName: null, changedAt: null, reason: null, inEffect: true }] as Array<Record<string, unknown>>;
   const permissions = role === "organization_owner" ? ["organization.update", "visits.read", "visits.manage", "billing.visits.read"] : role === "manager" ? ["visits.read", "visits.manage", "billing.visits.read"] : ["availability.manage_own"];
@@ -66,6 +68,19 @@ function fakeApi(role: Role, opts: Opts = {}) {
       }
       case "GET /v1/my-shifts":
         return json(200, { shifts: [{ shiftId: "66666666-0000-4000-8000-000000000001", startsAt: "2026-10-21T16:00:00Z", endsAt: "2026-10-21T18:00:00Z", clientCode: "C-104", serviceName: "Respite Care", coverageState: "covered", canCallOut: true }] });
+      case "GET /v1/open-shift-board":
+        return json(200, { shifts: boardShifts });
+      case "GET /v1/my-open-shift-requests":
+        return json(200, { requests: [] });
+      case "GET /v1/my-sms-consent":
+        return json(200, { consent: null });
+      case `POST /v1/open-shift-board/${REF}/request`:
+        if (opts.pickup === "filled") { boardShifts = []; return json(409, { error: { code: "conflict", message: "This opening is no longer available" } }); }
+        boardShifts = boardShifts.map((o) => ({ ...o, myRequestStatus: "requested" }));
+        return json(200, { requestState: "requested" });
+      case `POST /v1/open-shift-board/${REF}/withdraw`:
+        boardShifts = boardShifts.map((o) => ({ ...o, myRequestStatus: null }));
+        return json(200, { requestState: "withdrawn" });
       case "GET /v1/open-shifts":
         return json(200, { shifts: openShifts });
       case `POST /v1/shifts/${SHIFT}/pickup`:
@@ -225,32 +240,34 @@ describe("confirmation choices and attestation (G05, G06)", () => {
   }, T);
 });
 
-describe("open shifts (G09)", () => {
-  it("lists open shifts by client code; asking sends a request (with an idempotency key) and does NOT claim the shift; the caregiver can withdraw it", async () => {
-    const api = renderAws("/my-shifts", "caregiver", { pickup: "ok" });
-    expect(await screen.findByText(/Open shifts you can ask for/, undefined, { timeout: COLD })).toBeInTheDocument();
-    const region = screen.getByRole("heading", { name: /Open shifts you can ask for/ }).closest("section")!;
-    expect(within(region).getByText(/Client C-104 · Respite Care · 2 hr/)).toBeInTheDocument();
-    expect(within(region).getByText(/Asking does not give you the shift/)).toBeInTheDocument();
-    expect(within(region).queryByText(/disappear/)).toBeNull();
-    fireEvent.click(within(region).getByRole("button", { name: "Request this shift" }));
-    expect(await screen.findByText(/Request sent\. The office will confirm it\. The shift is not yours until they do/)).toBeInTheDocument();
-    expect(screen.queryByText(/You have the shift/)).toBeNull();
-    const call = api.calls.find((c) => c.path === `/v1/shifts/${SHIFT}/pickup`)!;
+describe("open shifts board (0086)", () => {
+  it("shows the service city and time with no client information; asking sends a request (with an idempotency key) and does NOT assign; Requested is shown; the caregiver can withdraw", async () => {
+    const api = renderAws("/open-shifts", "caregiver", { pickup: "ok" });
+    const item = await screen.findByTestId("board-shift", undefined, { timeout: COLD });
+    expect(item).toHaveTextContent("Winchester");
+    expect(item).not.toHaveTextContent(/Client|C-104/);
+    expect(screen.getByText(/Asking does not give you the shift/)).toBeInTheDocument();
+    fireEvent.click(within(item).getByRole("button", { name: "Request this shift" }));
+    expect(await screen.findByText(/Request sent\. Wait for the office to confirm before working this shift/)).toBeInTheDocument();
+    const call = api.calls.find((c) => c.path === `/v1/open-shift-board/${REF}/request`)!;
     expect(call.body).toEqual({ organizationId: ORG });
     expect(call.headers["idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(await screen.findByTestId("requested-badge")).toHaveTextContent("Requested — waiting for the office");
-    expect(screen.queryByRole("button", { name: "Request this shift" })).toBeNull();
+    expect(await screen.findByTestId("requested-badge")).toHaveTextContent("Requested");
     fireEvent.click(screen.getByRole("button", { name: "Withdraw request" }));
     expect(await screen.findByRole("button", { name: "Request this shift" })).toBeInTheDocument();
-    expect(api.calls.some((c) => c.path === `/v1/shifts/${SHIFT}/pickup/withdraw`)).toBe(true);
   }, T);
 
-  it("when someone else got there first, the caregiver is told and the shift leaves the list", async () => {
-    renderAws("/my-shifts", "caregiver", { pickup: "filled" });
+  it("the My shifts page shows the Open shifts entry with the requestable count; an empty board says so", async () => {
+    renderAws("/my-shifts", "caregiver", { pickup: "ok" });
+    expect(await screen.findByTestId("open-shifts-count", undefined, { timeout: COLD })).toHaveTextContent("1");
+  }, T);
+
+  it("when the opening is gone, the caregiver is told and the shift leaves the list", async () => {
+    renderAws("/open-shifts", "caregiver", { pickup: "filled" });
     fireEvent.click(await screen.findByRole("button", { name: "Request this shift" }, { timeout: COLD }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("This shift was just filled.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("This opening is no longer available");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Request this shift" })).not.toBeInTheDocument());
+    expect(await screen.findByTestId("board-empty")).toBeInTheDocument();
   }, T);
 });
 

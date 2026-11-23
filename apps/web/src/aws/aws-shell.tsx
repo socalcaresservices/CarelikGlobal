@@ -168,10 +168,12 @@ export function AwsShell({ children }: PropsWithChildren) {
     // The caregiver's own day (unchanged).
     { to: "/service-verification", label: "Verify visit", group: "MY WORK", icon: PenLine, show: isCaregiver },
     { to: "/my-shifts", label: "My shifts", group: "MY WORK", icon: CalendarClock, show: isCaregiver },
+    { to: "/open-shifts", label: "Open shifts", group: "MY WORK", icon: HandHeart, show: isCaregiver },
     { to: "/availability", label: "Availability", group: "MY WORK", icon: Clock, show: isCaregiver },
     { to: "/documents", label: "My documents", group: "MY WORK", icon: FolderOpen, show: isCaregiver && hasPermission("documents.manage_own") },
     // Main order: Schedule, Visits, Approvals, Clients, Caregivers, Documents, Reports (Home first, Settings last).
     { to: "/schedule", label: "Schedule", group: "WORK", icon: CalendarDays, accent: ACCENT.scheduling, show: hasPermission("shifts.manage") || (staff && canManageVisits) },
+    { to: "/schedule/coverage", label: "Coverage", group: "WORK", parent: "Schedule", icon: HandHeart, show: hasPermission("shifts.manage") },
     { to: SHIFT_REQUESTS_PATH, label: "Shift requests", group: "WORK", parent: "Schedule", icon: HandHeart, show: hasPermission("care_requests.read") },
     { to: REPORTS_PATH, search: "?view=calendar", label: "Monthly calendar", group: "WORK", parent: "Schedule", icon: CalendarHeart, show: canReadVisits, matchView: isCalendarView },
     // Visits = records of care delivered and the caregiver-side verification entry points (a section label: it has no page of its own).
@@ -197,6 +199,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/continuity", label: "Continuity pack", group: "SETUP", parent: "Settings", icon: LifeBuoy, show: staff && hasPermission("continuity.export") },
     { to: "/outage-visits", label: "Outage records", group: "SETUP", parent: "Settings", icon: FileArchive, show: staff && canManageVisits },
     { to: "/accounts", label: "Accounts", group: "SETUP", parent: "Settings", icon: UserCog, show: staff && hasPermission("accounts.manage") },
+    { to: "/settings/open-shifts", label: "Open shifts and texts", group: "SETUP", parent: "Settings", icon: HandHeart, show: staff && canSettings },
     { to: "/settings/appearance", label: "Appearance", group: "SETUP", ...(staff ? { parent: "Settings" } : {}), icon: Palette, show: true },
   ];
   const groups = visibleGroups(links);

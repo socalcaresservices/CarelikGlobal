@@ -1540,6 +1540,195 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // ---- Open Shifts board and coverage queue (0086). The legacy /v1/open-shifts and /pickup routes above stay for compatibility; the web uses these. ----
+  // Caregiver board: service city and local time only, an opaque reference, never a client id, code or address.
+  "GET /v1/open-shift-board": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const limit = Math.min(Math.max(Number.parseInt(String(query.limit ?? "50"), 10) || 50, 1), 200);
+      const offset = Math.max(Number.parseInt(String(query.offset ?? "0"), 10) || 0, 0);
+      return { shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shift_board($1, $2, $3)", [orgParam(event), limit, offset])) };
+    },
+  },
+
+  "GET /v1/open-shift-board/{shiftRef}": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      opening: (await tx((db) => rows(db, "select * from ogevia_api.get_open_shift($1, $2)", [orgParam(event), uuid(p(event).shiftRef, "shiftRef")])))[0] ?? null,
+    }),
+  },
+
+  "POST /v1/open-shift-board/{shiftRef}/request": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const ref = uuid(p(event).shiftRef, "shiftRef");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const state = await tx(async (db) => ((await db.query("select ogevia_api.request_open_shift($1, $2, $3) as s", [org, ref, key])).rows[0] as { s: string }).s);
+      return { requestState: state };
+    },
+  },
+
+  "POST /v1/open-shift-board/{shiftRef}/withdraw": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const ref = uuid(p(event).shiftRef, "shiftRef");
+      const org = uuid(parseBody(event.body, event.isBase64Encoded).organizationId, "organizationId");
+      const state = await tx(async (db) => ((await db.query("select ogevia_api.withdraw_open_shift_request($1, $2) as s", [org, ref])).rows[0] as { s: string }).s);
+      return { requestState: state };
+    },
+  },
+
+  "GET /v1/my-open-shift-requests": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ requests: await tx((db) => rows(db, "select * from ogevia_api.list_my_open_shift_requests($1)", [orgParam(event)])) }),
+  },
+
+  "GET /v1/my-sms-consent": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ consent: (await tx((db) => rows(db, "select * from ogevia_api.get_my_sms_consent($1)", [orgParam(event)])))[0] ?? null }),
+  },
+
+  "POST /v1/my-sms-consent": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      if (typeof body.optIn !== "boolean") throw new ApiError(422, "validation_failed", "Choose whether to receive texts.");
+      const phone = text(body.phone, "phone", 25, { required: true });
+      const state = await tx(async (db) => ((await db.query("select ogevia_api.set_my_sms_consent($1, $2, $3, 'app') as s", [org, phone, body.optIn])).rows[0] as { s: string }).s);
+      return { consent: state };
+    },
+  },
+
+  // Office: posting, service city, queue and ordered approval (shifts.manage).
+  "POST /v1/shifts/{shiftId}/post-coverage": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const org = uuid(parseBody(event.body, event.isBase64Encoded).organizationId, "organizationId");
+      const state = await tx(async (db) => ((await db.query("select ogevia_api.post_shift_for_coverage($1, $2) as s", [org, shift])).rows[0] as { s: string }).s);
+      return { postingState: state };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/unpost-coverage": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const reason = text(body.reason, "reason", 500);
+      const state = await tx(async (db) => ((await db.query("select ogevia_api.unpost_shift($1, $2, $3) as s", [org, shift, reason])).rows[0] as { s: string }).s);
+      return { postingState: state };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/service-city": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const shift = uuid(p(event).shiftId, "shiftId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const city = text(body.city, "city", 80, { required: true });
+      const state = text(body.state, "state", 2) ?? "CA";
+      await tx((db) => db.query("select ogevia_api.set_shift_service_city($1, $2, $3, $4)", [org, shift, city, state]));
+      return { ok: true };
+    },
+  },
+
+  "GET /v1/shifts/{shiftId}/coverage-status": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      status: (await tx((db) => rows(db, "select * from ogevia_api.get_shift_coverage_status($1, $2)", [orgParam(event), uuid(p(event).shiftId, "shiftId")])))[0] ?? null,
+    }),
+  },
+
+  "GET /v1/coverage-queue": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ items: await tx((db) => rows(db, "select * from ogevia_api.list_coverage_queue($1)", [orgParam(event)])) }),
+  },
+
+  "GET /v1/coverage-queue/{shiftId}/requests": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      requests: await tx((db) => rows(db, "select * from ogevia_api.list_coverage_requests($1, $2)", [orgParam(event), uuid(p(event).shiftId, "shiftId")])),
+    }),
+  },
+
+  "POST /v1/coverage-requests/{requestId}/confirm": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const request = uuid(p(event).requestId, "requestId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const skipReason = text(body.skipReason, "skipReason", 500);
+      const state = await tx(async (db) =>
+        ((await db.query("select ogevia_api.confirm_coverage_request($1, $2, $3, $4) as s", [org, request, skipReason, key])).rows[0] as { s: string }).s);
+      return { coverageState: state };
+    },
+  },
+
+  // Agency settings, office contacts and a caregiver's approved cities.
+  "GET /v1/open-shift-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => ((await db.query("select ogevia_api.get_open_shift_settings($1) as r", [orgParam(event)])).rows[0] as { r: unknown }).r) }),
+  },
+
+  "POST /v1/open-shift-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const { organizationId: _ignored, ...patch } = body;
+      void _ignored;
+      return { settings: await tx(async (db) => ((await db.query("select ogevia_api.update_open_shift_settings($1, $2::jsonb) as r", [org, JSON.stringify(patch)])).rows[0] as { r: unknown }).r) };
+    },
+  },
+
+  "GET /v1/office-contacts": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ contacts: await tx((db) => rows(db, "select * from ogevia_api.list_office_contacts($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/office-contacts": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const bool = (v: unknown) => (typeof v === "boolean" ? v : null);
+      const id = await tx(async (db) =>
+        ((await db.query("select ogevia_api.upsert_office_contact($1, $2, $3, $4, $5, $6, $7, $8, $9) as id", [
+          org, optionalUuid(body.contactId, "contactId"), text(body.label, "label", 80), text(body.phone, "phone", 25), text(body.email, "email", 200),
+          bool(body.notifySms), bool(body.notifyEmail), bool(body.isOnCall), bool(body.active),
+        ])).rows[0] as { id: string }).id);
+      return { contactId: id };
+    },
+  },
+
+  "GET /v1/caregivers/{caregiverRecordId}/coverage-cities": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      cities: await tx((db) => rows(db, "select * from ogevia_api.list_caregiver_coverage_cities($1, $2)", [orgParam(event), uuid(p(event).caregiverRecordId, "caregiverRecordId")])),
+    }),
+  },
+
+  "POST /v1/caregivers/{caregiverRecordId}/coverage-cities": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const record = uuid(p(event).caregiverRecordId, "caregiverRecordId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      if (!Array.isArray(body.cities)) throw new ApiError(422, "validation_failed", "Give the cities as a list.");
+      const count = await tx(async (db) =>
+        ((await db.query("select ogevia_api.set_caregiver_coverage_cities($1, $2, $3::jsonb) as n", [org, record, JSON.stringify(body.cities)])).rows[0] as { n: number }).n);
+      return { cityCount: count };
+    },
+  },
+
   // Shifts that ended with no visit record and still hold a reservation (0067). Nothing is released automatically: a person records an outcome.
   "GET /v1/shifts-to-reconcile": {
     mutating: false,

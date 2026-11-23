@@ -33,6 +33,9 @@ import { ServicesReviewPage } from "./readiness/service-approvals";
 import { ContinuityPage } from "./continuity-page";
 import { OutageVisitsPage } from "./outage-visits-page";
 import { MyShiftsPage, SchedulePage } from "./schedule-page";
+import { OpenShiftsPage } from "./open-shifts-page";
+import { CoveragePage } from "./coverage-page";
+import { OpenShiftSettingsPage } from "./open-shift-settings-page";
 import { ServicesPage } from "./services-page";
 import { BrandingSettingsPage, ProfilePage } from "./workspace-settings-pages";
 import { PublicCareOfferPage, PublicCareRequestPage } from "./care-public-pages";
@@ -106,6 +109,9 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/services" element={<MovedTo to={SERVICES_PATH} />} />
                     <Route path="/schedule" element={<SchedulePage />} />
                     <Route path="/my-shifts" element={<MyShiftsPage />} />
+                    <Route path="/open-shifts" element={<OpenShiftsPage />} />
+                    <Route path="/schedule/coverage" element={<CoveragePage />} />
+                    <Route path="/settings/open-shifts" element={<OpenShiftSettingsPage />} />
                     <Route path="/continuity" element={<ContinuityPage />} />
                     <Route path="/outage-visits" element={<OutageVisitsPage />} />
                     <Route path="/attention" element={<NeedsAttentionPage />} />

@@ -30,6 +30,10 @@ export function renderAws(path: string, permissions: string[], handlers: Record<
       case "GET /v1/action-issues": return json(200, { asOf: new Date().toISOString(), matching: 0, limit: 50, offset: 0, counts: { total: 0, critical: 0, urgent: 0, routine: 0, actionNeeded: 0, byQueue: {} }, issues: [] });
       case "GET /v1/notifications": return json(200, { notifications: { asOf: new Date().toISOString(), unread: 0, items: [] } });
       case "GET /v1/notification-settings": return json(200, { settings: { urgentInApp: true, criticalInApp: true, routine: "listed in Action needed only", outboundChannels: "none" } });
+      case "GET /v1/open-shift-board": return json(200, { shifts: [] });
+      case "GET /v1/my-open-shift-requests": return json(200, { requests: [] });
+      case "GET /v1/coverage-queue": return json(200, { items: [] });
+      case "GET /v1/my-sms-consent": return json(200, { consent: null });
       case "GET /v1/shifts": return json(200, { shifts: [] });
       case "GET /v1/clients": return json(200, { clients: [] });
       case "GET /v1/services": return json(200, { services: [] });
