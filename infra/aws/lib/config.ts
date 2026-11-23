@@ -101,8 +101,8 @@ export interface OgeviaEnvironmentConfig {
    * GET /v1/staff/duplicates and POST /v1/staff/{profileId}/merge only.
    * bulkImport (pending migration 0092, infra/aws/db/pending): R11 import of people and clients from a CSV file. OFF everywhere until the owner approves its release; turning it on
    * without applying 0092 would make the route fail. Adds POST /v1/imports/{kind} only.
-   * signInOverride (pending migration 0090, infra/aws/db/pending): the administrator override for a caregiver who has not signed in yet. OFF everywhere until the owner approves its release in
-   * that environment (demo first); with it off the two routes are not in the API at all.
+   * signInOverride (migration 0103, infra/aws/db/pending/migrations): the administrator override for a caregiver who has not signed in yet. ON for TEST and, by the owner's request of
+   * 2026-11-15, for production (PRD below). An environment that has not applied 0103 must keep it false: with it off the two routes are not in the API at all.
    * staffManagement (pending migration 0086, infra/aws/db/pending): on for the pilot/test slice and, since the owner's approval of 2026-10-26, on for production (PRD below). An environment that has not applied 0086 must keep it false.
    */
   readonly features: { readonly staffManagement: boolean; readonly signInOverride: boolean; readonly bulkImport: boolean; readonly staffDuplicates: boolean; readonly liveTestRepairs?: boolean; readonly requestCleanup?: boolean; readonly offices?: boolean; readonly officeAssignments?: boolean; readonly assignmentHistory?: boolean };
@@ -293,7 +293,7 @@ const PRD: OgeviaEnvironmentConfig = {
   ...PROD,
   existing: PRODUCTION_FOUNDATION,
   envName: "prd",
-  features: { staffManagement: true, signInOverride: false, bulkImport: false, staffDuplicates: false },   // production: the owner approved the staff-management release on 2026-10-25 (Pacific) together with migration 0086 (db/pending, applied outside the ledger like TEST); see docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md
+  features: { staffManagement: true, signInOverride: true, bulkImport: false, staffDuplicates: false },   // production: staffManagement approved 2026-10-25 with migration 0086 (docs/releases/2026-10-26-redesign/PRODUCTION_RELEASE_PREPARATION.md). signInOverride: owner request 2026-11-15, needs migration 0103 (in the production ledger since 2026-11-11) and adds exactly two routes; see docs/releases/2026-11-15-signin-override-production/. bulkImport and staffDuplicates stay off.
   customDomains: { hostnames: ["app.ogevia.com", "admin.ogevia.com"], certificateArn: WEB_CERTIFICATE_ARN },
   // Separate sign-in from the pilot: a dedicated user pool and client (lib/auth-stack.ts). `existing.cognitoUserPoolId` and
   // `auth.appClientId` are inherited from PROD only so they can be NAMED as forbidden for production; its API never accepts them.

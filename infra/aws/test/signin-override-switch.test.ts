@@ -1,5 +1,6 @@
-// The sign-in override routes (pending migration 0090) are added to an environment's API only when its `features.signInOverride` switch is on.
-// It is ON for the TEST stack (`ENVIRONMENTS.prod`) in this release candidate and OFF for production (`prd`) until the owner approves a production release, so no deployed API changes by merging this code.
+// The sign-in override routes (migration 0103) are added to an environment's API only when its `features.signInOverride` switch is on.
+// It is ON for the TEST stack (`ENVIRONMENTS.prod`) and, by the owner's request of 2026-11-15, for production (`ENVIRONMENTS.prd`). Merging does not deploy: the production API changes only when the
+// release in docs/releases/2026-11-15-signin-override-production/ is executed, and its change must be exactly these two routes.
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { buildOgeviaApp } from "../lib/app.js";
@@ -17,10 +18,17 @@ describe("signInOverride route switch", () => {
   it("marks exactly the two override routes", () => {
     expect(OVERRIDE).toEqual(["GET /v1/signin-overrides", "POST /v1/caregivers/{caregiverRecordId}/signin-override"]);
   });
-  it("is ON for the TEST stack and OFF for production: the routes exist only in TEST", () => {
+  it("is ON for the TEST stack and for production: the two routes exist in both", () => {
     expect(ENVIRONMENTS.prod.features.signInOverride).toBe(true);
-    expect(ENVIRONMENTS.prd.features.signInOverride).toBe(false);
-    for (const k of OVERRIDE) { expect(keys(ENVIRONMENTS.prod).some((r) => r.key === k), k).toBe(true); expect(keys(ENVIRONMENTS.prd).some((r) => r.key === k), k).toBe(false); }
+    expect(ENVIRONMENTS.prd.features.signInOverride).toBe(true);
+    for (const k of OVERRIDE) { expect(keys(ENVIRONMENTS.prod).some((r) => r.key === k), k).toBe(true); expect(keys(ENVIRONMENTS.prd).some((r) => r.key === k), k).toBe(true); }
+  });
+  it("production with the switch ON differs from production with it OFF by exactly the two JWT routes (nothing public, nothing else added)", () => {
+    const off = { ...ENVIRONMENTS.prd, features: { ...ENVIRONMENTS.prd.features, signInOverride: false } } as OgeviaEnvironmentConfig;
+    const on = keys(ENVIRONMENTS.prd), before = new Set(keys(off).map((r) => r.key));
+    expect(on.filter((r) => !before.has(r.key)).map((r) => r.key).sort()).toEqual(OVERRIDE);
+    for (const k of OVERRIDE) expect(on.find((r) => r.key === k), k).toMatchObject({ auth: "JWT" });
+    expect(before.size).toBe(on.length - 2);
   });
   it("with the switch on the routes require a JWT (nothing is public) and are the only difference from the same stack with it off", () => {
     const off = { ...ENVIRONMENTS.prod, features: { ...ENVIRONMENTS.prod.features, signInOverride: false } } as OgeviaEnvironmentConfig;
