@@ -4273,6 +4273,18 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Capture by tap or scan: the app sends the sticker's link, the server finds which sticker of THIS agency it is. Staff only.
+  "POST /v1/home-labels/resolve": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const found = typeof body.link === "string" ? /[0-9a-f]{64}/.exec(body.link) : null;
+      if (!found) throw new ApiError(400, "bad_request", "That is not an Ogevia label link.");
+      const [label] = await tx((db) => rows(db, "select * from ogevia_api.resolve_home_label_code($1,$2)", [uuid(body.organizationId, "organizationId"), hashLabelToken(found[0])]));
+      return { label };
+    },
+  },
+
   "POST /v1/home-labels/{labelId}/deactivate": {
     mutating: true,
     handle: async ({ event, tx }) => {
@@ -4422,7 +4434,7 @@ export const ROUTES: Record<string, Route> = {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
-      await tx((db) => db.query("select ogevia_api.set_signature_followup_owner($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).visitId, "visitId"), optionalUuid(body.ownerUserId, "ownerUserId")]));
+      await tx((db) => db.query("select ogevia_api.set_signature_followup_owner($1,$2,$3,$4)", [uuid(body.organizationId, "organizationId"), uuid(p(event).visitId, "visitId"), optionalUuid(body.ownerUserId, "ownerUserId"), body.assignToMe === true]));
       return { saved: true };
     },
   },

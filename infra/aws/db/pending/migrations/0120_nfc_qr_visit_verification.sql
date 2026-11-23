@@ -1113,10 +1113,11 @@ end;
 $$;
 revoke all on function ogevia.vv_sync_followups(uuid) from public;
 
-create function ogevia_api.set_signature_followup_owner(p_organization_id uuid, p_visit_id uuid, p_owner_user_id uuid)
+create function ogevia_api.set_signature_followup_owner(p_organization_id uuid, p_visit_id uuid, p_owner_user_id uuid, p_assign_to_me boolean default false)
 returns void language plpgsql security definer set search_path = ogevia, pg_temp as $$
 begin
   perform ogevia.require_actor();
+  if coalesce(p_assign_to_me, false) then p_owner_user_id := ogevia.current_user_id(); end if;
   if not ogevia.has_permission(p_organization_id, 'visits.manage') then raise exception 'You do not have permission to manage follow-ups' using errcode = 'OGA03'; end if;
   perform 1 from ogevia.visit_signature_followups f where f.organization_id = p_organization_id and f.visit_id = p_visit_id and f.state = 'pending';
   if not found then raise exception 'No pending signature follow-up for this visit' using errcode = 'OGN04'; end if;
@@ -1441,6 +1442,18 @@ end;
 $$;
 
 
+-- Tap or scan a sticker to capture it: the app reads the sticker's link, hashes the token and asks which sticker ID it belongs to. Own agency only; staff only.
+create function ogevia_api.resolve_home_label_code(p_organization_id uuid, p_token_hash text)
+returns table (label_id uuid, label_code text, status text)
+language plpgsql stable security definer set search_path = ogevia, pg_temp as $$
+begin
+  perform ogevia.require_actor();
+  if not ogevia.has_permission(p_organization_id, 'clients.manage') then raise exception 'You do not have permission to assign labels' using errcode = 'OGA03'; end if;
+  return query select h.id, h.label_code, h.status from ogevia.home_labels h where h.organization_id = p_organization_id and h.token_hash = p_token_hash;
+  if not found then raise exception 'Label not found for your agency' using errcode = 'OGN04'; end if;
+end;
+$$;
+
 -- CSV export of a 0120 report: the caller needs reports.export; the export is audited (report key and row count only, never the rows).
 create function ogevia_api.authorize_verification_export(p_organization_id uuid, p_report text, p_row_count integer)
 returns void language plpgsql security definer set search_path = ogevia, pg_temp as $$
@@ -1479,7 +1492,7 @@ begin
     'check_signature_session(uuid,uuid)',
     'consume_signature_session(uuid,uuid)',
     'defer_visit_signature(uuid,text,uuid)',
-    'set_signature_followup_owner(uuid,uuid,uuid)',
+    'set_signature_followup_owner(uuid,uuid,uuid,boolean)',
     'log_signature_delivery(uuid,uuid,text,uuid,text,text)',
     'flag_overdue_visits(uuid)',
     'list_visit_exceptions(uuid,text,text,date,date,uuid,uuid,uuid)',
@@ -1491,7 +1504,8 @@ begin
     'list_time_signature_register(uuid,date,date,uuid,uuid,uuid,text)',
     'list_corrections_audit(uuid,date,date)',
     'list_punch_billing_review(uuid,date,date,uuid,uuid,uuid)',
-    'authorize_verification_export(uuid,text,integer)'
+    'authorize_verification_export(uuid,text,integer)',
+    'resolve_home_label_code(uuid,text)'
   ] loop
     execute format('revoke all on function ogevia_api.%s from public', f);
     execute format('grant execute on function ogevia_api.%s to ogevia_app', f);

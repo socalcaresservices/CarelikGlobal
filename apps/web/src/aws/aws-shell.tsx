@@ -30,6 +30,7 @@ import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } 
 import { EnvironmentBanner } from "./environment-marker";
 import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isSidebarCurrent, isVisitListView, landingOf, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, tabsOf, visibleGroups, type NavGroup, type NavLinkDef } from "./nav-model";
 import { useOffices } from "./offices-data";
+import { useHomeLabelsAvailable } from "./home-labels-data";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
@@ -129,6 +130,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   }, [drawerShown]);
 
   const { available: officesOn } = useOffices(!loading && !!activeOrganizationId && hasPermission("organization.update"));   // the Offices link appears only where the offices switch is on (hook order: before the early returns)
+  const { available: verificationOn } = useHomeLabelsAvailable(!loading && !!activeOrganizationId && hasPermission("visits.read"));   // 0120: the Visit verification link appears only where the homeLabels switch is on
   if (loading) {
     return <div className="flex min-h-screen flex-col"><EnvironmentBanner /><div className="flex flex-1 items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div></div>;
   }
@@ -181,6 +183,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: REPORTS_PATH, label: "Visits", group: "Operations", show: canReadVisits, matchView: isVisitListView },
     { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "Operations", show: canBill ? canReadVisits : staff && canManageVisits, matchView: isExceptionsView },
     { to: "/outage-visits", label: "Outage records", group: "Operations", show: staff && canManageVisits },
+    { to: "/verification", label: "Visit verification", group: "Operations", show: staff && canReadVisits && verificationOn },
     { to: "/settings/roles", label: "Roles & Permissions", group: "Settings", show: staff && hasPermission("staff.read") },
     // Agency Settings opens the first agency page the person may use (branding, then services, then continuity); the others are its tabs.
     { to: agencyTo, label: "Agency Settings", group: "Settings", show: staff && (canSettings || canServices || canContinuity) },

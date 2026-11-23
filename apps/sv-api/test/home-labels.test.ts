@@ -13,7 +13,7 @@ function goodStrokes(width = 600, height = 200) {
   const stroke = (cx: number, t0: number): Array<[number, number, number]> => Array.from({ length: 40 }, (_, i) => [cx + 60 * Math.cos(i / 6), 100 + 40 * Math.sin(i / 4), t0 + i * 15] as [number, number, number]);
   return { width, height, strokes: [stroke(200, 0), stroke(330, 700)] };
 }
-const refuses = (input: unknown) => { try { validateStrokes(input); } catch (e) { expect(e).toBeInstanceOf(ApiError); expect((e as ApiError).statusCode ?? (e as any).status).toBe(422); return; } throw new Error("accepted"); };
+const refuses = (input: unknown) => { try { validateStrokes(input); } catch (e) { expect(e).toBeInstanceOf(ApiError); expect((e as ApiError).status).toBe(422); return; } throw new Error("accepted"); };
 
 describe("label codes and tokens", () => {
   it("codes are OGL- plus 8 unambiguous characters, unique in a batch, with no client or agency data", () => withKey(() => {

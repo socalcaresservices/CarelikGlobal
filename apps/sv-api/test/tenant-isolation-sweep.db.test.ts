@@ -271,6 +271,7 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "report" && /verification-reports/.test(route)) return "billing_review";
   if (name === "labelCode" || name === "newLabelCode") return "OGL-ABCDEFGH";
   if (name === "token" && /label-punch/.test(route)) return "f".repeat(64);
+  if (name === "link" && /home-labels\/resolve/.test(route)) return `https://app.example.test/l#${"f".repeat(64)}`;
   if (name === "ownerUserId") return ids.userId;
   if (name === "latitude") return 34.0522;
   if (name === "longitude") return -118.2437;

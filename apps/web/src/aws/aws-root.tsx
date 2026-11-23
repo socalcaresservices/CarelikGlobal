@@ -1,5 +1,7 @@
 import { AwsProtectedRoute } from "./aws-auth-pages";
 import { ClientQrCheckin, QrSignInGate } from "./client-qr";
+import { LabelPunchGate, LabelPunchPage } from "./label-punch-page";
+import { VerificationReportsPage } from "./verification-reports-page";
 // AWS build root (VITE_AUTH_PROVIDER=cognito): Cognito managed login (code +
 // PKCE) -> Ogevia AWS API. Nothing in this tree creates a Supabase client.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -80,7 +82,7 @@ const queryClient = new QueryClient({
 
 export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: AwsApiClient }) {
   const location = useLocation();
-  const ProtectedRoute = location.pathname === "/checkin" ? QrSignInGate : AwsProtectedRoute;
+  const ProtectedRoute = location.pathname === "/checkin" ? QrSignInGate : location.pathname === "/l" ? LabelPunchGate : AwsProtectedRoute;
   return (
     <Routes>
       <Route path="/login" element={<AwsLoginPage />} />
@@ -92,13 +94,15 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
       <Route
         path="*"
         element={
-          <ProtectedRoute key={location.pathname === "/checkin" ? location.key : "protected"}>
+          <ProtectedRoute key={location.pathname === "/checkin" || location.pathname === "/l" ? location.key : "protected"}>
             <AwsOrganizationProvider api={api}>
               <AwsBackendProvider api={api}>
                 <AwsShell>
                   <Routes>
                     <Route path="/" element={<AwsLanding home={<AwsHomePage />} />} />
                     <Route path="/checkin" element={<ClientQrCheckin />} />
+                    <Route path="/l" element={<LabelPunchPage />} />
+                    <Route path="/verification" element={<VerificationReportsPage />} />
                     <Route path="/service-verification" element={<ServiceVerificationPage />} />
                     <Route path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />
                     <Route path="/billing-review" element={<BillingReviewPage />} />

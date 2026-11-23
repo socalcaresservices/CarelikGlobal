@@ -14,8 +14,8 @@ const routes = (cfg: OgeviaEnvironmentConfig) => {
 const LABEL_ROUTES = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "homeLabels").map((r) => `${r.method} ${r.path}`).sort();
 
 describe("home label (0120) route switch", () => {
-  it("marks 28 routes, every one of them a handler in the API route table, none public", () => {
-    expect(LABEL_ROUTES).toHaveLength(28);
+  it("marks 29 routes, every one of them a handler in the API route table, none public", () => {
+    expect(LABEL_ROUTES).toHaveLength(29);
     for (const k of LABEL_ROUTES) { expect(ROUTES[k], k).toBeTruthy(); expect(ROUTES[k]!.public ?? false, k).toBe(false); }
     expect(SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "homeLabels").some((r) => r.public)).toBe(false);
   });
