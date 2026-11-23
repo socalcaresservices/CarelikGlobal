@@ -340,6 +340,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/home-labels/{labelId}/history", feature: "homeLabels" },
   { method: apigw.HttpMethod.POST, path: "/v1/label-punch/preview", feature: "homeLabels" },
   { method: apigw.HttpMethod.POST, path: "/v1/label-punch", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visit-punch", feature: "homeLabels" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-session", feature: "homeLabels" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/sign", feature: "homeLabels" },
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/sign-later", feature: "homeLabels" },

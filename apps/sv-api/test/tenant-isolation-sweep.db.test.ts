@@ -9,7 +9,7 @@
 // counted separately ("validation first") and listed, never silently counted as covered. Public (token) routes have no agency identity at all: reason recorded below.
 import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ageVisit, api, asActor, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { createTestDbWithPending } from "../../../infra/aws/db/test/pending";
 import { MemoryEvidenceStore } from "../src/evidence";
@@ -48,6 +48,7 @@ function blocks(): Record<string, string> {
 const BLOCKS = blocks();
 
 beforeAll(async () => {
+  vi.stubEnv("OGEVIA_QR_ENCRYPTION_KEY", "c".repeat(64));   // 0120: label links are sealed with the existing QR key parameter
   db = await createTestDbWithPending();   // includes the PENDING migration (infra/aws/db/pending) so the staff routes are swept too
   // Every PENDING migration (infra/aws/db/pending/migrations: sign-in override, client labels, bulk import, duplicate staff) is applied too, so the routes that depend on them are
   // swept against the real functions and tables, not against "function does not exist".
@@ -99,6 +100,7 @@ beforeAll(async () => {
     confirmationRequestId: confirmationRequest?.request_id ?? rnd(), documentTypeId: docType ?? rnd(), officeId: rnd(), clientTypeId: clientType ?? rnd(), lateVisitId: lateVisit,
     // kinds with no cheap real row here: well-formed unknown ids (the 404 then proves "not found", not "other agency"); counted and listed separately
     careRequestId: rnd(), offerId: rnd(), impactId: rnd(), holdId: rnd(), versionId: rnd(), documentId: rnd(), lateConfirmationId: rnd(), adjustmentId: rnd(),
+    labelId: rnd(), exceptionId: rnd(), sessionId: rnd(), serviceLocationId: rnd(),   // 0120: replaced by real org A rows below (the session id stays a well-formed unknown id: a real one lives five minutes)
     pickupRequestId: rnd(), openShiftId: shift, availabilityRequestId: rnd(), caregiverServiceApprovalId: rnd(), excludeShiftId: shift, excludeClientId: f.client, authorizationLineageId: rnd(), correctedByUserId: w.managerA.userId,
   };
   // --- real rows for the rest, made through the product's own routes as org A people ------------------------------------------------------------------
@@ -196,6 +198,14 @@ beforeAll(async () => {
   // an amendment below what is already used records an impact for the signed visits (org A people only)
   const am = await make(w.managerA, "POST /v1/authorizations/{authorizationId}/amend", { monthlyAuthorizedMinutes: 10, periodStart: (await db.admin.query("select to_char(period_start,'YYYY-MM-DD') d from ogevia.client_authorizations where id=$1", [f.auth])).rows[0].d, periodEnd: (await db.admin.query("select to_char(period_end,'YYYY-MM-DD') d from ogevia.client_authorizations where id=$1", [f.auth])).rows[0].d });
   real("impactId", am.body.affectedVisits?.[0]?.impactId);
+  // 0120 (pending migration, homeLabels switch): a real service location, a real label (assigned and with a link) and a real exception of org A
+  const sloc = await make(w.ownerA, "POST /v1/clients/{clientId}/service-locations", { kind: "home", name: "Synthetic Home", street: "1 Synthetic Way", city: "Synthetictown", zip: "90001", latitude: 34.0522, longitude: -118.2437 });
+  real("serviceLocationId", sloc.body.locationId);
+  const lreg = await make(w.ownerA, "POST /v1/home-labels", { count: 2 });
+  const lassign = ids.serviceLocationId && lreg.body.codes ? await make(w.ownerA, "POST /v1/home-labels/assign", { labelCode: lreg.body.codes[0], serviceLocationId: ids.serviceLocationId, confirmedAddress: true }) : { body: {} as any };
+  real("labelId", lassign.body.labelId);
+  const exId = (await db.admin.query("insert into ogevia.visit_exceptions (organization_id, kind, dedupe_key, visit_id, caregiver_user_id, client_id) values ($1,'location_issue','sweep:synthetic',$2,$3,$4) returning id", [A, signed, w.caregiverA1.userId, f.client])).rows[0].id as string;
+  real("exceptionId", exId);
   real("holdId", (await make(w.managerA, "POST /v1/clients/{clientId}/service-holds")).body.holdId);
   for (const k of ["careRequestId", "offerId", "caregiverServiceApprovalId", "authorizationLineageId"]) if (!madeReal.has(k)) synthetic.add(k);
 }, 120_000);
@@ -254,6 +264,22 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "subjectType") return "client";
   if (name === "subjectId") return ids.clientId;
   if (name === "status" && route === "GET /v1/availability/requests") return "pending";
+  // 0120: well-formed values so every probe reaches the database check
+  if (name === "kind" && /service-locations/.test(route)) return "home";
+  if (name === "kind" && /visit-exceptions/.test(route)) return undefined;
+  if (name === "locationId") return undefined;
+  if (name === "report" && /verification-reports/.test(route)) return "billing_review";
+  if (name === "labelCode" || name === "newLabelCode") return "OGL-ABCDEFGH";
+  if (name === "token" && /label-punch/.test(route)) return "f".repeat(64);
+  if (name === "ownerUserId") return ids.userId;
+  if (name === "latitude") return 34.0522;
+  if (name === "longitude") return -118.2437;
+  if (name === "accuracyM") return 20;
+  if (name === "radiusM") return 150;
+  if (name === "accuracyLimitM") return 100;
+  if (/Seconds$/.test(name)) return 600;
+  if (name === "attested" && /\/sign$/.test(route)) return true;
+  if (name === "strokes") return { width: 600, height: 200, strokes: [Array.from({ length: 40 }, (_, i) => [200 + 60 * Math.cos(i / 6), 100 + 40 * Math.sin(i / 4), i * 15]), Array.from({ length: 40 }, (_, i) => [330 + 60 * Math.cos(i / 6), 100 + 40 * Math.sin(i / 4), 700 + i * 15])] };
   if (name === "kind") return route === "GET /v1/readiness/flags" ? "service" : "weekly";
   if (name === "pairs") return [{ caregiverRecordId: ids.caregiverRecordId, serviceId: ids.serviceId }];
   if (name === "userIds") return [ids.userId];
@@ -444,8 +470,8 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
     return out;
   };
 
-  it("caregiver A2 (assigned to one client only): the only POST routes that succeed are her own availability request, experience and notification read", async () => {
-    expect((await ok2xx(w.caregiverA2, POSTS)).sort()).toEqual(["POST /v1/availability/requests", "POST /v1/experience/me", "POST /v1/notifications/read"]);
+  it("caregiver A2 (assigned to one client only): the only POST routes that succeed are her own availability request, experience, notification read and (0120) her own clock-in attempt, which names only her own visits", async () => {
+    expect((await ok2xx(w.caregiverA2, POSTS)).sort()).toEqual(["POST /v1/availability/requests", "POST /v1/experience/me", "POST /v1/notifications/read", "POST /v1/visit-punch"]);
   });
 
   it("caregiver A2: every GET answer is the stranger's answer (nothing) except her own scoped data, and none shows another caregiver's visit, shift, record, approval, authorization, document, hold or name", async () => {

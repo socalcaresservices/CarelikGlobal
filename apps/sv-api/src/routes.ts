@@ -311,6 +311,20 @@ const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
 
 
+/** The fields every punch carries: what the person chose and what the phone reported. Times, status and agency are never taken from the caller. */
+function punchFields(body: Record<string, unknown>) {
+  const num = (v: unknown, name: string, limit: number) => {
+    if (v === undefined || v === null) return null;
+    if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > limit) throw new ApiError(400, "bad_request", `${name} is not valid.`);
+    return v;
+  };
+  const lat = num(body.latitude, "latitude", 90), lng = num(body.longitude, "longitude", 180);
+  if ((lat === null) !== (lng === null)) throw new ApiError(400, "bad_request", "Send both latitude and longitude, or neither.");
+  const acc = body.accuracyM === undefined || body.accuracyM === null ? null : Math.round(Number(body.accuracyM));
+  if (acc !== null && (!Number.isFinite(acc) || acc < 0 || acc > 1_000_000)) throw new ApiError(400, "bad_request", "accuracyM is not valid.");
+  return { intent: oneOf(body.intent, "intent", ["arrival", "departure"] as const), shift: optionalUuid(body.shiftId, "shiftId"), visit: optionalUuid(body.visitId, "visitId"), lat, lng, acc, confirm: body.confirm === true };
+}
+
 /** 0120 reports: the database function, its filters and the CSV columns (the same columns the screen shows; nothing sensitive exists in a row to omit). */
 const VERIFICATION_REPORTS = {
   visit_exceptions: {
@@ -4305,30 +4319,30 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
-  // The only writer of punches. `intent` is chosen by the person on the screen after the preview ("Clock in" / "Clock out"), never inferred from a repeated scan.
+  // The only writer of punches from a label. `intent` is chosen by the person on the screen after the preview ("Clock in" / "Clock out"), never inferred from a repeated scan.
+  // The agency comes from the label itself; the caller names no organization.
   "POST /v1/label-punch": {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
-      const intent = oneOf(body.intent, "intent", ["arrival", "departure"] as const);
-      const token = body.token === undefined || body.token === null ? null : body.token;
-      if (token !== null && (typeof token !== "string" || !LABEL_TOKEN.test(token))) throw new ApiError(400, "bad_request", "That label link is not valid.");
-      const org = optionalUuid(body.organizationId, "organizationId");
-      if (token === null && !org) throw new ApiError(400, "bad_request", "organizationId is required for an app punch.");
-      const shift = optionalUuid(body.shiftId, "shiftId");
-      if (token === null && intent === "arrival" && !shift) throw new ApiError(400, "bad_request", "shiftId is required to clock in from the visit screen.");
-      const num = (v: unknown, name: string, limit: number) => {
-        if (v === undefined || v === null) return null;
-        if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > limit) throw new ApiError(400, "bad_request", `${name} is not valid.`);
-        return v;
-      };
-      const lat = num(body.latitude, "latitude", 90), lng = num(body.longitude, "longitude", 180);
-      if ((lat === null) !== (lng === null)) throw new ApiError(400, "bad_request", "Send both latitude and longitude, or neither.");
-      const acc = body.accuracyM === undefined || body.accuracyM === null ? null : Math.round(Number(body.accuracyM));
-      if (acc !== null && (!Number.isFinite(acc) || acc < 0 || acc > 1_000_000)) throw new ApiError(400, "bad_request", "accuracyM is not valid.");
-      return tx(async (db) => (await first(db, "select ogevia_api.record_punch($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) as r", [
-        token === null ? null : hashLabelToken(token as string), org, intent, shift, optionalUuid(body.visitId, "visitId"), lat, lng, acc, key, body.confirm === true])).r);
+      if (typeof body.token !== "string" || !LABEL_TOKEN.test(body.token)) throw new ApiError(400, "bad_request", "That label link is not valid.");
+      const a = punchFields(body);
+      return tx(async (db) => (await first(db, "select ogevia_api.record_punch($1,null,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+        hashLabelToken(body.token as string), a.intent, a.shift, a.visit, a.lat, a.lng, a.acc, key, a.confirm])).r);
+    },
+  },
+
+  // Clock in or out from the assigned visit screen (a visit that starts or ends at an approved community place). Same database function, no label.
+  "POST /v1/visit-punch": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const a = punchFields(body);
+      if (a.intent === "arrival" && !a.shift) throw new ApiError(400, "bad_request", "shiftId is required to clock in from the visit screen.");
+      return tx(async (db) => (await first(db, "select ogevia_api.record_punch(null,$1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+        uuid(body.organizationId, "organizationId"), a.intent, a.shift, a.visit, a.lat, a.lng, a.acc, key, a.confirm])).r);
     },
   },
 

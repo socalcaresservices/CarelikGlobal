@@ -533,9 +533,10 @@ declare
 begin
   perform ogevia.require_actor();
   select * into v_shift from ogevia.shifts s where s.id = p_shift_id and s.organization_id = p_organization_id;
+  -- Null-safe: an open shift has no caregiver, and "null = x" must read as "no", never as "allowed".
   if v_shift.id is null or not ogevia.is_active_member(p_organization_id)
      or not (ogevia.has_permission(p_organization_id, 'visits.read') or ogevia.has_permission(p_organization_id, 'shifts.manage')
-             or v_shift.caregiver_user_id = ogevia.current_user_id() or v_shift.caregiver_record_id = ogevia.my_caregiver_record(p_organization_id)) then
+             or coalesce(v_shift.caregiver_user_id = ogevia.current_user_id(), false) or coalesce(v_shift.caregiver_record_id = ogevia.my_caregiver_record(p_organization_id), false)) then
     raise exception 'Scheduled visit not found' using errcode = 'OGN04';
   end if;
   select * into v_k from ogevia.vv_expected_kinds(p_organization_id, p_shift_id, v_shift.service_id);
@@ -577,7 +578,9 @@ returns table (early_checkout_minutes integer, overdue_grace_minutes integer, ma
 language plpgsql stable security definer set search_path = ogevia, pg_temp as $$
 begin
   perform ogevia.require_actor();
-  if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
+  if not ogevia.is_active_member(p_organization_id) or not (ogevia.has_permission(p_organization_id, 'visits.read') or ogevia.has_permission(p_organization_id, 'organization.update')) then
+    raise exception 'Organization not found' using errcode = 'OGN04';
+  end if;
   return query select s.early_checkout_minutes, s.overdue_grace_minutes, s.material_time_change_minutes, s.signature_session_seconds, s.accuracy_limit_m,
     s.hold_billing_while_signature_pending, s.hold_billing_on_open_exceptions from ogevia.vv_settings(p_organization_id) s;
 end;
@@ -877,7 +880,8 @@ begin
          and not ogevia.shift_is_called_out(s.id)
          and not exists (select 1 from ogevia.service_visits v where v.scheduled_shift_id = s.id and v.status not in ('voided', 'corrected'))
          and (select expected_start from ogevia.vv_expected_kinds(s.organization_id, s.id, s.service_id)) = case when v_source = 'label' then 'home' else 'community' end;
-      if p_shift_id is not null and v_source = 'app' then v_client := (select s.client_id from ogevia.shifts s where s.id = p_shift_id and s.organization_id = v_org); end if;
+      -- the client of an app clock-in comes from the caregiver's OWN shift only; a shift that is not hers names nothing
+      if p_shift_id is not null and v_source = 'app' then v_client := (select s.client_id from ogevia.shifts s where s.id = p_shift_id and s.organization_id = v_org and (s.caregiver_user_id = v_actor or s.caregiver_record_id = v_record)); end if;
       if coalesce(array_length(v_cands, 1), 0) = 0 then
         v_reason := case
           when exists (select 1 from ogevia.shifts s where s.organization_id = v_org and (v_client is null or s.client_id = v_client) and (s.caregiver_user_id = v_actor or s.caregiver_record_id = v_record) and s.status = 'scheduled'
@@ -1114,11 +1118,12 @@ returns void language plpgsql security definer set search_path = ogevia, pg_temp
 begin
   perform ogevia.require_actor();
   if not ogevia.has_permission(p_organization_id, 'visits.manage') then raise exception 'You do not have permission to manage follow-ups' using errcode = 'OGA03'; end if;
+  perform 1 from ogevia.visit_signature_followups f where f.organization_id = p_organization_id and f.visit_id = p_visit_id and f.state = 'pending';
+  if not found then raise exception 'No pending signature follow-up for this visit' using errcode = 'OGN04'; end if;
   if p_owner_user_id is not null and not exists (select 1 from ogevia.organization_memberships m where m.organization_id = p_organization_id and m.user_id = p_owner_user_id and m.status = 'active') then
     raise exception 'That person is not an active member of this agency' using errcode = 'OGV22';
   end if;
   update ogevia.visit_signature_followups f set owner_user_id = p_owner_user_id where f.organization_id = p_organization_id and f.visit_id = p_visit_id and f.state = 'pending';
-  if not found then raise exception 'No pending signature follow-up for this visit' using errcode = 'OGN04'; end if;
   perform ogevia.vv_sig_event(p_organization_id, p_visit_id, 'owner_set', null, jsonb_build_object('owner_set', p_owner_user_id is not null));
 end;
 $$;
@@ -1235,7 +1240,7 @@ declare v_actor uuid := ogevia.require_actor(); v ogevia.service_visits%rowtype;
 begin
   select * into v from ogevia.service_visits sv where sv.id = p_visit_id;
   if v.id is null or not ogevia.is_active_member(v.organization_id)
-     or not (v.caregiver_user_id = v_actor or ogevia.has_permission(v.organization_id, 'visits.manage')) then raise exception 'Visit not found' using errcode = 'OGN04'; end if;
+     or not (coalesce(v.caregiver_user_id = v_actor, false) or ogevia.has_permission(v.organization_id, 'visits.manage')) then raise exception 'Visit not found' using errcode = 'OGN04'; end if;
   if p_requested_time_out is null or p_requested_time_out > now() then raise exception 'The corrected time out must be in the past' using errcode = 'OGV22'; end if;
   if p_requested_time_in is not null and p_requested_time_out <= p_requested_time_in then raise exception 'Time out must be after time in' using errcode = 'OGV22'; end if;
   if v.status in ('voided', 'corrected') then raise exception 'This visit can no longer be corrected' using errcode = 'OGC09'; end if;

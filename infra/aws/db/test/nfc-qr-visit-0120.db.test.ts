@@ -113,6 +113,24 @@ async function retire(a: Actor, client: string) {
   await db.admin.query("update ogevia.shifts set status = 'cancelled' where client_id = $1 and status = 'scheduled'", [client]);
 }
 
+describe("0120 null-safe authorization", () => {
+  it("an open shift (no caregiver) is not readable by a caregiver who is not assigned to it, and agency settings are staff-only", async () => {
+    const f = await freshClient(db, w, w.caregiverA1, 300);
+    await saveLocation(f.client);
+    const open = (await db.admin.query("insert into ogevia.shifts (organization_id, client_id, service_id, starts_at, ends_at) values ($1,$2,$3, now() + interval '1 day', now() + interval '1 day 2 hours') returning id", [w.orgA, f.client, f.service])).rows[0].id;
+    await expectPgError(call(w.caregiverA2, "select * from ogevia_api.get_expected_locations($1,$2)", [w.orgA, open]), "OGN04");
+    expect((await call(w.managerA, "select * from ogevia_api.get_expected_locations($1,$2)", [w.orgA, open]))[0]).toMatchObject({ expected_start: "home" });
+    await expectPgError(call(w.caregiverA2, "select * from ogevia_api.get_verification_settings($1)", [w.orgA]), "OGN04");
+    expect((await call(w.managerA, "select * from ogevia_api.get_verification_settings($1)", [w.orgA]))[0]).toMatchObject({ early_checkout_minutes: 30, accuracy_limit_m: 100 });
+    // a visit with no login-linked caregiver: another caregiver may not file a correction for it
+    const x = await checkedOut();
+    await sign(x.visit);
+    await expectPgError(call(w.caregiverA2, "select ogevia_api.request_punch_correction($1,'other','Should not be allowed',null,now() - interval '1 minute')", [x.visit]), "OGN04");
+    await retire(w.caregiverA1, x.client);
+    await retire(w.caregiverA1, f.client);
+  });
+});
+
 describe("0120 label administration", () => {
   it("registers a batch of unassigned labels with unique IDs; assigning needs the confirmed address; one active label per location; duplicates are rejected", async () => {
     const [a, b] = await register(w.ownerA, w.orgA, 2);
