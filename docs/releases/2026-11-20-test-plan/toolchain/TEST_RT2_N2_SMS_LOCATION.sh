@@ -197,10 +197,25 @@ find "$B" -type f -not -name SHA256SUMS -exec sha256sum {} + > "$B/SHA256SUMS"
 confirm "DEPLOY-TEST-STAGE2" "ABOUT TO CHANGE TEST ONLY (owner authorization $OGEVIA_DEPLOY_APPROVAL): take a fresh RDS snapshot of ogevia-postgres, apply migrations 0117 and 0118 to ogevia_sv_test, deploy the code of $COMMIT to $STACK with openShiftSms (MOCK sender only) and serviceLocation ON (9 routes), publish the web to the TEST site. Email and live texting stay off. Production is not touched."
 
 echo; echo "=== 3. fresh TEST snapshot, then migrations 0117 and 0118 ==="
-SNAP="ogevia-test-rt2-n2-$(date -u +%Y%m%dt%H%M%Sz)"; SNAP="${SNAP,,}"
-A rds create-db-snapshot --db-instance-identifier ogevia-postgres --db-snapshot-identifier "$SNAP" --query 'DBSnapshot.Status' --output text || stop "cannot create the snapshot. Nothing was changed."
-echo "$SNAP" > "$B/snapshot-id.txt"; echo "snapshot $SNAP requested; waiting until it is available (several minutes)"
-A rds wait db-snapshot-available --db-snapshot-identifier "$SNAP" || stop "the snapshot did not become available. Nothing else was changed."
+# A snapshot taken by an earlier run of this stage may be reused (OGEVIA_EXISTING_SNAPSHOT=<id>); it must be a snapshot of ogevia-postgres and must still be fresh (the migration tool refuses one older than 24 hours).
+if [[ -n "${OGEVIA_EXISTING_SNAPSHOT:-}" ]]; then
+  SNAP="$OGEVIA_EXISTING_SNAPSHOT"; [[ "$SNAP" =~ ^[a-z][a-z0-9-]{0,254}$ ]] || stop "the snapshot id looks wrong"
+  [[ "$(A rds describe-db-snapshots --db-snapshot-identifier "$SNAP" --query 'DBSnapshots[0].DBInstanceIdentifier' --output text)" == ogevia-postgres ]] || stop "snapshot $SNAP is not a snapshot of ogevia-postgres. Nothing was changed."
+  echo "reusing snapshot $SNAP"
+else
+  SNAP="ogevia-test-rt2-n2-$(date -u +%Y%m%dt%H%M%Sz)"; SNAP="${SNAP,,}"
+  A rds create-db-snapshot --db-instance-identifier ogevia-postgres --db-snapshot-identifier "$SNAP" --query 'DBSnapshot.Status' --output text || stop "cannot create the snapshot. Nothing was changed."
+fi
+echo "$SNAP" > "$B/snapshot-id.txt"
+# patient poll: each call is short (the AWS wrapper kills any single call after 5 minutes), up to 60 minutes in all
+echo "waiting until snapshot $SNAP is available (this can take 10 to 30 minutes)"
+ok=0; for _ in $(seq 1 ${OGEVIA_SNAPSHOT_POLLS:-120}); do
+  st="$(A rds describe-db-snapshots --db-snapshot-identifier "$SNAP" --query 'DBSnapshots[0].Status' --output text 2>/dev/null || echo unknown)"
+  [[ "$st" == available ]] && { ok=1; break; }
+  [[ "$st" == failed ]] && stop "the snapshot failed. Nothing else was changed."
+  echo "  snapshot status: $st"; sleep "${OGEVIA_SNAPSHOT_SLEEP:-30}"
+done
+[[ "$ok" == 1 ]] || stop "the snapshot did not become available in time (last status: $st). Nothing else was changed; reuse it later with OGEVIA_EXISTING_SNAPSHOT=$SNAP."
 export OGEVIA_TEST_SNAPSHOT="$SNAP"
 for m in 0117 0118; do
   bash "$TC/TEST_DB_SESSION.sh" bash "$TC/TEST_PENDING_LEDGER.sh" apply "$m" || stop "migration $m failed; it ran in one transaction, so the database is unchanged by it. Nothing else was deployed."

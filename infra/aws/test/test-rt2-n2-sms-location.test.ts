@@ -79,7 +79,10 @@ elif "events list-rules" in line: out("Ogevia-prod-NotifySweep")
 elif "rds create-db-snapshot" in line:
     if os.path.exists(st + "/fail-snapshot"): sys.exit(1)
     out("creating")
-elif "rds wait db-snapshot-available" in line: pass
+elif "rds describe-db-snapshots" in line:
+    if os.path.exists(st + "/snapshot-creating"): sys.exit(0) if False else out("creating")
+    elif "DBInstanceIdentifier" in line: out("ogevia-prod" if os.path.exists(st + "/wrong-instance") else "ogevia-postgres")
+    else: out("available")
 elif "lambda get-function-configuration" in line and "--query Environment.Variables " in line: out({"DB_NAME": "ogevia_sv_test", "COVER_ALERT_ADDRESS_RULES": "on", "SMS_MODE": "mock", "SERVICE_LOCATION": "on"} if open(st + "/live.json").read().find("sms-settings") >= 0 else {"DB_NAME": "ogevia_sv_test"})
 elif "lambda get-function --function-name Ogevia-prod-NotificationEmail" in line: sys.exit(254)
 elif "s3 sync s3://" in line:
@@ -125,7 +128,7 @@ exit 9
 }
 type S = ReturnType<typeof setup>;
 function run(s: S, env: Record<string, string> = {}, mode?: string) {
-  return spawnSync("bash", [script, ...(mode ? [mode] : [])], { encoding: "utf8", env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, REPO: s.repo, WORK: s.work, OGEVIA_RELEASE_COMMIT: s.head, OGEVIA_DEPLOY_APPROVAL: "RT2-TEST-20261123", OGEVIA_APP_BASE: s.head, OGEVIA_NO_CONFIRM: "1", OGEVIA_CF_WAIT: "0", ...env } });
+  return spawnSync("bash", [script, ...(mode ? [mode] : [])], { encoding: "utf8", env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, REPO: s.repo, WORK: s.work, OGEVIA_RELEASE_COMMIT: s.head, OGEVIA_DEPLOY_APPROVAL: "RT2-TEST-20261123", OGEVIA_APP_BASE: s.head, OGEVIA_SNAPSHOT_SLEEP: "0", OGEVIA_SNAPSHOT_POLLS: "3", OGEVIA_NO_CONFIRM: "1", OGEVIA_CF_WAIT: "0", ...env } });
 }
 const done = (s: { dir: string }) => rmSync(s.dir, { recursive: true, force: true });
 const calls = (s: S) => readFileSync(s.calls, "utf8");
@@ -160,6 +163,15 @@ describe("TEST_RT2_N2_SMS_LOCATION.sh", () => {
     try { writeFileSync(join(s.st, "fail-snapshot"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("cannot create the snapshot"); expect(changes(s).filter((l) => /^(deploy|web|ledger)/.test(l))).toEqual([]); } finally { done(s); }
   });
 
+  it("a snapshot that never becomes available stops everything before any migration; an existing snapshot can be reused, but only if it belongs to ogevia-postgres", () => {
+    let s = setup();
+    try { writeFileSync(join(s.st, "snapshot-creating"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("did not become available in time"); expect(r.stderr).toContain("OGEVIA_EXISTING_SNAPSHOT="); expect(changes(s).filter((l) => /^(deploy|web|ledger)/.test(l))).toEqual([]); } finally { done(s); }
+    s = setup();
+    try { writeFileSync(join(s.st, "wrong-instance"), ""); const r = run(s, { OGEVIA_EXISTING_SNAPSHOT: "some-other-snapshot" }); expect(r.status).toBe(2); expect(r.stderr).toContain("is not a snapshot of ogevia-postgres"); expect(changes(s).filter((l) => /^(deploy|web|ledger)/.test(l))).toEqual([]); } finally { done(s); }
+    s = setup();
+    try { const r = run(s, { OGEVIA_EXISTING_SNAPSHOT: "ogevia-test-rt2-n2-20261124t030750z" }); expect(r.status, r.stderr + r.stdout).toBe(0); expect(r.stdout).toContain("reusing snapshot ogevia-test-rt2-n2-20261124t030750z"); expect(calls(s)).not.toMatch(/rds create-db-snapshot/); } finally { done(s); }
+  }, 60000);
+
   it("happy path: fresh snapshot, 0117 then 0118 (each verified), the 9 routes and the variables, deploy then web; the snapshot id is kept; email stays off; the config is restored", () => {
     const s = setup();
     try {
@@ -169,7 +181,7 @@ describe("TEST_RT2_N2_SMS_LOCATION.sh", () => {
       expect(r.stdout).toContain("PASS Handler has SMS_MODE=mock and SERVICE_LOCATION=on"); expect(r.stdout).toContain("PASS no email function is wired"); expect(r.stdout).toContain("PASS no NotificationEmail function exists");
       expect(r.stdout).toContain("PASS the bundle carries commit " + s.head); expect(r.stdout).toContain("RT2 STAGE 2 COMPLETE (TEST)"); expect(r.stdout).toMatch(/snapshot ogevia-test-rt2-n2-/);
       const c = calls(s).split("\n"); const idx = (re: RegExp) => c.findIndex((l) => re.test(l));
-      const order = [idx(/^ledger verify 0116/), idx(/^ledger probe 0117/), idx(/^psql absent-check/), idx(/^synth stage2=0/), idx(/^synth stage2=1/), idx(/^aws rds create-db-snapshot/), idx(/^aws rds wait db-snapshot-available/),
+      const order = [idx(/^ledger verify 0116/), idx(/^ledger probe 0117/), idx(/^psql absent-check/), idx(/^synth stage2=0/), idx(/^synth stage2=1/), idx(/^aws rds create-db-snapshot/), idx(/^aws rds describe-db-snapshots/),
                      idx(/^ledger apply 0117/), idx(/^ledger verify 0117/), idx(/^ledger apply 0118/), idx(/^ledger verify 0118/), idx(/^deploy .*deploy-on/), idx(/^web version=/)];
       expect(order.every((i) => i >= 0), JSON.stringify(order)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
