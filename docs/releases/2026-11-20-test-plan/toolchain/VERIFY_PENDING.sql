@@ -36,6 +36,13 @@ select 'no PUBLIC execute ' || name, case when :'expect' = 'absent' then true el
 union all
 select 'app role execute ' || name, case when :'expect' = 'absent' then true else oid is not null and has_function_privilege('ogevia_app', oid, 'execute') end, '' from p
 union all
+select 'function ogevia.cover_key exists', to_regprocedure('ogevia.cover_key(ogevia.shifts)') is not null, '' where :'mig' = '0119'
+union all
+select 'round 0 keeps the original key (0119) ' || :'expect',
+       case when :'expect' = 'absent' then true else coalesce(pg_get_functiondef(to_regprocedure('ogevia.cover_key(ogevia.shifts)')) like '%0119 legacy key for round 0%', false) end, '' where :'mig' = '0119'
+union all
+select 'cover_key is defined exactly once', (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname = 'cover_key') = 1, '' where :'mig' = '0119'
+union all
 select 'ledger row ' || :'mig' || ' ' || :'expect',
        case when :'expect' = 'absent' then not exists (select 1 from ogevia_meta.schema_migrations where version = :'mig')
             else (select count(*) from ogevia_meta.schema_migrations where version = :'mig') = 1 end, '';
