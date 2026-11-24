@@ -25,7 +25,8 @@ function setup() {
   copyFileSync(join(root, TCREL, "diff_gate_rt2.py"), join(tc, "diff_gate_rt2.py"));
   writeFileSync(join(tc, "VERIFY_PENDING.sql"), "select 1;\n");
   writeFileSync(join(tc, "TEST_DB_SESSION.sh"), `#!/usr/bin/env bash\n"$@"\n`);
-  writeFileSync(join(tc, "TEST_PENDING_LEDGER.sh"), `#!/usr/bin/env bash\necho "ledger $1 $2" >> ${JSON.stringify(calls)}\nif [[ -f ${JSON.stringify(join(st, "fail-ledger"))} ]]; then exit 2; fi\n`);
+  // like the real tool: 0118 needs 0117 recorded (so it cannot be probed before 0117 is applied), and apply/rollback keep that state
+  writeFileSync(join(tc, "TEST_PENDING_LEDGER.sh"), `#!/usr/bin/env bash\necho "ledger $1 $2" >> ${JSON.stringify(calls)}\nif [[ -f ${JSON.stringify(join(st, "fail-ledger"))} ]]; then exit 2; fi\nif [[ "$1 $2" == "probe 0118" && ! -f ${JSON.stringify(join(st, "applied-0117"))} ]]; then echo "STOP: prerequisite migrations not recorded in the TEST ledger: 0117" >&2; exit 2; fi\nif [[ "$1 $2" == "apply 0117" ]]; then touch ${JSON.stringify(join(st, "applied-0117"))}; fi\nif [[ "$1 $2" == "rollback 0117" ]]; then rm -f ${JSON.stringify(join(st, "applied-0117"))}; fi\n`);
   writeFileSync(join(repo, "infra/aws/scripts/deploy-test-slice.sh"), `#!/usr/bin/env bash\necho "web version=\${VITE_APP_VERSION:-none}" >> ${JSON.stringify(calls)}\nmkdir -p "$(dirname "$0")/../../../apps/web/dist-aws"; cp ${JSON.stringify(join(dir, "built-index.html"))} "$(dirname "$0")/../../../apps/web/dist-aws/index.html"\n`);
   for (const f of ["TEST_PENDING_LEDGER.sh", "TEST_DB_SESSION.sh"]) chmodSync(join(tc, f), 0o755);
   chmodSync(join(repo, "infra/aws/scripts/deploy-test-slice.sh"), 0o755);
@@ -107,6 +108,7 @@ case "$url" in
 esac
 `);
   writeFileSync(join(bin, "corepack"), "#!/usr/bin/env bash\nexit 0\n");
+  writeFileSync(join(bin, "psql"), `#!/usr/bin/env bash\necho "psql absent-check" >> ${JSON.stringify(calls)}\nif [[ -f ${JSON.stringify(join(st, "has-0118"))} ]]; then echo "1|ogevia_api.get_client_service_location(uuid,uuid)"; else echo "0|none"; fi\n`);
   writeFileSync(join(bin, "pnpm"), `#!/usr/bin/env bash
 [[ "$1" == "--version" ]] && { echo 9.15.4; exit 0; }
 if [[ "$*" == *"cdk synth"* ]]; then out=""; prev=""; for x in "$@"; do [[ "$prev" == "--output" ]] && out="$x"; prev="$x"; done
@@ -118,7 +120,7 @@ if [[ "$*" == *"cdk deploy"* ]]; then app=""; prev=""; for x in "$@"; do [[ "$pr
   echo "deploy $app" >> ${JSON.stringify(calls)}; cp "$app/${STACK}.template.json" ${JSON.stringify(join(st, "live.json"))}; printf NEWSHA > ${JSON.stringify(join(st, "sha"))}; exit 0; fi
 exit 9
 `);
-  for (const f of ["aws", "curl", "pnpm", "corepack"]) chmodSync(join(bin, f), 0o755);
+  for (const f of ["aws", "curl", "pnpm", "corepack", "psql"]) chmodSync(join(bin, f), 0o755);
   return { dir, repo, work, bin, calls, head, st };
 }
 type S = ReturnType<typeof setup>;
@@ -151,6 +153,8 @@ describe("TEST_RT2_N2_SMS_LOCATION.sh", () => {
     let s = setup();
     try { writeFileSync(join(s.st, "fail-ledger"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("is not applied and verified in TEST"); expect(changes(s)).toEqual([]); expect(gitClean(s)).toBe(true); } finally { done(s); }
     s = setup();
+    try { writeFileSync(join(s.st, "has-0118"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("migration 0118 is not absent"); expect(changes(s)).toEqual([]); } finally { done(s); }
+    s = setup();
     try { writeFileSync(join(s.st, "extra"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stdout).toContain("EXPECTED-ONLY: NO"); expect(r.stderr).toContain("not exactly this stage"); expect(changes(s)).toEqual([]); expect(gitClean(s)).toBe(true); } finally { done(s); }
     s = setup();
     try { writeFileSync(join(s.st, "fail-snapshot"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("cannot create the snapshot"); expect(changes(s).filter((l) => /^(deploy|web|ledger)/.test(l))).toEqual([]); } finally { done(s); }
@@ -165,7 +169,7 @@ describe("TEST_RT2_N2_SMS_LOCATION.sh", () => {
       expect(r.stdout).toContain("PASS Handler has SMS_MODE=mock and SERVICE_LOCATION=on"); expect(r.stdout).toContain("PASS no email function is wired"); expect(r.stdout).toContain("PASS no NotificationEmail function exists");
       expect(r.stdout).toContain("PASS the bundle carries commit " + s.head); expect(r.stdout).toContain("RT2 STAGE 2 COMPLETE (TEST)"); expect(r.stdout).toMatch(/snapshot ogevia-test-rt2-n2-/);
       const c = calls(s).split("\n"); const idx = (re: RegExp) => c.findIndex((l) => re.test(l));
-      const order = [idx(/^ledger verify 0116/), idx(/^ledger probe 0117/), idx(/^ledger probe 0118/), idx(/^synth stage2=0/), idx(/^synth stage2=1/), idx(/^aws rds create-db-snapshot/), idx(/^aws rds wait db-snapshot-available/),
+      const order = [idx(/^ledger verify 0116/), idx(/^ledger probe 0117/), idx(/^psql absent-check/), idx(/^synth stage2=0/), idx(/^synth stage2=1/), idx(/^aws rds create-db-snapshot/), idx(/^aws rds wait db-snapshot-available/),
                      idx(/^ledger apply 0117/), idx(/^ledger verify 0117/), idx(/^ledger apply 0118/), idx(/^ledger verify 0118/), idx(/^deploy .*deploy-on/), idx(/^web version=/)];
       expect(order.every((i) => i >= 0), JSON.stringify(order)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);

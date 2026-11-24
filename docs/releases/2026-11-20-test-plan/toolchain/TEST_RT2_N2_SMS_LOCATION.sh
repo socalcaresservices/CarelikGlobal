@@ -180,7 +180,10 @@ for r in $OFFICE_ROUTES_GET; do c="$(code_get "$r")"; echo "GET $r (before): $c"
 for r in $OFFICE_ROUTES_POST; do c="$(code_post "$r")"; echo "POST $r (before): $c"; [[ "$c" == 404 ]] || stop "expected 404: the stage 2 routes must not exist yet"; done
 echo "--- database (read-only): 0113-0116 recorded with this checkout's checksums and all object checks pass"
 for m in 0113 0114 0115 0116; do bash "$TC/TEST_DB_SESSION.sh" bash "$TC/TEST_PENDING_LEDGER.sh" verify "$m" || stop "migration $m is not applied and verified in TEST. Nothing was changed."; done
-for m in 0117 0118; do bash "$TC/TEST_DB_SESSION.sh" bash "$TC/TEST_PENDING_LEDGER.sh" probe "$m" || stop "migration $m is not in the expected 'absent' state (or its prerequisites are missing). Nothing was changed."; done
+bash "$TC/TEST_DB_SESSION.sh" bash "$TC/TEST_PENDING_LEDGER.sh" probe 0117 || stop "migration 0117 is not in the expected 'absent' state (or its prerequisites are missing). Nothing was changed."
+# 0118 needs 0117 recorded, so it cannot be probed yet: check only that it is absent (no ledger row, no function)
+ABS="$(bash "$TC/TEST_DB_SESSION.sh" psql -X -At -c "select (select count(*) from ogevia_meta.schema_migrations where version = '0118') || '|' || coalesce(to_regprocedure('ogevia_api.get_client_service_location(uuid,uuid)')::text, 'none')")" || stop "cannot check migration 0118. Nothing was changed."
+[[ "$ABS" == "0|none" ]] || stop "migration 0118 is not absent ($ABS). Nothing was changed."
 
 echo; echo "=== 2. two assemblies, checked before anything is changed ==="
 synth "$B/deploy-off" false
