@@ -29,7 +29,8 @@ import { SummarySection } from "./ui/summary-section";
 import { actionBtn, actionBtnPrimary } from "./ui-classes";
 import { InfoTip } from "./ui/info-tip";
 import { ClientOfficeControl } from "./offices";
-import { ServiceLocationCard, useServiceLocation } from "./service-location";
+import { ServiceLocationCard } from "./service-location";
+import { useServiceLocation } from "./service-location-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
