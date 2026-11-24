@@ -46,7 +46,7 @@ describe("send an open-shift alert", () => {
     await openAlert();
     const dialog = await screen.findByTestId("alert-address", undefined, { timeout: 15000 });
     expect(dialog).toHaveTextContent("missing the city and ZIP code");
-    expect(within(dialog).getByRole("link", { name: "Open the client record to complete it" })).toHaveAttribute("href", `/clients/${CLIENT}#details`);
+    expect(within(dialog).getByRole("link", { name: "Open the client record to complete it" })).toHaveAttribute("href", `/clients/${CLIENT}?edit=location#service-location`);
     expect(dialog).not.toHaveTextContent(/office city will/i);
   }, 40000);
   it("an office whose alerts are off, and an agency with alerts off, say so in plain words", async () => {

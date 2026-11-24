@@ -133,3 +133,20 @@ describe("open-shift texting release switch (0117)", () => {
     }
   });
 });
+
+describe("client service location release switch (0118)", () => {
+  const LOC = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "serviceLocation").map((r) => `${r.method} ${r.path}`).sort();
+  const with_ = (base: OgeviaEnvironmentConfig, on: boolean): OgeviaEnvironmentConfig => ({ ...base, features: { ...base.features, serviceLocation: on } }) as OgeviaEnvironmentConfig;
+  it("is exactly two routes, OFF in TEST and production; with the switch on they require a JWT, set SERVICE_LOCATION=on, and nothing else differs", () => {
+    expect(LOC).toEqual(["GET /v1/clients/{clientId}/service-location", "POST /v1/clients/{clientId}/service-location"]);
+    for (const base of [ENVIRONMENTS.prod, ENVIRONMENTS.prd]) {
+      expect(base.features.serviceLocation ?? false).toBe(false);
+      const off = api(with_(base, false)); const on = api(with_(base, true));
+      expect(routeKeys(off).map((r) => r.RouteKey)).not.toContain(LOC[0]);
+      expect(JSON.stringify(off.toJSON())).not.toContain("SERVICE_LOCATION");
+      expect(routeKeys(on).length).toBe(routeKeys(off).length + 2);
+      for (const k of LOC) expect(routeKeys(on).find((r) => r.RouteKey === k), k).toMatchObject({ AuthorizationType: "JWT" });
+      expect(JSON.stringify(on.toJSON())).toContain('"SERVICE_LOCATION":"on"');
+    }
+  });
+});

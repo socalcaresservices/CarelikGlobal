@@ -393,7 +393,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       ) : alertBlock?.state === "address_incomplete" ? (
         <div className="space-y-3 text-sm" data-testid="alert-address">
           <p role="alert" className="text-red-800">This client's service address is missing the {(alertBlock.missing ?? []).map((m) => (m === "zip" ? "ZIP code" : m)).join(" and ")}. The alert is not sent until it is complete: caregivers are told the service city, never the office's.</p>
-          <Link className="inline-flex min-h-[44px] items-center font-semibold underline" to={`/clients/${alertBlock.clientId}#details`} onClick={() => setAlertBlock(null)}>Open the client record to complete it</Link>
+          <Link className="inline-flex min-h-[44px] items-center font-semibold underline" to={`/clients/${alertBlock.clientId}?edit=location#service-location`} onClick={() => setAlertBlock(null)}>Open the client record to complete it</Link>
         </div>
       ) : null}
     </Drawer>

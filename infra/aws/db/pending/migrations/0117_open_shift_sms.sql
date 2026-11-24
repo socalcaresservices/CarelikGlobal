@@ -143,9 +143,11 @@ $$;
 -- The one coordinating office of a shift: the only active office, else the shift's own; null when it still has to be chosen.
 create function ogevia.cover_office_for(p_organization_id uuid, p_shift ogevia.shifts)
 returns uuid language sql stable set search_path = ogevia, pg_temp as $$
-  select case when (select count(*) from ogevia.offices o where o.organization_id = p_organization_id and o.is_active) = 1
-              then (select o.id from ogevia.offices o where o.organization_id = p_organization_id and o.is_active)
-              else (select o.id from ogevia.offices o where o.id = p_shift.coordinating_office_id and o.organization_id = p_organization_id and o.is_active) end;
+  select coalesce(
+    (select o.id from ogevia.offices o where o.id = p_shift.coordinating_office_id and o.organization_id = p_organization_id and o.is_active),
+    (select o.id from ogevia.clients c join ogevia.offices o on o.id = c.responsible_office_id and o.organization_id = c.organization_id and o.is_active where c.id = p_shift.client_id),
+    case when (select count(*) from ogevia.offices o where o.organization_id = p_organization_id and o.is_active) = 1
+         then (select o.id from ogevia.offices o where o.organization_id = p_organization_id and o.is_active) end);
 $$;
 -- Is this caregiver in the audience of the shift's alert? (agency audience, no known office, or assigned to the coordinating office)
 create function ogevia.cover_in_audience(p_organization_id uuid, p_shift ogevia.shifts, p_caregiver_record_id uuid)
@@ -403,8 +405,8 @@ begin
 
   -- 2. the coordinating office: one office = that office; several = the one assigned to the shift, else the one the sender selected; otherwise the sender must choose
   select coalesce(array_agg(o.id order by lower(o.name)), '{}') into v_offices from ogevia.offices o where o.organization_id = p_organization_id and o.is_active;
-  if cardinality(v_offices) = 1 then v_office := v_offices[1];
-  elsif v_s.coordinating_office_id is not null and v_s.coordinating_office_id = any (v_offices) then v_office := v_s.coordinating_office_id;
+  v_office := ogevia.cover_office_for(p_organization_id, v_s);   -- the shift's own office, else the client's coordinating office, else the agency's only office
+  if v_office is not null then null;
   elsif p_office_id is not null and p_office_id = any (v_offices) then
     v_office := p_office_id;
     if p_sender is not null then update ogevia.shifts set coordinating_office_id = v_office, updated_at = now() where id = v_s.id; end if;   -- the shift now has its office

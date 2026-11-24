@@ -314,6 +314,8 @@ const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organiz
  * 5-digit ZIP code, on creation and on every edit. The alert itself is also blocked in the database for a client that has neither, so older clients are completed on the client record.
  */
 const addressRules = () => process.env.COVER_ALERT_ADDRESS_RULES === "on";
+/** 0118: city, ZIP, county and coordinating office are edited together on the client profile; the Details edit no longer carries (or changes) the city. */
+const serviceLocationOn = () => process.env.SERVICE_LOCATION === "on";
 const serviceZip = (value: unknown, required: boolean) => {
   const z = text(value, "serviceZip", 5, { required });
   if (z !== null && z !== undefined && !/^[0-9]{5}$/.test(z)) throw new ApiError(400, "bad_request", "Enter a 5-digit ZIP code.");
@@ -639,10 +641,12 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
       const c = clientDetails(body);
-      const rules = addressRules();
+      const location = serviceLocationOn();   // 0118: the service location section owns the city and ZIP; this edit leaves them as they are
+      const rules = addressRules() && !location;
       if (rules) requireCity(c.city);
       const zip = serviceZip(body.serviceZip, false);
       await tx(async (db) => {
+        if (location) c.city = ((await first(db, "select ogevia_api.get_client_service_location($1,$2) as r", [c.org, client])).r as { city: string | null }).city ?? null;   // the service city: the Details edit keeps it as it is
         // with the rules on, the service ZIP must exist after this edit: either sent now or already on the client record
         if (rules && !zip) {
           const { location } = await first(db, "select ogevia_api.get_matching_zip($1,$2,'client') as location", [c.org, client]);
@@ -652,6 +656,22 @@ export const ROUTES: Record<string, Route> = {
         if (rules && zip) await db.query("select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [c.org, client, zip, c.city]);
       });
       return { ok: true };
+    },
+  },
+
+  // 0118: the client's service address, service county and coordinating office, read and saved together. OFF unless features.serviceLocation.
+  "GET /v1/clients/{clientId}/service-location": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ location: await tx(async (db) => (await first(db, "select ogevia_api.get_client_service_location($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).r) }),
+  },
+  "POST /v1/clients/{clientId}/service-location": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const city = requireCity(text(body.city, "city", 80));
+      const zip = serviceZip(body.zip, true);
+      return { location: await tx(async (db) => (await first(db, "select ogevia_api.set_client_service_location($1,$2,$3,$4,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), city, zip, text(body.county, "county", 40) ?? null, optionalUuid(body.officeId, "officeId") ?? null])).r) };
     },
   },
 

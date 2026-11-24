@@ -254,6 +254,8 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "resolutions") return {};
   if (name === "ids" && route === "POST /v1/notification-center/mark") return [randomUUID()];
   // 0117 texting: well-formed values, so every probe reaches the database check
+  // 0118 service location: well-formed values
+  if (/service-location/.test(route)) { if (name === "zip") return "92596"; if (name === "city") return "Winchester"; if (name === "county") return "Riverside"; if (name === "officeId") return ids.officeId; }
   if (name === "phone") return "9515550123";
   if (name === "consent") return true;
   if (route === "POST /v1/sms-oncall" && name === "action") return "add";

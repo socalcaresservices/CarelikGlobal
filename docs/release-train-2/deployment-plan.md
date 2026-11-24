@@ -92,3 +92,7 @@ Owner ran `TEST_RT2_N1_NOTIFICATIONS.sh` from a `/tmp` checkout of commit `b0848
 5. As a caregiver in Temecula: the notification appears in Notifications (unread count, mark read, archive); the shift is on My shifts > Open shifts with the city and office; request and withdraw.
 6. Cross-agency: a caregiver of another agency sees nothing.
 Texting, "Filled" notices, the office queue preselection and the round/cancel fixes arrive with migration 0117 (stage 2) and are not testable in TEST yet.
+
+
+## Client service location (migration 0118) - PREPARED, NOT RUN
+See `docs/release-train-2/client-service-location.md`. Migration 0118 (`db/pending/migrations/0118_client_service_location.sql`, rollback `rollback/0118_client_service_location.down.sql`) and switch `features.serviceLocation` (OFF in TEST and production; 2 JWT routes; `SERVICE_LOCATION=on`). `TEST_PENDING_LEDGER.sh` accepts 0118 (needs 0111, 0113, 0117); rehearsed locally (apply, verify, rollback). The TEST stage that carries migrations 0117 and 0118 and the switches `openShiftSms` and `serviceLocation` is **not yet scripted**; it needs the owner's approval, a fresh TEST snapshot, and a stage gate like `diff_gate_rt2.py` extended with the new routes and environment variables.
