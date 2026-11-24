@@ -61,3 +61,32 @@ describe("diff_gate_rt2.py (stage notifications)", () => {
   });
   it("refuses a change in Outputs/Parameters", () => { const o = clone(ON); o.Outputs = { ...(o.Outputs ?? {}), Extra: { Value: "x" } }; expect(run(LIVE, o, "on").out).toContain("section Outputs differs"); });
 });
+
+// ---- stage 2: openShiftSms (mock) + serviceLocation on top of stage 1 (notifications already live) ----
+const synth2 = (on: boolean): T => {
+  const cfg = { ...ENVIRONMENTS.prod, features: { ...ENVIRONMENTS.prod.features, requestCleanup: true, offices: true, officeAssignments: true, assignmentHistory: true, notifications: true, openShiftSms: on, serviceLocation: on } } as OgeviaEnvironmentConfig;
+  const p = buildOgeviaApp(newApp(), cfg, "plan").find((x) => x.stack.stackName.endsWith("-ServiceVerificationApi"))!;
+  return JSON.parse(JSON.stringify(Template.fromStack(p.stack).toJSON()));
+};
+const run2 = (live: T, now: T, expect_: "off" | "on" | "post") => {
+  const r = spawnSync("python3", [GATE, "--stage", "stage2", "--live", file("live2.json", live), "--new", file("new2.json", now), "--expect", expect_], { encoding: "utf8" });
+  return { code: r.status, out: r.stdout + r.stderr };
+};
+describe("diff_gate_rt2.py (stage stage2)", () => {
+  let L2: T, OFF2: T, ON2: T;
+  beforeAll(() => { L2 = assets(synth2(false), "old"); OFF2 = assets(synth2(false), "new"); ON2 = assets(synth2(true), "new"); }, 120_000);
+  it("off: only the code assets change; on: exactly the 9 routes and the two Handler variables (plus code); post: no difference", () => {
+    expect(run2(L2, OFF2, "off").code).toBe(0);
+    const on = run2(L2, ON2, "on"); expect(on.out, on.out).toContain("routes added: 9"); expect(on.out).toContain("SMS_MODE"); expect(on.out).toContain("SERVICE_LOCATION"); expect(on.out).toContain("EXPECTED-ONLY: YES (stage2, on)"); expect(on.code).toBe(0);
+    expect(run2(ON2, JSON.parse(JSON.stringify(ON2)), "post").code).toBe(0);
+    expect(run2(L2, ON2, "post").code).toBe(1);
+  });
+  it("refuses a missing route, an extra resource (e.g. an email function), an extra or changed variable (e.g. EMAIL_FUNCTION_NAME or a live SMS mode), and a live-looking SMS_MODE", () => {
+    const missing = clone(ON2); const rid = Object.keys(missing.Resources).find((k) => missing.Resources[k].Properties?.RouteKey === "POST /v1/my-sms")!; delete missing.Resources[rid]; expect(run2(L2, missing, "on").code).toBe(1);
+    const extra = clone(ON2); extra.Resources.NotificationEmailFn = { Type: "AWS::Lambda::Function", Properties: { FunctionName: "Ogevia-prod-NotificationEmail" } }; expect(run2(L2, extra, "on").code).toBe(1);
+    const hid = Object.keys(ON2.Resources).find((k) => k.startsWith("Handler") && ON2.Resources[k].Type === "AWS::Lambda::Function")!;
+    const env = clone(ON2); env.Resources[hid].Properties.Environment.Variables.EMAIL_FUNCTION_NAME = "Ogevia-prod-NotificationEmail"; expect(run2(L2, env, "on").code).toBe(1);
+    const live = clone(ON2); live.Resources[hid].Properties.Environment.Variables.SMS_MODE = "live"; expect(run2(L2, live, "on").code).toBe(1);
+    const only = clone(ON2); delete only.Resources[hid].Properties.Environment.Variables.SERVICE_LOCATION; expect(run2(L2, only, "on").code).toBe(1);
+  });
+});

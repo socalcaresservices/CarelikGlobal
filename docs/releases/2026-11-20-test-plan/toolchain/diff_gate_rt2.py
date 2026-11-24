@@ -10,6 +10,7 @@ Read-only: compares two CloudFormation templates (JSON files) and exits 0 only i
                      environment variables on the Handler. Nothing removed, nothing else changed.
       --expect post  after deployment: NO difference at all
 
+Stage `stage2` (after stage 1 is live): 9 routes (7 texting, 2 service location), Handler env SMS_MODE=mock and SERVICE_LOCATION=on, new code assets; no new resource of any other kind.
 Stage `notifications` (email NOT configured: no email function, no SES permission, no sender):
   10 routes, one AWS::Events::Rule with rate(5 minutes), one AWS::Lambda::Permission named NotifySweepAllowEventRule*, Handler env COVER_ALERT_ADDRESS_RULES=on.
 Everything else must be identical: every other resource, Parameters, Outputs, Conditions, Mappings, Rules, Transform, Description.
@@ -21,6 +22,15 @@ ASSET_BUCKET = "cdk-hnb659fds-assets-300094796789-us-west-2"
 SECTIONS = ["AWSTemplateFormatVersion", "Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform"]
 CODE_ONLY_PREFIXES = ("Handler", "IdentityHandler")
 STAGES = {
+    "stage2": {   # open-shift texting (mock sender) and the client service location; the notification schedule and permission from stage 1 are already live
+        "routes": {
+            "GET /v1/sms-settings", "POST /v1/sms-settings", "GET /v1/my-sms", "POST /v1/my-sms", "GET /v1/sms-oncall", "POST /v1/sms-oncall", "GET /v1/sms-history",
+            "GET /v1/clients/{clientId}/service-location", "POST /v1/clients/{clientId}/service-location",
+        },
+        "schedules": set(),
+        "permission_prefixes": (),
+        "handler_env": {"SMS_MODE": "mock", "SERVICE_LOCATION": "on"},
+    },
     "notifications": {
         "routes": {
             "GET /v1/cover-notification-history", "GET /v1/cover-notification-settings", "GET /v1/cover-office-audiences", "GET /v1/notification-center",
