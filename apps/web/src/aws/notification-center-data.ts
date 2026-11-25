@@ -3,8 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useContext } from "react";
 import { useOrganization } from "@/providers/organization-provider";
 import { AwsApiContext } from "./aws-workspace";
+import type { CoverShiftSummary } from "./cover-shift-status";
 
-export interface CenterItem { id: string; category: "cover_shift"; title: string; body: string; link: string | null; shiftId: string | null; createdAt: string; readAt: string | null; archivedAt: string | null; state: "unread" | "read" | "archived" }
+export interface CenterItem { id: string; category: "cover_shift" | "cover_office"; title: string; body: string; link: string | null; shiftId: string | null; shift?: CoverShiftSummary | null; createdAt: string; readAt: string | null; archivedAt: string | null; state: "unread" | "read" | "archived" }
 export interface CenterList { asOf: string; unread: number; items: CenterItem[] }
 export type CenterState = "inbox" | "unread" | "archived" | "all";
 export interface Prefs { coverShift: { inApp: boolean; email: boolean }; coverOffice?: { inApp: boolean; email: boolean }; canSeeOffice?: boolean; emailAvailable: boolean }

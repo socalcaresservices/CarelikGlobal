@@ -34,6 +34,7 @@ import { CaregiverPicker } from "./caregiver-picker";
 import { CaregiverMarker } from "./office-assignments";
 import { useNotificationCenter } from "./notification-center-data";
 import { refreshAfterShiftChange } from "./shift-refresh";
+import { STATUS_SENTENCE, type CoverShiftSummary } from "./cover-shift-status";
 import { schedulingRefusal } from "./scheduling-refusal";
 
 /**
@@ -665,27 +666,29 @@ function useOpenShifts() {
   });
 }
 
-/** The caregiver opened an alert for one shift. If it is still open, the board below puts it first with the request button. If not, say what happened to it. */
-function AlertShiftStatus({ shiftId, mine }: { shiftId: string; mine: MyShift[] | undefined }) {
+/** The caregiver opened an alert for one shift. If it is open, the board below puts it first with the request button (or Requested, once asked). Otherwise say what it is now. */
+function AlertShiftStatus({ shiftId }: { shiftId: string }) {
   const api = useAwsApi();
   const { activeOrganizationId } = useOrganization();
+  const { when, time } = useAgencyClock();
   const open = useOpenShifts();
-  const notes = useQuery({
-    queryKey: ["alert-shift-status", activeOrganizationId, shiftId],
-    queryFn: async () => (await api.get<{ notifications: { items: Array<{ title: string; shiftId: string | null; createdAt: string }> } }>("/v1/notification-center", { organizationId: activeOrganizationId, state: "all", limit: "100" })).notifications.items,
-    enabled: !!activeOrganizationId && open.isSuccess && !!mine && !open.data.some((o) => o.shiftId === shiftId),
+  const info = useQuery({
+    queryKey: ["aws-alert-shift", activeOrganizationId, shiftId],
+    queryFn: async () => (await api.get<{ alertShift?: CoverShiftSummary }>("/v1/open-shifts", { organizationId: activeOrganizationId, shiftId })).alertShift ?? null,
+    enabled: !!activeOrganizationId,
     retry: false,
   });
-  if (!open.data || !mine) return null;
-  if (open.data.some((o) => o.shiftId === shiftId)) return null;
-  if (mine.some((m) => m.shiftId === shiftId)) return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-emerald-300 bg-emerald-50 p-2 text-sm font-semibold text-emerald-900">You are confirmed for this shift. It is in your list below.</p>;
-  if (notes.isLoading) return null;
-  const titles = (notes.data ?? []).filter((n) => n.shiftId === shiftId).map((n) => n.title);
-  const text = titles.some((t) => t.startsWith("Cancelled")) ? "Closed. This shift was cancelled. Nothing more is needed from you."
-    : titles.some((t) => t.startsWith("You are confirmed")) ? "You are confirmed for this shift."
-    : titles.some((t) => t.startsWith("Filled")) ? "Filled. Someone else was confirmed for this shift. No action needed."
-    : "No longer open. This shift was filled or closed by the office, so it cannot be requested.";
-  return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">{text}</p>;
+  if (!open.data || info.isLoading) return null;
+  if (open.data.some((o) => o.shiftId === shiftId)) return null;                       // the board card below says it
+  if (info.isError || !info.data) return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">This shift could not be loaded. Refresh the page.</p>;
+  const sh = info.data;
+  return (
+    <div role="status" data-testid="alert-shift-status" data-status={sh.status} className={`rounded-lg border p-2 text-sm ${sh.status === "yours" ? "border-emerald-300 bg-emerald-50" : "border-slate-300 bg-slate-50"}`}>
+      <p className="font-semibold text-slate-950">{STATUS_SENTENCE[sh.status]}</p>
+      {sh.startsAt && sh.status !== "unavailable" ? <p className="text-slate-800">{when(sh.startsAt)}–{time(sh.endsAt)}{sh.serviceName ? ` · ${sh.serviceName}` : ""}{sh.city ? ` · ${sh.city}` : ""}</p> : null}
+      {sh.officeName && sh.status !== "unavailable" ? <p className="text-xs text-slate-600" data-testid="alert-shift-office">Coordinated by {sh.officeName}</p> : null}
+    </div>
+  );
 }
 
 /** Wave 1 (G09), changed by 0063: open shifts the caregiver is assigned to. Asking sends a request; the office confirms one caregiver. */
@@ -827,7 +830,7 @@ export function MyShiftsPage() {
         </div>
       </section>
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
-      {alertShift ? <AlertShiftStatus shiftId={alertShift} mine={shifts.data} /> : null}
+      {alertShift ? <AlertShiftStatus shiftId={alertShift} /> : null}
       <OpenShiftsSection focusId={alertShift} onPicked={(text) => setState({ busy: false, error: null, done: text })} />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {shifts.isError ? <p role="alert" className="text-sm text-red-700">{(shifts.error as Error).message}</p> : null}

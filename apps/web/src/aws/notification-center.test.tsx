@@ -76,15 +76,19 @@ describe("notification centre (caregiver)", () => {
     expect(items).toHaveLength(2);
     expect(screen.getByTestId("center-unread")).toHaveTextContent("1 unread");
     expect(items[0]).toHaveAttribute("data-state", "unread");
-    fireEvent.click(within(items[0]!).getByRole("button", { name: "Mark read" }));
+    expect(within(items[0]!).queryByRole("button", { name: "Mark read" })).toBeNull();                 // not on the card: it is in the menu
+    expect(within(items[0]!).getAllByTestId("unread-dot")).toHaveLength(1);                           // one unread indicator per alert
+    fireEvent.click(within(items[0]!).getByRole("button", { name: "More actions" }));
+    fireEvent.click(within(items[0]!).getByRole("menuitem", { name: "Mark read" }));
     await waitFor(() => expect(posts).toContainEqual({ path: "/v1/notification-center/mark", body: { organizationId: ORG, action: "read", ids: [N1] } }));
     await waitFor(() => expect(screen.getByTestId("center-unread")).toHaveTextContent("0 unread"));
-    fireEvent.click(within(screen.getAllByTestId("center-item")[0]!).getByRole("button", { name: "Archive" }));
+    fireEvent.click(within(screen.getAllByTestId("center-item")[0]!).getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
     await waitFor(() => expect(posts.at(-1)!.body).toMatchObject({ action: "archive", ids: [N1] }));
     await waitFor(() => expect(screen.getAllByTestId("center-item")).toHaveLength(1));
     fireEvent.change(screen.getByTestId("center-state"), { target: { value: "archived" } });
-    const archived = await screen.findByRole("button", { name: "Restore" });
-    fireEvent.click(archived);
+    fireEvent.click(await screen.findByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Restore" }));
     await waitFor(() => expect(posts.at(-1)!.body).toMatchObject({ action: "unarchive", ids: [N1] }));
   });
   it("filters by state and type through the server, and shows an empty state", async () => {

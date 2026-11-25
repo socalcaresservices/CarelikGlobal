@@ -35,8 +35,8 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 /** The message shown to the caregiver: the stored title and body, and one link back into the app. No client detail is ever in either. */
 export function composeEmail(row: { to_email: string; subject: string; body: string; link: string | null; delivery_id: string }, appOrigin: string): EmailMessage {
   const url = row.link ? `${appOrigin}${row.link}` : appOrigin;
-  const text = `${row.body}\n\nOpen Ogevia: ${url}\n\nYou receive this because cover-shift emails are on for your agency. You can turn them off in Notifications > Preferences.`;
-  const html = `<!doctype html><html lang="en"><body style="font-family:Arial,Helvetica,sans-serif;color:#1d2a2e;line-height:1.5"><p style="font-size:18px;font-weight:700">${esc(row.subject)}</p><p>${esc(row.body)}</p><p><a href="${esc(url)}" style="display:inline-block;padding:12px 20px;background:#0f5f66;color:#ffffff;text-decoration:none;border-radius:6px">Open Ogevia</a></p><p style="font-size:12px;color:#4a5a5f">You receive this because cover-shift emails are on for your agency. You can turn them off in Notifications &gt; Preferences.</p></body></html>`;
+  const text = `${row.body}\n\nView shift: ${url}\n\nYou receive this because cover-shift emails are on for your agency. You can turn them off in Notifications > Preferences.`;
+  const html = `<!doctype html><html lang="en"><body style="font-family:Arial,Helvetica,sans-serif;color:#1d2a2e;line-height:1.5"><p style="font-size:18px;font-weight:700">${esc(row.subject)}</p><p>${esc(row.body)}</p><p><a href="${esc(url)}" style="display:inline-block;padding:12px 20px;background:#0f5f66;color:#ffffff;text-decoration:none;border-radius:6px">View shift</a></p><p style="font-size:12px;color:#4a5a5f">You receive this because cover-shift emails are on for your agency. You can turn them off in Notifications &gt; Preferences.</p></body></html>`;
   return { to: row.to_email, subject: row.subject, text, html, deliveryId: row.delivery_id };
 }
 

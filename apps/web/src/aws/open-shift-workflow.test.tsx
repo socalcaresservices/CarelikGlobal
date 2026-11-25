@@ -163,34 +163,46 @@ describe("alert link for a caregiver", () => {
   }, 40000);
 });
 
+const sum = (status: string, extra: Record<string, unknown> = {}) => ({ shiftId: SHIFT, status, startsAt: later(30), endsAt: later(32), minutes: 120, city: "Winchester", serviceName: "Respite", officeName: "Temecula Office", ...extra });
+const card = (status: string) => ({ id: `n-${status}`, category: "cover_shift", title: "Open shift in Winchester | Wed, Nov 25 | 9:00-12:00 PM", body: "Respite\nWinchester\nView the shift", link: "/schedule", shiftId: SHIFT, shift: sum(status), createdAt: later(-1), readAt: null, archivedAt: null, state: "unread" });
+const center = (items: object[]) => ({ "GET /v1/notification-center": () => json(200, { notifications: { asOf: new Date().toISOString(), unread: items.length, items } }), "GET /v1/notification-preferences": () => json(200, { preferences: { coverShift: { inApp: true, email: false }, emailAvailable: false } }) });
+
 describe("alert opens the specific shift", () => {
-  const link = (shiftId: string, extra: Record<string, unknown> = {}) => ({ "GET /v1/notification-center": () => json(200, { notifications: { asOf: new Date().toISOString(), unread: 0, items: [{ id: "n1", category: "cover_shift", title: "Open shift in Winchester", body: "x", link: "/schedule", shiftId, createdAt: later(-1), readAt: null, archivedAt: null, state: "unread" }, ...((extra.items as object[]) ?? [])] } }) });
-  it("the Open link carries the shift, and the page shows it first with Request this shift", async () => {
-    const other = { ...openShift, shiftId: "51515151-0000-4000-8000-000000000002", startsAt: later(10), endsAt: later(12) };
-    renderAws(`/notifications`, ["availability.manage_own"], { ...link(SHIFT), "GET /v1/notification-preferences": () => json(200, { preferences: { coverShift: { inApp: true, email: false }, emailAvailable: false } }) });
-    const open = await screen.findByRole("link", { name: "Open" }, { timeout: 15000 });
-    expect(open).toHaveAttribute("href", `/my-shifts?shift=${SHIFT}`);
-    cleanup();
-    renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [other, openShift] }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
-    const card = await screen.findByTestId("alert-shift", undefined, { timeout: 15000 });
-    expect(card).toHaveTextContent("The shift from your alert");
-    expect(within(card).getByRole("button", { name: "Request this shift" })).toBeInTheDocument();
-    expect(card.closest("ul")!.firstElementChild).toBe(card);
+  it("the card is short, shows the live status, and View shift carries the shift", async () => {
+    renderAws(`/notifications`, ["availability.manage_own"], center([card("open"), { ...card("filled"), id: "n2", shiftId: "51515151-0000-4000-8000-000000000009", shift: sum("filled", { shiftId: "51515151-0000-4000-8000-000000000009" }) }]));
+    const items = await screen.findAllByTestId("center-item", undefined, { timeout: 15000 });
+    expect(within(items[0]!).getByRole("link", { name: "View shift" })).toHaveAttribute("href", `/my-shifts?shift=${SHIFT}`);
+    expect(within(items[0]!).getByTestId("center-status")).toHaveTextContent("Open — you can request it");
+    expect(within(items[1]!).getByTestId("center-status")).toHaveTextContent("Filled");
+    expect(items[0]).toHaveTextContent("Open shift in Winchester");
+    expect(within(items[0]!).getByTestId("center-when")).toHaveTextContent(/·\s*Respite$/);
+    expect(items[0]).not.toHaveTextContent(/Temecula|Synthetic Client|92596/);                       // no office, no client detail in the alert
+    expect(within(items[0]!).getAllByTestId("unread-dot")).toHaveLength(1);
+    expect(within(items[0]!).queryByRole("button", { name: "Archive" })).toBeNull();                 // overflow menu only
   }, 60000);
-  it("a shift that is no longer open says Filled; a cancelled one says Closed; no notice says no longer open; a confirmed caregiver sees that", async () => {
-    const run = async (items: object[], mine: object[], expected: RegExp) => {
-      renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [] }), "GET /v1/my-shifts": () => json(200, { shifts: mine }), ...link(SHIFT, { items }) });
-      expect(await screen.findByTestId("alert-shift-status", undefined, { timeout: 15000 })).toHaveTextContent(expected);
-      cleanup();
+  it("the shift page shows the shift first with Request this shift, and keeps the office on the page", async () => {
+    const other = { ...openShift, shiftId: "51515151-0000-4000-8000-000000000002", startsAt: later(10), endsAt: later(12) };
+    renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [other, openShift], alertShift: sum("open") }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
+    const c = await screen.findByTestId("alert-shift", undefined, { timeout: 15000 });
+    expect(c).toHaveTextContent("The shift from your alert");
+    expect(c).toHaveTextContent("Coordinated by Temecula Office");
+    expect(within(c).getByRole("button", { name: "Request this shift" })).toBeInTheDocument();
+    expect(c.closest("ul")!.firstElementChild).toBe(c);
+  }, 60000);
+  it("after a request the card says Requested — waiting for the office", async () => {
+    renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [{ ...openShift, myRequestStatus: "requested" }], alertShift: sum("requested") }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
+    expect(await screen.findByTestId("requested-badge", undefined, { timeout: 15000 })).toHaveTextContent("Requested — waiting for the office");
+  }, 40000);
+  it("Filled, Cancelled, Shift already started, confirmed and unavailable each show their own status instead of a button", async () => {
+    const run = async (status: string, expected: RegExp) => {
+      renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [], alertShift: sum(status) }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
+      const box = await screen.findByTestId("alert-shift-status", undefined, { timeout: 15000 });
+      expect(box).toHaveTextContent(expected); expect(screen.queryByRole("button", { name: "Request this shift" })).toBeNull(); cleanup();
     };
-    const note = (title: string) => ({ id: title, category: "cover_shift", title, body: "", link: null, shiftId: SHIFT, createdAt: later(0), readAt: null, archivedAt: null, state: "unread" });
-    await run([note("Filled | Winchester")], [], /^Filled\./);
-    await run([note("Cancelled | Winchester")], [], /^Closed\./);
-    await run([], [], /^No longer open/);
-    await run([], [{ shiftId: SHIFT, startsAt: later(30), endsAt: later(32), clientCode: "CL-1", serviceName: "Respite", coverageState: "covered", canCallOut: true }], /confirmed for this shift/);
-  }, 90000);
-  it("/schedule?shift=… (an older link) forwards a caregiver to the same shift", async () => {
-    renderAws(`/schedule?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [openShift] }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
+    await run("filled", /^Filled\./); await run("cancelled", /^Cancelled\./); await run("started", /^Shift already started/); await run("yours", /confirmed for this shift/); await run("closed", /^Closed\./);
+  }, 120000);
+  it("an older link /schedule?shift=… (and an alert with no shift) forwards a caregiver to My Schedule", async () => {
+    renderAws(`/schedule?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [openShift], alertShift: sum("open") }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
     expect(await screen.findByTestId("alert-shift", undefined, { timeout: 15000 })).toBeInTheDocument();
   }, 40000);
 });

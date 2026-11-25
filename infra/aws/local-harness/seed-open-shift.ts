@@ -18,7 +18,7 @@ async function main() {
     try { await c.query("set local role ogevia_app"); await c.query("select ogevia_api.begin_request($1,$2)", [sub, randomUUID()]); const r = await fn(); await c.query("commit"); return r; }
     catch (e) { await c.query("rollback"); throw e; }
   }
-  for (const f of readdirSync(PENDING).filter((n) => /^01(09|1[0-7])_.*\.sql$/.test(n)).sort()) {
+  for (const f of readdirSync(PENDING).filter((n) => /^01(09|1[0-9]|20)_.*\.sql$/.test(n)).sort()) {
     await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL(f, PENDING), "utf8")); await c.query("reset role"); await c.query("commit");
     console.log("applied", f);
   }
@@ -30,9 +30,14 @@ async function main() {
   for (const r of [alex, blair]) await as(manager, () => q("select ogevia_api.set_person_offices($1,'caregiver',$2,$3,'{}'::uuid[])", [org, r, office]));
   // a client both caregivers can work, with its service
   const a = (await q(`select ca.client_id, ca.service_id from ogevia.caregiver_assignments ca join ogevia.app_users u on u.id = ca.caregiver_user_id where ca.organization_id = $1 and ca.is_active
+                        and exists (select 1 from ogevia.client_authorizations au where au.client_id = ca.client_id and au.service_id = ca.service_id and au.period_start <= current_date and au.period_end >= current_date + 5)
                       group by ca.client_id, ca.service_id having count(distinct u.id) >= 2 limit 1`, [org]))[0];
   let client = a?.client_id as string | undefined, service = a?.service_id as string | undefined;
-  if (!client) { client = (await q("select id from ogevia.clients where organization_id = $1 order by client_code limit 1", [org]))[0]!.id; service = (await q("select id from ogevia.services where organization_id = $1 limit 1", [org]))[0]!.id; }
+  if (!client) {   // a client whose authorization covers the shift day (client codes are random per setup, so "first by code" can be one with no authorization)
+    const pick = (await q(`select a.client_id, a.service_id from ogevia.client_authorizations a where a.organization_id = $1 and a.period_start <= current_date and a.period_end >= current_date + 5
+                           order by a.client_id limit 1`, [org]))[0]!;
+    client = pick.client_id as string; service = pick.service_id as string;
+  }
   for (const code of ["alex", "blair"]) {
     const uid = (await q("select u.id from ogevia.app_users u where u.cognito_sub = $1", [persona(code).sub]))[0]!.id as string;
     await q("insert into ogevia.caregiver_assignments (organization_id, caregiver_user_id, client_id, service_id, effective_start) select $1,$2,$3,$4,current_date - 30 where not exists (select 1 from ogevia.caregiver_assignments where organization_id=$1 and caregiver_user_id=$2 and client_id=$3 and service_id=$4 and is_active)", [org, uid, client, service]);

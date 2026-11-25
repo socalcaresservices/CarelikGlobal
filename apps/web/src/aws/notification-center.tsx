@@ -9,8 +9,10 @@ import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatClockTime, formatNumericDate } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { CENTER_REFRESH_MS, type CenterList, type CenterState, type CoverSettings, type HistoryRow, type Prefs } from "./notification-center-data";
+import { CENTER_REFRESH_MS, type CenterItem, type CenterList, type CenterState, type CoverSettings, type HistoryRow, type Prefs } from "./notification-center-data";
 import { MySmsPanel, OfficeSmsPanel } from "./sms-settings";
+import { useAgencyClock } from "./agency-clock";
+import { isActionable, STATUS_LABEL, STATUS_TONE } from "./cover-shift-status";
 import { PageHeader } from "./ui/page-header";
 import { SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
@@ -66,26 +68,64 @@ export function NotificationCenterPage() {
       {list.isError && !unavailable ? <p role="alert" className="text-sm text-red-700">Notifications could not be loaded. <button type="button" className="font-semibold underline" onClick={() => void list.refetch()}>Retry</button></p> : null}
       {data && data.items.length === 0 ? <p className="text-sm text-og-sub" data-testid="center-empty">{state === "archived" ? "Nothing archived." : "Nothing here."}</p> : null}
       <ul className="divide-y divide-og-line rounded-lg border border-og-line bg-og-card" aria-label="Notifications">
-        {data?.items.map((n) => (
-          <li key={n.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2" data-testid="center-item" data-state={n.state}>
-            <div className="min-w-0">
-              <p className={`text-sm ${n.state === "unread" ? "font-semibold text-og-ink" : "text-og-sub"}`}>{n.state === "unread" ? <span aria-hidden="true">● </span> : null}{n.title}<span className="sr-only">{n.state === "unread" ? " (unread)" : ""}</span></p>
-              <p className="text-sm text-og-ink">{n.body}</p>
-              <p className="text-xs text-og-sub">{formatNumericDate(n.createdAt)} {formatClockTime(n.createdAt)} · {n.state === "unread" ? "New" : n.state === "read" ? "Read" : "Archived"}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {n.link ? <Link className="inline-flex min-h-[44px] items-center text-sm font-semibold underline md:min-h-[32px]" to={n.shiftId && !hasPermission("shifts.manage") ? `/my-shifts?shift=${encodeURIComponent(n.shiftId)}` : n.link}>Open</Link> : null}
-              {n.state === "unread" ? <button type="button" disabled={busy} className="inline-flex min-h-[44px] items-center text-sm underline md:min-h-[32px]" onClick={() => void mark("read", [n.id])}>Mark read</button> : null}
-              {n.state === "archived"
-                ? <button type="button" disabled={busy} className="inline-flex min-h-[44px] items-center text-sm underline md:min-h-[32px]" onClick={() => void mark("unarchive", [n.id])}>Restore</button>
-                : <button type="button" disabled={busy} className="inline-flex min-h-[44px] items-center text-sm underline md:min-h-[32px]" onClick={() => void mark("archive", [n.id])}>Archive</button>}
-            </div>
-          </li>
-        ))}
+        {data?.items.map((n) => <NotificationCard key={n.id} n={n} busy={busy} canManage={hasPermission("shifts.manage")} onMark={(action) => void mark(action, [n.id])} />)}
       </ul>
       <Preferences />
       <MySmsPanel />
       {hasPermission("shifts.manage") || hasPermission("organization.update") ? <><OfficeSection /><OfficeSmsPanel /></> : null}
+    </div>
+  );
+}
+
+/** One alert. An open-shift alert shows the service city, the date and time and the service type once, what state the shift is in now, and one main action; the rest is in the menu. */
+function NotificationCard({ n, busy, canManage, onMark }: { n: CenterItem; busy: boolean; canManage: boolean; onMark: (action: "read" | "archive" | "unarchive") => void }) {
+  const { when, time } = useAgencyClock();
+  const sh = n.category === "cover_shift" ? n.shift ?? null : null;
+  const unread = n.state === "unread";
+  const to = n.shiftId && !canManage && n.category === "cover_shift" ? `/my-shifts?shift=${encodeURIComponent(n.shiftId)}` : n.link;
+  const dim = sh && !isActionable(sh.status);
+  const btn = "inline-flex min-h-11 items-center rounded-lg px-3 text-sm";
+  return (
+    <li className="px-3 py-2" data-testid="center-item" data-state={n.state} data-shift-status={sh?.status}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className={`text-base ${unread ? "font-semibold text-og-ink" : "text-og-sub"}`}>
+            {unread ? <span aria-hidden="true" data-testid="unread-dot">● </span> : null}
+            {sh ? `Open shift${sh.city ? ` in ${sh.city}` : ""}` : n.title}
+            <span className="sr-only">{unread ? " (unread)" : ""}</span>
+          </p>
+          {sh ? (
+            <p className={`text-base ${dim ? "text-og-sub" : "text-og-ink"}`} data-testid="center-when">{when(sh.startsAt)}–{time(sh.endsAt)}{sh.serviceName ? ` · ${sh.serviceName}` : ""}</p>
+          ) : <p className="text-sm text-og-ink">{n.body}</p>}
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-og-sub">
+            {sh ? <span data-testid="center-status" className={`rounded-full px-2 py-0.5 font-semibold ${STATUS_TONE[sh.status]}`}>{STATUS_LABEL[sh.status]}</span> : null}
+            <span>{formatNumericDate(n.createdAt)} {formatClockTime(n.createdAt)}{n.state === "archived" ? " · Archived" : ""}</span>
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {to ? <Link className={`${btn} ${dim ? "border border-og-line text-og-ink" : "bg-og-accent font-semibold text-og-on-accent"} no-underline`} to={to}>{n.category === "cover_shift" ? "View shift" : "Open"}</Link> : null}
+          <CardMenu state={n.state} busy={busy} onMark={onMark} />
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** Mark read and Archive live here, so the card has one obvious action. */
+function CardMenu({ state, busy, onMark }: { state: CenterItem["state"]; busy: boolean; onMark: (action: "read" | "archive" | "unarchive") => void }) {
+  const [open, setOpen] = useState(false);
+  const item = "flex min-h-11 w-full items-center px-3 text-left text-sm hover:bg-og-page disabled:opacity-60";
+  const act = (a: "read" | "archive" | "unarchive") => { setOpen(false); onMark(a); };
+  return (
+    <div className="relative" onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}>
+      <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-og-line text-lg" aria-haspopup="menu" aria-expanded={open} aria-label="More actions" onClick={() => setOpen((v) => !v)}>⋯</button>
+      {open ? (
+        <div role="menu" className="absolute right-0 z-10 mt-1 w-40 overflow-hidden rounded-lg border border-og-line bg-og-card shadow-lg">
+          {state === "unread" ? <button role="menuitem" type="button" className={item} disabled={busy} onClick={() => act("read")}>Mark read</button> : null}
+          {state === "archived" ? <button role="menuitem" type="button" className={item} disabled={busy} onClick={() => act("unarchive")}>Restore</button>
+            : <button role="menuitem" type="button" className={item} disabled={busy} onClick={() => act("archive")}>Archive</button>}
+        </div>
+      ) : null}
     </div>
   );
 }

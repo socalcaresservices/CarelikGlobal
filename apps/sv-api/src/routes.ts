@@ -1816,7 +1816,15 @@ export const ROUTES: Record<string, Route> = {
   // a retry is the same answer; readiness, overlap and authorization are re-checked in the database.
   "GET /v1/open-shifts": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])) }),
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      // 0120: with ?shiftId= the answer also says what happened to the one shift an alert pointed at (status, service city, time); same rule as the board, no client detail
+      const alertShift = query.shiftId === undefined ? undefined : uuid(query.shiftId, "shiftId");
+      return {
+        shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])),
+        ...(alertShift === undefined ? {} : { alertShift: await tx(async (db) => (await first(db, "select ogevia_api.get_cover_shift($1,$2) as r", [orgParam(event), alertShift])).r) }),
+      };
+    },
   },
 
   // 0063: asking for an open shift only records a request; the shift is not assigned until an administrator confirms (confirm below).
