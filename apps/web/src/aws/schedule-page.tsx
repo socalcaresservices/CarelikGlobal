@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { nameWithCode } from "./name-label";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { Button, Card, QuickActionMenu } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
@@ -549,6 +549,8 @@ export function SchedulePage() {
     }
     return [...by.values()];
   }, [filtered]);
+  // Alerts and emails link to /schedule. A caregiver has no office schedule, so send them to the board where open shifts can be requested.
+  if (!canManage && !hasPermission("visits.manage") && hasPermission("availability.manage_own")) return <Navigate to="/my-shifts" replace />;
   if (!canManage && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the schedule.</p>;
   const unit = view === "day" ? "day" : view === "week" ? "week" : "month";
   const link = "inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8";

@@ -147,3 +147,14 @@ describe("texting panels", () => {
     expect(calls.find((c) => c.path === "/v1/notification-preferences" && c.method === "POST")!.body).toMatchObject({ category: "cover_office", inApp: true, email: true });
   }, 40000);
 });
+
+describe("alert link for a caregiver", () => {
+  it("opening /schedule (the link in every open-shift alert and email) lands a caregiver on My Schedule with the request button", async () => {
+    renderAws("/schedule", ["availability.manage_own"], {
+      "GET /v1/open-shifts": () => json(200, { shifts: [{ shiftId: SHIFT, startsAt: later(30), endsAt: later(32), minutes: 120, clientCode: "CL-1", city: "Winchester", officeName: "Temecula Office", serviceName: "Respite", coverageState: "needs_coverage", myRequestStatus: null }] }),
+      "GET /v1/my-shifts": () => json(200, { shifts: [] }),
+    });
+    expect(await screen.findByRole("button", { name: "Request this shift" }, { timeout: 15000 })).toBeInTheDocument();
+    expect(screen.queryByText("You do not have access to the schedule.")).toBeNull();
+  }, 40000);
+});
