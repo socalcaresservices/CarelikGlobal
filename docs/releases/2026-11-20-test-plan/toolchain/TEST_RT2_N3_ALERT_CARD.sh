@@ -30,7 +30,7 @@ COMMIT="$OGEVIA_RELEASE_COMMIT"
 [[ "$(git -C "$REPO" rev-parse HEAD)" == "$COMMIT" ]] || stop "the checkout is not at the release commit"
 [[ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]] || stop "tracked files in the checkout are modified"
 # the release commit may add only tooling, tests and documents on top of the audited commit: the application and infrastructure code must be byte-identical to it
-APP_BASE="${OGEVIA_APP_BASE:-28832ee010a1c187b51a13ef2ef78f5c715eaff8}"
+APP_BASE="${OGEVIA_APP_BASE:-f2d6108c4add13bbd777172122d664c4f09ac05f}"
 git -C "$REPO" cat-file -e "$APP_BASE^{commit}" 2>/dev/null || stop "the audited commit $APP_BASE is not in this checkout (git fetch --depth 1 origin $APP_BASE)"
 git -C "$REPO" diff --quiet "$APP_BASE" "$COMMIT" -- apps packages infra/aws/lib infra/aws/bin infra/aws/package.json pnpm-lock.yaml infra/aws/db/pending/migrations || stop "application, infrastructure or migration files differ from the audited commit $APP_BASE"
 A() { timeout --foreground -k 5 "${OGEVIA_AWS_TIMEOUT:-300}" aws --cli-connect-timeout 5 --cli-read-timeout 120 "$@"; }
