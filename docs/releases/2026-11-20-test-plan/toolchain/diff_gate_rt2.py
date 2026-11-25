@@ -10,6 +10,7 @@ Read-only: compares two CloudFormation templates (JSON files) and exits 0 only i
                      environment variables on the Handler. Nothing removed, nothing else changed.
       --expect post  after deployment: NO difference at all
 
+Stage `stage3` (after stage 2 is live): CODE ONLY (the exact-shift lookup rides on the existing GET /v1/open-shifts route as ?shiftId=). Use --expect off, then --expect post.
 Stage `stage2` (after stage 1 is live): 9 routes (7 texting, 2 service location), Handler env SMS_MODE=mock and SERVICE_LOCATION=on, new code assets; no new resource of any other kind.
 Stage `notifications` (email NOT configured: no email function, no SES permission, no sender):
   10 routes, one AWS::Events::Rule with rate(5 minutes), one AWS::Lambda::Permission named NotifySweepAllowEventRule*, Handler env COVER_ALERT_ADDRESS_RULES=on.
@@ -22,6 +23,9 @@ ASSET_BUCKET = "cdk-hnb659fds-assets-300094796789-us-west-2"
 SECTIONS = ["AWSTemplateFormatVersion", "Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform"]
 CODE_ONLY_PREFIXES = ("Handler", "IdentityHandler")
 STAGES = {
+    "stage3": {   # the alert card and the exact-shift page: migration 0120 and new Handler code ONLY. No route, schedule, permission or environment variable is added: --expect off (code only) and --expect post
+        "routes": set(), "schedules": set(), "permission_prefixes": (), "handler_env": {},
+    },
     "stage2": {   # open-shift texting (mock sender) and the client service location; the notification schedule and permission from stage 1 are already live
         "routes": {
             "GET /v1/sms-settings", "POST /v1/sms-settings", "GET /v1/my-sms", "POST /v1/my-sms", "GET /v1/sms-oncall", "POST /v1/sms-oncall", "GET /v1/sms-history",

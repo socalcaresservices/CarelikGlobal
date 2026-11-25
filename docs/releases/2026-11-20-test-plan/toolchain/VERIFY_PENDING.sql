@@ -1,4 +1,4 @@
--- READ-ONLY verification of pending migrations 0113-0118. Writes nothing.
+-- READ-ONLY verification of pending migrations 0113-0120. Writes nothing.
 --   psql -X -At -F '|' -v mig=0113 -v expect=absent|present -f VERIFY_PENDING.sql
 -- One row per check: name|t|detail (t = ok, f = FAILING). The wrapper counts rows and fails on any "|f|".
 -- Tables: must exist (present) / not exist (absent). Functions (by schema + name): must exist, be SECURITY DEFINER, have a pinned
@@ -21,7 +21,8 @@ with t(mig, rel) as (values
   ('0116','ogevia_api','preview_staff_merge'),('0116','ogevia_api','merge_staff_profiles_v2'),('0116','ogevia_api','unmerge_staff_profiles'),('0116','ogevia_api','list_staff_merges'),
   ('0117','ogevia_api','get_sms_settings'),('0117','ogevia_api','set_sms_settings'),('0117','ogevia_api','get_my_sms'),('0117','ogevia_api','set_my_sms'),('0117','ogevia_api','list_sms_oncall'),('0117','ogevia_api','set_sms_oncall'),
   ('0117','ogevia_api','list_sms_history'),('0117','ogevia_api','system_sms_escalate_orgs'),('0117','ogevia_api','system_sms_inbound'),('0117','ogevia_api','system_sms_claim'),('0117','ogevia_api','system_sms_record'),
-  ('0118','ogevia_api','get_client_service_location'),('0118','ogevia_api','set_client_service_location')
+  ('0118','ogevia_api','get_client_service_location'),('0118','ogevia_api','set_client_service_location'),
+  ('0120','ogevia_api','get_cover_shift')
 ), p as (
   select f.mig, f.sch || '.' || f.fn as name, (select pr.oid from pg_proc pr join pg_namespace n on n.oid = pr.pronamespace where n.nspname = f.sch and pr.proname = f.fn limit 1) as oid
   from f where f.mig = :'mig'
@@ -42,6 +43,19 @@ select 'round 0 keeps the original key (0119) ' || :'expect',
        case when :'expect' = 'absent' then true else coalesce(pg_get_functiondef(to_regprocedure('ogevia.cover_key(ogevia.shifts)')) like '%0119 legacy key for round 0%', false) end, '' where :'mig' = '0119'
 union all
 select 'cover_key is defined exactly once', (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname = 'cover_key') = 1, '' where :'mig' = '0119'
+union all
+select 'function ogevia.cover_shift_summary exists, not callable by the app role directly ' || :'expect',
+       case when :'expect' = 'absent' then to_regprocedure('ogevia.cover_shift_summary(uuid,uuid,uuid)') is null
+            else to_regprocedure('ogevia.cover_shift_summary(uuid,uuid,uuid)') is not null
+                 and not has_function_privilege('ogevia_app', to_regprocedure('ogevia.cover_shift_summary(uuid,uuid,uuid)'), 'execute') end, '' where :'mig' = '0120'
+union all
+select 'alert link rule allows the exact-shift link only ' || :'expect',
+       case when :'expect' = 'absent' then coalesce((select pg_get_constraintdef(c.oid) not like '%my-shifts%' from pg_constraint c where c.conrelid = 'ogevia.user_notifications'::regclass and c.conname = 'user_notifications_link_check'), false)
+            else coalesce((select pg_get_constraintdef(c.oid) like '%my-shifts%' from pg_constraint c where c.conrelid = 'ogevia.user_notifications'::regclass and c.conname = 'user_notifications_link_check'), false) end, '' where :'mig' = '0120'
+union all
+select 'new alerts carry the exact-shift link ' || :'expect',
+       case when :'expect' = 'absent' then coalesce(pg_get_functiondef(to_regprocedure('ogevia.cover_notify(uuid,uuid,uuid,uuid,boolean)')) not like '%/my-shifts?shift=%', false)
+            else coalesce(pg_get_functiondef(to_regprocedure('ogevia.cover_notify(uuid,uuid,uuid,uuid,boolean)')) like '%/my-shifts?shift=%', false) end, '' where :'mig' = '0120'
 union all
 select 'ledger row ' || :'mig' || ' ' || :'expect',
        case when :'expect' = 'absent' then not exists (select 1 from ogevia_meta.schema_migrations where version = :'mig')

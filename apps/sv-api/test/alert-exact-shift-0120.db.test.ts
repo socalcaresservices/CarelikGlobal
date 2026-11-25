@@ -1,4 +1,5 @@
 // 0120: an alert opens the exact shift, is short, and says whether it can still be requested. SYNTHETIC data only.
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { asActor, createTestDb, freshClient, orgToday, seedWorld } from "../../../infra/aws/db/test/harness";
@@ -58,12 +59,17 @@ describe("0120 alert for the exact shift", () => {
       const s4 = await mk(day(5), "09:00", "09:50");
       expect((await look(w.caregiverA1.sub, s4)).status).toBe("open");
 
+      // the deployment's read-only verification (VERIFY_PENDING.sql): present passes except the ledger row (the test database has no ledger entry), absent passes after the rollback
+      const verify = (expect: "present" | "absent") => spawnSync("psql", ["-X", "-At", "-F", "|", "-v", "mig=0120", "-v", `expect=${expect}`, "-f", new URL("../../../docs/releases/2026-11-20-test-plan/toolchain/VERIFY_PENDING.sql", import.meta.url).pathname, `postgres://postgres:postgres@127.0.0.1:5432/${db.name}`], { encoding: "utf8" });
+      const pres = verify("present"); expect(pres.stderr).toBe(""); const failing = pres.stdout.split("\n").filter((l) => l.includes("|f|")); expect(failing).toEqual(["ledger row 0120 present|f|"]);
+
       // someone with no connection to it sees nothing, and an unknown id looks the same
       expect((await look(w.caregiverA1.sub, "00000000-0000-4000-8000-000000000000")).status).toBe("unavailable");
 
       // rollback: the old link and body come back, the new functions are gone
       await run(P("rollback/0120_alert_opens_exact_shift.down.sql"));
       expect((await q("select to_regprocedure('ogevia_api.get_cover_shift(uuid,uuid)') is null as gone"))[0].gone).toBe(true);
+      const abs = verify("absent"); expect(abs.stderr).toBe(""); expect(abs.stdout.split("\n").filter((l) => l.includes("|f|"))).toEqual([]);
       const s5 = await mk(day(2), "14:00", "14:50"); await q("select ogevia_api.system_cover_notify_org($1)", [w.orgA]);
       const old = (await q("select link, body from ogevia.user_notifications where shift_id = $1 and recipient_user_id = $2 and category = 'cover_shift'", [s5, w.caregiverA2.userId]))[0];
       expect(old.link).toBe("/schedule"); expect(old.body).toContain("Coordinating office: Temecula");
