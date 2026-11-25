@@ -11,7 +11,7 @@ const script = join(dir, "release_pins.py");
 const run = (...args: string[]) => spawnSync("python3", [script, ...args], { encoding: "utf8" });
 // The application commit the pins are validated against. Changed deliberately (2026-11-21) from 88426e8 (the release deployed to production as ef90a2a) to the web follow-up
 // the web follow-ups and minimal Offices (caregiver header without the staff ID; charts follow the Dashboard palette; offices, migration 0110, switch off). Any later application change must re-pin and update this line.
-const PINNED = "8265d689647ba8e706adc77a94f2ac841c85e422";
+const PINNED = "725bb9ebddd13be7406f0cf1bada087f7a3e942b";
 const present = spawnSync("git", ["cat-file", "-e", `${PINNED}^{commit}`]).status === 0;
 
 describe.skipIf(!present)("release_pins.py", () => {
