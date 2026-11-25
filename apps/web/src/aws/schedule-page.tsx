@@ -550,7 +550,7 @@ export function SchedulePage() {
     return [...by.values()];
   }, [filtered]);
   // Alerts and emails link to /schedule. A caregiver has no office schedule, so send them to the board where open shifts can be requested.
-  if (!canManage && !hasPermission("visits.manage") && hasPermission("availability.manage_own")) return <Navigate to="/my-shifts" replace />;
+  if (!canManage && !hasPermission("visits.manage") && hasPermission("availability.manage_own")) return <Navigate to={`/my-shifts${params.get("shift") ? `?shift=${encodeURIComponent(params.get("shift")!)}` : ""}`} replace />;
   if (!canManage && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the schedule.</p>;
   const unit = view === "day" ? "day" : view === "week" ? "week" : "month";
   const link = "inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8";
@@ -655,8 +655,41 @@ export function SchedulePage() {
 
 interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; city?: string | null; officeName?: string | null; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
 
+function useOpenShifts() {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  return useQuery({
+    queryKey: ["aws-open-shifts", activeOrganizationId],
+    queryFn: async () => (await api.get<{ shifts: OpenShift[] }>("/v1/open-shifts", { organizationId: activeOrganizationId })).shifts,
+    enabled: !!activeOrganizationId,
+  });
+}
+
+/** The caregiver opened an alert for one shift. If it is still open, the board below puts it first with the request button. If not, say what happened to it. */
+function AlertShiftStatus({ shiftId, mine }: { shiftId: string; mine: MyShift[] | undefined }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const open = useOpenShifts();
+  const notes = useQuery({
+    queryKey: ["alert-shift-status", activeOrganizationId, shiftId],
+    queryFn: async () => (await api.get<{ notifications: { items: Array<{ title: string; shiftId: string | null; createdAt: string }> } }>("/v1/notification-center", { organizationId: activeOrganizationId, state: "all", limit: "100" })).notifications.items,
+    enabled: !!activeOrganizationId && open.isSuccess && !!mine && !open.data.some((o) => o.shiftId === shiftId),
+    retry: false,
+  });
+  if (!open.data || !mine) return null;
+  if (open.data.some((o) => o.shiftId === shiftId)) return null;
+  if (mine.some((m) => m.shiftId === shiftId)) return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-emerald-300 bg-emerald-50 p-2 text-sm font-semibold text-emerald-900">You are confirmed for this shift. It is in your list below.</p>;
+  if (notes.isLoading) return null;
+  const titles = (notes.data ?? []).filter((n) => n.shiftId === shiftId).map((n) => n.title);
+  const text = titles.some((t) => t.startsWith("Cancelled")) ? "Closed. This shift was cancelled. Nothing more is needed from you."
+    : titles.some((t) => t.startsWith("You are confirmed")) ? "You are confirmed for this shift."
+    : titles.some((t) => t.startsWith("Filled")) ? "Filled. Someone else was confirmed for this shift. No action needed."
+    : "No longer open. This shift was filled or closed by the office, so it cannot be requested.";
+  return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">{text}</p>;
+}
+
 /** Wave 1 (G09), changed by 0063: open shifts the caregiver is assigned to. Asking sends a request; the office confirms one caregiver. */
-function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
+function OpenShiftsSection({ onPicked, focusId }: { onPicked: (text: string) => void; focusId?: string | null }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
@@ -665,11 +698,7 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
   const [error, setError] = useState<{ shiftId: string; text: string } | null>(null);
   // One key per shift, so a double tap or a retry is the same request.
   const keys = useRef(new Map<string, string>());
-  const open = useQuery({
-    queryKey: ["aws-open-shifts", activeOrganizationId],
-    queryFn: async () => (await api.get<{ shifts: OpenShift[] }>("/v1/open-shifts", { organizationId: activeOrganizationId })).shifts,
-    enabled: !!activeOrganizationId,
-  });
+  const open = useOpenShifts();
   async function pickUp(shiftId: string) {
     if (busyId) return;
     if (!keys.current.has(shiftId)) keys.current.set(shiftId, newIdempotencyKey());
@@ -709,8 +738,10 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
       <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can ask for</h2>
       <Hint details="The office confirms one caregiver, and the shift appears in your list once it does." show>Asking does not give you the shift.</Hint>
       <ul className="space-y-1.5">
-        {open.data.map((s) => (
-          <li key={s.shiftId} className="rounded-lg border border-sky-200 bg-sky-50 p-2">
+        {[...open.data].sort((a, b) => Number(b.shiftId === focusId) - Number(a.shiftId === focusId)).map((s) => (
+          <li key={s.shiftId} data-testid={s.shiftId === focusId ? "alert-shift" : undefined} ref={s.shiftId === focusId ? (el) => el?.scrollIntoView?.({ block: "center" }) : undefined}
+            className={`rounded-lg border p-2 ${s.shiftId === focusId ? "border-sky-600 bg-sky-100 ring-2 ring-sky-500" : "border-sky-200 bg-sky-50"}`}>
+            {s.shiftId === focusId ? <p className="text-xs font-semibold uppercase text-sky-900">The shift from your alert</p> : null}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <div className="min-w-0">
                 <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
@@ -741,6 +772,8 @@ export function MyShiftsPage() {
   const { activeOrganizationId } = useOrganization();
   const { today, time, tz } = useAgencyClock();
   const [selectedDate, setSelectedDate] = useState(today);
+  const [urlParams] = useSearchParams();
+  const alertShift = /^[0-9a-f-]{36}$/i.test(urlParams.get("shift") ?? "") ? urlParams.get("shift") : null;
   const [open, setOpen] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
@@ -794,7 +827,8 @@ export function MyShiftsPage() {
         </div>
       </section>
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
-      <OpenShiftsSection onPicked={(text) => setState({ busy: false, error: null, done: text })} />
+      {alertShift ? <AlertShiftStatus shiftId={alertShift} mine={shifts.data} /> : null}
+      <OpenShiftsSection focusId={alertShift} onPicked={(text) => setState({ busy: false, error: null, done: text })} />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {shifts.isError ? <p role="alert" className="text-sm text-red-700">{(shifts.error as Error).message}</p> : null}
       {shifts.data && visible.length === 0 ? <p className="text-sm text-og-sub">No shifts shown for this date.</p> : null}

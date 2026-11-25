@@ -74,7 +74,7 @@ export function NotificationCenterPage() {
               <p className="text-xs text-og-sub">{formatNumericDate(n.createdAt)} {formatClockTime(n.createdAt)} · {n.state === "unread" ? "New" : n.state === "read" ? "Read" : "Archived"}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {n.link ? <Link className="inline-flex min-h-[44px] items-center text-sm font-semibold underline md:min-h-[32px]" to={n.link}>Open</Link> : null}
+              {n.link ? <Link className="inline-flex min-h-[44px] items-center text-sm font-semibold underline md:min-h-[32px]" to={n.shiftId && !hasPermission("shifts.manage") ? `/my-shifts?shift=${encodeURIComponent(n.shiftId)}` : n.link}>Open</Link> : null}
               {n.state === "unread" ? <button type="button" disabled={busy} className="inline-flex min-h-[44px] items-center text-sm underline md:min-h-[32px]" onClick={() => void mark("read", [n.id])}>Mark read</button> : null}
               {n.state === "archived"
                 ? <button type="button" disabled={busy} className="inline-flex min-h-[44px] items-center text-sm underline md:min-h-[32px]" onClick={() => void mark("unarchive", [n.id])}>Restore</button>

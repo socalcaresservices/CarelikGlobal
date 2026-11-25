@@ -10,6 +10,7 @@ import { Hint } from "./hint";
 import { clientLabel } from "./name-label";
 import { refreshAfterShiftChange } from "./shift-refresh";
 import { schedulingRefusal } from "./scheduling-refusal";
+import { pacific } from "./pacific-time";
 
 const message = schedulingRefusal;
 
@@ -62,32 +63,35 @@ export function PickupRequestsPanel({ onDone }: { onDone: (text: string) => void
     }
   }
   if (!canManage || !list.data || list.data.length === 0) return null;
-  // One card per shift. Within a shift the requests are ordered with the eligible ones first, then by who asked first, and the EARLIEST ELIGIBLE request is preselected.
+  // One card per shift. Within a shift the requests are in the order they were made (first asked first). The EARLIEST ELIGIBLE request is preselected;
+  // someone who asked earlier but cannot be confirmed stays in their place, with the reason.
   const isEligible = (r: PickupRequest) => r.eligible ?? r.blockers.length === 0;
   const groups = new Map<string, PickupRequest[]>();
   for (const r of list.data) groups.set(r.shiftId, [...(groups.get(r.shiftId) ?? []), r]);
-  const ordered = [...groups.values()].map((g) => [...g].sort((a, b) => Number(isEligible(b)) - Number(isEligible(a)) || a.requestedAt.localeCompare(b.requestedAt)));
+  const ordered = [...groups.values()].map((g) => [...g].sort((a, b) => Date.parse(a.requestedAt) - Date.parse(b.requestedAt)));
   return (
     <section className="space-y-2" data-testid="pickup-requests" aria-labelledby="pickup-heading">
       <h2 id="pickup-heading" className="text-base font-semibold text-slate-950">Caregiver requests for open shifts ({list.data.length})</h2>
       <Hint details="Confirming checks the shift again: compliance, availability, other shifts, hour limits and the authorization. Only the office confirms." show>Nobody is assigned until you confirm.</Hint>
       <ul className="space-y-2">
         {ordered.map((g) => {
-          const first = g[0]!; const defaultId = isEligible(first) ? first.requestId : null;
+          const first = g[0]!; const defaultId = g.find(isEligible)?.requestId ?? null;
           const chosenId = chosen[first.shiftId] ?? defaultId;
           const sel = g.find((r) => r.requestId === chosenId) ?? null;
           return (
             <li key={first.shiftId} className="rounded-lg border border-slate-200 bg-og-card p-2 text-sm" data-testid="pickup-shift">
+              <p className="font-semibold text-slate-950" data-testid="pickup-start">Shift starts {pacific(first.startsAt)}</p>
               <p className="font-semibold text-slate-950">{when(first.startsAt)}–{time(first.endsAt)} · {clientLabel(first, true)}{first.serviceName ? ` · ${first.serviceName}` : ""} · {formatDuration(first.minutes)}</p>
               <fieldset className="mt-1">
                 <legend className="sr-only">Choose who to confirm for this shift</legend>
                 <ul className="space-y-1">
-                  {g.map((r) => (
+                  {g.map((r, i) => (
                     <li key={r.requestId} className="rounded border border-slate-100 p-1.5">
                       <label className="flex min-h-11 items-start gap-2">
                         <input type="radio" name={`pick-${first.shiftId}`} className="mt-1" checked={chosenId === r.requestId} disabled={busy !== null} onChange={() => setChosen((c) => ({ ...c, [first.shiftId]: r.requestId }))} data-testid="pickup-choice" />
                         <span className="min-w-0">
-                          <span className="font-medium text-slate-950">{r.caregiverName ?? r.caregiverCode} ({r.caregiverCode})</span>
+                          <span className="font-medium text-slate-950">{i + 1}. {r.caregiverName ?? r.caregiverCode} ({r.caregiverCode})</span>
+                          <span className="block text-slate-700" data-testid="pickup-asked">Asked {pacific(r.requestedAt)}</span>
                           {r.requestId === defaultId ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900" data-testid="pickup-earliest">Earliest eligible request</span> : null}
                           {r.blockers.length > 0 ? <span role="note" className="block text-red-800">Would be refused now: {r.blockers.join(" ")}</span> : <span className="block text-emerald-800">No problem found right now.</span>}
                         </span>

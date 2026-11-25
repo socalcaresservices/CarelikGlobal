@@ -45,11 +45,15 @@ describe("office queue for one shift", () => {
     const panel = await screen.findByTestId("pickup-requests", undefined, { timeout: 15000 });
     expect(within(panel).getAllByTestId("pickup-shift")).toHaveLength(1);                          // one card for the shift
     const radios = within(panel).getAllByTestId("pickup-choice") as HTMLInputElement[];
-    expect(radios.map((r) => r.checked)).toEqual([true, false, false]);                              // eligible first: Second, Third, then the blocked one
+    expect(radios.map((r) => r.checked)).toEqual([false, true, false]);                              // in the order they asked: Blocked First, Eligible Second, Eligible Third
     expect(within(panel).getAllByTestId("pickup-earliest")).toHaveLength(1);
-    expect(radios[0]!.closest("li")).toHaveTextContent("Eligible Second");
-    expect(radios[2]!.closest("li")).toHaveTextContent("Would be refused now: Over the daily hour limit.");
-    fireEvent.click(radios[1]!);                                                                    // the office prefers the third
+    expect(radios[1]!.closest("li")).toHaveTextContent("Eligible Second");
+    expect(radios[1]!.closest("li")).toHaveTextContent("Earliest eligible request");
+    expect(radios[0]!.closest("li")).toHaveTextContent("Would be refused now: Over the daily hour limit.");
+    const asked = within(panel).getAllByTestId("pickup-asked").map((e) => e.textContent!);
+    expect(asked.every((t) => /^Asked .+ PT$/.test(t))).toBe(true);                                // each request time is shown in Pacific time
+    expect(within(panel).getByTestId("pickup-start")).toHaveTextContent(/^Shift starts .+ PT$/);
+    fireEvent.click(radios[2]!);                                                                    // the office prefers the third
     fireEvent.click(within(panel).getByRole("button", { name: "Confirm assignment" }));
     await waitFor(() => expect(calls.some((c) => c.path === "/v1/shift-pickups/pr-3/confirm")).toBe(true), { timeout: 15000 });
     expect(calls.some((c) => c.path === "/v1/shift-pickups/pr-2/confirm")).toBe(false);
@@ -156,5 +160,37 @@ describe("alert link for a caregiver", () => {
     });
     expect(await screen.findByRole("button", { name: "Request this shift" }, { timeout: 15000 })).toBeInTheDocument();
     expect(screen.queryByText("You do not have access to the schedule.")).toBeNull();
+  }, 40000);
+});
+
+describe("alert opens the specific shift", () => {
+  const link = (shiftId: string, extra: Record<string, unknown> = {}) => ({ "GET /v1/notification-center": () => json(200, { notifications: { asOf: new Date().toISOString(), unread: 0, items: [{ id: "n1", category: "cover_shift", title: "Open shift in Winchester", body: "x", link: "/schedule", shiftId, createdAt: later(-1), readAt: null, archivedAt: null, state: "unread" }, ...((extra.items as object[]) ?? [])] } }) });
+  it("the Open link carries the shift, and the page shows it first with Request this shift", async () => {
+    const other = { ...openShift, shiftId: "51515151-0000-4000-8000-000000000002", startsAt: later(10), endsAt: later(12) };
+    renderAws(`/notifications`, ["availability.manage_own"], { ...link(SHIFT), "GET /v1/notification-preferences": () => json(200, { preferences: { coverShift: { inApp: true, email: false }, emailAvailable: false } }) });
+    const open = await screen.findByRole("link", { name: "Open" }, { timeout: 15000 });
+    expect(open).toHaveAttribute("href", `/my-shifts?shift=${SHIFT}`);
+    cleanup();
+    renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [other, openShift] }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
+    const card = await screen.findByTestId("alert-shift", undefined, { timeout: 15000 });
+    expect(card).toHaveTextContent("The shift from your alert");
+    expect(within(card).getByRole("button", { name: "Request this shift" })).toBeInTheDocument();
+    expect(card.closest("ul")!.firstElementChild).toBe(card);
+  }, 60000);
+  it("a shift that is no longer open says Filled; a cancelled one says Closed; no notice says no longer open; a confirmed caregiver sees that", async () => {
+    const run = async (items: object[], mine: object[], expected: RegExp) => {
+      renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [] }), "GET /v1/my-shifts": () => json(200, { shifts: mine }), ...link(SHIFT, { items }) });
+      expect(await screen.findByTestId("alert-shift-status", undefined, { timeout: 15000 })).toHaveTextContent(expected);
+      cleanup();
+    };
+    const note = (title: string) => ({ id: title, category: "cover_shift", title, body: "", link: null, shiftId: SHIFT, createdAt: later(0), readAt: null, archivedAt: null, state: "unread" });
+    await run([note("Filled | Winchester")], [], /^Filled\./);
+    await run([note("Cancelled | Winchester")], [], /^Closed\./);
+    await run([], [], /^No longer open/);
+    await run([], [{ shiftId: SHIFT, startsAt: later(30), endsAt: later(32), clientCode: "CL-1", serviceName: "Respite", coverageState: "covered", canCallOut: true }], /confirmed for this shift/);
+  }, 90000);
+  it("/schedule?shift=… (an older link) forwards a caregiver to the same shift", async () => {
+    renderAws(`/schedule?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [openShift] }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
+    expect(await screen.findByTestId("alert-shift", undefined, { timeout: 15000 })).toBeInTheDocument();
   }, 40000);
 });
