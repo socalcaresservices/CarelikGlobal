@@ -680,7 +680,8 @@ function AlertShiftStatus({ shiftId }: { shiftId: string }) {
   });
   if (!open.data || info.isLoading) return null;
   if (open.data.some((o) => o.shiftId === shiftId)) return null;                       // the board card below says it
-  if (info.isError || !info.data) return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">This shift could not be loaded. Refresh the page.</p>;
+  if (info.isError) return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">This shift could not be loaded. Refresh the page.</p>;
+  if (!info.data) return <p role="status" data-testid="alert-shift-status" data-status="unavailable" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">{STATUS_SENTENCE.unavailable}</p>;
   const sh = info.data;
   return (
     <div role="status" data-testid="alert-shift-status" data-status={sh.status} className={`rounded-lg border p-2 text-sm ${sh.status === "yours" ? "border-emerald-300 bg-emerald-50" : "border-slate-300 bg-slate-50"}`}>

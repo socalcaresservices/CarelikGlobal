@@ -45,7 +45,8 @@ create function ogevia_api.get_cover_shift(p_organization_id uuid, p_shift_id uu
 returns jsonb language plpgsql stable security definer set search_path = ogevia, pg_temp as $$
 declare v_actor uuid := ogevia.require_actor(); v_s ogevia.shifts%rowtype;
 begin
-  if not ogevia.is_active_member(p_organization_id) then raise exception 'Organization not found' using errcode = 'OGN04'; end if;
+  -- like list_open_shifts, a caller who is not a member gets the same answer as a caller with no connection to the shift (no error that tells them the organization exists)
+  if not ogevia.is_active_member(p_organization_id) then return jsonb_build_object('status', 'unavailable'); end if;
   select * into v_s from ogevia.shifts where id = p_shift_id and organization_id = p_organization_id;
   if v_s.id is null
      or not (ogevia.has_permission(p_organization_id, 'shifts.manage')

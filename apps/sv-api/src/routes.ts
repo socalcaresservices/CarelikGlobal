@@ -1822,7 +1822,11 @@ export const ROUTES: Record<string, Route> = {
       const alertShift = query.shiftId === undefined ? undefined : uuid(query.shiftId, "shiftId");
       return {
         shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])),
-        ...(alertShift === undefined ? {} : { alertShift: await tx(async (db) => (await first(db, "select ogevia_api.get_cover_shift($1,$2) as r", [orgParam(event), alertShift])).r) }),
+        ...(alertShift === undefined ? {} : await (async () => {
+          const r = await tx(async (db) => (await first(db, "select ogevia_api.get_cover_shift($1,$2) as r", [orgParam(event), alertShift])).r) as { status?: string } | null;
+          // a shift the caller has no connection to (or that does not exist) is answered exactly like no shift: the key is simply absent, so nothing can be learned from the difference
+          return r && r.status !== "unavailable" ? { alertShift: r } : {};
+        })()),
       };
     },
   },

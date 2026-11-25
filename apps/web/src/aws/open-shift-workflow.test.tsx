@@ -201,6 +201,10 @@ describe("alert opens the specific shift", () => {
     };
     await run("filled", /^Filled\./); await run("cancelled", /^Cancelled\./); await run("started", /^Shift already started/); await run("yours", /confirmed for this shift/); await run("closed", /^Closed\./);
   }, 120000);
+  it("a shift the caregiver has no connection to (the server leaves alertShift out) says it is not available to them", async () => {
+    renderAws(`/my-shifts?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [] }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
+    expect(await screen.findByTestId("alert-shift-status", undefined, { timeout: 15000 })).toHaveTextContent("This shift isn't available to you.");
+  }, 40000);
   it("an older link /schedule?shift=… (and an alert with no shift) forwards a caregiver to My Schedule", async () => {
     renderAws(`/schedule?shift=${SHIFT}`, ["availability.manage_own"], { "GET /v1/open-shifts": () => json(200, { shifts: [openShift], alertShift: sum("open") }), "GET /v1/my-shifts": () => json(200, { shifts: [] }) });
     expect(await screen.findByTestId("alert-shift", undefined, { timeout: 15000 })).toBeInTheDocument();
