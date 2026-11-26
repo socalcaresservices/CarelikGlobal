@@ -10,7 +10,9 @@ export interface EmailRequest { to?: unknown; subject?: unknown; text?: unknown;
 export type EmailResponse = { ok: true; messageId: string } | { ok: false; error: string; transient: boolean };
 type Ses = Pick<SESv2Client, "send">;
 
-export function createEmailHandler(ses: Ses, from: string, configurationSet?: string, log: (line: string) => void = console.log, replyTo?: string) {
+export function createEmailHandler(ses: Ses, from: string, configurationSet?: string, log: (line: string) => void = console.log, replyTo?: string, allowedRecipients?: readonly string[]) {
+  // When a list is configured (TEST), ONLY these addresses can receive mail from this function, whatever SES would allow: it holds even after SES leaves its sandbox.
+  const allowed = allowedRecipients && allowedRecipients.length > 0 ? new Set(allowedRecipients.map((a) => a.trim().toLowerCase())) : null;
   const outcome = (r: EmailResponse) => { log(JSON.stringify({ action: "send", outcome: r.ok ? "ok" : r.error })); return r; };
   return async function handler(event: EmailRequest): Promise<EmailResponse> {
     const to = typeof event?.to === "string" ? event.to.trim() : "";
@@ -20,6 +22,7 @@ export function createEmailHandler(ses: Ses, from: string, configurationSet?: st
     if (to.length > 254 || !EMAIL.test(to) || subject.length < 1 || subject.length > 200 || text.length < 1 || text.length > 5000 || html.length > 20000) {
       return outcome({ ok: false, error: "invalid_request", transient: false });
     }
+    if (allowed && !allowed.has(to.toLowerCase())) return outcome({ ok: false, error: "recipient_not_allowed", transient: false });
     try {
       const out = await ses.send(new SendEmailCommand({
         FromEmailAddress: from,

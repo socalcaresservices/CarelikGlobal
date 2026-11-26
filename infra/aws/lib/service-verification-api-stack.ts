@@ -727,7 +727,7 @@ export class ServiceVerificationApiStack extends Stack {
         timeout: Duration.seconds(10),
         role: emailRole,
         logGroup: emailLogGroup,
-        environment: { SES_FROM: notificationEmail.from, ...(notificationEmail.replyTo ? { SES_REPLY_TO: notificationEmail.replyTo } : {}), ...(notificationEmail.configurationSet ? { SES_CONFIGURATION_SET: notificationEmail.configurationSet } : {}) },
+        environment: { SES_FROM: notificationEmail.from, ...(notificationEmail.replyTo ? { SES_REPLY_TO: notificationEmail.replyTo } : {}), ...(notificationEmail.configurationSet ? { SES_CONFIGURATION_SET: notificationEmail.configurationSet } : {}), ...(notificationEmail.allowedRecipients ? { SES_ALLOWED_RECIPIENTS: notificationEmail.allowedRecipients.join(",") } : {}) },
       });
       emailHandler.node.addDependency(emailPolicy);
       Validations.of(emailHandler).acknowledge({

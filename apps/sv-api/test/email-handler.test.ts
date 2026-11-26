@@ -33,5 +33,15 @@ describe("email Lambda", () => {
     await mk("admin@example.invalid")(ok); await mk()(ok);
     expect(sent[0].ReplyToAddresses).toEqual(["admin@example.invalid"]); expect(sent[1]).not.toHaveProperty("ReplyToAddresses");
   });
+  it("with an allow-list only those addresses are sent to (case-insensitive); anyone else is refused without calling SES and without a retry", async () => {
+    const sent: unknown[] = [];
+    const h = createEmailHandler(ses(async (c) => { sent.push(c.input); return { MessageId: "m" }; }), "Ogevia <scheduling@example.invalid>", undefined, () => {}, undefined, ["Admin@Example.invalid"]);
+    const msg = (to: string) => ({ to, subject: "s", text: "t" });
+    expect(await h(msg("admin@example.invalid"))).toEqual({ ok: true, messageId: "m" });
+    expect(await h(msg("someone.else@example.invalid"))).toEqual({ ok: false, error: "recipient_not_allowed", transient: false });
+    expect(sent).toHaveLength(1);
+    const open = createEmailHandler(ses(async () => ({ MessageId: "m" })), "a@b.co", undefined, () => {}, undefined, []);
+    expect((await open({ to: "x@y.co", subject: "s", text: "t" })).ok).toBe(true);   // an empty list means no restriction
+  });
 });
 

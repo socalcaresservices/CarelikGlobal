@@ -111,7 +111,9 @@ export interface OgeviaEnvironmentConfig {
    * adds one small Lambda OUTSIDE the VPC (the API Lambda has no internet route and NAT stays deferred) whose role may call ses:SendEmail on this ONE verified
    * identity, plus the Lambda VPC-endpoint permission for the API to invoke it. `from` is "Name <address>". Needs a verified SES identity (the owner's decision).
    */
-  readonly notificationEmail?: { readonly from: string; readonly sesIdentityArn: string; readonly replyTo?: string; readonly configurationSetArn?: string; readonly configurationSet?: string };
+  readonly notificationEmail?: { readonly from: string; readonly sesIdentityArn: string; readonly replyTo?: string; readonly configurationSetArn?: string; readonly configurationSet?: string;
+    /** TEST safety: when present, the function sends ONLY to these addresses (also after SES leaves its sandbox). Absent = any address SES accepts. */
+    readonly allowedRecipients?: readonly string[] };
   readonly auth: {
     /**
      * Existing Cognito app client the API's JWT authorizer accepts (audience).
@@ -524,6 +526,7 @@ export function notificationEmailOf(config: OgeviaEnvironmentConfig): NonNullabl
   if (!/^[^<>\r\n]{1,80} <[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>$/.test(n.from) && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(n.from)) throw new Error("notificationEmail.from must be an address or \"Name <address>\"");
   if (!/^arn:aws:ses:[a-z0-9-]+:\d{12}:identity\/.+$/.test(n.sesIdentityArn)) throw new Error("notificationEmail.sesIdentityArn must be an SES identity ARN");
   if (n.replyTo !== undefined && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(n.replyTo)) throw new Error("notificationEmail.replyTo must be an email address");
+  if (n.allowedRecipients !== undefined && (n.allowedRecipients.length === 0 || n.allowedRecipients.length > 10 || n.allowedRecipients.some((a) => !/^[^\s<>@,]+@[^\s<>@,]+\.[^\s<>@,]+$/.test(a)))) throw new Error("notificationEmail.allowedRecipients must be 1 to 10 email addresses");
   if (n.configurationSetArn && !/^arn:aws:ses:[a-z0-9-]+:\d{12}:configuration-set\/[A-Za-z0-9_-]+$/.test(n.configurationSetArn)) throw new Error("notificationEmail.configurationSetArn must be an SES configuration-set ARN");
   return n;
 }
