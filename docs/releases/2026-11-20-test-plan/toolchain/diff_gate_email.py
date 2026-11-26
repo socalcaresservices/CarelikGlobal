@@ -9,6 +9,8 @@
       --expect same  (the saved rollback assembly) NO change except the code assets of the Handler*/IdentityHandler* functions; the egress stack identical.
       --expect identity  (SES sandbox fix) the ONLY change in either stack: the email function's managed policy (Email*) gains EXACTLY ONE SES identity ARN in its single ses:SendEmail
                      statement (SendFromOneIdentity). Nothing added, removed or otherwise changed (code assets of Handler*/IdentityHandler* may differ).
+      --expect recipient  (adding one more approved recipient) the ONLY changes: the email function's variable SES_ALLOWED_RECIPIENTS gains exactly ONE address at the end, and its managed policy
+                     (Email*) gains exactly ONE SES identity ARN (as for identity). Nothing else, in either stack (code assets of Handler*/IdentityHandler* may differ).
       --expect post  after deployment: NO difference at all in either stack.
 AWS::CDK::Metadata is ignored; the value of the `ogevia:deployment-status` tag is ignored. Any other difference: exit 1 and the operator STOPS. Talks to no AWS.
 """
@@ -17,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import diff_gate_rt2 as g
 
 NAME_SUFFIX = "-NotificationEmail"
+EMAIL_ADDR = re.compile(r"^[^\s<>@,]+@[^\s<>@,]+\.[^\s<>@,]+$")
 IDENTITY_ARN = re.compile(r"^arn:aws:ses:[a-z0-9-]+:\d{12}:identity/[^/\s]+$")
 
 
@@ -54,6 +57,7 @@ def compare_api(live, new, expect):
     elif added:
         bad.append("api: unexpected added resources %s" % added)
     changed = []
+    seen = set()   # recipient mode: both the allow-list change and the permission change must be present
     for k in sorted(set(lr) & set(nr)):
         l, n = g.norm(lr[k]), g.norm(nr[k])
         if l == n:
@@ -76,7 +80,14 @@ def compare_api(live, new, expect):
                             n2["DependsOn"] = ldep
             if l2 == n2 and nr[k].get("Properties", {}).get("Code", {}).get("S3Bucket") == g.ASSET_BUCKET:
                 changed.append(k); continue
-        if expect == "identity" and t == "AWS::IAM::ManagedPolicy" and k.startswith("EmailPolicy"):
+        if expect == "recipient" and t == "AWS::Lambda::Function" and k.startswith("EmailHandler"):
+            lv = ((l.get("Properties") or {}).get("Environment") or {}).get("Variables", {}); nv = ((n.get("Properties") or {}).get("Environment") or {}).get("Variables", {})
+            la = [x for x in str(lv.get("SES_ALLOWED_RECIPIENTS", "")).split(",") if x]; na = [x for x in str(nv.get("SES_ALLOWED_RECIPIENTS", "")).split(",") if x]
+            if la and len(na) == len(la) + 1 and na[:-1] == la and EMAIL_ADDR.match(na[-1]) and na[-1].lower() not in [x.lower() for x in la]:
+                same = json.loads(json.dumps(n)); same["Properties"]["Environment"]["Variables"]["SES_ALLOWED_RECIPIENTS"] = lv.get("SES_ALLOWED_RECIPIENTS")
+                if g.norm(same) == g.norm(l):
+                    seen.add("allow-list"); continue
+        if expect in ("identity", "recipient") and t == "AWS::IAM::ManagedPolicy" and k.startswith("EmailPolicy"):
             ls = lr[k]["Properties"]["PolicyDocument"]["Statement"]; ns = nr[k]["Properties"]["PolicyDocument"]["Statement"]
             ok = len(ls) == len(ns)
             for a, b in zip(ls, ns) if ok else []:
@@ -91,7 +102,7 @@ def compare_api(live, new, expect):
             if ok:
                 same = json.loads(json.dumps(nr[k])); same["Properties"]["PolicyDocument"]["Statement"] = ls
                 if g.norm(same) == g.norm(lr[k]):
-                    continue
+                    seen.add("permission"); continue
         if expect == "on" and t == "AWS::IAM::ManagedPolicy" and k.startswith("HandlerPolicy") and fn_key:
             ls = lr[k]["Properties"]["PolicyDocument"]["Statement"]; ns = nr[k]["Properties"]["PolicyDocument"]["Statement"]
             extra = [s for s in ns if s not in ls]
@@ -103,6 +114,8 @@ def compare_api(live, new, expect):
         bad.append("api: CHANGED resource %s (%s)" % (k, t))
     if expect == "post" and (changed or added):
         bad.append("api: expected NO difference after deployment")
+    if expect == "recipient" and seen != {"allow-list", "permission"}:
+        bad.append("api: expected BOTH the allow-list address and the send-permission identity to be added; saw %s" % sorted(seen))
     return bad
 
 
@@ -141,7 +154,7 @@ def main():
     ap = argparse.ArgumentParser()
     for n in ("api-live", "api-new", "egress-live", "egress-new"):
         ap.add_argument("--" + n, required=True)
-    ap.add_argument("--expect", choices=["on", "same", "identity", "post"], required=True)
+    ap.add_argument("--expect", choices=["on", "same", "identity", "recipient", "post"], required=True)
     a = ap.parse_args()
     try:
         al, an, el, en = g.load(a.api_live), g.load(a.api_new), g.load(a.egress_live), g.load(a.egress_new)

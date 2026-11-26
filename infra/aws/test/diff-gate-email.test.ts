@@ -18,7 +18,9 @@ const withEmail = { ...base, notificationEmail: { from: "Ogevia <scheduling@ogev
 const dump = (cfg: OgeviaEnvironmentConfig) => Object.fromEntries(buildOgeviaApp(newApp(), cfg, "plan").map((p) => [p.stack.stackName.replace(/^Ogevia-prod-/, ""), Template.fromStack(p.stack).toJSON() as any]));
 const RECIPIENT_ARN = "arn:aws:ses:us-west-2:300094796789:identity/admin.ogevia@gmail.com";
 const withRecipient = { ...withEmail, notificationEmail: { ...withEmail.notificationEmail!, recipientIdentityArns: [RECIPIENT_ARN] } } as OgeviaEnvironmentConfig;
-const off = dump(base), on = dump(withEmail), rec = dump(withRecipient);
+const EXTRA = "caregiver.test@example.invalid", EXTRA_ARN = `arn:aws:ses:us-west-2:300094796789:identity/${EXTRA}`;
+const withTwo = { ...withEmail, notificationEmail: { ...withEmail.notificationEmail!, allowedRecipients: ["admin.ogevia@gmail.com", EXTRA], recipientIdentityArns: [RECIPIENT_ARN, EXTRA_ARN] } } as OgeviaEnvironmentConfig;
+const off = dump(base), on = dump(withEmail), rec = dump(withRecipient), two = dump(withTwo);
 
 function gate(api: [any, any], egress: [any, any], expect: string) {
   const dir = mkdtempSync(join(tmpdir(), "gate-email-"));
@@ -78,5 +80,19 @@ describe("diff_gate_email.py on real synthesis", () => {
     expect(gate([A(on), t], [E(on), E(rec)], "identity").status).toBe(1);             // an extra statement
     expect(gate([A(on), A(rec)], [E(on), E(rec)], "post").status).toBe(1);
     expect(() => buildOgeviaApp(newApp(), { ...withEmail, notificationEmail: { ...withEmail.notificationEmail!, recipientIdentityArns: ["*"] } } as OgeviaEnvironmentConfig, "plan")).toThrow(/recipientIdentityArns/);
+  });
+  it("recipient: one more allowed address AND one more identity ARN, nothing else; anything beyond that is refused", () => {
+    const r = gate([A(rec), A(two)], [E(rec), E(two)], "recipient"); expect(r.status, r.stdout + r.stderr).toBe(0); expect(r.stdout).toContain("EXPECTED-ONLY: YES (email, recipient)");
+    const fn = (t: any) => Object.keys(t.Resources).find((k) => k.startsWith("EmailHandler"))!;
+    expect(A(two).Resources[fn(A(two))].Properties.Environment.Variables.SES_ALLOWED_RECIPIENTS).toBe(`admin.ogevia@gmail.com,${EXTRA}`);
+    let t = clone(A(two)); t.Resources[fn(t)].Properties.Environment.Variables.SES_ALLOWED_RECIPIENTS = `admin.ogevia@gmail.com,${EXTRA},third@example.invalid`;
+    expect(gate([A(rec), t], [E(rec), E(two)], "recipient").status).toBe(1);        // two added addresses
+    t = clone(A(two)); t.Resources[fn(t)].Properties.Environment.Variables.SES_ALLOWED_RECIPIENTS = "*";
+    expect(gate([A(rec), t], [E(rec), E(two)], "recipient").status).toBe(1);        // a wildcard
+    t = clone(A(two)); t.Resources[fn(t)].Properties.Environment.Variables.SES_FROM = "Other <x@example.invalid>";
+    expect(gate([A(rec), t], [E(rec), E(two)], "recipient").status).toBe(1);        // another variable changed
+    t = clone(A(two)); t.Resources[fn(t)].Properties.Environment.Variables.SES_ALLOWED_RECIPIENTS = "admin.ogevia@gmail.com";
+    expect(gate([A(rec), t], [E(rec), E(two)], "recipient").status).toBe(1);        // the permission gained an ARN but the allow-list did not
+    expect(gate([A(on), A(two)], [E(on), E(two)], "recipient").status).toBe(1);     // two ARNs and one address from the stage-4 state is not this change set
   });
 });
