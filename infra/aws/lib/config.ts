@@ -113,7 +113,9 @@ export interface OgeviaEnvironmentConfig {
    */
   readonly notificationEmail?: { readonly from: string; readonly sesIdentityArn: string; readonly replyTo?: string; readonly configurationSetArn?: string; readonly configurationSet?: string;
     /** TEST safety: when present, the function sends ONLY to these addresses (also after SES leaves its sandbox). Absent = any address SES accepts. */
-    readonly allowedRecipients?: readonly string[] };
+    readonly allowedRecipients?: readonly string[];
+    /** SES sandbox only: an account in the sandbox also needs send permission on each RECIPIENT identity. These identity ARNs are added to the function's one ses:SendEmail statement (nothing else). */
+    readonly recipientIdentityArns?: readonly string[] };
   readonly auth: {
     /**
      * Existing Cognito app client the API's JWT authorizer accepts (audience).
@@ -527,6 +529,7 @@ export function notificationEmailOf(config: OgeviaEnvironmentConfig): NonNullabl
   if (!/^arn:aws:ses:[a-z0-9-]+:\d{12}:identity\/.+$/.test(n.sesIdentityArn)) throw new Error("notificationEmail.sesIdentityArn must be an SES identity ARN");
   if (n.replyTo !== undefined && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(n.replyTo)) throw new Error("notificationEmail.replyTo must be an email address");
   if (n.allowedRecipients !== undefined && (n.allowedRecipients.length === 0 || n.allowedRecipients.length > 10 || n.allowedRecipients.some((a) => !/^[^\s<>@,]+@[^\s<>@,]+\.[^\s<>@,]+$/.test(a)))) throw new Error("notificationEmail.allowedRecipients must be 1 to 10 email addresses");
+  if (n.recipientIdentityArns !== undefined && (n.recipientIdentityArns.length === 0 || n.recipientIdentityArns.length > 10 || n.recipientIdentityArns.some((a) => !/^arn:aws:ses:[a-z0-9-]+:\d{12}:identity\/[^/\s]+$/.test(a)))) throw new Error("notificationEmail.recipientIdentityArns must be 1 to 10 SES identity ARNs");
   if (n.configurationSetArn && !/^arn:aws:ses:[a-z0-9-]+:\d{12}:configuration-set\/[A-Za-z0-9_-]+$/.test(n.configurationSetArn)) throw new Error("notificationEmail.configurationSetArn must be an SES configuration-set ARN");
   return n;
 }

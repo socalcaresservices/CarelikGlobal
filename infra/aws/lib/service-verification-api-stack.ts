@@ -711,7 +711,7 @@ export class ServiceVerificationApiStack extends Stack {
       const emailPolicy = new iam.ManagedPolicy(this, "EmailPolicy", { description: "Ogevia notification email: own logs + ses:SendEmail on the one identity", roles: [emailRole] });
       emailPolicy.addStatements(
         new iam.PolicyStatement({ sid: "WriteOwnLogGroup", actions: ["logs:CreateLogStream", "logs:PutLogEvents"], resources: [emailLogGroup.logGroupArn] }),
-        new iam.PolicyStatement({ sid: "SendFromOneIdentity", actions: ["ses:SendEmail"], resources: [notificationEmail.sesIdentityArn, ...(notificationEmail.configurationSetArn ? [notificationEmail.configurationSetArn] : [])] }),
+        new iam.PolicyStatement({ sid: "SendFromOneIdentity", actions: ["ses:SendEmail"], resources: [notificationEmail.sesIdentityArn, ...(notificationEmail.recipientIdentityArns ?? []), ...(notificationEmail.configurationSetArn ? [notificationEmail.configurationSetArn] : [])] }),
       );
       emailHandler = new nodejs.NodejsFunction(this, "EmailHandler", {
         functionName: emailFunctionName(config),

@@ -16,7 +16,9 @@ const feats = { ...ENVIRONMENTS.prod.features, requestCleanup: true, offices: tr
 const base = { ...ENVIRONMENTS.prod, features: feats } as OgeviaEnvironmentConfig;
 const withEmail = { ...base, notificationEmail: { from: "Ogevia <scheduling@ogevia.com>", replyTo: "admin.ogevia@gmail.com", sesIdentityArn: ARN, allowedRecipients: ["admin.ogevia@gmail.com"] } } as OgeviaEnvironmentConfig;
 const dump = (cfg: OgeviaEnvironmentConfig) => Object.fromEntries(buildOgeviaApp(newApp(), cfg, "plan").map((p) => [p.stack.stackName.replace(/^Ogevia-prod-/, ""), Template.fromStack(p.stack).toJSON() as any]));
-const off = dump(base), on = dump(withEmail);
+const RECIPIENT_ARN = "arn:aws:ses:us-west-2:300094796789:identity/admin.ogevia@gmail.com";
+const withRecipient = { ...withEmail, notificationEmail: { ...withEmail.notificationEmail!, recipientIdentityArns: [RECIPIENT_ARN] } } as OgeviaEnvironmentConfig;
+const off = dump(base), on = dump(withEmail), rec = dump(withRecipient);
 
 function gate(api: [any, any], egress: [any, any], expect: string) {
   const dir = mkdtempSync(join(tmpdir(), "gate-email-"));
@@ -61,5 +63,20 @@ describe("diff_gate_email.py on real synthesis", () => {
     expect(fn.Properties.Environment.Variables).toEqual({ SES_FROM: "Ogevia <scheduling@ogevia.com>", SES_REPLY_TO: "admin.ogevia@gmail.com", SES_ALLOWED_RECIPIENTS: "admin.ogevia@gmail.com" });
     expect(() => buildOgeviaApp(newApp(), { ...withEmail, notificationEmail: { ...withEmail.notificationEmail!, allowedRecipients: [] } } as OgeviaEnvironmentConfig, "plan")).toThrow(/allowedRecipients/);
     expect(() => buildOgeviaApp(newApp(), { ...withEmail, notificationEmail: { ...withEmail.notificationEmail!, allowedRecipients: ["not an address"] } } as OgeviaEnvironmentConfig, "plan")).toThrow(/allowedRecipients/);
+  });
+  it("identity: exactly one SES identity ARN added to the single send statement, nothing else; any other change is refused", () => {
+    const r = gate([A(on), A(rec)], [E(on), E(rec)], "identity"); expect(r.status, r.stdout + r.stderr).toBe(0); expect(r.stdout).toContain("EXPECTED-ONLY: YES (email, identity)");
+    const send = Object.values(A(rec).Resources as Record<string, any>).flatMap((x) => (x.Type === "AWS::IAM::ManagedPolicy" ? x.Properties.PolicyDocument.Statement : [])).find((x: any) => x.Sid === "SendFromOneIdentity");
+    expect([...send.Resource].sort()).toEqual(["arn:aws:ses:us-west-2:300094796789:identity/ogevia.com", RECIPIENT_ARN].sort());
+    expect(gate([A(off), A(rec)], [E(off), E(rec)], "identity").status).toBe(1);   // adding the function itself is not this change set
+    const pol = (t: any) => Object.keys(t.Resources).find((k) => k.startsWith("EmailPolicy"))!;
+    let t = clone(A(rec)); t.Resources[pol(t)].Properties.PolicyDocument.Statement.find((x: any) => x.Sid === "SendFromOneIdentity").Resource.push("arn:aws:ses:us-west-2:300094796789:identity/other@example.com");
+    expect(gate([A(on), t], [E(on), E(rec)], "identity").status).toBe(1);             // two added
+    t = clone(A(rec)); t.Resources[pol(t)].Properties.PolicyDocument.Statement.find((x: any) => x.Sid === "SendFromOneIdentity").Resource[1] = "*";
+    expect(gate([A(on), t], [E(on), E(rec)], "identity").status).toBe(1);             // a wildcard is not an identity ARN
+    t = clone(A(rec)); t.Resources[pol(t)].Properties.PolicyDocument.Statement.push({ Sid: "Extra", Effect: "Allow", Action: "ses:*", Resource: "*" });
+    expect(gate([A(on), t], [E(on), E(rec)], "identity").status).toBe(1);             // an extra statement
+    expect(gate([A(on), A(rec)], [E(on), E(rec)], "post").status).toBe(1);
+    expect(() => buildOgeviaApp(newApp(), { ...withEmail, notificationEmail: { ...withEmail.notificationEmail!, recipientIdentityArns: ["*"] } } as OgeviaEnvironmentConfig, "plan")).toThrow(/recipientIdentityArns/);
   });
 });

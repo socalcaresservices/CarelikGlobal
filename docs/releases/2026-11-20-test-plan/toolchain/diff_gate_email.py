@@ -7,14 +7,17 @@
                      the API Handler's environment gains EXACTLY EMAIL_FUNCTION_NAME and APP_ORIGIN (code assets of Handler*/IdentityHandler* may differ).
                      NetworkEgress: ONLY the Lambda VPC endpoint policy changes, gaining EXACTLY the ARN of that one function. Nothing removed, nothing else changed.
       --expect same  (the saved rollback assembly) NO change except the code assets of the Handler*/IdentityHandler* functions; the egress stack identical.
+      --expect identity  (SES sandbox fix) the ONLY change in either stack: the email function's managed policy (Email*) gains EXACTLY ONE SES identity ARN in its single ses:SendEmail
+                     statement (SendFromOneIdentity). Nothing added, removed or otherwise changed (code assets of Handler*/IdentityHandler* may differ).
       --expect post  after deployment: NO difference at all in either stack.
 AWS::CDK::Metadata is ignored; the value of the `ogevia:deployment-status` tag is ignored. Any other difference: exit 1 and the operator STOPS. Talks to no AWS.
 """
-import argparse, json, os, sys
+import argparse, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import diff_gate_rt2 as g
 
 NAME_SUFFIX = "-NotificationEmail"
+IDENTITY_ARN = re.compile(r"^arn:aws:ses:[a-z0-9-]+:\d{12}:identity/[^/\s]+$")
 
 
 def resources(t):
@@ -73,6 +76,22 @@ def compare_api(live, new, expect):
                             n2["DependsOn"] = ldep
             if l2 == n2 and nr[k].get("Properties", {}).get("Code", {}).get("S3Bucket") == g.ASSET_BUCKET:
                 changed.append(k); continue
+        if expect == "identity" and t == "AWS::IAM::ManagedPolicy" and k.startswith("EmailPolicy"):
+            ls = lr[k]["Properties"]["PolicyDocument"]["Statement"]; ns = nr[k]["Properties"]["PolicyDocument"]["Statement"]
+            ok = len(ls) == len(ns)
+            for a, b in zip(ls, ns) if ok else []:
+                if a.get("Sid") == "SendFromOneIdentity" and b.get("Sid") == "SendFromOneIdentity":
+                    ra = a["Resource"] if isinstance(a["Resource"], list) else [a["Resource"]]; rb = b["Resource"] if isinstance(b["Resource"], list) else [b["Resource"]]
+                    gained = [x for x in rb if x not in ra]
+                    rest_a = json.loads(json.dumps(a)); rest_b = json.loads(json.dumps(b)); rest_a.pop("Resource"); rest_b.pop("Resource")
+                    ok = ok and len(rb) == len(ra) + 1 and all(x in rb for x in ra) and len(gained) == 1 and isinstance(gained[0], str) \
+                        and bool(IDENTITY_ARN.match(gained[0])) and rest_a == rest_b and a.get("Action") == "ses:SendEmail"
+                elif a != b:
+                    ok = False
+            if ok:
+                same = json.loads(json.dumps(nr[k])); same["Properties"]["PolicyDocument"]["Statement"] = ls
+                if g.norm(same) == g.norm(lr[k]):
+                    continue
         if expect == "on" and t == "AWS::IAM::ManagedPolicy" and k.startswith("HandlerPolicy") and fn_key:
             ls = lr[k]["Properties"]["PolicyDocument"]["Statement"]; ns = nr[k]["Properties"]["PolicyDocument"]["Statement"]
             extra = [s for s in ns if s not in ls]
@@ -122,7 +141,7 @@ def main():
     ap = argparse.ArgumentParser()
     for n in ("api-live", "api-new", "egress-live", "egress-new"):
         ap.add_argument("--" + n, required=True)
-    ap.add_argument("--expect", choices=["on", "same", "post"], required=True)
+    ap.add_argument("--expect", choices=["on", "same", "identity", "post"], required=True)
     a = ap.parse_args()
     try:
         al, an, el, en = g.load(a.api_live), g.load(a.api_new), g.load(a.egress_live), g.load(a.egress_new)

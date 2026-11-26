@@ -13,7 +13,7 @@ mkdir -p "$DEST"; chmod 700 "$DEST"
 copied=0; kept=0; problems=""
 for w in $WORKS; do
   [[ -d "$w" ]] || continue
-  for d in "$w"/rt2n[1-4]-2*; do
+  for d in "$w"/rt2n[1-5]-2*; do
     [[ -d "$d" && ! -L "$d" ]] || continue
     name="$(basename "$d")"
     if [[ -d "$DEST/$name" ]]; then kept=$((kept + 1)); continue; fi
@@ -30,13 +30,14 @@ done
   echo "# Ogevia TEST rollback references"; echo; echo "Generated $(date -u +%Y-%m-%dT%H:%M:%SZ) from: $WORKS. Keep this folder; it is outside /tmp so it survives a CloudShell reset."; echo
   echo "Run a rollback from a checkout of the SAME release commit (REPO, OGEVIA_RELEASE_COMMIT, WORK, OGEVIA_DEPLOY_APPROVAL as in the deploy), after copying the folder back under \$WORK. Order within a stage is in docs/release-train-2/rollback-plan.md."; echo
   echo "| Folder | Stage | Release commit | Snapshot | Size | Rollback (script modes, typed words) |"; echo "|---|---|---|---|---|---|"
-  for d in "$DEST"/rt2n[1-4]-2*; do
+  for d in "$DEST"/rt2n[1-5]-2*; do
     [[ -d "$d" ]] || continue; name="$(basename "$d")"
     case "$name" in
       rt2n1-*) st="1 notifications (in-app)"; rb='TEST_RT2_N1_NOTIFICATIONS.sh: rollback-web (ROLLBACK-TEST-WEB), rollback-routes (ROLLBACK-TEST-ROUTES), rollback-api (ROLLBACK-TEST-API); database: TEST_PENDING_LEDGER.sh rollback, reverse order';;
       rt2n2-*) st="2 open-shift texting (mock) + service location"; rb='TEST_RT2_N2_SMS_LOCATION.sh: rollback-web, rollback-routes, rollback-api, rollback-db (ROLLBACK-TEST-0118-0117)';;
       rt2n3-*) st="3 alert card, exact-shift link, migration 0120"; rb='TEST_RT2_N3_ALERT_CARD.sh: rollback-web (ROLLBACK-TEST-WEB), rollback-api (ROLLBACK-TEST-API), rollback-db (ROLLBACK-TEST-0120)';;
       rt2n4-*) st="4 email function (SES)"; rb='TEST_RT2_N4_EMAIL.sh rollback (ROLLBACK-TEST-EMAIL). Turn email OFF in the app first';;
+      rt2n5-*) st="5 SES sandbox fix (recipient identity)"; rb='TEST_RT2_N5_EMAIL_RECIPIENT_IDENTITY.sh rollback (ROLLBACK-TEST-EMAIL-IDENTITY)';;
     esac
     echo "| $name | $st | $(cat "$d/release-commit.txt" 2>/dev/null || echo unknown) | $(cat "$d/snapshot-id.txt" 2>/dev/null || echo none) | $(du -sh "$d" | cut -f1) | $rb |"
   done

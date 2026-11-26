@@ -34,3 +34,7 @@ PASS only when all of these are seen on the NEW email in `admin.ogevia@gmail.com
 
 ## Status
 Prepared and tested locally only. NOT DEPLOYED. Email acceptance: NOT VERIFIED.
+
+## Finding 2026-11-26 and stage 5 (SES sandbox)
+First real send: TEST-CG-01's email reached the function with the approved address, passed the allow-list, and SES returned `access_denied_exception` (trace: alert 05:10:21 PT, failed 05:10:22). The account is in the SES sandbox (`ProductionAccessEnabled=false`), where SES also checks send permission on the RECIPIENT identity, and the function's permission named only `ogevia.com`. The policy simulator could not confirm this per identity (inconclusive); the first real send after stage 5 will.
+Stage 5 (`TEST_RT2_N5_EMAIL_RECIPIENT_IDENTITY.sh`) adds exactly one identity ARN (`admin.ogevia@gmail.com`) to the function's single `ses:SendEmail` statement. The allow-list is unchanged. Gate: `diff_gate_email.py --expect identity`. After it deploys, create ONE new open shift inside the 48-hour window (TEST `window_hours` = 48).
