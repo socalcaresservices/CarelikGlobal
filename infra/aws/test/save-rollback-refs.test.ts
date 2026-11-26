@@ -31,9 +31,11 @@ describe("SAVE_ROLLBACK_REFS.sh", () => {
   it("refuses to go over the size limit and removes a copy that fails its checksums; the original is never touched", () => {
     const s = setup();
     try {
-      let r = run(s, { LIMIT_MB: "0" }); expect(r.status).toBe(2); expect(r.stderr).toContain("over 0 MB");
+      let r = run(s, { LIMIT_MB: "0" }); expect(r.status).toBe(2); expect(r.stderr).toContain("over the 0 MB limit"); expect(readFileSync(join(s.dest, "INDEX.md"), "utf8")).toContain("NOT SAVED");   // the index is still written
       writeFileSync(join(s.work, "rt2n3-20261125T195943Z", "SHA256SUMS"), "0".repeat(64) + "  a.txt\n");
       r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("does not match its checksums"); expect(existsSync(join(s.dest, "rt2n3-20261125T195943Z"))).toBe(false);
+      expect(existsSync(join(s.dest, "rt2n4-20261126T120746Z"))).toBe(true);                    // one bad capture does not stop the others
+      expect(readFileSync(join(s.dest, "INDEX.md"), "utf8")).toContain("checksum mismatch");
       expect(readFileSync(join(s.work, "rt2n3-20261125T195943Z", "a.txt"), "utf8")).toBe("hello");
     } finally { rmSync(s.dir, { recursive: true, force: true }); }
   });

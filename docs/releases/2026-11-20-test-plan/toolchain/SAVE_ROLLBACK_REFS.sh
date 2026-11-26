@@ -10,7 +10,7 @@ DEST="${DEST:-$HOME/ogevia-rollback-refs}"
 WORKS="${WORKS:-/tmp/rt2n2/work /tmp/rt2/work $HOME}"
 LIMIT_MB="${LIMIT_MB:-600}"
 mkdir -p "$DEST"; chmod 700 "$DEST"
-copied=0; kept=0
+copied=0; kept=0; problems=""
 for w in $WORKS; do
   [[ -d "$w" ]] || continue
   for d in "$w"/rt2n[1-4]-2*; do
@@ -18,9 +18,11 @@ for w in $WORKS; do
     name="$(basename "$d")"
     if [[ -d "$DEST/$name" ]]; then kept=$((kept + 1)); continue; fi
     size_kb="$(du -sk "$d" | cut -f1)"; used_kb="$(du -sk "$DEST" | cut -f1)"
-    if (( used_kb + size_kb > LIMIT_MB * 1024 )); then echo "STOP: copying $name would take $DEST over ${LIMIT_MB} MB. Free space first (nothing was copied for it)." >&2; exit 2; fi
-    cp -a "$d" "$DEST/$name"
-    if [[ -f "$DEST/$name/SHA256SUMS" ]]; then (cd "$DEST/$name" && sha256sum --check --quiet SHA256SUMS) || { rm -rf "$DEST/$name"; echo "STOP: the copy of $name does not match its checksums; it was removed. The original was not touched." >&2; exit 2; }; fi
+    if (( used_kb + size_kb > LIMIT_MB * 1024 )); then echo "NOT SAVED: copying $name would take $DEST over ${LIMIT_MB} MB. Free space first (nothing was copied for it)." >&2; problems="$problems$name: over the ${LIMIT_MB} MB limit"$'\n'; continue; fi
+    cp -a "$d" "$DEST/$name" || { rm -rf "$DEST/$name"; echo "NOT SAVED: could not copy $name." >&2; problems="$problems$name: copy failed"$'\n'; continue; }
+    if [[ -f "$DEST/$name/SHA256SUMS" ]] && ! (cd "$DEST/$name" && sha256sum --check --quiet SHA256SUMS) >/dev/null 2>&1; then
+      rm -rf "$DEST/$name"; echo "NOT SAVED: the copy of $name does not match its checksums (it was removed; the original was not touched)." >&2; problems="$problems$name: checksum mismatch"$'\n'; continue
+    fi
     copied=$((copied + 1)); echo "saved $name"
   done
 done
@@ -40,4 +42,8 @@ done
   done
   echo; echo "Reverse order for everything on TEST: stage 4, then 3, then 2, then 1. Within a stage the order is web, routes, api, db."
 } > "$DEST/INDEX.md"
+if [[ -n "$problems" ]]; then
+  { echo; echo "## NOT SAVED (this run)"; echo; printf '%s' "$problems" | sed 's/^/- /'; } >> "$DEST/INDEX.md"
+  echo "DONE WITH PROBLEMS: $copied new, $kept already saved. Index: $DEST/INDEX.md. Not saved:" >&2; printf '%s' "$problems" >&2; exit 2
+fi
 echo "DONE: $copied new, $kept already saved. Index: $DEST/INDEX.md"
