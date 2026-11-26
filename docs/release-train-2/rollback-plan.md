@@ -1,4 +1,30 @@
-# Release Train 2 — Rollback plan (PROPOSED)
+# Release Train 2 — Rollback plan
+
+## TEST rollouts as deployed: exact rollback commands (one place; keep this file)
+Every TEST stage was deployed by one script that saved its own rollback capture in `/tmp/rt2n2/work/rt2nN-<timestamp>` (`/tmp` is cleared when CloudShell resets). **After every deployment run `SAVE_ROLLBACK_REFS.sh`** (below): it copies the captures to `~/ogevia-rollback-refs/` and writes `INDEX.md` there.
+
+Run each rollback from a checkout of the SAME release commit, from `docs/releases/2026-11-20-test-plan/toolchain`, with the same variables as the deploy: `REPO=<checkout> OGEVIA_RELEASE_COMMIT=<sha> WORK=/tmp/rt2n2/work OGEVIA_DEPLOY_APPROVAL=<reference> bash <script> <mode>`. If `/tmp` was cleared, copy the saved folder back first: `cp -r ~/ogevia-rollback-refs/<folder> /tmp/rt2n2/work/`. Each mode asks you to type its word. All refuse any AWS account other than 300094796789. None touches sign-in or production.
+
+| Stage | Deployed commit | Script | Modes in order (typed word) | Capture folder | Snapshot |
+|---|---|---|---|---|---|
+| 1 notifications (in-app) | b0848ede | `TEST_RT2_N1_NOTIFICATIONS.sh` | `rollback-web` (ROLLBACK-TEST-WEB), `rollback-routes` (ROLLBACK-TEST-ROUTES), `rollback-api` (ROLLBACK-TEST-API); database separately: `TEST_PENDING_LEDGER.sh rollback 0116 … 0113`, reverse order | `/tmp/rt2/work/rt2n1-20261123T201506Z` | `ogevia-test-rt2-pre-0113` |
+| 2 open-shift texting (mock) + service location | 9b2fdef8 (app code = 88c104b2) | `TEST_RT2_N2_SMS_LOCATION.sh` | `rollback-web`, `rollback-routes` (ROLLBACK-TEST-ROUTES), `rollback-api`, `rollback-db` (ROLLBACK-TEST-0118-0117). Also 0119: `TEST_PENDING_LEDGER.sh rollback 0119` first | `~/rt2n2-20261124T031440Z` (also `/tmp/rt2n2/work/rt2n2-20261124T031440Z`) | `ogevia-test-rt2-n2-20261124t030750z` |
+| 3 alert card, exact-shift link, migration 0120 | 620ccf35 | `TEST_RT2_N3_ALERT_CARD.sh` | `rollback-web` (ROLLBACK-TEST-WEB), `rollback-api` (ROLLBACK-TEST-API), `rollback-db` (ROLLBACK-TEST-0120). No routes rollback: no route changed | `/tmp/rt2n2/work/rt2n3-20261125T195943Z` | `ogevia-test-rt2-n3-20261125t200140z` |
+| 4 email function (SES) | 0c85c5fe | `TEST_RT2_N4_EMAIL.sh` | `rollback` (ROLLBACK-TEST-EMAIL). Turn email OFF in the app first | `/tmp/rt2n2/work/rt2n4-20261126T120746Z` | none (no database change) |
+
+**Order for everything on TEST:** stage 4, then 3, then 2, then 1. Within a stage the order is the order in the table (web, routes, api, db).
+
+**What each one reverts and what it cannot:** web restores the captured site files (nothing deleted); routes redeploys the saved assembly without that stage's routes; api puts the captured Handler code back (code only: the stack template then differs from the live function until the next deploy); db removes that stage's migration(s) in one transaction (texting tables are dropped by 0117's rollback: the snapshot is the restore point); email removes the function, role, policy, log group, the API invoke permission and variables, and the one endpoint-policy entry (the SES identities stay). Emails already sent and audit events cannot be undone.
+
+**Verified:** each script's rollback modes are exercised by stand-in tests (`infra/aws/test/test-rt2-n*.test.ts`) and the database rollbacks by database tests. **Not verified:** no rollback has been run against real AWS.
+
+### Keep the captures (so they cannot be lost)
+```bash
+bash SAVE_ROLLBACK_REFS.sh        # from the toolchain folder; no AWS; copies to ~/ogevia-rollback-refs and writes INDEX.md
+```
+CloudShell's home folder survives a session reset but is limited (about 1 GB) and is deleted after a long period of inactivity. Also download `~/ogevia-rollback-refs` to your own computer (CloudShell, Actions, Download file; zip it first with `cd ~ && zip -r ogevia-rollback-refs.zip ogevia-rollback-refs`). The captures hold live site files, Lambda code, CloudFormation templates and ids; they hold no passwords. Do not commit them to Git.
+
+## Earlier plan (layer by layer)
 
 Principle: every capability is behind a switch, so the **first rollback is always to turn the switch off** (a routes-only change set; the routes disappear and the web hides the controls). Data rollback is separate, needs a snapshot and the owner's approval, and is rarely needed.
 
