@@ -34,3 +34,23 @@ TEST has no email sender. It passes only when a NEWLY generated TEST open-shift 
 
 ### The earlier email
 `CHECK_EMAIL_EVER.sql` shows whether the app ever sent one (counts only). The Demo Today A alert's delivery was `queued`, never `sent`, and the stage scripts assert that no email function exists. So an app-sent open-shift email cannot have been delivered by TEST. Messages that did arrive are most likely sign-in emails (invitation, temporary password, reset code) sent by the sign-in service. Confirm from the message itself: sender address, subject, time, and (Show original) the `Received`/`Message-ID` lines.
+
+## Result: TEST phone pass, 2026-11-25/26 (stage 3 deployed at 620ccf358dfc73b9e677da6887e6ee6a95b00a00)
+Deployed to TEST only; ledger 0120; Handler code only (296 routes, unchanged); web serves the commit. Snapshot `ogevia-test-rt2-n3-20261125t200140z`; rollback reference `/tmp/rt2n2/work/rt2n3-20261125T195943Z`.
+
+| Step | Result | Evidence |
+|---|---|---|
+| Alert opens the exact shift (`?shift=`), shown first with a label | PASS | owner screenshot |
+| Request, then "Requested — waiting for the office" + Withdraw; office shown on the shift page | PASS | owner screenshot |
+| Office card: shift start in PT, request time in PT, earliest eligible marked (one requester) | PASS | owner screenshot |
+| Two caregivers in request order, office confirms one | PASS | owner report ("pass all"), no screenshot received |
+| Chosen caregiver card "You are confirmed"; other "Filled" | PASS | owner report, no screenshot received |
+| Signed-out caregiver opens the alert, signs in, returns to the exact shift | PASS | owner report, no screenshot received |
+| Older alert still opens | PASS | owner report, no screenshot received |
+| Phone layout, tap targets, no client name or address in the alert | PASS | owner report, no screenshot received |
+
+Recorded as owner-confirmed. The last five rows have no screenshots in this repository; attach them if the evidence trail matters.
+
+## Still NOT VERIFIED
+- Email: TEST has no sender. Passes only when a newly generated TEST open-shift email arrives and its link opens the exact shift after sign-in. Needs owner approval for a sender.
+- Production: not deployed and not approved.
