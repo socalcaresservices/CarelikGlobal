@@ -354,20 +354,20 @@ function punchFields(body: Record<string, unknown>) {
 /** 0124 reports: the database function, its filters and the CSV columns (the same columns the screen shows; nothing sensitive exists in a row to omit). */
 const VERIFICATION_REPORTS = {
   visit_exceptions: {
-    sql: "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8)",
-    params: (org: string, c: unknown[], status: string | null, query: Record<string, string | undefined>) => [org, status, query.kind ?? null, c[0], c[1], c[2], c[3], c[4]],
+    sql: "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+    params: (org: string, c: unknown[], status: string | null, query: Record<string, string | undefined>) => [org, status, query.kind ?? null, c[0], c[1], c[2], c[3], c[4], c[5]],
     columns: [["Opened", "openedAt"], ["Age (hours)", "ageHours"], ["Kind", "kind"], ["Status", "status"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"],
       ["Scheduled start", "scheduledStart"], ["Scheduled end", "scheduledEnd"], ["Actual in", "actualTimeIn"], ["Actual out", "actualTimeOut"], ["Reviewer", "reviewerName"], ["Resolved", "resolvedAt"], ["Resolution", "resolution"]],
   },
   unsigned_checkouts: {
-    sql: "select * from ogevia_api.list_unsigned_checkouts($1,$2,$3,$4,$5,$6,$7)",
-    params: (org: string, c: unknown[], _s: string | null, query: Record<string, string | undefined>) => [org, c[0], c[1], c[2], c[3], c[4], query.includeResolved === "true"],
+    sql: "select * from ogevia_api.list_unsigned_checkouts($1,$2,$3,$4,$5,$6,$7,$8)",
+    params: (org: string, c: unknown[], _s: string | null, query: Record<string, string | undefined>) => [org, c[0], c[1], c[2], c[3], c[4], query.includeResolved === "true", c[5]],
     columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Checked out", "checkoutAt"], ["Pending since", "pendingSince"],
       ["Pending (hours)", "pendingHours"], ["State", "state"], ["Reason", "reason"], ["Direct signing required", "directRequired"], ["Last request", "lastRequestAt"], ["Last delivery", "lastDelivery"], ["Owner", "ownerName"], ["Resolved", "resolvedAt"]],
   },
   time_signature_register: {
-    sql: "select * from ogevia_api.list_time_signature_register($1,$2,$3,$4,$5,$6,$7)",
-    params: (org: string, c: unknown[], status: string | null) => [org, c[0], c[1], c[2], c[3], c[4], status],
+    sql: "select * from ogevia_api.list_time_signature_register($1,$2,$3,$4,$5,$6,$7,$8)",
+    params: (org: string, c: unknown[], status: string | null) => [org, c[0], c[1], c[2], c[3], c[4], status, c[5]],
     columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Scheduled start", "scheduledStart"], ["Scheduled end", "scheduledEnd"],
       ["Actual in", "actualTimeIn"], ["Actual out", "actualTimeOut"], ["Punch in", "punchInMethod"], ["Punch out", "punchOutMethod"], ["Expected start", "expectedStart"], ["Expected end", "expectedEnd"],
       ["Location in", "locationIn"], ["Location out", "locationOut"], ["Signature", "signatureStatus"], ["Signature method", "signatureMethod"], ["Signed", "signedAt"], ["Visit status", "visitStatus"]],
@@ -378,14 +378,14 @@ const VERIFICATION_REPORTS = {
     columns: [["When", "occurredAt"], ["Kind", "kind"], ["Subject", "subject"], ["Original", "original"], ["Revised", "revised"], ["Requester", "requester"], ["Approver", "approver"], ["Reason", "reason"], ["Re-sign required", "needsResigning"], ["Location decision", "locationDecision"]],
   },
   billing_review: {
-    sql: "select * from ogevia_api.list_punch_billing_review($1,$2,$3,$4,$5,$6)",
-    params: (org: string, c: unknown[]) => [org, c[0], c[1], c[2], c[3], c[4]],
+    sql: "select * from ogevia_api.list_punch_billing_review($1,$2,$3,$4,$5,$6,$7)",
+    params: (org: string, c: unknown[]) => [org, c[0], c[1], c[2], c[3], c[4], c[5]],
     columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Recorded (min)", "recordedMinutes"], ["Reviewed (min)", "reviewedMinutes"],
       ["Billable (min)", "billableMinutes"], ["Open exceptions", "openExceptions"], ["Signature", "signatureStatus"], ["Billing hold", "billingHold"], ["Hold reasons", "holdReasons"]],
   },
   label_inventory: {
-    sql: "select * from ogevia_api.list_home_labels($1,$2,$3,1000)",
-    params: (org: string, c: unknown[], status: string | null) => [org, status, c[3]],
+    sql: "select * from ogevia_api.list_home_labels($1,$2,$3,1000,$4)",
+    params: (org: string, c: unknown[], status: string | null) => [org, status, c[3], c[5]],
     columns: [["Sticker ID", "labelCode"], ["Status", "status"], ["Client code", "clientCode"], ["Location", "locationName"], ["City", "locationCity"], ["Installed", "installedAt"], ["Ended", "endedAt"],
       ["Replaced by", "replacedByCode"], ["Last used", "lastUsedAt"], ["Registered", "createdAt"]],
   },
@@ -4581,7 +4581,7 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const query = q(event);
       const status = query.status ? oneOf(query.status, "status", ["unassigned", "active", "disabled", "replaced"] as const) : null;
-      return { labels: await tx((db) => rows(db, "select * from ogevia_api.list_home_labels($1,$2,$3)", [orgParam(event), status, optionalUuid(query.clientId, "clientId")])) };
+      return { labels: await tx((db) => rows(db, "select * from ogevia_api.list_home_labels($1,$2,$3,200,$4)", [orgParam(event), status, optionalUuid(query.clientId, "clientId"), optionalUuid(query.officeId, "officeId")])) };
     },
   },
 
@@ -4791,10 +4791,10 @@ export const ROUTES: Record<string, Route> = {
     mutating: false,
     handle: async ({ event, tx }) => {
       const query = q(event);
-      return { exceptions: await tx((db) => rows(db, "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8)", [orgParam(event),
+      return { exceptions: await tx((db) => rows(db, "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8,$9)", [orgParam(event),
         query.status ? oneOf(query.status, "status", ["open", "in_review", "resolved", "dismissed"] as const) : null,
         query.kind ? oneOf(query.kind, "kind", ["missing_punch", "failed_punch", "overdue_clock_out", "location_issue", "overlap", "disputed_signature", "correction_request"] as const) : null,
-        optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId")])) };
+        optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId"), optionalUuid(query.officeId, "officeId")])) };
     },
   },
 
@@ -4843,7 +4843,7 @@ export const ROUTES: Record<string, Route> = {
       const report = oneOf(p(event).report, "report", Object.keys(VERIFICATION_REPORTS) as Array<keyof typeof VERIFICATION_REPORTS>);
       const query = q(event);
       const org = orgParam(event);
-      const common = [optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId")];
+      const common = [optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId"), optionalUuid(query.officeId, "officeId")];
       const def = VERIFICATION_REPORTS[report];
       const status = query.status ? oneOf(query.status, "status", ["open", "in_review", "resolved", "dismissed", "draft", "awaiting_signature", "signed", "administrator_review", "unassigned", "active", "disabled", "replaced"] as const) : null;
       const data = await tx((db) => rows(db, def.sql, def.params(org, common, status, query)));

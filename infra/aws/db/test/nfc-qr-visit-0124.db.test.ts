@@ -66,6 +66,8 @@ const sign = async (visit: string) => { const ev = await api.registerEvidence(db
 beforeAll(async () => {
   db = await createTestDb({ includeLiveTest: true });
   w = await seedWorld(db, 1400);
+  // the office filter on the reports needs offices (0110) and office assignments (0111), which production already has
+  for (const f of ["0110_offices.sql", "0111_office_assignments_counties_colors.sql"]) await run(new URL(`../pending/migrations/${f}`, import.meta.url));
   await run(UP);
 }, 180_000);
 afterAll(async () => db?.drop());
@@ -516,6 +518,23 @@ describe("0124 corrections, exceptions and reports", () => {
     expect(audit.some((a: any) => a.kind === "time_correction")).toBe(true);
     expect(audit.some((a: any) => a.kind === "label_change")).toBe(true);
     await expectPgError(call(w.managerA, "select ogevia_api.decide_punch_correction($1,$2,true,'again please')", [w.orgA, req]), "OGC09");
+    await retire(w.caregiverA1, x.client);
+  });
+  it("every report can be limited to one office (the client's primary office)", async () => {
+    const x = await checkedOut();
+    await call(w.caregiverA1, "select ogevia_api.defer_visit_signature($1,'signing_later')", [x.visit]);
+    const east = (await call(w.ownerA, "select ogevia_api.create_office($1,'East Office',null) as id", [w.orgA]))[0].id;
+    const west = (await call(w.ownerA, "select ogevia_api.create_office($1,'West Office',null) as id", [w.orgA]))[0].id;
+    await call(w.managerA, "select ogevia_api.set_client_office($1,$2,$3)", [w.orgA, x.client, east]);
+    const has = (rows: any[]) => rows.some((r) => r.visit_id === x.visit);
+    expect(has(await call(w.managerA, "select * from ogevia_api.list_unsigned_checkouts($1,null,null,null,null,null,false,$2)", [w.orgA, east]))).toBe(true);
+    expect(has(await call(w.managerA, "select * from ogevia_api.list_unsigned_checkouts($1,null,null,null,null,null,false,$2)", [w.orgA, west]))).toBe(false);
+    expect(has(await call(w.managerA, "select * from ogevia_api.list_time_signature_register($1,null,null,null,null,null,null,$2)", [w.orgA, east]))).toBe(true);
+    expect(has(await call(w.managerA, "select * from ogevia_api.list_time_signature_register($1,null,null,null,null,null,null,$2)", [w.orgA, west]))).toBe(false);
+    expect(has(await call(w.ownerA, "select * from ogevia_api.list_punch_billing_review($1,null,null,null,null,null,$2)", [w.orgA, east]))).toBe(true);
+    expect(has(await call(w.ownerA, "select * from ogevia_api.list_punch_billing_review($1,null,null,null,null,null,$2)", [w.orgA, west]))).toBe(false);
+    const ex = await call(w.managerA, "select * from ogevia_api.list_visit_exceptions($1,null,null,null,null,null,null,null,$2)", [w.orgA, west]);
+    expect(ex.some((e: any) => e.visit_id === x.visit)).toBe(false);
     await retire(w.caregiverA1, x.client);
   });
   it("overdue open visits and shifts with no punch are flagged without touching the actual or scheduled times; exceptions are reviewed with a history", async () => {

@@ -357,6 +357,14 @@ language sql stable security definer set search_path = ogevia, pg_temp as $$
 $$;
 revoke all on function ogevia.vv_expected_kinds(uuid, uuid, uuid) from public;
 
+-- The office a client belongs to (primary office assignment, else the client's responsible office). Needs offices (0110) and office assignments (0111), which production already has.
+create function ogevia.vv_client_office(p_client_id uuid)
+returns uuid language sql stable security definer set search_path = ogevia, pg_temp as $$
+  select coalesce((select oa.office_id from ogevia.office_assignments oa where oa.client_id = p_client_id and oa.is_primary limit 1),
+                  (select c.responsible_office_id from ogevia.clients c where c.id = p_client_id));
+$$;
+revoke all on function ogevia.vv_client_office(uuid) from public;
+
 create function ogevia.vv_open_exception(p_org uuid, p_kind text, p_dedupe text, p_visit uuid, p_shift uuid, p_caregiver uuid, p_client uuid, p_punch uuid, p_detail jsonb)
 returns uuid language plpgsql security definer set search_path = ogevia, pg_temp as $$
 declare v_id uuid;
@@ -713,7 +721,7 @@ end;
 $$;
 
 -- Inventory (also the "Home label inventory" report). Client names never appear; the location is named by the client's Ogevia code.
-create function ogevia_api.list_home_labels(p_organization_id uuid, p_status text default null, p_client_id uuid default null, p_limit integer default 200)
+create function ogevia_api.list_home_labels(p_organization_id uuid, p_status text default null, p_client_id uuid default null, p_limit integer default 200, p_office_id uuid default null)
 returns table (label_id uuid, label_code text, status text, batch_id uuid, client_code text, location_name text, location_city text, installed_at timestamptz, ended_at timestamptz,
                replaced_by_code text, last_used_at timestamptz, created_at timestamptz, location_needs_attention boolean)
 language plpgsql stable security definer set search_path = ogevia, pg_temp as $$
@@ -731,6 +739,7 @@ begin
     left join ogevia.clients c on c.id = h.client_id
     left join ogevia.home_labels r on r.id = h.replaced_by_label_id
    where h.organization_id = p_organization_id and (p_status is null or h.status = p_status) and (p_client_id is null or h.client_id = p_client_id)
+     and (p_office_id is null or ogevia.vv_client_office(h.client_id) = p_office_id)
    order by h.created_at desc, h.label_code
    limit greatest(1, least(coalesce(p_limit, 200), 1000));
 end;
@@ -1173,7 +1182,7 @@ end;
 $$;
 
 create function ogevia_api.list_visit_exceptions(p_organization_id uuid, p_status text default null, p_kind text default null, p_from date default null, p_to date default null,
-  p_caregiver_user_id uuid default null, p_client_id uuid default null, p_service_id uuid default null)
+  p_caregiver_user_id uuid default null, p_client_id uuid default null, p_service_id uuid default null, p_office_id uuid default null)
 returns table (exception_id uuid, kind text, status text, opened_at timestamptz, age_hours integer, visit_id uuid, shift_id uuid, caregiver_name text, client_code text, service_name text,
                scheduled_start timestamptz, scheduled_end timestamptz, actual_time_in timestamptz, actual_time_out timestamptz, detail jsonb, reviewer_name text, resolved_at timestamptz, resolution text)
 language plpgsql security definer set search_path = ogevia, pg_temp as $$
@@ -1199,6 +1208,7 @@ begin
      and (p_caregiver_user_id is null or e.caregiver_user_id = p_caregiver_user_id)
      and (p_client_id is null or coalesce(e.client_id, v.client_id) = p_client_id)
      and (p_service_id is null or coalesce(v.service_id, s.service_id) = p_service_id)
+     and (p_office_id is null or ogevia.vv_client_office(coalesce(e.client_id, v.client_id)) = p_office_id)
    order by e.opened_at desc limit 500;
 end;
 $$;
@@ -1314,7 +1324,7 @@ $$;
 -- Reports (existing filters; staff only; no signature images, no precise GPS, no signing links in any column)
 -- ---------------------------------------------------------------------------
 create function ogevia_api.list_unsigned_checkouts(p_organization_id uuid, p_from date default null, p_to date default null, p_caregiver_user_id uuid default null,
-  p_client_id uuid default null, p_service_id uuid default null, p_include_resolved boolean default false)
+  p_client_id uuid default null, p_service_id uuid default null, p_include_resolved boolean default false, p_office_id uuid default null)
 returns table (visit_id uuid, visit_number text, service_date date, caregiver_name text, client_code text, service_name text, checkout_at timestamptz, pending_since timestamptz, pending_hours integer,
                state text, reason text, direct_required boolean, last_request_at timestamptz, last_delivery text, owner_name text, resolved_at timestamptz, resolution text)
 language plpgsql security definer set search_path = ogevia, pg_temp as $$
@@ -1338,12 +1348,13 @@ begin
      and (f.id is not null or v.status = 'awaiting_signature')
      and (p_from is null or v.service_date >= p_from) and (p_to is null or v.service_date <= p_to)
      and (p_caregiver_user_id is null or v.caregiver_user_id = p_caregiver_user_id) and (p_client_id is null or v.client_id = p_client_id) and (p_service_id is null or v.service_id = p_service_id)
+     and (p_office_id is null or ogevia.vv_client_office(v.client_id) = p_office_id)
    order by coalesce(f.opened_at, v.time_out) limit 1000;
 end;
 $$;
 
 create function ogevia_api.list_time_signature_register(p_organization_id uuid, p_from date default null, p_to date default null, p_caregiver_user_id uuid default null,
-  p_client_id uuid default null, p_service_id uuid default null, p_status text default null)
+  p_client_id uuid default null, p_service_id uuid default null, p_status text default null, p_office_id uuid default null)
 returns table (visit_id uuid, visit_number text, service_date date, caregiver_name text, client_code text, service_name text, scheduled_start timestamptz, scheduled_end timestamptz,
                actual_time_in timestamptz, actual_time_out timestamptz, punch_in_method text, punch_out_method text, expected_start text, expected_end text,
                location_in text, location_out text, signature_status text, signature_method text, signed_at timestamptz, visit_status text)
@@ -1379,6 +1390,7 @@ begin
      and (p_from is null or v.service_date >= p_from) and (p_to is null or v.service_date <= p_to)
      and (p_caregiver_user_id is null or v.caregiver_user_id = p_caregiver_user_id) and (p_client_id is null or v.client_id = p_client_id) and (p_service_id is null or v.service_id = p_service_id)
      and (p_status is null or v.status::text = p_status)
+     and (p_office_id is null or ogevia.vv_client_office(v.client_id) = p_office_id)
    order by v.service_date desc, v.time_in desc limit 1000;
 end;
 $$;
@@ -1412,7 +1424,7 @@ end;
 $$;
 
 create function ogevia_api.list_punch_billing_review(p_organization_id uuid, p_from date default null, p_to date default null, p_caregiver_user_id uuid default null,
-  p_client_id uuid default null, p_service_id uuid default null)
+  p_client_id uuid default null, p_service_id uuid default null, p_office_id uuid default null)
 returns table (visit_id uuid, visit_number text, service_date date, caregiver_name text, client_code text, service_name text, recorded_minutes integer, reviewed_minutes integer, billable_minutes integer,
                open_exceptions integer, signature_status text, billing_hold boolean, hold_reasons text[])
 language plpgsql security definer set search_path = ogevia, pg_temp as $$
@@ -1437,6 +1449,7 @@ begin
        where v.organization_id = p_organization_id and v.status not in ('voided', 'corrected', 'draft')
          and (p_from is null or v.service_date >= p_from) and (p_to is null or v.service_date <= p_to)
          and (p_caregiver_user_id is null or v.caregiver_user_id = p_caregiver_user_id) and (p_client_id is null or v.client_id = p_client_id) and (p_service_id is null or v.service_id = p_service_id)
+         and (p_office_id is null or ogevia.vv_client_office(v.client_id) = p_office_id)
     ) t order by t.service_date desc, t.visit_number limit 1000;
 end;
 $$;
@@ -1484,7 +1497,7 @@ begin
     'deactivate_home_label(uuid,uuid,text)',
     'replace_home_label(uuid,uuid,text,text)',
     'get_home_label_link(uuid,uuid)',
-    'list_home_labels(uuid,text,uuid,integer)',
+    'list_home_labels(uuid,text,uuid,integer,uuid)',
     'list_home_label_history(uuid,uuid)',
     'preview_home_label(text)',
     'record_punch(text,uuid,text,uuid,uuid,numeric,numeric,integer,uuid,boolean)',
@@ -1495,15 +1508,15 @@ begin
     'set_signature_followup_owner(uuid,uuid,uuid,boolean)',
     'log_signature_delivery(uuid,uuid,text,uuid,text,text)',
     'flag_overdue_visits(uuid)',
-    'list_visit_exceptions(uuid,text,text,date,date,uuid,uuid,uuid)',
+    'list_visit_exceptions(uuid,text,text,date,date,uuid,uuid,uuid,uuid)',
     'resolve_visit_exception(uuid,uuid,text,text)',
     'list_visit_exception_history(uuid,uuid)',
     'request_punch_correction(uuid,text,text,timestamptz,timestamptz)',
     'decide_punch_correction(uuid,uuid,boolean,text,text,uuid)',
-    'list_unsigned_checkouts(uuid,date,date,uuid,uuid,uuid,boolean)',
-    'list_time_signature_register(uuid,date,date,uuid,uuid,uuid,text)',
+    'list_unsigned_checkouts(uuid,date,date,uuid,uuid,uuid,boolean,uuid)',
+    'list_time_signature_register(uuid,date,date,uuid,uuid,uuid,text,uuid)',
     'list_corrections_audit(uuid,date,date)',
-    'list_punch_billing_review(uuid,date,date,uuid,uuid,uuid)',
+    'list_punch_billing_review(uuid,date,date,uuid,uuid,uuid,uuid)',
     'authorize_verification_export(uuid,text,integer)',
     'resolve_home_label_code(uuid,text)'
   ] loop

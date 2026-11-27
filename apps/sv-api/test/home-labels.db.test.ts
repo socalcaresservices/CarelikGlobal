@@ -18,7 +18,7 @@ beforeAll(async () => {
   db = await createTestDb({ includeLiveTest: true });
   w = await seedWorld(db, 1400);
   const c = await db.admin.connect();
-  try { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0124_nfc_qr_visit_verification.sql", import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } finally { c.release(); }
+  try { for (const f of ["0110_offices.sql", "0111_office_assignments_counties_colors.sql", "0124_nfc_qr_visit_verification.sql"]) { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL(`../../../infra/aws/db/pending/migrations/${f}`, import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } } finally { c.release(); }
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence: store, identity: new MemoryIdentityAdmin(), log: (r) => logs.push(JSON.stringify(r)) });
 }, 180_000);
 afterAll(async () => { vi.unstubAllEnvs(); await db?.drop(); });

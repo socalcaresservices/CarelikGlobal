@@ -119,3 +119,12 @@ The sweep and the null-safety review found two real defects in the first draft, 
 2. Snapshot, then apply 0124 to TEST through the ledgered runner (`BACKUP REQUIRED` rollback).
 3. Turn `features.homeLabels` on for TEST only; run the TEST acceptance table with real phones; record results here.
 4. Production only after the release checklist (`docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`) and the owner's GO.
+
+## 9. Release 2 integration (2026-11-27)
+This branch now contains PR #124 (merged in, so it carries #124's own migrations 0113-0123) plus the NFC/QR work and the directive items below. PR #124 is untouched and can merge on its own first; this branch then shrinks to its own changes.
+* **Renumbered:** NFC/QR migration 0120 -> **0124** (0120-0123 belong to #124). Files, tests and docs renamed; behavior unchanged.
+* **0125 Authorization Worklist** (new, pending, switch `authorizationWorklist` OFF): `GET /v1/authorization-worklist`; page `/authorizations/worklist` with dashboard, hours totals, by-office table, filters (month, status, client, office, program, dates, "expiring within N days"), CSV, Excel, Print.
+* **Exports everywhere it was missing:** one helper (`report-export.ts`, `export-menu.tsx`): CSV, Excel and Print on Caregiver readiness (Care Team), Documents, Caregiver holds, the Authorization Worklist and all NFC/QR verification reports; the rows exported are the rows on screen, in screen order, formula-safe.
+* **Office filter** on all six NFC/QR reports (needs 0110/0111, which production already has).
+* **Compliance package:** `docs/compliance/` (retention policy draft with blank periods, security, HIPAA and BAA readiness checklists).
+* Existing in #124 and not rebuilt: readiness dashboard, CPR/TB and document tracking, holds, admin-approved exceptions with revoke/audit, notifications, invitations, offices, open-shift workflow, service-location/county.

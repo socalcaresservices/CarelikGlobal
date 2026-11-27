@@ -10,6 +10,7 @@ import { useAwsApi } from "./aws-workspace";
 import { LabelInventory } from "./home-labels-panel";
 import { useHomeLabelsAvailable } from "./home-labels-data";
 import { exportRows } from "./report-export";
+import { useOffices } from "./offices-data";
 
 type Row = Record<string, unknown>;
 interface ReportDef { key: string; title: string; hint: string; columns: Array<[string, string]>; statuses?: Array<[string, string]> }
@@ -68,8 +69,10 @@ function ReportTable({ def }: { def: ReportDef }) {
   const { activeOrganizationId, hasPermission } = useOrganization();
   const [from, setFrom] = useState(""); const [to, setTo] = useState(""); const [status, setStatus] = useState(def.key === "visit_exceptions" ? "open" : "");
   const [includeResolved, setIncludeResolved] = useState(false);
+  const [office, setOffice] = useState("");
+  const { offices, available: officesOn } = useOffices();
   const [note, setNote] = useState<string | null>(null);
-  const query = { organizationId: activeOrganizationId, from: from || null, to: to || null, status: status || null, ...(def.key === "unsigned_checkouts" && includeResolved ? { includeResolved: "true" } : {}) };
+  const query = { organizationId: activeOrganizationId, from: from || null, to: to || null, status: status || null, officeId: office || null, ...(def.key === "unsigned_checkouts" && includeResolved ? { includeResolved: "true" } : {}) };
   const data = useQuery({ queryKey: ["verification-report", def.key, query], retry: false, enabled: !!activeOrganizationId,
     queryFn: async () => (await api.get<{ rows: Row[] }>(`/v1/verification-reports/${def.key}`, query)).rows });
   const refresh = () => { void cache.invalidateQueries({ queryKey: ["verification-report", def.key] }); };
@@ -86,6 +89,7 @@ function ReportTable({ def }: { def: ReportDef }) {
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm font-medium">From<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={input} /></label>
         <label className="text-sm font-medium">To<input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={input} /></label>
+        {officesOn ? <label className="text-sm font-medium">Office<select value={office} onChange={(e) => setOffice(e.target.value)} className={input}><option value="">All offices</option>{offices.filter((o) => o.isActive).map((o) => <option key={o.officeId} value={o.officeId}>{o.name}</option>)}</select></label> : null}
         {def.statuses ? <label className="text-sm font-medium">Status<select value={status} onChange={(e) => setStatus(e.target.value)} className={input}><option value="">All</option>{def.statuses.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label> : null}
         {def.key === "unsigned_checkouts" ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeResolved} onChange={(e) => setIncludeResolved(e.target.checked)} className="h-5 w-5" />Show cleared</label> : null}
         {hasPermission("reports.export") ? <>

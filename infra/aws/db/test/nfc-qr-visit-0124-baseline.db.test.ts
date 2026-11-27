@@ -14,7 +14,7 @@ beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 1400);
   const c = await db.admin.connect();
-  try { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL("../pending/migrations/0124_nfc_qr_visit_verification.sql", import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } finally { c.release(); }
+  try { for (const f of ["0110_offices.sql", "0111_office_assignments_counties_colors.sql", "0124_nfc_qr_visit_verification.sql"]) { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL(`../pending/migrations/${f}`, import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } } finally { c.release(); }
 }, 180_000);
 afterAll(async () => db?.drop());
 
