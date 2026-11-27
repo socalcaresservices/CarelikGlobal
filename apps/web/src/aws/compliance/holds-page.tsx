@@ -156,6 +156,8 @@ function HoldCard({ h }: { h: ComplianceHold }) {
 }
 
 /** Action needed destination for caregivers on a compliance hold: the reason, the shifts to cover and any visit in progress. */
+import { ExportMenu } from "../export-menu";
+
 export function ComplianceHoldsPage() {
   const q = useComplianceHolds();
   const api = useAwsApi();
@@ -193,6 +195,8 @@ export function ComplianceHoldsPage() {
         ) : (
           <>
             <p className="text-sm text-slate-800">{q.data.totals.holds} on hold · {q.data.totals.affectedShifts} shift{q.data.totals.affectedShifts === 1 ? "" : "s"} to cover · {q.data.totals.inProgressVisits} visit{q.data.totals.inProgressVisits === 1 ? "" : "s"} in progress</p>
+            <ExportMenu basename="caregiver-holds" sheet="Caregiver holds" rows={q.data.holds.map((h) => ({ caregiver: h.caregiverName, code: h.caregiverCode, opened: h.openedAt, how: h.automatic ? "Automatic" : "Manual", reasons: h.reasons.map((r) => r.message).join("; "), shifts: h.affectedShifts.length, assignments: h.affectedAssignments.length, visits: h.inProgressVisits.length }))}
+              columns={[["Caregiver", "caregiver"], ["Code", "code"], ["Hold opened", "opened"], ["Opened", "how"], ["Reasons", "reasons"], ["Shifts to cover", "shifts"], ["Assignments affected", "assignments"], ["Visits in progress", "visits"]]} />
             {q.data.holds.map((h) => <HoldCard key={h.holdId} h={h} />)}
             <ShiftRisks risks={q.data.shiftsAtRisk ?? []} />
           </>

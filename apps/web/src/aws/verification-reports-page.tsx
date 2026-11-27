@@ -9,6 +9,7 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
 import { LabelInventory } from "./home-labels-panel";
 import { useHomeLabelsAvailable } from "./home-labels-data";
+import { exportRows } from "./report-export";
 
 type Row = Record<string, unknown>;
 interface ReportDef { key: string; title: string; hint: string; columns: Array<[string, string]>; statuses?: Array<[string, string]> }
@@ -87,7 +88,10 @@ function ReportTable({ def }: { def: ReportDef }) {
         <label className="text-sm font-medium">To<input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={input} /></label>
         {def.statuses ? <label className="text-sm font-medium">Status<select value={status} onChange={(e) => setStatus(e.target.value)} className={input}><option value="">All</option>{def.statuses.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label> : null}
         {def.key === "unsigned_checkouts" ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeResolved} onChange={(e) => setIncludeResolved(e.target.checked)} className="h-5 w-5" />Show cleared</label> : null}
-        {hasPermission("reports.export") ? <Button type="button" onClick={() => void csv()}>Download CSV</Button> : null}
+        {hasPermission("reports.export") ? <>
+          <Button type="button" onClick={() => void csv()}>Download CSV</Button>
+          <Button type="button" onClick={() => exportRows("xlsx", def.key.replace(/_/g, "-"), def.title.slice(0, 31), def.columns.map(([h, k]) => [h, k, (v: unknown) => show(k, v)] as const), rows)}>Download Excel</Button>
+          <Button type="button" onClick={() => window.print()}>Print</Button></> : null}
       </div>
       {note ? <p role="alert" className="text-sm text-red-700">{note}</p> : null}
       {data.isPending ? <p>Loading…</p> : null}

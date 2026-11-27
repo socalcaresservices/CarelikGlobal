@@ -29,6 +29,7 @@ import { ColorSwatch } from "./caregiver-color";
 import { AssignmentHistory, CaregiverColorControl, CaregiverServiceCountiesControl, NewRecordOffice, OfficeAssignmentsControl, OfficeCountyFilters, OfficeNames } from "./office-assignments";
 import { EditableRow, ProfileBlock, ProfileRow, ProfileTabs, StatusChip, rowButton, type Tone } from "./profile-ui";
 import { documentStatusLabel } from "./readiness/format";
+import { ExportMenu } from "./export-menu";
 import { assignOfficeAfterCreate, countyMatches, officeMatches, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -174,6 +175,8 @@ export function CareTeamPage() {
         </div>
         {peopleReady ? <OfficeCountyFilters idPrefix="cg" offices={offices} counties={countiesInUse} office={officeFilter} onOffice={setOfficeFilter} county={countyFilter} onCounty={setCountyFilter} /> : null}
       </div>
+      {shown.length > 0 ? <ExportMenu basename="caregiver-readiness" sheet="Caregiver readiness" rows={sortedCaregivers.map((c) => ({ caregiver: caregiverName(c), code: c.caregiverCode ?? "", status: WORK_STATUS_LABEL[c.workStatus], met: c.workStatus === "not_ready" ? c.readinessMet ?? 0 : "", total: c.workStatus === "not_ready" ? c.readinessTotal ?? "" : "", signedIn: c.signedIn ? "Yes" : "No", assignments: c.activeAssignments, openVisits: c.openVisits }))}
+        columns={[["Caregiver", "caregiver"], ["Code", "code"], ["Work status", "status"], ["Requirements met", "met"], ["Requirements total", "total"], ["Signed in to the app", "signedIn"], ["Active assignments", "assignments"], ["Visits in progress", "openVisits"]]} /> : null}
       {caregivers.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {caregivers.isError ? <p role="alert" className="text-sm text-red-700">{(caregivers.error as Error).message}</p> : null}
       {caregivers.data && shown.length === 0 ? <p className="text-sm text-slate-600">No caregivers match.</p> : null}

@@ -117,10 +117,11 @@ describe("Visit verification page", () => {
     const { requests } = renderPage({ reports: { visit_exceptions: [] } });
     fireEvent.click(await screen.findByRole("button", { name: "Download CSV" }, T));
     await waitFor(() => expect(requests.some((r) => r.query.get("format") === "csv")).toBe(true));
+    expect(screen.getByRole("button", { name: "Download Excel" })).toBeInTheDocument(); expect(screen.getByRole("button", { name: "Print" })).toBeInTheDocument();
     cleanup();
     renderPage({ perms: ["visits.read", "visits.manage", "billing.visits.read"] });
     await screen.findByRole("tab", { name: "Visit exceptions" }, T);
-    expect(screen.queryByRole("button", { name: "Download CSV" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Download CSV" })).toBeNull(); expect(screen.queryByRole("button", { name: "Download Excel" })).toBeNull();
   });
   it("a person without visit access sees nothing", async () => {
     renderPage({ perms: ["clients.manage"] });
