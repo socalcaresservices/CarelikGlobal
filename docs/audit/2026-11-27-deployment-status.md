@@ -1,9 +1,9 @@
 # What is deployed: Ogevia TEST and production (2026-11-27, PROVISIONAL)
 
-Method: the closeout audit (`2026-11-26-closeout-audit.md`), the repository and branches (read from Git on 2026-11-27), CI results, and the deployment output and screenshots you pasted. **No live AWS check was possible from the session** (no AWS access). `DEPLOYMENT_EVIDENCE_BLOCK.sh` in this folder is the one read-only CloudShell block that collects the live evidence; nothing below is "confirmed live" until its output is read. A merged PR, green CI or a migration file in Git is not treated as proof of deployment.
+Method: the closeout audit (`2026-11-26-closeout-audit.md`), the repository and branches (read from Git on 2026-11-27), CI results, and the deployment output and screenshots you pasted. **No live AWS check was possible from the session** (no AWS access). `DEPLOYMENT_EVIDENCE_BLOCK.sh` in this folder is the read-only CloudShell block that collects the live evidence. **Its first run (owner, 2026-11-27) is recorded in the next section; the TEST database part has not yet been read.** A merged PR, green CI or a migration file in Git is not treated as proof of deployment.
 
 ## Direct answers
-1. **Production through 0112:** documented through **0112** (0109 on 2026-11-21, 0110 on 2026-11-21, 0111 and 0112 on 2026-11-22; owner-pasted output, "111 verified ledger rows"). **Nothing from Release Train 2 (0113-0120) was deployed to production in any recorded step**; every RT2 deploy output says "Production was not touched". Not re-verified live. The production `requestCleanup` switch state after 2026-11-21 14:16 is **unknown**.
+1. **Production through 0112:** documented through **0112** (0109 on 2026-11-21, 0110 on 2026-11-21, 0111 and 0112 on 2026-11-22; owner-pasted output, "111 verified ledger rows"). **Nothing from Release Train 2 (0113-0120) was deployed to production in any recorded step**; every RT2 deploy output says "Production was not touched". **Confirmed live 2026-11-27:** production API (276 routes, Lambda modified 2026-11-22 08:03 UTC) and web (stamped `c7691b63`, modified 2026-11-22 08:06 GMT) are unchanged since 22 Nov; `requestCleanup`, `offices`, `officeAssignments`, `assignmentHistory` and `signInOverride` are ON; every Release Train 2 switch is off and there is no email function. Production's database ledger was not read (needs the production admin-host procedure).
 2. **Open Shifts in TEST:** deployed and enabled through stage 3 (`620ccf35`, 0117-0120, web + API, owner "pass all" 2026-11-26). **Email:** stages 4 (`0c85c5fe`), 5 (`c1af8dbc`, SES permission fix) and 6 (`b2fe3944`, `footietree` recipient) were each reported complete by the owner. I saw the stage 4 and 5 output; for stage 6 I have only "deploy complete" with no output. An email DID arrive after stage 5 (screenshot, 1:15 PM, from `scheduling@ogevia.com`, Reply-To works). **No post-fix test yet proves** `dkim`/`dmarc` pass, the trace's `sent` row, or that **View shift opens the exact shift after sign-in**. Email acceptance = NOT VERIFIED.
 3. **QR/NFC, stickers, signatures, exception reports:** built locally only (PR #125, branch `claude/amazing-clarke-8b309z`, migration file `0120_nfc_qr_visit_verification.sql`, version `0120`). **Not deployed to TEST or production** (TEST ledger version `0120` is `0120_alert_opens_exact_shift.sql`; the NFC migration has never been applied anywhere). **The 0120 conflict is NOT resolved**: Git on 2026-11-27 still shows both `0120_*.sql` files on separate branches, neither merged into `main` (698ae23b) and neither containing the other.
 4. See the table.
@@ -11,7 +11,7 @@ Method: the closeout audit (`2026-11-26-closeout-audit.md`), the repository and 
 ## Table
 | Feature | Built | TEST deployed and enabled | TEST verified | Production deployed and enabled | Evidence | What remains |
 |---|---|---|---|---|---|---|
-| Request cleanup, offices, office assignments + counties + colors, assignment history (0109-0112) | Yes | Yes (ledger 0109-0112) | Yes (owner passes 2026-11-21/22) | Yes per owner output 2026-11-21/22; `requestCleanup` switch: unknown | Owner pastes; PR #113/#114 merged | Re-check live (block); production switch state |
+| Request cleanup, offices, office assignments + counties + colors, assignment history (0109-0112) | Yes | Yes (ledger 0109-0112) | Yes (owner passes 2026-11-21/22) | **Yes: routes live 2026-11-27 (all four switches ON)**; ledger per owner output | Owner pastes; PR #113/#114 merged | Production ledger not re-read |
 | Go-live ten items (sorting, drawer, refresh, picker, mobile, refusals) | Yes | Yes | Partly (no per-item acceptance) | Yes per owner report (#113 live 2026-11-21) | PR #113/#114 | Per-item acceptance unknown |
 | Notifications, in-app (0113) | Yes | Yes (stage 1, `b0848ede`) | Yes (owner screenshots, pass all) | No (RT2 not in production) | Stage 1 output 2026-11-23 | Production decision |
 | Open Shifts: board, request, office queue, exact-shift link, statuses (0117, 0119, 0120) | Yes | Yes (stages 2-3, `620ccf35`) | Yes (owner, 2026-11-26) | No | Stage 2/3 output; screenshots | Production decision; call-out/cancel/replacement flows not exercised in TEST |
@@ -41,3 +41,16 @@ Method: the closeout audit (`2026-11-26-closeout-audit.md`), the repository and 
 - **Physical stickers:** artwork, printing, NFC programming, real-phone tests (none done).
 - **Briefs missing:** Sandata, authorization worklist, Patriot, second agency.
 - **Unknown live state:** everything in the "unknown" cells until the block's output is read.
+
+## Live evidence: first run of the evidence block (owner CloudShell, 2026-11-27)
+| | TEST (Ogevia-prod-*) | Production (Ogevia-prd-*) |
+|---|---|---|
+| Web build | stamped `620ccf358dfc73b9e677da6887e6ee6a95b00a00` (stage 3), published 2026-11-25 20:09 GMT | stamped `c7691b637621783615c1977d1f14e0f24e8f3689`, published 2026-11-22 08:06 GMT |
+| API Lambda | code hash `iA+TK26m...`, modified 2026-11-26 12:11 UTC (stage 4) | code hash `222d1mJu...`, modified 2026-11-22 08:03 UTC |
+| Routes | 296 | 276 |
+| Switches ON | notifications, openShiftSms, serviceLocation, bulkImport, requestCleanup, offices, officeAssignments, assignmentHistory, signInOverride | requestCleanup, offices, officeAssignments, assignmentHistory, signInOverride |
+| Switches off | invitationBranding, importRollback, staffDuplicates, operationsReadiness, homeLabels (NFC/QR) | everything else, including all Release Train 2 switches and homeLabels |
+| API env | SMS_MODE=mock, SERVICE_LOCATION=on, COVER_ALERT_ADDRESS_RULES=on, EMAIL_FUNCTION_NAME, APP_ORIGIN=demo | none of those |
+| Email function | present; allow-list 1 address; send permission names 2 identities (stage 5 state) | absent |
+| Sign-in pools | us-west-2_849AYz5J7: no triggers, Cognito default sender | us-west-2_FHJoX71ca: no triggers, Cognito default sender (branded invitations not wired in either) |
+| Database ledger | not read yet (run skipped: checkout) | not read (outside a read-only pass) |
