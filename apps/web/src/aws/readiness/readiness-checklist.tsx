@@ -8,6 +8,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "../care-team-admin";
 import { OVERRIDE_BADGE_TEXT, useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
+import { ProfileRow, StatusChip, rowButton } from "../profile-ui";
+import { chipFor } from "./readiness-chip";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm";
@@ -20,19 +22,15 @@ function useRefreshReadiness() {
   };
 }
 
-const ICON: Record<ReadinessItem["state"], { glyph: string; cls: string; sr: string }> = {
-  met: { glyph: "✓", cls: "text-emerald-700", sr: "Done" },
-  unmet: { glyph: "✗", cls: "text-red-700", sr: "Not done" },
-  pending: { glyph: "!", cls: "text-amber-700", sr: "Due soon" },
-  overdue: { glyph: "!", cls: "text-red-700", sr: "Overdue" },
-  problem: { glyph: "!", cls: "text-red-700", sr: "Needs attention" },
-};
-
 /** What a row says on its second line. Dates come from the server as YYYY-MM-DD and are never passed through a time zone. */
 function line(i: ReadinessItem): string {
   const by = i.actorName ? ` by ${i.actorName}` : "";
-  if (i.requirement === "background" && i.state === "met") return `Verified${i.metOn ? ` ${formatDateOnly(i.metOn)}` : ""}${by}`;
-  if (i.state === "met") return `${i.detail ?? "Done"}${i.metOn ? ` ${formatDateOnly(i.metOn)}` : ""}`;
+  if (i.state === "met") {
+    if (i.requirement === "signin") return i.detail ?? "";
+    const when = i.metOn ? formatDateOnly(i.metOn) : "";
+    const text = `${when}${by}`.trim();
+    return text || (i.requirement === "background" ? "Verified" : (i.detail ?? "Done"));
+  }
   if (i.requirement === "signin") return i.detail ?? "Not signed in";
   if (i.state === "overdue") return `${i.detail ?? "Missing"} · overdue since ${i.dueDate ? formatDateOnly(i.dueDate) : "the due date"}`;
   if (i.dueDate && (i.state === "pending" || i.state === "problem")) return `${i.detail ?? "Missing"} · due ${formatDateOnly(i.dueDate)}`;
@@ -41,8 +39,8 @@ function line(i: ReadinessItem): string {
 
 type Panel = null | "verify" | "training" | "contact" | "extend" | "override";
 
-function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, canOverride = false, canSetup = false, backgroundClear = false, children }: {
-  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; canOverride?: boolean; canSetup?: boolean; backgroundClear?: boolean; children?: ReactNode;
+function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, canOverride = false, backgroundClear = false, children }: {
+  item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; canOverride?: boolean; backgroundClear?: boolean; children?: ReactNode;
 }) {
   const api = useAwsApi();
   const refresh = useRefreshReadiness();
@@ -88,34 +86,28 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
     actions.push(<button key="o" type="button" className={btn} aria-expanded={panel === "override"} onClick={() => toggle("override")}>Approve by override</button>);
   }
   const setupGap = (item.requirement === "cpr" || item.requirement === "tb") && /not set up/i.test(item.detail ?? "");
-  if (setupGap) {
-    // R7: the agency has not finished the CPR/TB setup, so uploading cannot fix it. An administrator goes to the setup; everyone else is told who can.
-    actions.push(canSetup
-      ? <Link key="setup" to="/care-team#readiness-setup" className={btn}>Set up CPR and TB</Link>
-      : <span key="setup" className="text-sm text-slate-600">Ask an administrator</span>);
-  } else if ((item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
+  // R7: an agency setup gap is fixed once, in the header ("Set up CPR and TB"), not per row. Uploading cannot fix it, so no Upload or Extend here.
+  if (!setupGap && (item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
     actions.push(<Link key="u" to="/documents" className={btn}>Upload</Link>);
     if (canCompliance) actions.push(<button key="x" type="button" className={btn} aria-expanded={panel === "extend"} onClick={() => toggle("extend")}>Extend</button>);
   }
 
+  const chip = chipFor(item);
+  const value = (
+    <>
+      <span>{line(item)}</span>
+      {item.requirement === "signin" && item.extra.override ? <span className="ml-2 inline-block rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" data-testid="override-badge">{OVERRIDE_BADGE_TEXT}</span> : null}
+      {item.requirement === "signin" && item.state !== "met" && canOverride && !backgroundClear ? <p className="text-xs text-slate-600" data-testid="override-needs-background">An administrator can approve before the first sign-in once the background check is clear. There is no override for the background check.</p> : null}
+      {item.requirement === "signin" && item.extra.lastSentAt ? <p className="text-xs text-slate-600">Last sent {formatDateTime(item.extra.lastSentAt)}</p> : null}
+      {item.requirement === "signin" && item.state !== "met" ? <p className="text-xs text-slate-600">Confirm the caregiver's email, send the invitation, then ask them to sign in once. Resend if it expired; check spam before sending again.</p> : null}
+      {item.state === "overdue" && item.blocksShifts ? <p className="text-xs font-semibold text-red-800">Blocks new shift assignments</p> : null}
+      {item.state === "overdue" && !item.blocksShifts ? <p className="text-xs text-slate-600">Flagged only; the agency has not switched enforcement on</p> : null}
+    </>
+  );
   return (
-    <li className="px-3 py-2" data-requirement={item.requirement}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-start gap-2">
-          <span aria-hidden="true" className={`mt-0.5 w-4 shrink-0 text-center font-bold ${ICON[item.state].cls}`}>{ICON[item.state].glyph}</span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-950">{item.label}<span className="sr-only"> — {ICON[item.state].sr}</span></p>
-            <p className="text-sm text-slate-700">{line(item)}</p>
-            {item.requirement === "signin" && item.extra.override ? <p className="mt-0.5"><span className="inline-block rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" data-testid="override-badge">{OVERRIDE_BADGE_TEXT}</span></p> : null}
-            {item.requirement === "signin" && item.state !== "met" && canOverride && !backgroundClear ? <p className="text-xs text-slate-600" data-testid="override-needs-background">An administrator can approve before the first sign-in once the background check is clear. There is no override for the background check.</p> : null}
-            {item.requirement === "signin" && item.extra.lastSentAt ? <p className="text-xs text-slate-600">Last sent {formatDateTime(item.extra.lastSentAt)}</p> : null}
-            {item.requirement === "signin" && item.state !== "met" ? <p className="text-xs text-slate-600">Confirm the caregiver's email, send the invitation, then ask them to sign in once. Resend if it expired; check spam before sending again.</p> : null}
-            {item.state === "overdue" && item.blocksShifts ? <p className="text-xs font-semibold text-red-800">Blocks new shift assignments</p> : null}
-            {item.state === "overdue" && !item.blocksShifts ? <p className="text-xs text-slate-600">Flagged only; the agency has not switched enforcement on</p> : null}
-          </div>
-        </div>
-        {actions.length > 0 ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
-      </div>
+    <ProfileRow requirement={item.requirement} label={item.label} status={<StatusChip tone={chip.tone}>{chip.label}</StatusChip>} value={value}
+      action={actions.length > 0 ? <>{actions}</> : null}
+      panel={<>
       {panel === "verify" ? (
         <form className="mt-2 grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-end" onSubmit={(e) => {
           e.preventDefault();
@@ -187,7 +179,7 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
       {state.error ? <p role="alert" className="mt-1 text-sm text-red-700">{state.error}</p> : null}
       {state.done ? <p role="status" className="mt-1 text-sm text-emerald-800">{state.done}</p> : null}
       {children}
-    </li>
+      </>} />
   );
 }
 
@@ -222,40 +214,49 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
     } finally { inFlight.current = false; }
   }
   const waiting = r.waitingOn.length > 0 ? `Waiting on: ${r.waitingOn.join(", ")}` : null;
+  const canSetup = hasPermission("readiness.manage") || hasPermission("documents.requirements.manage");
+  const setupGaps = r.items.filter((i) => (i.requirement === "cpr" || i.requirement === "tb") && /not set up/i.test(i.detail ?? ""));
+  // Scheduling holds are shown with the server's own reason. Work approval never implies "eligible to schedule": the two are shown side by side and only the server's holds decide.
+  const holds = r.items.filter((i) => i.blocksShifts);
+  const attention = r.items.filter((i) => i.state !== "met").length;
   return (
     <section aria-label="Readiness" data-testid="readiness-checklist" className="space-y-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-semibold ${WORK_STATUS_BADGE[r.status]}`}>{WORK_STATUS_LABEL[r.status]}</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span data-testid="work-approval-chip" className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-sm font-semibold ${WORK_STATUS_BADGE[r.status]}`}>Work approval: {isApproved ? (r.status === "active" ? "Approved · Active" : "Approved") : WORK_STATUS_LABEL[r.status]}</span>
+        {attention > 0 ? <span className="inline-block rounded-md bg-red-50 px-2 py-0.5 text-sm font-semibold text-red-900">{attention} compliance item{attention === 1 ? "" : "s"} need{attention === 1 ? "s" : ""} attention</span> : null}
         {!isApproved && !inactive ? <span className="text-sm font-semibold text-slate-900">{r.met} of {r.total} done</span> : null}
         <span className="text-sm text-slate-700">
           {r.hireDate ? `Hired ${formatDateOnly(r.hireDate)}` : "Hire date not recorded"}
           {r.cprTbDueDate ? ` · CPR/TB due ${formatDateOnly(r.cprTbDueDate)}` : ""}
         </span>
       </div>
-      <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-og-card" aria-label="Requirements">
+      {holds.length > 0 ? (
+        <div role="status" data-testid="scheduling-hold" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+          <p className="font-semibold">Scheduling hold</p>
+          <ul className="list-disc pl-5">{holds.map((h) => <li key={h.requirement}>{h.label}: {h.detail ?? "Needs attention"}</li>)}</ul>
+          <p className="text-xs">Work approval is a separate step. These reasons come from the agency's scheduling rules.</p>
+        </div>
+      ) : null}
+      {setupGaps.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2" data-testid="cpr-tb-setup">
+          {canSetup ? <Link to="/care-team#readiness-setup" className={rowButton}>Set up CPR and TB</Link> : <span className="text-sm text-slate-700">Ask an administrator to set up CPR and TB.</span>}
+          <span className="text-xs text-slate-600">An agency setup step: it does not change this caregiver's work approval.</span>
+        </div>
+      ) : null}
+      <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-og-card" aria-label="Requirements">
         {r.items.map((i) => <Row key={i.requirement} item={i} caregiverRecordId={caregiverRecordId} canManage={canManage} canCompliance={canCompliance} hasContact={hasContact}
-          canOverride={hasPermission("caregivers.signin_override")} canSetup={hasPermission("readiness.manage") || hasPermission("documents.requirements.manage")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
-        <li className="px-3 py-2" data-requirement="approve">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-start gap-2">
-              <span aria-hidden="true" className={`mt-0.5 w-4 shrink-0 text-center font-bold ${isApproved ? "text-emerald-700" : "text-slate-500"}`}>{isApproved ? "✓" : "○"}</span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-950">Approve for work</p>
-                <p className="text-sm text-slate-700" id="approve-reason">
-                  {isApproved
-                    ? r.approvalSource === "legacy_status" ? "Approved before this checklist existed" : `Approved ${r.approvedAt ? formatDateTime(r.approvedAt) : ""}${r.approvedByName ? ` by ${r.approvedByName}` : ""}`
-                    : inactive ? (waiting ?? "Inactive. Approve to reactivate.") : waiting ?? "Every required item is done"}
-                </p>
-              </div>
-            </div>
-            {canManage && !isApproved ? (
-              <button type="button" className={btn} disabled={!r.canApprove || approve.busy} aria-describedby="approve-reason" onClick={() => void doApprove()}>
-                {approve.busy ? "Approving…" : inactive ? "Reactivate" : "Approve"}
-              </button>
-            ) : null}
-          </div>
-          {approve.error ? <p role="alert" className="mt-1 text-sm text-red-700">{approve.error}</p> : null}
-        </li>
+          canOverride={hasPermission("caregivers.signin_override")} backgroundClear={r.items.find((x) => x.requirement === "background")?.state === "met"} />)}
+        <ProfileRow requirement="approve" label="Work approval"
+          status={<StatusChip tone={isApproved ? "ok" : "neutral"}>{isApproved ? "Approved" : "Not approved"}</StatusChip>}
+          value={<span id="approve-reason">{isApproved
+            ? r.approvalSource === "legacy_status" ? "Approved before this checklist existed" : `Approved ${r.approvedAt ? formatDateTime(r.approvedAt) : ""}${r.approvedByName ? ` by ${r.approvedByName}` : ""}`.trim()
+            : inactive ? (waiting ?? "Inactive. Approve to reactivate.") : waiting ?? "Every required item is done"}</span>}
+          action={canManage && !isApproved ? (
+            <button type="button" className={btn} disabled={!r.canApprove || approve.busy} aria-describedby="approve-reason" onClick={() => void doApprove()}>
+              {approve.busy ? "Approving…" : inactive ? "Reactivate" : "Approve"}
+            </button>
+          ) : null}
+          panel={approve.error ? <p role="alert" className="text-sm text-red-700">{approve.error}</p> : null} />
       </ul>
       {r.items.some((i) => (i.state === "pending" || i.state === "overdue") && i.kind === "flexible") ? (
         <p className="text-xs text-slate-600">CPR and TB are due {r.graceDays} days after the hire date unless an administrator extends one. Before the due date they do not block approval or shifts.</p>
