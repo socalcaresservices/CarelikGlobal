@@ -615,7 +615,7 @@ export function CaregiverDetailPage() {
         {primaryName ? <p className="text-sm text-slate-600">{primaryName} primary office</p> : null}
       </div>
       <ProfileTabs tabs={PROFILE_TABS} active={tab} onChange={setTab} />
-      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="max-md:[&_button]:min-h-[44px]">   {/* phone: every button in the profile is at least 44 px tall */}
         {tab === "overview" ? <OverviewTab c={c} canManage={canManage} onManageSignIn={() => setTab("readiness")} /> : null}
         {tab === "readiness" ? <ReadinessTab c={c} canManage={canManage} /> : null}
         {tab === "assignments" ? <AssignmentsTab c={c} canManage={canManage} /> : null}

@@ -40,7 +40,7 @@ for (const [label, vp] of Object.entries(VIEWS)) {
   if (label === "desktop") for (const id of ["row-contact-email", "row-app-signin", "row-hire-date", "row-hire-type", "row-offices"]) {
     if (await page.getByTestId(id).count()) { const d = await sameLine(page, id); check(`[desktop] row ${id}: label, value, status and action on one line`, d < 24, `spread ${Math.round(d)}px`); }
   }
-  const edit = page.getByTestId("row-contact-email").getByRole("button", { name: /contact email/i });   // its name changes from Edit to Close once open
+  const edit = page.getByTestId("row-contact-email").locator("button[aria-expanded]").first();   // the row's own Edit/Close button
   if (await edit.count()) { await edit.click(); await settle(page, 300); check(`[${label}] Edit opens the contact editor only on request`, (await page.getByLabel(/Caregiver contact email/).count()) === 1); await page.screenshot({ path: `${out}/${label}-1b-overview-editing.png`, fullPage: true }); await edit.click(); }
   await page.getByRole("tab", { name: "Readiness" }).click(); await settle(page, 500);
   check(`[${label}] readiness: no horizontal scroll`, await noHScroll(page));
