@@ -17,7 +17,7 @@ Method: the closeout audit (`2026-11-26-closeout-audit.md`), the repository and 
 | Open Shifts: board, request, office queue, exact-shift link, statuses (0117, 0119, 0120) | Yes | Yes (stages 2-3, `620ccf35`) | Yes (owner, 2026-11-26) | No | Stage 2/3 output; screenshots | Production decision; call-out/cancel/replacement flows not exercised in TEST |
 | Service location + one edit form (0118) | Yes | Yes (stage 2) | Unknown (owner never reported) | No | Stage 2 output | 3-minute TEST check |
 | Alert email via SES (stages 4-6) | Yes | Yes per owner (stage 6 output not seen); app email setting ON | **Not verified**: arrival yes; `dkim`/`dmarc`, sent row, exact-shift link after sign-in unknown | No | Stage 4/5 output; email screenshot | Acceptance checks; cosmetic HTML line breaks |
-| SMS texting (mock) | Yes | Yes (mock only) | Unknown | No | Stage 2 output | Owner check of mock texts |
+| SMS texting (mock) | Yes | Code and routes live; **no settings saved, so not configured** | Not started | No | Stage 2 output | Owner check of mock texts |
 | Live SMS | No (mock only) | No | No | No | Owner: separate approval | Sender, number, registration undecided |
 | Branded invitations, password-reset emails (0114 + Cognito trigger) | Yes (code) | 0114 applied; Cognito trigger/sender: unknown (block lists pool triggers) | No | No | PR #124 docs | Wire sender; no branded email received |
 | Bulk import + rollback (0115) | Yes | Migration applied; switches unknown | No | No (`bulkImport` false in production config) | Ledger 0115 | Switch check; TEST acceptance |
@@ -53,4 +53,12 @@ Method: the closeout audit (`2026-11-26-closeout-audit.md`), the repository and 
 | API env | SMS_MODE=mock, SERVICE_LOCATION=on, COVER_ALERT_ADDRESS_RULES=on, EMAIL_FUNCTION_NAME, APP_ORIGIN=demo | none of those |
 | Email function | present; allow-list 1 address; send permission names 2 identities (stage 5 state) | absent |
 | Sign-in pools | us-west-2_849AYz5J7: no triggers, Cognito default sender | us-west-2_FHJoX71ca: no triggers, Cognito default sender (branded invitations not wired in either) |
-| Database ledger | not read yet (run skipped: checkout) | not read (outside a read-only pass) |
+| Database ledger | **read 2026-11-27**: 0106, 0107, 0109-0120 applied (0108 absent); 0120 = `0120_alert_opens_exact_shift.sql`, applied 2026-11-25 20:06 UTC; NFC/QR tables 0 of 3 present | not read (needs the production admin-host procedure, a security-group change) |
+
+## TEST database evidence (owner CloudShell, 2026-11-27, read-only)
+- Ledger: 0120 `0120_alert_opens_exact_shift.sql` 2026-11-25 20:06:44 UTC; 0119 2026-11-24 03:29; 0118 and 0117 2026-11-24 03:16; 0116, 0115, 0114, 0113 2026-11-23 17:38-17:42; 0112 2026-11-22 07:05; 0111 2026-11-22 05:44; 0110 2026-11-21 11:49; 0109 2026-11-20 23:19; 0107 and 0106 2026-11-12. No 0108.
+- Alert settings: enabled, email on, auto-notify on, window 48 hours.
+- **`sms_settings` has no row: texting has never been configured in TEST** (routes are live, no setting saved, so no mock text could have been sent).
+- Email deliveries, all time: **sent 1 (with provider message id, 2026-11-26 13:15:22 PT)**; failed `access_denied_exception` 2 (before the stage 5 fix); failed `recipient_not_allowed` 10; skipped `no_email` 14; skipped (other) 5.
+- NFC/QR tables present: 0 of 3.
+- Effect on the table above: email = provider accepted one message (database) and the owner received it (screenshot); `dkim`/`dmarc`, and the exact-shift link after caregiver sign-in, are still unproven. Mock SMS = not started in TEST. QR/NFC = not in TEST (schema absent).
