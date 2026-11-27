@@ -135,6 +135,8 @@ beforeAll(async () => {
   real("pickupRequestId", firstId(pk.body, ["requestId", "id"]));
   const csa = await make(w.ownerA, "POST /v1/caregiver-services", { caregiverRecordId: rec, serviceId: f.service });
   real("caregiverServiceApprovalId", csa.body.approvalId ?? csa.body.id);
+  // 0123 readiness override: a real org A override, so the revoke route reaches the database check (a missing CPR on org A's caregiver, approved by org A's owner)
+  real("overrideId", (await db.admin.query("insert into ogevia.caregiver_readiness_overrides (organization_id, caregiver_record_id, requirement, issue_status, issue_key, reason, approved_by) values ($1,$2,'cpr','missing','missing:none:','Synthetic override for the isolation sweep',$3) returning id", [A, rec, w.ownerA.userId])).rows[0].id);
   // staff management (pending migration 0086): a real staff type and a real staff profile of org A
   const st = await make(w.ownerA, "POST /v1/staff-types", { name: "Synthetic Staff Type" });
   real("staffTypeId", st.body.staffType?.id);
