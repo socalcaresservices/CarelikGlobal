@@ -1,4 +1,4 @@
--- READ-ONLY verification of pending migrations 0113-0122. Writes nothing.
+-- READ-ONLY verification of pending migrations 0113-0123. Writes nothing.
 --   psql -X -At -F '|' -v mig=0113 -v expect=absent|present -f VERIFY_PENDING.sql
 -- One row per check: name|t|detail (t = ok, f = FAILING). The wrapper counts rows and fails on any "|f|".
 -- Tables: must exist (present) / not exist (absent). Functions (by schema + name): must exist, be SECURITY DEFINER, have a pinned
@@ -10,7 +10,7 @@ with t(mig, rel) as (values
   ('0114','ogevia.office_branding'),
   ('0115','ogevia.import_batch_records'),('0115','ogevia.import_batch_rollbacks'),
   ('0116','ogevia.staff_merge_snapshots'),('0116','ogevia.staff_merge_reversals'),
-  ('0117','ogevia.sms_settings'),('0117','ogevia.sms_contacts'),('0117','ogevia.sms_oncall'),('0117','ogevia.sms_messages'),('0117','ogevia.sms_inbound_log'),('0118','ogevia.zip_county_reference')
+  ('0117','ogevia.sms_settings'),('0117','ogevia.sms_contacts'),('0117','ogevia.sms_oncall'),('0117','ogevia.sms_messages'),('0117','ogevia.sms_inbound_log'),('0118','ogevia.zip_county_reference'),('0123','ogevia.caregiver_readiness_overrides')
 ), f(mig, sch, fn) as (values
   ('0113','ogevia_api','get_cover_notification_settings'),('0113','ogevia_api','set_cover_notification_settings'),('0113','ogevia_api','set_cover_office_audience'),
   ('0113','ogevia_api','list_cover_office_audiences'),('0113','ogevia_api','notify_cover_shift'),('0113','ogevia_api','system_cover_notify_orgs'),
@@ -22,7 +22,8 @@ with t(mig, rel) as (values
   ('0117','ogevia_api','get_sms_settings'),('0117','ogevia_api','set_sms_settings'),('0117','ogevia_api','get_my_sms'),('0117','ogevia_api','set_my_sms'),('0117','ogevia_api','list_sms_oncall'),('0117','ogevia_api','set_sms_oncall'),
   ('0117','ogevia_api','list_sms_history'),('0117','ogevia_api','system_sms_escalate_orgs'),('0117','ogevia_api','system_sms_inbound'),('0117','ogevia_api','system_sms_claim'),('0117','ogevia_api','system_sms_record'),
   ('0118','ogevia_api','get_client_service_location'),('0118','ogevia_api','set_client_service_location'),
-  ('0120','ogevia_api','get_cover_shift')
+  ('0120','ogevia_api','get_cover_shift'),
+  ('0123','ogevia_api','approve_readiness_override'),('0123','ogevia_api','revoke_readiness_override'),('0123','ogevia_api','list_readiness_overrides')
 ), p as (
   select f.mig, f.sch || '.' || f.fn as name, (select pr.oid from pg_proc pr join pg_namespace n on n.oid = pr.pronamespace where n.nspname = f.sch and pr.proname = f.fn limit 1) as oid
   from f where f.mig = :'mig'
@@ -72,6 +73,14 @@ union all
 select 'the scheduling check, the compliance hold rule and the profile read use it ' || :'expect',
        case when :'expect' = 'absent' then (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname in ('readiness_checks','compliance_blockers','caregiver_readiness') and pg_get_functiondef(p.oid) like '%caregiver_has_work_approval%') = 0
             else (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname in ('readiness_checks','compliance_blockers','caregiver_readiness') and pg_get_functiondef(p.oid) like '%caregiver_has_work_approval%') = 3 end, '' where :'mig' = '0122'
+union all
+select 'the scheduling check, the compliance hold rule and the profile read honour an override ' || :'expect',
+       case when :'expect' = 'absent' then (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname in ('readiness_checks','compliance_blockers','caregiver_readiness') and pg_get_functiondef(p.oid) like '%readiness_override%') = 0
+            else (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname in ('readiness_checks','compliance_blockers','caregiver_readiness') and (pg_get_functiondef(p.oid) like '%readiness_override_for%' or pg_get_functiondef(p.oid) like '%caregiver_readiness_overrides%')) = 3 end, '' where :'mig' = '0123'
+union all
+select 'the follow-up queue layer exists ' || :'expect',
+       case when :'expect' = 'absent' then to_regprocedure('ogevia.action_issue_rows_pre0123(uuid,boolean,boolean,boolean,boolean,boolean,integer)') is null
+            else to_regprocedure('ogevia.action_issue_rows_pre0123(uuid,boolean,boolean,boolean,boolean,boolean,integer)') is not null end, '' where :'mig' = '0123'
 union all
 select 'ledger row ' || :'mig' || ' ' || :'expect',
        case when :'expect' = 'absent' then not exists (select 1 from ogevia_meta.schema_migrations where version = :'mig')

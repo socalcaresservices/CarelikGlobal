@@ -2139,6 +2139,45 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0123 (pending, behind the readinessOverrides release switch): an administrator lifts ONE caregiver-readiness block (a CPR or TB document that is missing, waiting for review, rejected or
+  // expired) for one caregiver and one exact issue, with a reason; revoking restores the block. The server recomputes the issue and refuses a stale or different one, so the browser only
+  // names what the administrator reviewed. The document's status is never changed; the original work approval and every override are kept.
+  "POST /v1/caregivers/{caregiverRecordId}/readiness-override": {
+    mutating: true,
+    status: 201,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        override: await tx(async (db) => (await first(db, "select ogevia_api.approve_readiness_override($1,$2,$3,$4,$5,$6) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.requirement, "requirement", ["cpr", "tb"] as const), text(body.issueKey, "issueKey", 200, { required: true }),
+          text(body.reason, "reason", 500, { required: true }), key])).r),
+      };
+    },
+  },
+  "POST /v1/readiness-overrides/{overrideId}/revoke": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        override: await tx(async (db) => (await first(db, "select ogevia_api.revoke_readiness_override($1,$2,$3,$4) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).overrideId, "overrideId"), text(body.reason, "reason", 500, { required: true }), key])).r),
+      };
+    },
+  },
+  "GET /v1/readiness-overrides": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return {
+        overrides: await tx(async (db) => (await first(db, "select ogevia_api.list_readiness_overrides($1,$2,$3) as r", [
+          orgParam(event), optionalUuid(query.caregiverRecordId, "caregiverRecordId"), query.activeOnly === "true"])).r),
+      };
+    },
+  },
+
   // 0092 (pending, behind the bulkImport release switch): R11 bulk import of people or clients from a CSV/XLSX file. The file is parsed here, the rows are
   // validated and created by ogevia_api.import_rows in ONE transaction (preview first, then confirm). The organization comes from the signed-in session via
   // the database guards; the file never names a tenant. The file content and the row values are never logged.

@@ -90,7 +90,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness" | "openShiftSms" | "serviceLocation";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness" | "openShiftSms" | "serviceLocation" | "readinessOverrides";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -355,6 +355,10 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/sms-oncall", feature: "openShiftSms" },
   { method: apigw.HttpMethod.POST, path: "/v1/sms-oncall", feature: "openShiftSms" },
   { method: apigw.HttpMethod.GET, path: "/v1/sms-history", feature: "openShiftSms" },
+  // 0123: an administrator lifts one CPR/TB document readiness block for one caregiver and one exact issue, with a reason (and can revoke it). OFF unless features.readinessOverrides (needs migration 0123).
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/readiness-override", feature: "readinessOverrides" },
+  { method: apigw.HttpMethod.POST, path: "/v1/readiness-overrides/{overrideId}/revoke", feature: "readinessOverrides" },
+  { method: apigw.HttpMethod.GET, path: "/v1/readiness-overrides", feature: "readinessOverrides" },
   // Release Train 2 (0118): the client's service address, county and coordinating office together. OFF unless features.serviceLocation (needs the offices and county switches).
   { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-location", feature: "serviceLocation" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-location", feature: "serviceLocation" },

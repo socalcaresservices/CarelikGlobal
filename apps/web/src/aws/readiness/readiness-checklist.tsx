@@ -11,6 +11,8 @@ import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "../care-team-admin";
 import { OVERRIDE_BADGE_TEXT, useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
 import { ProfileRow, StatusChip, rowButton } from "../profile-ui";
 import { chipFor } from "./readiness-chip";
+import { ApproveOverrideDialog, OverrideDetails } from "./readiness-override";
+import { useReadinessOverrides } from "./readiness-overrides-data";
 
 interface ComplianceRead {
   eligible: boolean;
@@ -45,7 +47,7 @@ function line(i: ReadinessItem): string {
   return i.detail ?? "Not done";
 }
 
-type Panel = null | "verify" | "training" | "contact" | "extend" | "override";
+type Panel = null | "verify" | "training" | "contact" | "extend" | "override" | "details";
 
 function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, canOverride = false, backgroundClear = false, children }: {
   item: ReadinessItem; caregiverRecordId: string; canManage: boolean; canCompliance: boolean; hasContact: boolean; canOverride?: boolean; backgroundClear?: boolean; children?: ReactNode;
@@ -54,6 +56,9 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
   const refresh = useRefreshReadiness();
   const { activeOrganizationId } = useOrganization();
   const [panel, setPanel] = useState<Panel>(null);
+  const [approving, setApproving] = useState(false);
+  const isDoc = item.requirement === "cpr" || item.requirement === "tb";
+  const overrides = useReadinessOverrides(caregiverRecordId, isDoc && canCompliance);   // available only where the release switch is on
   const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
   const [f, setF] = useState({ result: "approved", note: "", date: "", email: "", reason: "" });
   const key = useRef(newIdempotencyKey());
@@ -97,13 +102,20 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
   // R7: an agency setup gap is fixed once, in the header ("Set up CPR and TB"), not per row. Uploading cannot fix it, so no Upload or Extend here.
   if (!setupGap && (item.requirement === "cpr" || item.requirement === "tb") && item.state !== "met") {
     actions.push(<Link key="u" to="/documents" className={btn}>Upload</Link>);
-    if (canCompliance) actions.push(<button key="x" type="button" className={btn} aria-expanded={panel === "extend"} onClick={() => toggle("extend")}>Extend</button>);
+    // Extend moves the grace period of a document that is missing or waiting for review; it does nothing for an expired, rejected or expiry-less one, so it is not offered there
+    if (canCompliance && (!item.extra.issueStatus || item.extra.issueStatus === "missing" || item.extra.issueStatus === "awaiting_review")) actions.push(<button key="x" type="button" className={btn} aria-expanded={panel === "extend"} onClick={() => toggle("extend")}>Extend</button>);
   }
 
+  // 0123: ONE short row for a document issue: CPR | Expired Doc | Blocked | Approve, or CPR | Expired Doc | Admin Approved | Details.
+  const issue = isDoc && item.extra.issueKey ? item.extra.issueLabel ?? "Document issue" : null;
+  const ovr = item.extra.override && typeof item.extra.override === "object" ? item.extra.override : null;
+  if (issue && !ovr && item.blocksShifts && canCompliance && overrides.available) actions.unshift(<button key="approve" type="button" className={btn} onClick={() => setApproving(true)}>Approve</button>);
+  if (issue && ovr) actions.unshift(<button key="details" type="button" className={btn} aria-expanded={panel === "details"} onClick={() => toggle("details")}>Details</button>);
   const chip = chipFor(item);
   const value = (
     <>
-      <span>{line(item)}</span>
+      {issue ? <span className="font-medium" data-testid="issue-label">{issue}</span> : null}
+      <span className={issue ? "block text-xs text-slate-600" : undefined}>{line(item)}</span>
       {item.requirement === "signin" && item.extra.override ? <span className="ml-2 inline-block rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" data-testid="override-badge">{OVERRIDE_BADGE_TEXT}</span> : null}
       {item.requirement === "signin" && item.state !== "met" && canOverride && !backgroundClear ? <p className="text-xs text-slate-600" data-testid="override-needs-background">An administrator can approve before the first sign-in once the background check is clear. There is no override for the background check.</p> : null}
       {item.requirement === "signin" && item.extra.lastSentAt ? <p className="text-xs text-slate-600">Last sent {formatDateTime(item.extra.lastSentAt)}</p> : null}
@@ -113,9 +125,11 @@ function Row({ item, caregiverRecordId, canManage, canCompliance, hasContact, ca
     </>
   );
   return (
-    <ProfileRow requirement={item.requirement} label={item.label} status={<StatusChip tone={chip.tone}>{chip.label}</StatusChip>} value={value}
+    <ProfileRow requirement={item.requirement} label={isDoc ? (item.requirement === "cpr" ? "CPR" : "TB") : item.label} status={<StatusChip tone={chip.tone}>{chip.label}</StatusChip>} value={value}
       action={actions.length > 0 ? <>{actions}</> : null}
       panel={<>
+      {panel === "details" && ovr ? <OverrideDetails caregiverRecordId={caregiverRecordId} item={item} canRevoke={canCompliance && overrides.available} /> : null}
+      {approving ? <ApproveOverrideDialog caregiverRecordId={caregiverRecordId} item={item} onClose={() => setApproving(false)} /> : null}
       {panel === "verify" ? (
         <form className="mt-2 grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-end" onSubmit={(e) => {
           e.preventDefault();

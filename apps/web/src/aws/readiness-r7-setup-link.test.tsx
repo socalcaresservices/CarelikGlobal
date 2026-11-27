@@ -27,7 +27,7 @@ const base = () => ({
 describe("CPR/TB setup incomplete on the caregiver profile", () => {
   it("an administrator gets a link to the setup instead of Upload", async () => {
     renderAws(`/care-team/${CG}?tab=readiness`, ADMIN, base(), "organization_owner");
-    const row = (await screen.findByText("CPR certificate", undefined, { timeout: 15000 })).closest("li")!;
+    const row = (await screen.findByText("CPR", undefined, { timeout: 15000 })).closest("li")!;
     // one shared setup action, not one per row; the row says what is wrong and offers no Upload
     const link = within(screen.getByTestId("cpr-tb-setup")).getByRole("link", { name: "Set up CPR and TB" });
     expect(link).toHaveAttribute("href", "/care-team#readiness-setup");
@@ -39,7 +39,7 @@ describe("CPR/TB setup incomplete on the caregiver profile", () => {
 
   it("a manager without the setup permission is told to ask an administrator", async () => {
     renderAws(`/care-team/${CG}?tab=readiness`, MANAGER, base(), "manager");
-    const row = (await screen.findByText("TB clearance", undefined, { timeout: 15000 })).closest("li")!;
+    const row = (await screen.findByText("TB", undefined, { timeout: 15000 })).closest("li")!;
     expect(within(screen.getByTestId("cpr-tb-setup")).getByText(/Ask an administrator to set up CPR and TB/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Set up|Upload/ })).toBeNull();
     expect(within(row).getByText("Setup needed")).toBeInTheDocument();

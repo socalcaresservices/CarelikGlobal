@@ -1,10 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 /**
  * Layout pieces for the caregiver profile: one compact row per question or requirement (label, saved value, status, action),
  * and four tabs. They carry no data of their own; every value and action is bound by the caller to existing application data.
  */
-export type Tone = "ok" | "warn" | "bad" | "neutral" | "saved";
+export type Tone = "ok" | "warn" | "bad" | "neutral" | "saved" | "override";
 
 const TONE: Record<Tone, string> = {
   ok: "bg-emerald-100 text-emerald-950",
@@ -12,6 +12,7 @@ const TONE: Record<Tone, string> = {
   bad: "bg-red-100 text-red-900",
   neutral: "bg-slate-100 text-slate-900",
   saved: "bg-sky-100 text-sky-950",
+  override: "bg-indigo-100 text-indigo-950",
 };
 
 export function StatusChip({ tone, children, testId }: { tone: Tone; children: ReactNode; testId?: string }) {
@@ -39,13 +40,13 @@ export function ProfileRow({ label, value, status, action, panel, testId, id, re
 }) {
   return (
     <li className="px-3 py-2" data-testid={testId} id={id} data-requirement={requirement}>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 md:grid-cols-[10rem_minmax(0,1fr)_auto_5.5rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 md:grid-cols-[8rem_minmax(0,1fr)_8.5rem_13rem]">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 md:contents">
           <span className="text-sm font-semibold text-slate-950 md:col-start-1 md:row-start-1">{label}</span>
           {status ? <span className="md:col-start-3 md:row-start-1 md:justify-self-start">{status}</span> : null}
         </div>
         <div className="col-span-2 row-start-2 min-w-0 break-words text-sm text-slate-800 md:col-span-1 md:col-start-2 md:row-start-1">{value ?? null}</div>
-        {action ? <div className="col-start-2 row-start-1 flex flex-wrap justify-end gap-2 md:col-start-4 md:justify-self-end">{action}</div> : null}
+        {action ? <div className="col-start-2 row-start-1 flex flex-wrap justify-end gap-2 md:col-start-4 md:flex-nowrap md:justify-self-end">{action}</div> : null}
       </div>
       {panel ? <div className="mt-2">{panel}</div> : null}
     </li>
@@ -77,6 +78,25 @@ export function ProfileTabs({ tabs, active, onChange }: { tabs: readonly Profile
           {t.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** A confirmation that sits over the page (a bottom sheet on a phone). Focus moves into it, Escape closes it, and the page behind stays as it was. */
+export function Dialog({ title, onClose, children, testId }: { title: string; onClose: () => void; children: ReactNode; testId?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLElement>("textarea, input, select")?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4">
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} data-testid={testId} className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:max-w-md sm:rounded-2xl">
+        <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+        <div className="mt-2 space-y-3">{children}</div>
+      </div>
     </div>
   );
 }

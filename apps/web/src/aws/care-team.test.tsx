@@ -287,13 +287,13 @@ describe("Approve for work and CPR/TB extensions (0086)", () => {
   it("only an administrator sees Extend and Verify; extending needs a date and a reason, then posts both and shows the new due date", async () => {
     renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "manager");
     const asManager = await screen.findByTestId("readiness-checklist");
-    await within(asManager).findByText("CPR certificate");
+    await within(asManager).findByText("CPR");
     expect(within(asManager).queryByRole("button", { name: "Extend" })).not.toBeInTheDocument();
     cleanup();
 
     const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "organization_owner");
     const list = await screen.findByTestId("readiness-checklist");
-    const cprRow = (await within(list).findByText("CPR certificate")).closest("li")!;
+    const cprRow = (await within(list).findByText("CPR")).closest("li")!;
     fireEvent.click(within(cprRow).getByRole("button", { name: "Extend" }));
     fireEvent.click(within(cprRow).getAllByRole("button", { name: "Extend" }).at(-1)!); // the form's own Extend button, with nothing filled in
     expect(await within(cprRow).findByRole("alert")).toHaveTextContent("Choose the new due date");
@@ -310,7 +310,7 @@ describe("Approve for work and CPR/TB extensions (0086)", () => {
   it("every action button is at least 44px high on a phone and the checklist is one column", async () => {
     renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "organization_owner");
     const list = await screen.findByTestId("readiness-checklist");
-    await within(list).findByText("CPR certificate");
+    await within(list).findByText("CPR");
     for (const control of [...within(list).getAllByRole("button"), ...within(list).getAllByRole("link")]) expect(control.className, control.textContent ?? "").toMatch(/min-h-\[44px\]/);
     expect(list.querySelector("table")).toBeNull();
   });

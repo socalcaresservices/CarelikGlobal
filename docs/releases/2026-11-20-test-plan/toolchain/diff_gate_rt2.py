@@ -10,6 +10,7 @@ Read-only: compares two CloudFormation templates (JSON files) and exits 0 only i
                      environment variables on the Handler. Nothing removed, nothing else changed.
       --expect post  after deployment: NO difference at all
 
+Stage `stage7` (after stage 6 is live): 3 routes (the readiness override approve, revoke and list), new Handler code, nothing else; use --expect off, then on, then post.
 Stage `stage3` (after stage 2 is live): CODE ONLY (the exact-shift lookup rides on the existing GET /v1/open-shifts route as ?shiftId=). Use --expect off, then --expect post.
 Stage `stage2` (after stage 1 is live): 9 routes (7 texting, 2 service location), Handler env SMS_MODE=mock and SERVICE_LOCATION=on, new code assets; no new resource of any other kind.
 Stage `notifications` (email NOT configured: no email function, no SES permission, no sender):
@@ -23,6 +24,10 @@ ASSET_BUCKET = "cdk-hnb659fds-assets-300094796789-us-west-2"
 SECTIONS = ["AWSTemplateFormatVersion", "Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform"]
 CODE_ONLY_PREFIXES = ("Handler", "IdentityHandler")
 STAGES = {
+    "stage7": {   # admin override of a CPR/TB readiness block (0123): 3 routes behind readinessOverrides and new Handler code; no schedule, permission or environment variable is added
+        "routes": {"GET /v1/readiness-overrides", "POST /v1/caregivers/{caregiverRecordId}/readiness-override", "POST /v1/readiness-overrides/{overrideId}/revoke"},
+        "schedules": set(), "permission_prefixes": (), "handler_env": {},
+    },
     "stage3": {   # the alert card and the exact-shift page: migration 0120 and new Handler code ONLY. No route, schedule, permission or environment variable is added: --expect off (code only) and --expect post
         "routes": set(), "schedules": set(), "permission_prefixes": (), "handler_env": {},
     },
