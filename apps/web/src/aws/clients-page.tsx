@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@carelik/auth";
 import { Button, Card } from "@carelik/ui";
+import { useNotificationCenter } from "./notification-center-data";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
@@ -75,7 +76,8 @@ function AddClientForm({ onDone }: { onDone: (clientId: string, note?: string) =
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
-  const [form, setForm] = useState({ first: "", last: "", city: "", type: "", label: "" });
+  const [form, setForm] = useState({ first: "", last: "", city: "", zip: "", type: "", label: "" });
+  const rules = useNotificationCenter().available;   // open-shift alerts are on: the service address needs a city AND a ZIP code
   const [draft, setDraft] = useState(false);
   const [office, setOffice] = useState("");
   const [dupConfirmed, setDupConfirmed] = useState(false);
@@ -86,12 +88,14 @@ function AddClientForm({ onDone }: { onDone: (clientId: string, note?: string) =
   async function submit() {
     if (!form.first.trim() || !form.last.trim()) return setState({ busy: false, error: "Enter the client's first and last name." });
     if ((dupes.data ?? []).some((m) => m.match === "same_name") && !dupConfirmed) return setState({ busy: false, error: "A client with this name already exists. Confirm it is a different person, or open the existing client." });
+    if (rules && !form.city.trim()) return setState({ busy: false, error: "Enter the city of the service address." });
+    if (rules && !/^[0-9]{5}$/.test(form.zip.trim())) return setState({ busy: false, error: "Enter the 5-digit ZIP code of the service address." });
     if (form.label.trim() && (form.label.trim().length < 3 || form.label.trim().length > 40)) return setState({ busy: false, error: "The caregiver label must be 3 to 40 characters." });
     setState({ busy: true, error: null });
     try {
       const r = await api.post<{ client: { clientId: string; clientCode: string } }>("/v1/clients", {
         organizationId: activeOrganizationId, firstName: form.first.trim(), lastName: form.last.trim(),
-        city: form.city.trim() || null, clientTypeId: form.type || null, caregiverLabel: form.label.trim() || null,
+        city: form.city.trim() || null, ...(rules ? { serviceZip: form.zip.trim() } : {}), clientTypeId: form.type || null, caregiverLabel: form.label.trim() || null,
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       if (draft) await api.post(`/v1/clients/${encodeURIComponent(r.client.clientId)}/stage`, { organizationId: activeOrganizationId, stage: "draft", note: null }, { idempotencyKey: newIdempotencyKey() });
@@ -112,7 +116,8 @@ function AddClientForm({ onDone }: { onDone: (clientId: string, note?: string) =
       <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="new-first" className="block text-sm font-medium text-slate-700">First name</label><input id="new-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="new-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="new-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
-        <div><label htmlFor="new-city" className="block text-sm font-medium text-slate-700">City (optional)</label><input id="new-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
+        <div><label htmlFor="new-city" className="block text-sm font-medium text-slate-700">{rules ? "City of the service address" : "City (optional)"}</label><input id="new-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
+        {rules ? <div><label htmlFor="new-zip" className="block text-sm font-medium text-slate-700">ZIP code of the service address</label><input id="new-zip" value={form.zip} maxLength={5} inputMode="numeric" autoComplete="off" onChange={(e) => set("zip")(e.target.value.replace(/\D/g, ""))} className={inputClass} /></div> : null}
         <ClientTypeField id="new-type" value={form.type} onChange={set("type")} />
         <div className="sm:col-span-2"><label htmlFor="new-label" className="block text-sm font-medium text-slate-700">Label caregivers see instead of the code (optional)</label><input id="new-label" value={form.label} maxLength={40} autoComplete="off" onChange={(e) => set("label")(e.target.value)} className={inputClass} /></div>
         <NewRecordOffice kind="client" value={office} onChange={setOffice} />

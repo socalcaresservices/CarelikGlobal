@@ -1,0 +1,172 @@
+[
+  {
+    "name": "owner: texting panel says the test sender sends nothing to a phone",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "owner: this agency's own limits are shown",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "owner: an on-call number is added and shown by its last four digits only",
+    "ok": true,
+    "detail": "On-call Temecula · ends 0199 · every office Remove"
+  },
+  {
+    "name": "Alex: the Turn on texts button is off until there is a number AND an explicit yes",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Alex: a number alone is not consent",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Alex: the button is on after the yes",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Alex: the consent text is visible (rates, STOP, no client names)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Alex: primary button reachable on the phone, no sideways scroll",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Alex: opted in, shows only the last four digits",
+    "ok": true,
+    "detail": "Texts go to the number ending 0101. Reply STOP to any text to stop them. Stop texts"
+  },
+  {
+    "name": "Blair: the Turn on texts button is off until there is a number AND an explicit yes",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: a number alone is not consent",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: the button is on after the yes",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: the consent text is visible (rates, STOP, no client names)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: primary button reachable on the phone, no sideways scroll",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: opted in, shows only the last four digits",
+    "ok": true,
+    "detail": "Texts go to the number ending 0102. Reply STOP to any text to stop them. Stop texts"
+  },
+  {
+    "name": "alert run: two recruitment texts went through the MOCK sender, both opted-in caregivers",
+    "ok": true,
+    "detail": "[\"…0101\",\"…0102\"]"
+  },
+  {
+    "name": "alert run: the text has the service city, STOP line, and no client name, code, street or ZIP",
+    "ok": true,
+    "detail": "Local Demo: Open shift in Winchester, Wed, Nov 25 5:00 AM–5:50 AM. Request it in Ogevia. Reply STOP to opt out."
+  },
+  {
+    "name": "Alex: the Winchester shift shows the SERVICE city and the coordinating office",
+    "ok": true,
+    "detail": "Wed 11/25/2026 5:00 AM–5:50 AM Client CL-1AC5BFD578 · Winchester · Respite · 50 min Coordinated by Temecula Office Request this shift"
+  },
+  {
+    "name": "Alex: the Request button is visible and reachable on the phone",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Alex: after requesting it says Requested and offers Withdraw (it is not the caregiver's shift yet)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: the Winchester shift shows the SERVICE city and the coordinating office",
+    "ok": true,
+    "detail": "Wed 11/25/2026 5:00 AM–5:50 AM Client CL-1AC5BFD578 · Winchester · Respite · 50 min Coordinated by Temecula Office Request this shift"
+  },
+  {
+    "name": "Blair: the Request button is visible and reachable on the phone",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: after requesting it says Requested and offers Withdraw (it is not the caregiver's shift yet)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Blair: withdrawing returns the shift to the Request state",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "office: one card for the shift with two requests",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "office: the EARLIEST eligible request (Alex) is preselected",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "office: the earliest-eligible badge is shown once",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "a caregiver never sees the office queue (the server also refuses it: 403 in the API tests)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "office: confirming assigns exactly the chosen caregiver and closes the other request",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Alex: sees 'You are confirmed' for the Winchester shift",
+    "ok": true,
+    "detail": "● You are confirmed | Winchester | Wed, Nov 25 | 5:00 AM–5:50 AM (unread) The office confirmed you for this shift. 11/23/2026 10:26 AM · New Open Mark read Archive"
+  },
+  {
+    "name": "Blair: sees 'Filled' in-app, and no confirmation",
+    "ok": true,
+    "detail": "● Filled | Winchester | Wed, Nov 25 | 5:00 AM–5:50 AM (unread) Someone else was confirmed for this shift. No action needed. 11/23/2026 10:26 AM · New Open Mark read Archive"
+  },
+  {
+    "name": "Blair: the filled shift is gone from the board",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "worker: exactly one confirmation text, to the chosen caregiver's number (ending 0101), none to Blair",
+    "ok": true,
+    "detail": "[[\"…0101\",\"Local Demo: You are confirmed for the sh\"]]"
+  },
+  {
+    "name": "owner: the history lists the confirmation (ending 0101) and the two offers, as Sent (test sender); no full numbers",
+    "ok": true,
+    "detail": "Confirmation · caregiver ending 0101 · Sent (test sender) Open-shift offer · caregiver ending 0101 · Sent (test sender) Open-shift offer · caregiver ending 0102 · Sent (test sender)"
+  }
+]

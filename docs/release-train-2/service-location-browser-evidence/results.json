@@ -1,0 +1,87 @@
+[
+  {
+    "name": "Today A: one Service location section with the address, county and office together",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today A (before): Winchester, CA 92596 · County not set · No coordinating office",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today A: Details no longer says 'No city' and has no separate City field",
+    "ok": true,
+    "detail": "Details No type ▾"
+  },
+  {
+    "name": "Today A: the form starts from the saved Winchester / 92596",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today A: Riverside County is SUGGESTED from the agency's other client with this ZIP, and the office is not preselected",
+    "ok": true,
+    "detail": "Suggested: Riverside County (from other clients with this ZIP). Use this"
+  },
+  {
+    "name": "Today A (after): Winchester, CA 92596 · Riverside County · Temecula office",
+    "ok": true,
+    "detail": "Winchester, CA 92596 · Riverside County · Temecula office"
+  },
+  {
+    "name": "Today A: the saved values persist after a reload and Details still has no 'No city'",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today A: the Details edit form has no City or ZIP field",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today A: saving Details does not ask for a city and keeps the service address",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "open-shift alert: the subject says Winchester and the body names Temecula as the coordinating office (the shift itself had no office set)",
+    "ok": true,
+    "detail": "● Open shift in Winchester | Wed, Nov 25 | 5:00–5:50 AM (unread) Personal care · Wed, Nov 25, 5:00–5:50 AM Service city: Winchester Coordinating office: Temecula Open Ogevia to ask for it. The office confirms who works it. 11/23/2026 6:35 PM · New Open Mark read Archive / ● Open shift in Winchester | Tue, Nov 24 | 2:00–5:00 PM (unread) Personal care · Tue, Nov 24, 2:00–5:00 PM Service city: Winchester Coordinating office: Temecula Open Ogevia to ask for it. The office confirms who works it. 11/23/2026 6:35 PM · New Open Mark read Archive"
+  },
+  {
+    "name": "caregiver board: the Today A shift shows Winchester and 'Coordinated by Temecula'",
+    "ok": true,
+    "detail": "Open shifts you can ask for Asking does not give you the shift. Tue 11/24/2026 2:00 PM–5:00 PM Client CL-C7EBDF7166 · Winchester · Personal care · 3 hr Coordinated by Temecula Request this shift Wed 11/25/2026 5:00 AM–5:50 AM Client CL-C7EBDF7166 · Winchester · Personal care · 50 min Coordinated by Temecula Request this shift Thu 11/26/2026 10:00 AM–2:00 PM Client CL-2819D8C05B · Winchester · Respite · 4 hr Request this shift"
+  },
+  {
+    "name": "no horizontal scroll on the phone",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today B (city, no ZIP): says exactly what is missing",
+    "ok": true,
+    "detail": "The service address is missing the ZIP code. Open shifts for this client cannot be sent to caregivers until it is complete."
+  },
+  {
+    "name": "Today B: the summary names the gaps",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today B: the link opens the edit form directly, with the ZIP empty",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today B: saving without a ZIP is refused with the exact message",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "Today B: after completing it, the summary is Hemet, CA 92596 · Riverside County · Murrieta office",
+    "ok": true,
+    "detail": "Hemet, CA 92596 · Riverside County · Murrieta office"
+  }
+]

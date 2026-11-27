@@ -6,6 +6,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { getSaveErrorMessage } from "@/lib/data-errors";
 
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
 // Administrative workforce records only. This screen does not rank, score,
 // recommend, select, or remove people. Authorized staff control record changes.
 interface WorkforceRow {
@@ -50,6 +52,10 @@ export function CareTeamPage() {
     [recordsQuery.data]
   );
   const filteredRecords = (recordsQuery.data ?? []).filter((row) => !positionFilter || row.position === positionFilter);
+  const { rows: sortedRecords, sort } = useSortedRows(filteredRecords, {
+    name: { get: (r) => r.display_name }, code: { get: (r) => r.caregiver_code }, position: { get: (r) => r.position }, status: { get: (r) => r.status },
+    hours: { get: (r) => r.desired_weekly_hours, kind: "number" }, access: { get: (r) => (r.linked_user_id ? "Linked" : "No login") },
+  });
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -138,16 +144,16 @@ export function CareTeamPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Code</th>
-                  <th className="px-3 py-2">Position</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Hours</th>
-                  <th className="px-3 py-2">Access</th>
+                  <SortTh sort={sort} column="name" className="px-3 py-2">Name</SortTh>
+                  <SortTh sort={sort} column="code" className="px-3 py-2">Code</SortTh>
+                  <SortTh sort={sort} column="position" className="px-3 py-2">Position</SortTh>
+                  <SortTh sort={sort} column="status" className="px-3 py-2">Status</SortTh>
+                  <SortTh sort={sort} column="hours" kind="number" className="px-3 py-2">Hours</SortTh>
+                  <SortTh sort={sort} column="access" className="px-3 py-2">Access</SortTh>
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map((row) => (
+                {sortedRecords.map((row) => (
                   <tr key={row.id} className="border-b border-slate-100">
                     <td className="px-3 py-3">
                       <Link to={`/team/${row.id}`} className="font-semibold text-slate-900 hover:underline">{row.display_name}</Link>

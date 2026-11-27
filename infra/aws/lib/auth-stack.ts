@@ -1,8 +1,18 @@
 import { CfnOutput, RemovalPolicy, Stack, Token, Validations, type StackProps } from "aws-cdk-lib";
 import * as cognito from "aws-cdk-lib/aws-cognito";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as nodejs from "aws-cdk-lib/aws-lambda-nodejs";
+import { Duration } from "aws-cdk-lib";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Construct } from "constructs";
 import { assertCognitoTemplate, renderInvitationEmail } from "./invitation-email.js";
 import { assertAuthConfig, type OgeviaEnvironmentConfig, customOriginsFor } from "./config.js";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+export const CUSTOM_MESSAGE_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/custom-message-index.ts");
 
 export interface ProductionAuthStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
@@ -48,7 +58,37 @@ export class ProductionAuthStack extends Stack {
       const rendered = renderInvitationEmail({ companyName: invite.companyName, signInUrl: Token.isUnresolved(webOrigin) ? "https://app.ogevia.com" : webOrigin, ...(invite.logoUrl ? { logoUrl: invite.logoUrl } : {}), ...(invite.accentColor ? { accentColor: invite.accentColor } : {}), ...(invite.supportEmail ? { supportEmail: invite.supportEmail } : {}) });
       assertCognitoTemplate(rendered);
       inviteMessage = { emailSubject: rendered.subject, emailMessage: rendered.html };
+      if (invite.replyTo !== undefined && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(invite.replyTo)) throw new Error("invitation email: replyTo must be an email address");
       if (invite.sender && !/^arn:aws:ses:[a-z0-9-]+:\d{12}:identity\/.+$/.test(invite.sender.sesIdentityArn)) throw new Error("invitation email: sender.sesIdentityArn must be an SES identity ARN");
+    }
+    // Release Train 2 (priority B): Cognito custom-message trigger (branded invitation, branded password reset, per-office look from ClientMetadata). Created only when the
+    // environment sets auth.invitationEmail. Pure function: no VPC, no database, no secrets; its role can only write its own logs. It fails open (Cognito's own message).
+    let customMessage: lambda.Function | undefined;
+    if (invite) {
+      const cmLogs = new logs.LogGroup(this, "CustomMessageLogGroup", { retention: config.logRetention, removalPolicy: RemovalPolicy.RETAIN });
+      const cmRole = new iam.Role(this, "CustomMessageRole", { assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"), description: "Ogevia Cognito custom-message trigger (logs only)" });
+      const cmPolicy = new iam.ManagedPolicy(this, "CustomMessagePolicy", { description: "Ogevia custom-message trigger: own logs only", roles: [cmRole] });
+      cmPolicy.addStatements(new iam.PolicyStatement({ sid: "WriteOwnLogGroup", actions: ["logs:CreateLogStream", "logs:PutLogEvents"], resources: [cmLogs.logGroupArn] }));
+      customMessage = new nodejs.NodejsFunction(this, "CustomMessageHandler", {
+        description: "Ogevia Cognito custom message: branded invitation and password reset",
+        runtime: lambda.Runtime.NODEJS_24_X,
+        architecture: lambda.Architecture.ARM_64,
+        entry: CUSTOM_MESSAGE_ENTRY,
+        handler: "handler",
+        projectRoot: REPO_ROOT,
+        depsLockFilePath: resolve(REPO_ROOT, "pnpm-lock.yaml"),
+        bundling: { format: nodejs.OutputFormat.CJS, target: "node22", minify: true, sourceMap: false, forceDockerBundling: false },
+        memorySize: 128,
+        timeout: Duration.seconds(3),   // Cognito allows 5 s for a trigger
+        role: cmRole,
+        logGroup: cmLogs,
+        environment: {
+          BRAND_COMPANY: invite.companyName, SIGN_IN_URL: Token.isUnresolved(webOrigin) ? "https://app.ogevia.com" : webOrigin,
+          ...(invite.logoUrl ? { BRAND_LOGO_URL: invite.logoUrl } : {}), ...(invite.accentColor ? { BRAND_ACCENT: invite.accentColor } : {}), ...(invite.supportEmail ? { BRAND_SUPPORT_EMAIL: invite.supportEmail } : {}),
+        },
+      });
+      customMessage.node.addDependency(cmPolicy);
+      Validations.of(customMessage).acknowledge({ id: "HIPAA.Security-LambdaInsideVPC", reason: "A pure template function: no database, S3, KMS or secret access and no network use. Cognito invokes it directly; it fails open." });
     }
     this.userPool = new cognito.CfnUserPool(this, "UserPool", {
       userPoolName: `ogevia-${config.envName}`,
@@ -71,13 +111,20 @@ export class ProductionAuthStack extends Stack {
         },
         signInPolicy: { allowedFirstAuthFactors: ["PASSWORD"] },
       },
+      ...(customMessage ? { lambdaConfig: { customMessage: customMessage.functionArn } } : {}),
       accountRecoverySetting: { recoveryMechanisms: [{ name: "verified_email", priority: 1 }] },
-      emailConfiguration: invite?.sender ? { emailSendingAccount: "DEVELOPER", from: invite.sender.from, sourceArn: invite.sender.sesIdentityArn } : { emailSendingAccount: "COGNITO_DEFAULT" },
+      emailConfiguration: {
+        ...(invite?.sender ? { emailSendingAccount: "DEVELOPER", from: invite.sender.from, sourceArn: invite.sender.sesIdentityArn } : { emailSendingAccount: "COGNITO_DEFAULT" }),
+        ...(invite?.replyTo ? { replyToEmailAddress: invite.replyTo } : {}),
+      },
       schema: [{ name: "email", attributeDataType: "String", required: true, mutable: true }],
       userAttributeUpdateSettings: { attributesRequireVerificationBeforeUpdate: ["email"] },
     });
     // Retain on stack deletion AND on replacement (a replaced pool would lose every user).
     this.userPool.applyRemovalPolicy(RemovalPolicy.RETAIN);
+    if (customMessage) {
+      new lambda.CfnPermission(this, "CustomMessageInvoke", { action: "lambda:InvokeFunction", functionName: customMessage.functionName, principal: "cognito-idp.amazonaws.com", sourceArn: this.userPool.attrArn });
+    }
 
     this.userPoolDomain = new cognito.CfnUserPoolDomain(this, "UserPoolDomain", {
       domain: dedicated.domainPrefix,

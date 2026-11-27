@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { BillingSummaryCard } from "@/components/billing-summary-card";
 import { OrganizationBrandingCard } from "@/components/organization-branding-card";
 
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
 // Skills and languages are org-scoped lookup catalogs (same shape as the
 // service catalog, Build 003) that feed the picker on caregiver and
 // client profiles - see 20260727070000_skills_and_languages_catalog.sql
@@ -999,6 +1001,9 @@ export function SettingsPage() {
     },
     enabled: !!activeOrganizationId && canRead
   });
+  const { rows: sortedSettings, sort: settingsSort } = useSortedRows(settingsQuery.data ?? [], {
+    key: { get: (r) => r.key }, value: { get: (r) => previewValue(r.value) }, updated: { get: (r) => r.updated_at, kind: "date" },
+  });
 
   function refreshSettings() {
     void queryClient.invalidateQueries({ queryKey: ["organization-settings", activeOrganizationId] });
@@ -1188,14 +1193,14 @@ export function SettingsPage() {
           <table className="mt-4 w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                <th className="pb-2 font-medium">Key</th>
-                <th className="pb-2 font-medium">Value</th>
-                <th className="pb-2 font-medium">Updated</th>
+                <SortTh sort={settingsSort} column="key" className="pb-2 font-medium">Key</SortTh>
+                <SortTh sort={settingsSort} column="value" className="pb-2 font-medium">Value</SortTh>
+                <SortTh sort={settingsSort} column="updated" kind="date" className="pb-2 font-medium">Updated</SortTh>
                 {canUpdate ? <th className="pb-2 font-medium" /> : null}
               </tr>
             </thead>
             <tbody>
-              {(settingsQuery.data ?? []).map((row) => (
+              {sortedSettings.map((row) => (
                 <tr key={row.key} className="border-b border-slate-100 last:border-0">
                   <td className="py-2.5 font-mono text-xs text-slate-800">{row.key}</td>
                   <td className="py-2.5 font-mono text-xs text-slate-600">{previewValue(row.value)}</td>

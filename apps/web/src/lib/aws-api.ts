@@ -21,7 +21,12 @@ export const SWITCHED_PATHS: readonly RegExp[] = [
   /^\/v1\/care-notifications\/read$/, /^\/v1\/documents\/[^/]+\/cancel$/, /^\/v1\/document-types\/[^/]+\/retire$/,
   /^\/v1\/offices(\/|$)/, /^\/v1\/client-offices$/, /^\/v1\/clients\/[^/]+\/office$/,
   /^\/v1\/people-facets$/, /^\/v1\/assignment-history$/, /^\/v1\/clients\/[^/]+\/(offices|service-county)$/, /^\/v1\/caregivers\/[^/]+\/(offices|service-counties|color)$/,
-  /^\/v1\/staff\/duplicates$/, /^\/v1\/staff\/[^/]+\/merge$/, /^\/v1\/imports\/[^/]+$/,
+  /^\/v1\/(notification-center(\/mark)?|notification-preferences|cover-notification-(settings|history)|cover-office-audiences)$/, /^\/v1\/offices\/[^/]+\/cover-audience$/, /^\/v1\/shifts\/[^/]+\/notify-cover$/,
+  /^\/v1\/(sms-settings|my-sms|sms-oncall|sms-history)$/,
+  /^\/v1\/clients\/[^/]+\/service-location$/,
+  /^\/v1\/caregivers\/[^/]+\/readiness-override$/, /^\/v1\/readiness-overrides(\/[^/]+\/revoke)?$/,
+  /^\/v1\/office-branding$/, /^\/v1\/operations-readiness$/, /^\/v1\/offices\/[^/]+\/branding$/,
+  /^\/v1\/staff\/duplicates$/, /^\/v1\/staff\/merge-preview$/, /^\/v1\/staff-merges(\/[^/]+\/undo)?$/, /^\/v1\/staff\/[^/]+\/merge$/, /^\/v1\/imports(\/[^/]+(\/rollback)?)?$/,
   /^\/v1\/caregivers\/[^/]+\/signin-override$/, /^\/v1\/signin-overrides$/,
   /^\/v1\/reports\/missing-visits$/, /^\/v1\/shifts\/[^/]+\/missing-visit$/, /^\/v1\/business-documents$/, /^\/v1\/checkin$/, /^\/v1\/clients\/[^/]+\/qr-card$/,
 ];

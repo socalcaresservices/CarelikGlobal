@@ -7,6 +7,7 @@ import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportPa
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
 import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
+import { sanitizeOfficeLook, type OfficeLook } from "@carelik/shared";
 import type { IdentityAdmin } from "./identity";
 import {
   date,
@@ -308,6 +309,31 @@ function exportFilename(report: ReportKey, p: ExportParams): string {
 
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
+/**
+ * Release Train 2 (open-shift alerts): when ON (CDK sets COVER_ALERT_ADDRESS_RULES=on together with the notifications switch) a client's service address must have BOTH a city and a
+ * 5-digit ZIP code, on creation and on every edit. The alert itself is also blocked in the database for a client that has neither, so older clients are completed on the client record.
+ */
+const addressRules = () => process.env.COVER_ALERT_ADDRESS_RULES === "on";
+/** 0118: city, ZIP, county and coordinating office are edited together on the client profile; the Details edit no longer carries (or changes) the city. */
+const serviceLocationOn = () => process.env.SERVICE_LOCATION === "on";
+const serviceZip = (value: unknown, required: boolean) => {
+  const z = text(value, "serviceZip", 5, { required });
+  if (z !== null && z !== undefined && !/^[0-9]{5}$/.test(z)) throw new ApiError(400, "bad_request", "Enter a 5-digit ZIP code.");
+  return z ?? null;
+};
+const requireCity = (city: string | null | undefined) => { if (!city || !city.trim()) throw new ApiError(400, "bad_request", "Enter the city of the service address."); return city; };
+/**
+ * Release Train 2 (0114): the caregiver's office look for the invitation email. Only when INVITATION_BRANDING=on (set by CDK together with the Cognito trigger), and it
+ * can never block an invitation: any failure (for example 0114 not applied) means the company look.
+ */
+async function invitationLook(tx: (work: (db: Queryable) => Promise<unknown>) => Promise<unknown>, org: string, caregiverRecordId: string): Promise<OfficeLook | undefined> {
+  if (process.env.INVITATION_BRANDING !== "on") return undefined;
+  try {
+    const raw = await tx(async (db) => (await first(db, "select ogevia_api.get_invitation_look($1,$2) as r", [org, caregiverRecordId])).r);
+    const look = sanitizeOfficeLook(raw);
+    return Object.keys(look).length > 0 ? look : undefined;
+  } catch { return undefined; }
+}
 
 /**
  * Route table keyed by the API Gateway routeKey. Every route here MUST also be
@@ -595,8 +621,15 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
       const c = clientDetails(body);
-      const [created] = await tx((db) =>
-        rows(db, "select * from ogevia_api.create_client($1, $2, $3, $4, $5, $6, $7)", [c.org, c.first, c.last, c.city, c.type, c.label, key]));
+      const rules = addressRules();
+      if (rules) requireCity(c.city);
+      const zip = serviceZip(body.serviceZip, rules);
+      // one transaction: a client is never created with an address the rules refuse
+      const [created] = await tx(async (db) => {
+        const made = await rows(db, "select * from ogevia_api.create_client($1, $2, $3, $4, $5, $6, $7)", [c.org, c.first, c.last, c.city, c.type, c.label, key]);
+        if (rules && zip && made[0]) await db.query("select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [c.org, made[0].clientId, zip, c.city]);
+        return made;
+      });
       return { client: created };
     },
   },
@@ -608,8 +641,37 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
       const c = clientDetails(body);
-      await tx((db) => db.query("select ogevia_api.update_client($1, $2, $3, $4, $5, $6, $7, $8)", [c.org, client, c.first, c.last, c.city, c.type, c.label, key]));
+      const location = serviceLocationOn();   // 0118: the service location section owns the city and ZIP; this edit leaves them as they are
+      const rules = addressRules() && !location;
+      if (rules) requireCity(c.city);
+      const zip = serviceZip(body.serviceZip, false);
+      await tx(async (db) => {
+        if (location) c.city = ((await first(db, "select ogevia_api.get_client_service_location($1,$2) as r", [c.org, client])).r as { city: string | null }).city ?? null;   // the service city: the Details edit keeps it as it is
+        // with the rules on, the service ZIP must exist after this edit: either sent now or already on the client record
+        if (rules && !zip) {
+          const { location } = await first(db, "select ogevia_api.get_matching_zip($1,$2,'client') as location", [c.org, client]);
+          if (!location?.zip) throw new ApiError(400, "bad_request", "Enter the 5-digit ZIP code of the service address.");
+        }
+        await db.query("select ogevia_api.update_client($1, $2, $3, $4, $5, $6, $7, $8)", [c.org, client, c.first, c.last, c.city, c.type, c.label, key]);
+        if (rules && zip) await db.query("select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [c.org, client, zip, c.city]);
+      });
       return { ok: true };
+    },
+  },
+
+  // 0118: the client's service address, service county and coordinating office, read and saved together. OFF unless features.serviceLocation.
+  "GET /v1/clients/{clientId}/service-location": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ location: await tx(async (db) => (await first(db, "select ogevia_api.get_client_service_location($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).r) }),
+  },
+  "POST /v1/clients/{clientId}/service-location": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const city = requireCity(text(body.city, "city", 80));
+      const zip = serviceZip(body.zip, true);
+      return { location: await tx(async (db) => (await first(db, "select ogevia_api.set_client_service_location($1,$2,$3,$4,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), city, zip, text(body.county, "county", 40) ?? null, optionalUuid(body.officeId, "officeId") ?? null])).r) };
     },
   },
 
@@ -1040,7 +1102,7 @@ export const ROUTES: Record<string, Route> = {
       const email = text(body.email, "email", 254, { required: true })!;
       const normalized = await tx(async (db) =>
         ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
-      const signIn = await identity.invite(normalized);
+      const signIn = await identity.invite(normalized, await invitationLook(tx, org, record));
       const [invitation] = await tx((db) =>
         rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
       return { invitation };
@@ -1055,7 +1117,7 @@ export const ROUTES: Record<string, Route> = {
       const org = uuid(body.organizationId, "organizationId");
       const email = await tx(async (db) =>
         ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
-      await identity.resend(email);
+      await identity.resend(email, await invitationLook(tx, org, record));
       const sendCount = await tx(async (db) =>
         ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
       return { invitation: { sendCount } };
@@ -1754,7 +1816,19 @@ export const ROUTES: Record<string, Route> = {
   // a retry is the same answer; readiness, overlap and authorization are re-checked in the database.
   "GET /v1/open-shifts": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])) }),
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      // 0120: with ?shiftId= the answer also says what happened to the one shift an alert pointed at (status, service city, time); same rule as the board, no client detail
+      const alertShift = query.shiftId === undefined ? undefined : uuid(query.shiftId, "shiftId");
+      return {
+        shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])),
+        ...(alertShift === undefined ? {} : await (async () => {
+          const r = await tx(async (db) => (await first(db, "select ogevia_api.get_cover_shift($1,$2) as r", [orgParam(event), alertShift])).r) as { status?: string } | null;
+          // a shift the caller has no connection to (or that does not exist) is answered exactly like no shift: the key is simply absent, so nothing can be learned from the difference
+          return r && r.status !== "unavailable" ? { alertShift: r } : {};
+        })()),
+      };
+    },
   },
 
   // 0063: asking for an open shift only records a request; the shift is not assigned until an administrator confirms (confirm below).
@@ -1950,6 +2024,32 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Release Train 2 (behind the `operationsReadiness` release switch): the operations readiness view in ONE call. It only COMPOSES existing database functions (the attention overview, expiring
+  // authorization hours, the compliance summary), each in its own transaction and each under that function's own permission check. A part that fails or is not allowed comes back as null and is
+  // named in `unavailable`: the page then says so instead of showing zero.
+  "GET /v1/operations-readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      const unavailable: string[] = [];
+      const part = async <T>(name: string, work: () => Promise<T>): Promise<T | null> => { try { return await work(); } catch { unavailable.push(name); return null; } };
+      // The caller's permissions in THIS agency (the same source as /v1/me). A part the caller may not see is named as unavailable, never composed as empty.
+      const context = await tx((db) => rows(db, "select * from ogevia_api.get_my_context()", []));
+      const mine = context.find((m) => m.organizationId === org);
+      const perms = new Set<string>(Array.isArray(mine?.permissions) ? (mine!.permissions as string[]) : []);
+      const may = (...any: string[]) => any.some((x) => perms.has(x));
+      const overview = await part("overview", () => tx(async (db) => {
+        if (!may("visits.read", "shifts.manage", "documents.read", "readiness.read")) throw new ApiError(403, "forbidden", "Not allowed.");
+        const o = (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [org, 48])).o;
+        return o && typeof o === "object" ? withClientNames(o, await nameDirectory(db, org)) : o;
+      }));
+      const expiring = await part("expiring", async () => { if (!may("visits.read")) throw new ApiError(403, "forbidden", "Not allowed."); return tx((db) => rows(db, "select * from ogevia_api.list_expiring_authorization_hours($1)", [org])); });
+      const compliance = await part("compliance", async () => { if (!may("readiness.read")) throw new ApiError(403, "forbidden", "Not allowed."); return tx(async (db) => (await first(db, "select ogevia_api.get_compliance_summary($1) as c", [org])).c); });
+      if (overview === null && expiring === null && compliance === null) throw new ApiError(403, "forbidden", "You do not have permission to see operations readiness.");
+      return { readiness: { asOf: new Date().toISOString(), overview, expiring, compliance, unavailable } };
+    },
+  },
+
   // Appearance (0054): agency defaults (organization.update) and each person's own choices. A null value means "follow the next level".
   "GET /v1/appearance": {
     mutating: false,
@@ -2039,6 +2139,45 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0123 (pending, behind the readinessOverrides release switch): an administrator lifts ONE caregiver-readiness block (a CPR or TB document that is missing, waiting for review, rejected or
+  // expired) for one caregiver and one exact issue, with a reason; revoking restores the block. The server recomputes the issue and refuses a stale or different one, so the browser only
+  // names what the administrator reviewed. The document's status is never changed; the original work approval and every override are kept.
+  "POST /v1/caregivers/{caregiverRecordId}/readiness-override": {
+    mutating: true,
+    status: 201,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        override: await tx(async (db) => (await first(db, "select ogevia_api.approve_readiness_override($1,$2,$3,$4,$5,$6) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.requirement, "requirement", ["cpr", "tb"] as const), text(body.issueKey, "issueKey", 200, { required: true }),
+          text(body.reason, "reason", 500, { required: true }), key])).r),
+      };
+    },
+  },
+  "POST /v1/readiness-overrides/{overrideId}/revoke": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        override: await tx(async (db) => (await first(db, "select ogevia_api.revoke_readiness_override($1,$2,$3,$4) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).overrideId, "overrideId"), text(body.reason, "reason", 500, { required: true }), key])).r),
+      };
+    },
+  },
+  "GET /v1/readiness-overrides": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return {
+        overrides: await tx(async (db) => (await first(db, "select ogevia_api.list_readiness_overrides($1,$2,$3) as r", [
+          orgParam(event), optionalUuid(query.caregiverRecordId, "caregiverRecordId"), query.activeOnly === "true"])).r),
+      };
+    },
+  },
+
   // 0092 (pending, behind the bulkImport release switch): R11 bulk import of people or clients from a CSV/XLSX file. The file is parsed here, the rows are
   // validated and created by ogevia_api.import_rows in ONE transaction (preview first, then confirm). The organization comes from the signed-in session via
   // the database guards; the file never names a tenant. The file content and the row values are never logged.
@@ -2061,6 +2200,21 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0115 (pending, behind the importRollback release switch): the import history and rollback of one import (all or nothing; records become Inactive, nothing is deleted).
+  "GET /v1/imports": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ imports: await tx((db) => rows(db, "select * from ogevia_api.list_import_batches($1,50)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/imports/{batchId}/rollback": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.rollback_import_batch($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).batchId, "batchId"), text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
   // 0093 (pending, behind the staffDuplicates release switch): R6. The report is read-only; the merge marks a duplicate staff profile inactive and linked (never deletes),
   // refuses unless the two records really match, and refuses a record that has a sign-in or invitation.
   "GET /v1/staff/duplicates": {
@@ -2070,15 +2224,41 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // 0116 (same staffDuplicates switch; apply 0116 with 0106): the wizard's preview, the merge with explicit choices for conflicting fields, the merge history and the guarded undo.
+  "GET /v1/staff/merge-preview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { preview: await tx(async (db) => (await first(db, "select ogevia_api.preview_staff_merge($1,$2,$3) as r", [orgParam(event), uuid(query.keepProfileId, "keepProfileId"), uuid(query.duplicateProfileId, "duplicateProfileId")])).r) };
+    },
+  },
+
   "POST /v1/staff/{profileId}/merge": {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       const reason = text(body.reason, "reason", 500, { required: true })!;
-      return {
-        result: await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles($1,$2,$3,$4) as r", [
-          uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason])).r),
-      };
+      const resolutions = body.resolutions === undefined || body.resolutions === null ? {}
+        : typeof body.resolutions === "object" && !Array.isArray(body.resolutions) && Object.values(body.resolutions as Record<string, unknown>).every((v) => v === "keep" || v === "duplicate") ? body.resolutions
+        : (() => { throw new ApiError(400, "bad_request", "resolutions must choose keep or duplicate for each field."); })();
+      // `result` stays the plain state string ("merged" / "already_merged") as in 0106; the link id (for the undo) is additive.
+      const r = await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles_v2($1,$2,$3,$4,$5::jsonb) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason, JSON.stringify(resolutions)])).r) as { state: string; linkId?: string };
+      return { result: r.state, linkId: r.linkId ?? null };
+    },
+  },
+
+  "GET /v1/staff-merges": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ merges: await tx((db) => rows(db, "select * from ogevia_api.list_staff_merges($1,50)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/staff-merges/{linkId}/undo": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.unmerge_staff_profiles($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).linkId, "linkId"), text(body.reason, "reason", 500, { required: true })])).r) };
     },
   },
 
@@ -2157,13 +2337,13 @@ export const ROUTES: Record<string, Route> = {
       if (!invited) {
         const normalized = await tx(async (db) =>
           ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
-        const signIn = await identity.invite(normalized);
+        const signIn = await identity.invite(normalized, await invitationLook(tx, org, record));
         const [invitation] = await tx((db) =>
           rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
         return { invitation };
       }
       const resendTo = await tx(async (db) => ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
-      await identity.resend(resendTo);
+      await identity.resend(resendTo, await invitationLook(tx, org, record));
       const sendCount = await tx(async (db) => ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
       return { invitation: { sendCount } };
     },
@@ -3648,6 +3828,160 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0113 (pending, behind the `notifications` release switch): cover-shift notifications, the notification centre, preferences and the office history.
+  // Nothing here sends mail: the email outbox is drained by the scheduled worker (notify-worker.ts). Bodies never carry a client name or code.
+  "GET /v1/notification-center": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const state = oneOf(query.state ?? "inbox", "state", ["inbox", "unread", "archived", "all"] as const);
+      const category = query.category === undefined || query.category === "" ? null : oneOf(query.category, "category", ["cover_shift", "cover_office"] as const);
+      const limit = query.limit === undefined ? 30 : wholeNumber(Number(query.limit), "limit", 1, 100);
+      const before = query.before === undefined || query.before === "" ? null : (Number.isNaN(Date.parse(query.before)) ? (() => { throw new ApiError(400, "bad_request", "before must be a date and time."); })() : new Date(query.before).toISOString());
+      return { notifications: await tx(async (db) => (await first(db, "select ogevia_api.list_user_notifications($1,$2,$3,$4,$5::timestamptz) as r", [orgParam(event), state, category, limit, before])).r) };
+    },
+  },
+
+  "POST /v1/notification-center/mark": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const action = oneOf(body.action, "action", ["read", "read_all", "archive", "unarchive"] as const);
+      const ids = body.ids === undefined || body.ids === null ? [] : Array.isArray(body.ids) && body.ids.length <= 200 ? body.ids.map((id) => uuid(id, "ids")) : (() => { throw new ApiError(400, "bad_request", "ids must be a list of up to 200 ids."); })();
+      return { changed: await tx(async (db) => Number((await first(db, "select ogevia_api.mark_user_notifications($1,$2::uuid[],$3) as r", [uuid(body.organizationId, "organizationId"), ids, action])).r)) };
+    },
+  },
+
+  "GET /v1/notification-preferences": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ preferences: await tx(async (db) => (await first(db, "select ogevia_api.get_my_notification_preferences($1) as r", [orgParam(event)])).r) }),
+  },
+
+  "POST /v1/notification-preferences": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { preferences: await tx(async (db) => (await first(db, "select ogevia_api.set_my_notification_preferences($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), oneOf(body.category, "category", ["cover_shift", "cover_office"] as const), booleanValue(body.inApp, "inApp"), booleanValue(body.email, "email")])).r) };
+    },
+  },
+
+  "GET /v1/cover-notification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => (await first(db, "select ogevia_api.get_cover_notification_settings($1) as r", [orgParam(event)])).r) }),
+  },
+
+  "POST /v1/cover-notification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_notification_settings($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+        uuid(body.organizationId, "organizationId"), booleanValue(body.enabled, "enabled"), booleanValue(body.emailEnabled, "emailEnabled"), booleanValue(body.autoNotify, "autoNotify"),
+        wholeNumber(body.windowHours, "windowHours", 1, 336), wholeNumber(body.maxRecipients, "maxRecipients", 1, 200), oneOf(body.audience, "audience", ["office", "agency"] as const),
+        text(body.subjectTemplate, "subjectTemplate", 120, { required: true }), text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
+  // The per-office audience override (office, agency or none; null removes it) and the list of offices with their override.
+  // 0117: automatic texting for open shifts (mock sender only). OFF unless features.openShiftSms.
+  "GET /v1/sms-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => (await first(db, "select ogevia_api.get_sms_settings($1) as r", [orgParam(event)])).r) }),
+  },
+  "POST /v1/sms-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      // only the known keys reach the database function, each checked here and again there
+      const s: Record<string, unknown> = {
+        enabled: booleanValue(body.enabled, "enabled"), provider: oneOf(body.provider, "provider", ["mock", "live"] as const),
+        senderLabel: text(body.senderLabel, "senderLabel", 24), senderId: text(body.senderId, "senderId", 20),
+        dailyLimit: wholeNumber(body.dailyLimit, "dailyLimit", 1, 5000), hourlyLimit: wholeNumber(body.hourlyLimit, "hourlyLimit", 1, 1000), perRecipientDaily: wholeNumber(body.perRecipientDaily, "perRecipientDaily", 1, 20),
+        quietStart: text(body.quietStart, "quietStart", 5, { required: true }), quietEnd: text(body.quietEnd, "quietEnd", 5, { required: true }),
+        recruitmentDays: wholeNumber(body.recruitmentDays, "recruitmentDays", 1, 14), escalationHours: wholeNumber(body.escalationHours, "escalationHours", 1, 72),
+        recruitOn: booleanValue(body.recruitOn, "recruitOn"), receiptOn: booleanValue(body.receiptOn, "receiptOn"), cancelOn: booleanValue(body.cancelOn, "cancelOn"),
+        confirmOn: booleanValue(body.confirmOn, "confirmOn"), officeOn: booleanValue(body.officeOn, "officeOn"),
+      };
+      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_sms_settings($1,$2::jsonb) as r", [org, JSON.stringify(s)])).r) };
+    },
+  },
+  "GET /v1/my-sms": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ sms: await tx(async (db) => (await first(db, "select ogevia_api.get_my_sms($1) as r", [orgParam(event)])).r) }),
+  },
+  "POST /v1/my-sms": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const consent = booleanValue(body.consent, "consent");
+      return { sms: await tx(async (db) => (await first(db, "select ogevia_api.set_my_sms($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), consent ? text(body.phone, "phone", 25, { required: true }) : null, consent, text(body.consentVersion, "consentVersion", 20) ?? "v1"])).r) };
+    },
+  },
+  "GET /v1/sms-oncall": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ contacts: await tx((db) => rows(db, "select * from ogevia_api.list_sms_oncall($1)", [orgParam(event)])) }),
+  },
+  "POST /v1/sms-oncall": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const action = oneOf(body.action, "action", ["add", "remove"] as const);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.set_sms_oncall($1,$2,$3,$4,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), action, action === "add" && body.officeId ? uuid(body.officeId, "officeId") : null,
+        action === "add" ? text(body.label, "label", 40, { required: true }) : null, action === "add" ? text(body.phone, "phone", 25, { required: true }) : null,
+        action === "remove" ? uuid(body.id, "id") : null])).r) };
+    },
+  },
+  "GET /v1/sms-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ messages: await tx((db) => rows(db, "select * from ogevia_api.list_sms_history($1, $2)", [orgParam(event), 100])) }),
+  },
+
+  "GET /v1/cover-office-audiences": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ offices: await tx((db) => rows(db, "select * from ogevia_api.list_cover_office_audiences($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/offices/{officeId}/cover-audience": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const audience = body.audience === null || body.audience === undefined ? null : oneOf(body.audience, "audience", ["office", "agency", "none"] as const);
+      return { audience: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_office_audience($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), audience, text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/notify-cover": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.notify_cover_shift($1,$2,$3) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).shiftId, "shiftId"), optionalUuid(body.officeId, "officeId")])).r) };
+    },
+  },
+
+  "GET /v1/cover-notification-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_cover_notification_history($1,50)", [orgParam(event)])) }),
+  },
+
+  // 0114 (pending, behind the `invitationBranding` release switch): each office's look for sign-in invitation emails. The look is applied by the Cognito custom-message trigger.
+  "GET /v1/office-branding": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ offices: await tx((db) => rows(db, "select * from ogevia_api.list_office_branding($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/offices/{officeId}/branding": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { branding: await tx(async (db) => (await first(db, "select ogevia_api.set_office_branding($1,$2,$3,$4,$5) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), text(body.accentColor, "accentColor", 7), text(body.logoUrl, "logoUrl", 300), text(body.supportEmail, "supportEmail", 254)])).r) };
+    },
+  },
+
   "POST /v1/caregivers/{caregiverRecordId}/color": {
     mutating: true,
     handle: async ({ event, tx }) => {
@@ -4082,6 +4416,8 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       const args = [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), text(body.zip, "zip", 5, { required: true })];
+      if (addressRules()) requireCity(text(body.city, "city", 100)) ;
+      if (!/^[0-9]{5}$/.test(String(args[2] ?? ""))) throw new ApiError(400, "bad_request", "Enter a 5-digit ZIP code.");
       if (body.city === undefined) {
         await tx((db) => db.query("select ogevia_api.set_client_service_zip($1,$2,$3)", args));
       } else {

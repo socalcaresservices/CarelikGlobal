@@ -2,10 +2,11 @@ import { Stack, type StackProps } from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
-import { ENVIRONMENTS, secretArnPattern, type OgeviaEnvironmentConfig } from "./config.js";
+import { ENVIRONMENTS, notificationEmailOf, secretArnPattern, type OgeviaEnvironmentConfig } from "./config.js";
 import { CLIENT_DOCUMENT_OBJECT_KEY_PATTERN, DOCUMENT_OBJECT_KEY_PATTERN, LOGO_OBJECT_KEY_PATTERN, SIGNATURE_OBJECT_KEY_PATTERN, signatureBucketName } from "./evidence-storage-stack.js";
 import { ExistingFoundation } from "./existing-foundation.js";
-import { identityFunctionName } from "./service-verification-api-stack.js";
+import { emailFunctionName, identityFunctionName } from "./service-verification-api-stack.js";
+
 
 export interface NetworkEgressStackProps extends StackProps {
   readonly config: OgeviaEnvironmentConfig;
@@ -118,7 +119,11 @@ export class NetworkEgressStack extends Stack {
       new iam.PolicyStatement({
         principals: [new iam.AnyPrincipal()],
         actions: ["lambda:InvokeFunction"],
-        resources: [config, ...peers].map((env) => `arn:aws:lambda:${config.region}:${config.account}:function:${identityFunctionName(env)}`),
+        resources: [
+          ...[config, ...peers].map((env) => `arn:aws:lambda:${config.region}:${config.account}:function:${identityFunctionName(env)}`),
+          // Release Train 2: the notification email function, only for an environment that has one (none today).
+          ...[config, ...peers].filter((env) => notificationEmailOf(env)).map((env) => `arn:aws:lambda:${config.region}:${config.account}:function:${emailFunctionName(env)}`),
+        ],
         conditions: { StringEquals: { "aws:PrincipalAccount": config.account } },
       }),
     );

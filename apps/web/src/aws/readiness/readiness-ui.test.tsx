@@ -41,7 +41,7 @@ const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === 
 
 describe("administrator matching inputs", () => {
   it("separates reported experience from confirmed tags and requires an explicit review", async () => {
-    const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner" });
+    const { calls } = renderAt(`/care-team/${CG}?tab=assignments`, { role: "organization_owner" });
     expect(await screen.findByText("ABA experience · Caregiver-reported", {}, { timeout: COLD_RENDER_MS })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Review experience" }));
     expect(screen.getByLabelText("ABA experience")).not.toBeChecked();
@@ -201,7 +201,7 @@ describe("administrator: reviewing availability", () => {
   });
 
   it("the caregiver record shows approved and pending hours separately, and an administrator edit needs a reason", async () => {
-    const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner", availability: { pending } });
+    const { calls } = renderAt(`/care-team/${CG}?tab=assignments`, { role: "organization_owner", availability: { pending } });
     fireEvent.click(await screen.findByRole("button", { name: "Edit availability" }));
     const form = await screen.findByRole("form", { name: "Edit availability" });
     expect(screen.getByRole("heading", { name: "Approved" })).toBeInTheDocument();
@@ -234,7 +234,7 @@ describe("Approved services and Documents", () => {
   });
 
   it("only an administrator approves or revokes; a revocation needs a reason and reports what was flagged", async () => {
-    const { calls } = renderAt(`/care-team/${CG}`, { role: "organization_owner", approvals });
+    const { calls } = renderAt(`/care-team/${CG}?tab=readiness`, { role: "organization_owner", approvals });
     fireEvent.click(await screen.findByRole("button", { name: "Revoke" }));
     const form = await screen.findByRole("form", { name: "Revoke approval" });
     expect(within(form).getByRole("button", { name: "Revoke approval" })).toBeDisabled();
@@ -244,7 +244,7 @@ describe("Approved services and Documents", () => {
   });
 
   it("a manager sees approvals but cannot approve or revoke", async () => {
-    renderAt(`/care-team/${CG}`, { role: "manager", approvals });
+    renderAt(`/care-team/${CG}?tab=readiness`, { role: "manager", approvals });
     expect(await screen.findByText("Personal care")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve a service" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Revoke" })).toBeNull();

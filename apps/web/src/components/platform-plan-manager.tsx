@@ -5,6 +5,8 @@ import { FEATURE_LABELS, formatCents } from "@carelik/shared";
 import { supabase } from "@/lib/supabase";
 import { isStripeConfigured } from "@/env";
 
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
 // Raw row shape from list_all_plan_versions() (setof plan_definitions,
 // snake_case straight off the table).
 interface PlanVersionRow {
@@ -138,12 +140,14 @@ export function PlatformPlanManager() {
     }
   });
 
+  const { rows: sortedPlans, sort } = useSortedRows((plansQuery.data ?? []).filter((row) => row.is_current), {
+    plan: { get: (r) => r.name }, version: { get: (r) => r.version, kind: "number" }, price: { get: (r) => r.monthly_price_cents, kind: "number" },
+    limits: { get: (r) => r.max_active_clients, kind: "number" }, status: { get: (r) => (r.is_active ? "Active" : "Retired") },
+  });
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["platform-plan-versions"] });
   }
 
-  const rows = plansQuery.data ?? [];
-  const currentByKey = rows.filter((row) => row.is_current);
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -266,16 +270,16 @@ export function PlatformPlanManager() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                <th className="pb-2 font-medium">Plan</th>
-                <th className="pb-2 font-medium">Version</th>
-                <th className="pb-2 font-medium">Price</th>
-                <th className="pb-2 font-medium">Clients / Staff / Admins</th>
-                <th className="pb-2 font-medium">Status</th>
+                <SortTh sort={sort} column="plan" className="pb-2 font-medium">Plan</SortTh>
+                <SortTh sort={sort} column="version" kind="number" className="pb-2 font-medium">Version</SortTh>
+                <SortTh sort={sort} column="price" kind="number" className="pb-2 font-medium">Price</SortTh>
+                <SortTh sort={sort} column="limits" kind="number" className="pb-2 font-medium">Clients / Staff / Admins</SortTh>
+                <SortTh sort={sort} column="status" className="pb-2 font-medium">Status</SortTh>
                 <th className="pb-2 font-medium" />
               </tr>
             </thead>
             <tbody>
-              {currentByKey.map((row) => (
+              {sortedPlans.map((row) => (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0 align-top">
                   <td className="py-2.5 pr-3">
                     <p className="font-medium text-slate-900">{row.name}</p>

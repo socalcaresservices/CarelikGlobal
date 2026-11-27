@@ -14,7 +14,7 @@ import {
   CAREGIVER_STATUS_LABEL, WORK_STATUS_BADGE, WORK_STATUS_LABEL, caregiverName, signInLabel, useCaregivers,
   type Caregiver, type CaregiverStatus, type WorkStatus,
 } from "./care-team-admin";
-import { formatDateTime } from "@/lib/service-verification";
+import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import type { StaffDocument } from "./document-status";
 import { CaregiverReadiness } from "./readiness/caregiver-readiness";
 import { ReadinessCard } from "./readiness/readiness-card";
@@ -27,6 +27,8 @@ import { SummarySection } from "./ui/summary-section";
 import { InfoTip } from "./ui/info-tip";
 import { ColorSwatch } from "./caregiver-color";
 import { AssignmentHistory, CaregiverColorControl, CaregiverServiceCountiesControl, NewRecordOffice, OfficeAssignmentsControl, OfficeCountyFilters, OfficeNames } from "./office-assignments";
+import { EditableRow, ProfileBlock, ProfileRow, ProfileTabs, StatusChip, rowButton, type Tone } from "./profile-ui";
+import { documentStatusLabel } from "./readiness/format";
 import { assignOfficeAfterCreate, countyMatches, officeMatches, useOffices, usePeopleFacets } from "./offices-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
@@ -254,7 +256,7 @@ function CaregiverContactEmail({ c }: { c: Caregiver }) {
           placeholder="Enter the caregiver's email" value={email ?? savedEmail ?? ""} onChange={(event) => setEmail(event.target.value)} />
       </label>
       <Button type="submit" disabled={saving || !email?.trim()}>{saving ? "Saving…" : "Save contact email"}</Button>
-      <p className="text-xs text-slate-600 sm:col-span-2">{!hasPermission("staff.read") ? "Your role cannot view the saved contact." : roster.isError ? "Saved contact could not be loaded." : roster.isLoading ? "Loading saved contact…" : !savedEmail ? "No contact email saved." : "Saved contact email is shown above."} Use App sign-in to manage invitations. Saving a contact address does not update an existing sign-in email.</p>
+      <p className="text-xs text-slate-600 sm:col-span-2">{!hasPermission("staff.read") ? "Your role cannot view the saved contact." : roster.isError ? "Saved contact could not be loaded." : roster.isLoading ? "Loading saved contact…" : !savedEmail ? "No contact email saved." : "The saved contact email is in the row above."} Use App sign-in to manage invitations. Saving a contact address does not update an existing sign-in email.</p>
       {result ? <p role={result.error ? "alert" : "status"} className="text-sm sm:col-span-2">{result.text}</p> : null}
     </form>
   </Card>;
@@ -318,7 +320,7 @@ function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) 
     } catch (cause) { setState({ busy: false, error: cause instanceof Error ? cause.message : "Not saved.", done: null }); }
   }
   return (
-    <SummarySection title="Hire type and scheduling" summary={`${c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"} · ${c.schedulingMode === "flexible" ? "Flexible" : "Fixed"}`}>
+    <div aria-label="Hire type and scheduling">
       {!canManage ? (
         <p className="mt-1 text-sm text-slate-700">{c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"} · {SCHEDULING_LABEL[c.schedulingMode ?? "fixed"]}</p>
       ) : (
@@ -338,7 +340,7 @@ function EmploymentCard({ c, canManage }: { c: Caregiver; canManage: boolean }) 
 
         </form>
       )}
-    </SummarySection>
+    </div>
   );
 }
 
@@ -369,13 +371,12 @@ function HireDateForm({ c }: { c: Caregiver }) {
     }
   }
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid gap-2 sm:grid-cols-[auto_auto_1fr_auto] sm:items-end" aria-label="Hire date">
-      <p className="text-sm"><span className="block text-xs font-medium">Hire type</span>{c.hireType ? HIRE_LABEL[c.hireType] : "Not recorded"}</p>
+    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-end" aria-label="Hire date">
       <div><label htmlFor="hire-date" className="block text-xs font-medium text-slate-700">Hire date</label><input id="hire-date" type="date" value={v.date} onChange={(e) => { setV((o) => ({ ...o, date: e.target.value })); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
       <div><label htmlFor="hire-reason" className="block text-xs font-medium text-slate-700">Reason</label><input id="hire-reason" value={v.reason} maxLength={500} onChange={(e) => { setV((o) => ({ ...o, reason: e.target.value })); key.current = newIdempotencyKey(); }} className={inputClass} /></div>
       <Button type="submit" variant="secondary" disabled={state.busy}>{state.busy ? "Saving…" : "Save hire date"}</Button>
-      {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-4">{state.error}</p> : null}
-      {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-4">Saved. The change is in the audit history.</p> : null}
+      {state.error ? <p role="alert" className="text-sm text-red-700 sm:col-span-3">{state.error}</p> : null}
+      {state.done ? <p role="status" className="text-sm text-emerald-800 sm:col-span-3">Saved. The change is in the audit history.</p> : null}
     </form>
   );
 }
@@ -446,66 +447,180 @@ function CaregiverProfileSwatch({ caregiverRecordId }: { caregiverRecordId: stri
   const facets = usePeopleFacets(available);
   return facets.ready ? <ColorSwatch color={facets.caregiverColor.get(caregiverRecordId)} /> : null;
 }
+
+/** Tabs of the caregiver profile (CG redesign). Each row shows the saved value; the editor opens only on Edit or Manage. */
+const PROFILE_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "readiness", label: "Readiness" },
+  { id: "assignments", label: "Assignments & availability" },
+  { id: "documents", label: "Documents" },
+] as const;
+type ProfileTabId = (typeof PROFILE_TABS)[number]["id"];
+const isProfileTab = (v: string | null): v is ProfileTabId => PROFILE_TABS.some((t) => t.id === v);
+
+function OverviewTab({ c, canManage, onManageSignIn }: { c: Caregiver; canManage: boolean; onManageSignIn: () => void }) {
+  const { hasPermission } = useOrganization();
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const readiness = useCaregiverReadiness(c.caregiverRecordId, canManage || hasPermission("readiness.read"));
+  const { offices, available } = useOffices();
+  const facets = usePeopleFacets(available);
+  const roster = useQuery({
+    queryKey: ["aws-staff", activeOrganizationId],
+    queryFn: () => api.get<{ staff: { caregiverRecordId: string | null; contactEmail: string | null }[] }>("/v1/staff", { organizationId: activeOrganizationId }),
+    enabled: !!activeOrganizationId && hasPermission("staff.read"),
+  });
+  const contact = roster.data?.staff.find((row) => row.caregiverRecordId === c.caregiverRecordId)?.contactEmail ?? null;
+  const signInEmail = c.invitationEmail ?? null;
+  const differs = !!contact && !!signInEmail && contact.trim().toLowerCase() !== signInEmail.trim().toLowerCase();
+  const signInTone: Tone = c.hasSignIn && c.signInStatus === "active" ? (c.invitedAt && !c.firstSignedInAt ? "warn" : "ok") : "neutral";
+  const hire = readiness.data?.hireDate ?? null;
+  const counties = facets.ready ? facets.caregiverCounties.get(c.caregiverRecordId) ?? [] : null;
+  return (
+    <div className="space-y-3">
+      {canManage ? (
+        <ProfileBlock title="Contact and sign-in">
+          <EditableRow testId="row-contact-email" label="Contact email" canEdit={canManage}
+            value={!hasPermission("staff.read") ? <span className="text-slate-600">Your role cannot view the saved contact.</span> : roster.isError ? <span role="alert" className="text-red-700">Saved contact could not be loaded.</span> : roster.isLoading ? "Loading…" : contact ?? <span className="text-slate-600">Not recorded</span>}
+            status={contact ? <StatusChip tone="saved">Saved</StatusChip> : roster.isSuccess ? <StatusChip tone="neutral">Not recorded</StatusChip> : null}>
+            <CaregiverContactEmail key={c.caregiverRecordId} c={c} />
+          </EditableRow>
+          <ProfileRow testId="row-app-signin" label="App sign-in"
+            value={<>{signInEmail ?? (c.hasSignIn ? "Signed in" : <span className="text-slate-600">No sign-in yet</span>)}{differs ? <span className="mt-0.5 block text-xs text-amber-900" data-testid="signin-differs">Different from the contact email. Open-shift alerts go to the contact email; the sign-in stays as it is.</span> : null}</>}
+            status={<StatusChip tone={signInTone}>{signInLabel(c)}</StatusChip>}
+            action={<button type="button" className={rowButton} onClick={onManageSignIn} aria-label="Manage app sign-in">Manage sign-in</button>} />
+        </ProfileBlock>
+      ) : null}
+      {canManage ? (
+        <ProfileBlock title="Employment">
+          <EditableRow testId="row-hire-date" label="Hire date" canEdit value={hire ? formatDateOnlyLabel(hire) : <span className="text-slate-600">Not recorded</span>}
+            status={hire ? <StatusChip tone="saved">Saved</StatusChip> : <StatusChip tone="neutral">Not recorded</StatusChip>}><HireDateForm c={c} /></EditableRow>
+          <EditableRow testId="row-hire-type" label="Hire type" canEdit value={c.hireType ? HIRE_LABEL[c.hireType] : <span className="text-slate-600">Not recorded</span>}
+            status={c.hireType ? <StatusChip tone="saved">Saved</StatusChip> : <StatusChip tone="neutral">Not recorded</StatusChip>}><EmploymentCard c={c} canManage={canManage} /></EditableRow>
+          <EditableRow testId="row-scheduling-type" label="Scheduling type" canEdit value={c.schedulingMode === "flexible" ? "Flexible" : "Fixed"}
+            status={<StatusChip tone="saved">Saved</StatusChip>}><EmploymentCard c={c} canManage={canManage} /></EditableRow>
+        </ProfileBlock>
+      ) : null}
+      <ProfileBlock title="Offices and service area">
+        <EditableRow testId="row-offices" label="Assigned offices" canEdit={canManage} actionLabel="Manage"
+          value={available ? <OfficeNames ids={facets.caregiverOffices.get(c.caregiverRecordId)} offices={offices} /> : <span className="text-slate-600">Not available yet</span>}>
+          <OfficeAssignmentsControl kind="caregiver" subjectId={c.caregiverRecordId} />
+        </EditableRow>
+        <EditableRow testId="row-counties" label="Service counties" canEdit={canManage}
+          value={counties === null ? <span className="text-slate-600">Not available yet</span> : counties.length ? counties.join(", ") : <span className="text-slate-600">None chosen</span>}>
+          <CaregiverServiceCountiesControl caregiverRecordId={c.caregiverRecordId} />
+        </EditableRow>
+        {hasPermission("matching.manage") ? <li className="px-3 py-2" data-testid="row-location"><MatchingLocation caregiverRecordId={c.caregiverRecordId} /></li> : null}
+        {available ? <li className="px-3 py-2" data-testid="row-assignment-history"><AssignmentHistory kind="caregiver" subjectId={c.caregiverRecordId} /></li> : null}
+      </ProfileBlock>
+      {canManage ? (
+        <SummarySection title="Name and record" summary={`${caregiverName(c)} · ${c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"}`}>
+          <div className="space-y-3"><CaregiverDetails c={c} /><DeactivateForm c={c} /></div>
+        </SummarySection>
+      ) : null}
+    </div>
+  );
+}
+const formatDateOnlyLabel = (d: string) => formatDateOnly(d);
+
+function ReadinessTab({ c, canManage }: { c: Caregiver; canManage: boolean }) {
+  const { hasPermission } = useOrganization();
+  return (
+    <div className="space-y-3">
+      <ReadinessChecklist caregiverRecordId={c.caregiverRecordId} canManage={canManage} hasContact={!!c.hasContact} />
+      {hasPermission("caregiver_services.read") ? <CaregiverServices caregiverRecordId={c.caregiverRecordId} /> : null}
+    </div>
+  );
+}
+
+function AssignmentsTab({ c, canManage }: { c: Caregiver; canManage: boolean }) {
+  const { available } = useOffices();
+  const facets = usePeopleFacets(available);
+  const colorKey = facets.ready ? facets.caregiverColor.get(c.caregiverRecordId) ?? null : null;
+  return (
+    <div className="space-y-3">
+      <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
+      <CaregiverReadiness caregiverRecordId={c.caregiverRecordId} />
+      {canManage && available ? (
+        <ProfileBlock title="Scheduling preferences">
+          <EditableRow testId="row-schedule-color" label="Schedule color" canEdit
+            value={colorKey ? <span className="inline-flex items-center gap-2"><ColorSwatch color={colorKey} />Chosen</span> : <span className="text-slate-600">Optional. None chosen.</span>}>
+            <CaregiverColorControl caregiverRecordId={c.caregiverRecordId} />
+          </EditableRow>
+        </ProfileBlock>
+      ) : null}
+    </div>
+  );
+}
+
+function DocumentsTab({ c }: { c: Caregiver }) {
+  const api = useAwsApi();
+  const { activeOrganizationId, hasPermission } = useOrganization();
+  const canSee = hasPermission("documents.read") || hasPermission("readiness.read") || hasPermission("caregivers.manage");
+  const q = useQuery({
+    queryKey: ["document-readiness", activeOrganizationId, c.caregiverRecordId],
+    queryFn: async () => (await api.get<{ readiness: { requirements: { requirement: "cpr" | "tb"; status: string; validUntil: string | null }[] } }>("/v1/document-readiness", { organizationId: activeOrganizationId, caregiverRecordId: c.caregiverRecordId })).readiness.requirements,
+    enabled: !!activeOrganizationId && canSee,
+  });
+  const ready = useCaregiverReadiness(c.caregiverRecordId, canSee);
+  const due = (req: "cpr" | "tb") => ready.data?.items.find((i) => i.requirement === req)?.dueDate ?? null;
+  if (!canSee) return <p className="text-sm text-slate-600">Your role cannot view documents.</p>;
+  return (
+    <div className="space-y-3">
+      <ProfileBlock title="Required documents">
+        {q.isLoading ? <li className="px-3 py-2 text-sm text-slate-500">Loading…</li> : null}
+        {q.isError ? <li role="alert" className="px-3 py-2 text-sm text-red-700">Document status could not be loaded.</li> : null}
+        {(q.data ?? []).map((r) => {
+          const s = documentStatusLabel(r.status, r.requirement);
+          const tone: Tone = s.ok ? "ok" : s.label === "Setup incomplete" ? "warn" : s.label === "Needs review" ? "warn" : s.label === "Expired" || s.label === "Unverified" ? "bad" : "neutral";
+          const label = s.label === "Setup incomplete" ? "Document type not set up" : s.label === "Needs review" ? "Pending review" : s.label === "Missing" || s.label === "Not provided" ? "Not recorded" : s.label;
+          const date = r.validUntil && s.ok ? `Valid through ${formatDateOnlyLabel(r.validUntil)}` : due(r.requirement) ? `Due ${formatDateOnlyLabel(due(r.requirement)!)}` : "";
+          return <ProfileRow key={r.requirement} testId={`doc-${r.requirement}`} label={r.requirement === "cpr" ? "CPR certificate" : "TB clearance"} status={<StatusChip tone={tone}>{label}</StatusChip>}
+            value={date || <span className="text-slate-600">{s.detail ?? ""}</span>}
+            action={hasPermission("documents.read") ? <Link to="/documents" className={rowButton}>Open documents</Link> : null} />;
+        })}
+      </ProfileBlock>
+      <CaregiverFiles caregiverRecordId={c.caregiverRecordId} />
+    </div>
+  );
+}
+
 export function CaregiverDetailPage() {
   const { caregiverRecordId } = useParams<{ caregiverRecordId: string }>();
   const { hasPermission } = useOrganization();
   const caregivers = useCaregivers();
   const overrides = useSigninOverrides();
+  const [params, setParams] = useSearchParams();
+  const rawTab = params.get("tab");
+  const tab: ProfileTabId = isProfileTab(rawTab) ? rawTab : "overview";
+  const setTab = (id: string) => { const next = new URLSearchParams(params); next.set("tab", id); setParams(next, { replace: true }); };
+  const { offices, available } = useOffices();
+  const facets = usePeopleFacets(available);
   if (!hasPermission("caregivers.manage") && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the Care Team.</p>;
   if (caregivers.isLoading) return <p className="text-sm text-slate-500">Loading…</p>;
   if (caregivers.isError) return <p role="alert" className="text-sm text-red-700">{(caregivers.error as Error).message}</p>;
   const c = caregivers.data?.find((x) => x.caregiverRecordId === caregiverRecordId);
   if (!c) return <p className="text-sm text-slate-600">Caregiver not found. <Link to="/care-team" className="underline">Back to the Care Team</Link></p>;
   const canManage = hasPermission("caregivers.manage");
+  const primary = available ? facets.caregiverOffices.get(c.caregiverRecordId)?.[0] : undefined;
+  const primaryName = primary ? offices.find((o) => o.officeId === primary)?.name : undefined;
   return (
     <div className="max-w-3xl space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div>
         <Link to="/care-team" className="inline-flex min-h-[44px] items-center text-sm text-slate-700 underline md:min-h-0">← Care Team</Link>
-        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-950"><CaregiverProfileSwatch caregiverRecordId={c.caregiverRecordId} />{caregiverName(c)}</h1>
-        {!c.hasSignIn && (overrides.data ?? []).some((o) => o.caregiverRecordId === c.caregiverRecordId) ? <OverrideBadge /> : null}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-950"><CaregiverProfileSwatch caregiverRecordId={c.caregiverRecordId} />{caregiverName(c)}</h1>
+          {!c.hasSignIn && (overrides.data ?? []).some((o) => o.caregiverRecordId === c.caregiverRecordId) ? <OverrideBadge /> : null}
+        </div>
+        {primaryName ? <p className="text-sm text-slate-600">{primaryName} primary office</p> : null}
       </div>
-      <section className="space-y-2" aria-label="Contact and employment">
-      <h2 className="text-base font-semibold">Contact and employment</h2>
-      {canManage ? <CaregiverContactEmail key={c.caregiverRecordId} c={c} /> : null}
-      {canManage ? <Card className="space-y-3">
-        <h2 className="text-sm font-semibold">Employment</h2>
-        <HireDateForm c={c} />
-        <EmploymentCard c={c} canManage={canManage} />
-      </Card> : null}
-      <Card className="space-y-3" aria-label="Offices, service area and color">
-        <h2 className="text-sm font-semibold">Offices, service area and color</h2>
-        <OfficeAssignmentsControl kind="caregiver" subjectId={c.caregiverRecordId} />
-        <CaregiverServiceCountiesControl caregiverRecordId={c.caregiverRecordId} />
-        <CaregiverColorControl caregiverRecordId={c.caregiverRecordId} />
-        <AssignmentHistory kind="caregiver" subjectId={c.caregiverRecordId} />
-      </Card>
-      {hasPermission("matching.manage") ? <MatchingLocation caregiverRecordId={c.caregiverRecordId} /> : null}
-      </section>
-      <section className="space-y-2" aria-label="Readiness and services">
-      <h2 className="text-base font-semibold">Readiness and services</h2>
-      <ReadinessChecklist caregiverRecordId={c.caregiverRecordId} canManage={canManage} hasContact={!!c.hasContact} />
-      {hasPermission("caregiver_services.read") ? <CaregiverServices caregiverRecordId={c.caregiverRecordId} /> : null}
-      </section>
-      <section className="space-y-2" aria-label="Assignments and availability">
-      <h2 className="text-base font-semibold">Assignments and availability</h2>
-      <InfoTip label="About assigned clients">Select a client name to open their record.</InfoTip>
-      <AssignmentsCard caregiverRecordId={c.caregiverRecordId} />
-      <CaregiverReadiness caregiverRecordId={c.caregiverRecordId} />
-      </section>
-      <section className="space-y-2" aria-label="Documents and record details">
-      <h2 className="text-base font-semibold">Documents and record details</h2>
-      <CaregiverFiles caregiverRecordId={c.caregiverRecordId} />
-      {canManage ? (
-        <SummarySection title="Details" summary={`${caregiverName(c)} · ${c.hireType ? HIRE_LABEL[c.hireType] : "Hire type not recorded"}`}>
-          <div className="space-y-3">
-            <CaregiverDetails c={c} />
-
-
-            <DeactivateForm c={c} />
-          </div>
-        </SummarySection>
-      ) : null}
-      </section>
+      <ProfileTabs tabs={PROFILE_TABS} active={tab} onChange={setTab} />
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="max-md:[&_button]:min-h-[44px]">   {/* phone: every button in the profile is at least 44 px tall */}
+        {tab === "overview" ? <OverviewTab c={c} canManage={canManage} onManageSignIn={() => setTab("readiness")} /> : null}
+        {tab === "readiness" ? <ReadinessTab c={c} canManage={canManage} /> : null}
+        {tab === "assignments" ? <AssignmentsTab c={c} canManage={canManage} /> : null}
+        {tab === "documents" ? <DocumentsTab c={c} /> : null}
+      </div>
       <Link to="/care-team" className="inline-block text-sm underline">Back to all caregivers</Link>
     </div>
   );

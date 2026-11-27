@@ -16,8 +16,16 @@ export interface ReadinessItem {
   actorName: string | null;
   blocksShifts: boolean;
   nextAction: "view" | "verify" | "record" | "reopen" | "add_contact" | "send_link" | "resend_link" | "upload" | "none";
-  extra: { requirementId?: string; lastSentAt?: string | null; sendCount?: number | null; override?: boolean };
+  extra: {
+    requirementId?: string; lastSentAt?: string | null; sendCount?: number | null;
+    /** App sign-in: true when approved before the first sign-in (0103). CPR/TB (0123): the admin override of the current document issue, when one is in force. */
+    override?: boolean | ReadinessOverride;
+    /** CPR/TB (0123): the exact document issue (status, document version, expiry) an administrator could override, its short label and the expiry date. */
+    issueStatus?: string; issueKey?: string | null; issueLabel?: string | null; validUntil?: string | null;
+  };
 }
+/** An administrator's override of ONE document issue for one caregiver (0123). The document keeps its status; this only records who lifted the scheduling block, when and why. */
+export interface ReadinessOverride { id: string; issueKey: string; issueStatus: string; validUntil: string | null; approvedAt: string; approvedByName: string | null; reason: string }
 export interface CaregiverReadinessState {
   caregiverRecordId: string;
   caregiverCode: string;

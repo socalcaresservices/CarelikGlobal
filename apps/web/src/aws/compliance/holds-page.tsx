@@ -1,3 +1,4 @@
+import { ReadinessOverridesReport } from "../readiness/readiness-override";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { Link } from "react-router-dom";
@@ -197,6 +198,7 @@ export function ComplianceHoldsPage() {
           </>
         )
       ) : null}
+      <ReadinessOverridesReport />
     </div>
   );
 }

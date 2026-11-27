@@ -55,6 +55,7 @@ export function issueDestination(i: ActionIssue): { to: string; label: string } 
     case "approve_billing": return { to: "/billing-review", label: "Go to billing review" };
     case "confirm_pickup": return { to: `/schedule?pickups=1&shift=${i.shiftId ?? ""}`, label: "Review the request" };
     case "reconcile_shift": return { to: `/schedule?reconcile=1&shift=${i.shiftId ?? i.entityId}${i.since ? `&at=${encodeURIComponent(i.since)}` : ""}`, label: "Reconcile the shift" };
+    case "review_readiness_override": return { to: `/care-team/${i.caregiverRecordId ?? ""}?tab=readiness`, label: "Review the override" };
     case "review_document": case "renew_document": case "request_renewal": case "follow_up_document": return { to: "/documents", label: "Open documents" };
     default: return { to: "/authorization-impacts", label: "Review the change" };
   }
@@ -62,7 +63,7 @@ export function issueDestination(i: ActionIssue): { to: string; label: string } 
 
 /** The row's reason in a few words; the full recommended sentence stays in the row for screen readers and as the tooltip. */
 const REASON_PHRASE: Record<string, string> = {
-  business_document_renewal: "Renewal due",
+  business_document_renewal: "Renewal due", readiness_override: "Expired Doc · Admin Approved",
   uncovered_open: "No caregiver", uncovered_called_out: "Called out", compliance_hold: "Caregiver on hold", documents_not_current: "Document not current", missing_clock_out: "Still open",
   in_progress_on_hold: "Visit on hold", pending_confirmation: "Awaiting confirmation", confirmation_overdue: "Confirmation overdue", needs_review: "Needs review", late_response: "Late response",
   ready_for_approval: "Ready to approve", authorization_decreased: "Authorization lowered", pending_pickup: "Pickup requested", expired: "Expired", overdue: "Overdue", review_overdue: "Review overdue",

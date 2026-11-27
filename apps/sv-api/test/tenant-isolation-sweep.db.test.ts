@@ -135,6 +135,8 @@ beforeAll(async () => {
   real("pickupRequestId", firstId(pk.body, ["requestId", "id"]));
   const csa = await make(w.ownerA, "POST /v1/caregiver-services", { caregiverRecordId: rec, serviceId: f.service });
   real("caregiverServiceApprovalId", csa.body.approvalId ?? csa.body.id);
+  // 0123 readiness override: a real org A override, so the revoke route reaches the database check (a missing CPR on org A's caregiver, approved by org A's owner)
+  real("overrideId", (await db.admin.query("insert into ogevia.caregiver_readiness_overrides (organization_id, caregiver_record_id, requirement, issue_status, issue_key, reason, approved_by) values ($1,$2,'cpr','missing','missing:none:','Synthetic override for the isolation sweep',$3) returning id", [A, rec, w.ownerA.userId])).rows[0].id);
   // staff management (pending migration 0086): a real staff type and a real staff profile of org A
   const st = await make(w.ownerA, "POST /v1/staff-types", { name: "Synthetic Staff Type" });
   real("staffTypeId", st.body.staffType?.id);
@@ -245,6 +247,23 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "decisionId") return ids.decisionId;
   if (route === "POST /v1/business-documents" && name === "id") return undefined;
   if (ids[name]) return ids[name];
+  // Release Train 2 (0113-0116): well-formed values, so every probe reaches the database check
+  if (name === "keepProfileId") return ids.profileId;
+  if (name === "serviceZip") return "92596";
+  if (name === "audience" && route === "POST /v1/offices/{officeId}/cover-audience") return "none";
+  if (name === "batchId") return (ids.batchId ??= randomUUID());
+  if (name === "linkId") return (ids.linkId ??= randomUUID());
+  if (name === "resolutions") return {};
+  if (name === "ids" && route === "POST /v1/notification-center/mark") return [randomUUID()];
+  // 0117 texting: well-formed values, so every probe reaches the database check
+  // 0118 service location: well-formed values
+  if (/service-location/.test(route)) { if (name === "zip") return "92596"; if (name === "city") return "Winchester"; if (name === "county") return "Riverside"; if (name === "officeId") return ids.officeId; }
+  if (name === "phone") return "9515550123";
+  if (name === "consent") return true;
+  if (route === "POST /v1/sms-oncall" && name === "action") return "add";
+  if (route === "POST /v1/sms-oncall" && name === "label") return "On-call";
+  if (route === "POST /v1/sms-settings" && (name === "quietStart" || name === "quietEnd")) return name === "quietStart" ? "21:00" : "08:00";
+  if (route === "POST /v1/sms-settings" && name === "provider") return "mock";
   // 0111 office assignments, counties and colour: well-formed values, so every probe reaches the database check
   if (name === "primaryOfficeId") return ids.officeId;
   if (name === "secondaryOfficeIds") return [];
@@ -445,12 +464,13 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
   };
 
   it("caregiver A2 (assigned to one client only): the only POST routes that succeed are her own availability request, experience and notification read", async () => {
-    expect((await ok2xx(w.caregiverA2, POSTS)).sort()).toEqual(["POST /v1/availability/requests", "POST /v1/experience/me", "POST /v1/notifications/read"]);
+    // Release Train 2 (0113): her own notification centre (mark read/archive) and her own notification preferences, nothing else.
+    expect((await ok2xx(w.caregiverA2, POSTS)).sort()).toEqual(["POST /v1/availability/requests", "POST /v1/experience/me", "POST /v1/my-sms", "POST /v1/notification-center/mark", "POST /v1/notification-preferences", "POST /v1/notifications/read"]);
   });
 
   it("caregiver A2: every GET answer is the stranger's answer (nothing) except her own scoped data, and none shows another caregiver's visit, shift, record, approval, authorization, document, hold or name", async () => {
     const OWN_SCOPE = ["GET /v1/appearance", "GET /v1/attention", "GET /v1/branding", "GET /v1/clients/assigned", "GET /v1/document-types", "GET /v1/experience-tags", "GET /v1/experience/me",
-      "GET /v1/notification-settings", "GET /v1/notifications", "GET /v1/work-hour-policy"];
+      "GET /v1/my-sms", "GET /v1/notification-center", "GET /v1/notification-preferences", "GET /v1/notification-settings", "GET /v1/notifications", "GET /v1/work-hour-policy"];
     const o = ids;
     const forbidden: Record<string, string> = { [o.visitId!]: "A1's signed visit", [o.lateVisitId!]: "A1's second visit", [o.caregiverRecordId!]: "A1's Care Team record", [o.userId!]: "A1's user id",
       [o.assignmentId!]: "A1's assignment", [o.confirmationRequestId!]: "A3's confirmation request", [o.billingApprovalId!]: "billing approval", [o.adjustmentId!]: "rounding adjustment",
@@ -489,10 +509,11 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
     const got = (await ok2xx(w.schedulerA, POSTS)).sort();
     // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only.
     // 0109: care-notifications/read clears only the scheduler's OWN care-request alerts (care_requests.read), like notifications/read.
+    // Release Train 2 (0113): her own notification centre and preferences, and "Notify caregivers" for a shift (shifts.manage; it only creates notifications, assigns no one).
     expect(got).toEqual([
       "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-notifications/read", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
-      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
-      "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel"]);
+      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/my-sms", "POST /v1/notification-center/mark", "POST /v1/notification-preferences", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
+      "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel", "POST /v1/shifts/{shiftId}/notify-cover"]);
     // billing reads: the scheduler holds no billing permission, so they are the stranger's (empty) answer
     for (const route of ["GET /v1/billing-approvals", "GET /v1/billing-review", "GET /v1/billing-rounding/policies", "GET /v1/billing-rounding/preview", "GET /v1/accounts", "GET /v1/continuity/status"]) {
       const r = await callAs(w.schedulerA, route, w.orgA);

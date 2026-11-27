@@ -5,6 +5,7 @@ import {
   AdminGetUserCommand,
   CognitoIdentityProviderClient,
 } from "@aws-sdk/client-cognito-identity-provider";
+import { sanitizeOfficeLook, OFFICE_LOOK_KEYS } from "@carelik/shared";
 import type { IdentityRequest, IdentityResponse } from "./identity";
 
 /**
@@ -53,10 +54,13 @@ export function createIdentityHandler(cognito: Cognito, userPoolId: string, log:
     if ((action !== "invite" && action !== "resend") || email.length > 254 || !EMAIL.test(email)) {
       return outcome(String(action), { ok: false, error: "invalid_email" });
     }
+    // The office look travels to Cognito's custom-message trigger as ClientMetadata. Malformed parts are dropped (the invitation then uses the company look).
+    const look = sanitizeOfficeLook((event as { look?: unknown }).look);
+    const clientMetadata = OFFICE_LOOK_KEYS.some((k) => look[k]) ? { ClientMetadata: Object.fromEntries(OFFICE_LOOK_KEYS.filter((k) => look[k]).map((k) => [k, look[k] as string])) } : {};
     try {
       if (action === "resend") {
         await cognito.send(new AdminCreateUserCommand({
-          UserPoolId: userPoolId, Username: email, MessageAction: "RESEND", DesiredDeliveryMediums: ["EMAIL"],
+          UserPoolId: userPoolId, Username: email, MessageAction: "RESEND", DesiredDeliveryMediums: ["EMAIL"], ...clientMetadata,
         }));
         return outcome(action, { ok: true });
       }
@@ -66,6 +70,7 @@ export function createIdentityHandler(cognito: Cognito, userPoolId: string, log:
           Username: email,
           DesiredDeliveryMediums: ["EMAIL"],
           UserAttributes: [{ Name: "email", Value: email }, { Name: "email_verified", Value: "true" }],
+          ...clientMetadata,
         }));
         const sub = subOf(created.User?.Attributes);
         return outcome(action, sub ? { ok: true, sub, existingAccount: false } : { ok: false, error: "failed" });
@@ -78,7 +83,7 @@ export function createIdentityHandler(cognito: Cognito, userPoolId: string, log:
         // earlier invitation that did not finish: send that person a fresh email.
         if (user.UserStatus === "FORCE_CHANGE_PASSWORD") {
           await cognito.send(new AdminCreateUserCommand({
-            UserPoolId: userPoolId, Username: email, MessageAction: "RESEND", DesiredDeliveryMediums: ["EMAIL"],
+            UserPoolId: userPoolId, Username: email, MessageAction: "RESEND", DesiredDeliveryMediums: ["EMAIL"], ...clientMetadata,
           }));
           return outcome(action, { ok: true, sub, existingAccount: false });
         }

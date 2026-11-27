@@ -1,0 +1,206 @@
+// TEST_RT2_N3_ALERT_CARD.sh (Release Train 2, TEST stage 3: migration 0120, Handler code only, web) with stand-in `aws`, `curl`, `pnpm` and database tools, in a throwaway git repository. Nothing touches AWS.
+// The stand-in `cdk synth` reads the (temporarily edited) config.ts, so the test proves the script keeps every switch ON as it is live, runs the real diff_gate_rt2.py (stage3: code only, no route or variable added)
+// on the assembly, deploys only after the gate passes, applies only migration 0120, and restores the config.
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const root = fileURLToPath(new URL("../../../", import.meta.url));
+const TCREL = "docs/releases/2026-11-20-test-plan/toolchain";
+const script = join(root, TCREL, "TEST_RT2_N3_ALERT_CARD.sh");
+const STACK = "Ogevia-prod-ServiceVerificationApi";
+const OLDSHA = createHash("sha256").update("zip").digest("base64");
+const FEATURES = "    features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: false },\n";
+
+function setup() {
+  const dir = mkdtempSync(join(tmpdir(), "rt2n3-"));
+  const repo = join(dir, "repo"); const work = join(dir, "work"); const bin = join(dir, "bin"); const calls = join(dir, "calls"); const st = join(dir, "state");
+  const tc = join(repo, TCREL);
+  for (const d of [tc, work, bin, st, join(repo, "infra/aws/lib"), join(repo, "infra/aws/node_modules/.bin"), join(repo, "infra/aws/scripts")]) mkdirSync(d, { recursive: true });
+  writeFileSync(calls, ""); writeFileSync(join(repo, "infra/aws/lib/config.ts"), `const PROD = {\n${FEATURES}};\n`); writeFileSync(join(repo, "infra/aws/node_modules/.bin/cdk"), ""); chmodSync(join(repo, "infra/aws/node_modules/.bin/cdk"), 0o755);
+  copyFileSync(join(root, TCREL, "diff_gate_rt2.py"), join(tc, "diff_gate_rt2.py"));
+  writeFileSync(join(tc, "VERIFY_PENDING.sql"), "select 1;\n");
+  writeFileSync(join(tc, "TEST_DB_SESSION.sh"), `#!/usr/bin/env bash\n"$@"\n`);
+  // like the real tool: 0118 needs 0117 recorded (so it cannot be probed before 0117 is applied), and apply/rollback keep that state
+  // like the real tool: 0120 can be probed only while absent; apply/rollback keep that state
+  writeFileSync(join(tc, "TEST_PENDING_LEDGER.sh"), `#!/usr/bin/env bash\necho "ledger $1 $2" >> ${JSON.stringify(calls)}\nif [[ -f ${JSON.stringify(join(st, "fail-ledger"))} ]]; then exit 2; fi\nif [[ "$1 $2" == "probe 0120" && -f ${JSON.stringify(join(st, "applied-0120"))} ]]; then echo "STOP: migration 0120 is already recorded" >&2; exit 2; fi\nif [[ "$1 $2" == "apply 0120" ]]; then touch ${JSON.stringify(join(st, "applied-0120"))}; fi\nif [[ "$1 $2" == "rollback 0120" ]]; then rm -f ${JSON.stringify(join(st, "applied-0120"))}; fi\n`);
+  writeFileSync(join(repo, "infra/aws/scripts/deploy-test-slice.sh"), `#!/usr/bin/env bash\necho "web version=\${VITE_APP_VERSION:-none}" >> ${JSON.stringify(calls)}\nmkdir -p "$(dirname "$0")/../../../apps/web/dist-aws"; cp ${JSON.stringify(join(dir, "built-index.html"))} "$(dirname "$0")/../../../apps/web/dist-aws/index.html"\n`);
+  for (const f of ["TEST_PENDING_LEDGER.sh", "TEST_DB_SESSION.sh"]) chmodSync(join(tc, f), 0o755);
+  chmodSync(join(repo, "infra/aws/scripts/deploy-test-slice.sh"), 0o755);
+  const git = (...a: string[]) => spawnSync("git", ["-C", repo, ...a], { encoding: "utf8" });
+  git("init", "-q"); git("-c", "user.email=t@t", "-c", "user.name=t", "add", "-A"); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "x");
+  const head = git("rev-parse", "HEAD").stdout.trim();
+  writeFileSync(join(dir, "built-index.html"), `<html><script src="/assets/index-abc.js"></script></html>`);
+  writeFileSync(join(dir, "main.js"), `x={VITE_APP_VERSION:"${head}",VITE_APP_ENV:"test"}`);
+  writeFileSync(join(dir, "web.json"), '{"c":1}');
+  writeFileSync(join(dir, "mk.py"), `import json, sys
+S1 = ["GET /v1/cover-notification-history", "GET /v1/cover-notification-settings", "GET /v1/cover-office-audiences", "GET /v1/notification-center", "GET /v1/notification-preferences",
+      "POST /v1/cover-notification-settings", "POST /v1/notification-center/mark", "POST /v1/notification-preferences", "POST /v1/offices/{officeId}/cover-audience", "POST /v1/shifts/{shiftId}/notify-cover"]
+S2 = ["GET /v1/sms-settings", "POST /v1/sms-settings", "GET /v1/my-sms", "POST /v1/my-sms", "GET /v1/sms-oncall", "POST /v1/sms-oncall", "GET /v1/sms-history",
+      "GET /v1/clients/{clientId}/service-location", "POST /v1/clients/{clientId}/service-location"]
+def build(s2, key, extra=False):
+    env = {"DB_NAME": "ogevia_sv_test", "COVER_ALERT_ADDRESS_RULES": "on"}
+    if s2: env["SMS_MODE"] = "mock"; env["SERVICE_LOCATION"] = "on"
+    r = {"Handler886CB40B": {"Type": "AWS::Lambda::Function", "Properties": {"Code": {"S3Bucket": "cdk-hnb659fds-assets-300094796789-us-west-2", "S3Key": key}, "Environment": {"Variables": env}}, "Metadata": {"aws:asset:path": "asset." + key}},
+         "IdentityHandlerAB": {"Type": "AWS::Lambda::Function", "Properties": {"Code": {"S3Bucket": "cdk-hnb659fds-assets-300094796789-us-west-2", "S3Key": "id-" + key}}, "Metadata": {"aws:asset:path": "asset.id." + key}}}
+    keys = ["GET /v1/r%d" % i for i in range(270)] + S1 + (S2 if s2 else [])
+    for i, k in enumerate(keys): r["R%d" % i] = {"Type": "AWS::ApiGatewayV2::Route", "Properties": {"RouteKey": k}}
+    r["NotifySweepRule"] = {"Type": "AWS::Events::Rule", "Properties": {"ScheduleExpression": "rate(5 minutes)"}}
+    r["NotifySweepAllowEventRuleOgeviaprodX"] = {"Type": "AWS::Lambda::Permission", "Properties": {}}
+    if extra: r["Extra"] = {"Type": "AWS::SQS::Queue", "Properties": {}}
+    return {"Parameters": {"ClientQrEncryptionKey": {"Type": "String", "NoEcho": True, "Default": ""}}, "Resources": r}
+if __name__ == "__main__":
+    s2, key, extra, out = sys.argv[1] == "1", sys.argv[2], sys.argv[3] == "1", sys.argv[4]
+    json.dump(build(s2, key, extra), open(out, "w"))
+`);
+  spawnSync("python3", [join(dir, "mk.py"), "1", "old.zip", "0", join(st, "live.json")]);
+  writeFileSync(join(st, "sha"), OLDSHA);
+  writeFileSync(join(bin, "aws"), `#!/usr/bin/env python3
+import json, sys, os
+a = sys.argv[1:]
+while a[:2] in (["--cli-connect-timeout", "5"], ["--cli-read-timeout", "120"]): a = a[2:]
+line = " ".join(a)
+open(${JSON.stringify(calls)}, "a").write("aws " + line + "\\n")
+st = ${JSON.stringify(st)}
+def out(x): print(x if isinstance(x, str) else json.dumps(x))
+sha = open(st + "/sha").read()
+if "sts get-caller-identity" in line: out("300094796789")
+elif "list-stack-resources" in line: out({"StackResourceSummaries": [{"ResourceType": "AWS::Lambda::Function", "LogicalResourceId": "Handler886CB40B", "PhysicalResourceId": "fn"}]})
+elif "get-template" in line: out(open(st + "/live.json").read())
+elif "rds describe-db-instances" in line: out("arn:aws:secretsmanager:us-west-2:300094796789:secret:rds!db-x")
+elif "lambda get-function-configuration" in line and "--query CodeSha256" in line: out(sha)
+elif "lambda get-function-configuration" in line and "--query Environment.Variables " not in line: out({"FunctionName": "fn", "CodeSha256": sha, "Database": {"host": "ogevia-postgres.c50cageec7mv.us-west-2.rds.amazonaws.com", "name": "ogevia_sv_test", "secretArn": "arn:x"}})
+elif "lambda get-function " in line and "NotificationEmail" not in line: out("https://zip.example/code")
+elif "lambda wait" in line: pass
+elif "events list-rules" in line: out("Ogevia-prod-NotifySweep")
+elif "rds create-db-snapshot" in line:
+    if os.path.exists(st + "/fail-snapshot"): sys.exit(1)
+    out("creating")
+elif "rds describe-db-snapshots" in line:
+    if os.path.exists(st + "/snapshot-creating"): sys.exit(0) if False else out("creating")
+    elif "DBInstanceIdentifier" in line: out("ogevia-prod" if os.path.exists(st + "/wrong-instance") else "ogevia-postgres")
+    else: out("available")
+elif "lambda get-function-configuration" in line and "--query Environment.Variables " in line: out({"DB_NAME": "ogevia_sv_test", "COVER_ALERT_ADDRESS_RULES": "on", "SMS_MODE": "mock", "SERVICE_LOCATION": "on"} if open(st + "/live.json").read().find("sms-settings") >= 0 else {"DB_NAME": "ogevia_sv_test"})
+elif "lambda get-function --function-name Ogevia-prod-NotificationEmail" in line: sys.exit(254)
+elif "s3 sync s3://" in line:
+    d = a[3]; os.makedirs(d, exist_ok=True); open(d + "/index.html", "w").write("old"); open(d + "/config.json", "w").write(open(${JSON.stringify(join(dir, "web.json"))}).read())
+elif "s3 sync" in line or "s3 cp" in line or "cloudfront create-invalidation" in line: pass
+elif "update-function-code" in line: open(st + "/sha", "w").write(${JSON.stringify(OLDSHA)}); out("Successful")
+elif "describe-stacks" in line and "StackStatus" in line: out("UPDATE_COMPLETE")
+elif "describe-stacks" in line and "ApiUrl" in line: out("https://api.example")
+elif "describe-stacks" in line and "WebOrigin" in line: out("https://site.example")
+elif "describe-stacks" in line and "SiteBucketName" in line: out("prd-bucket" if "Ogevia-prd" in line else "test-bucket")
+elif "describe-stacks" in line and "DistributionId" in line: out("PRDDIST" if "Ogevia-prd" in line else "DISTTEST")
+else: sys.stderr.write("UNEXPECTED AWS CALL: " + line + "\\n"); sys.exit(9)
+`);
+  writeFileSync(join(bin, "curl"), `#!/usr/bin/env bash
+args="$*"; out=""; prev=""; for x in "$@"; do [[ "$prev" == "-o" ]] && out="$x"; prev="$x"; done
+url=""; for x in "$@"; do [[ "$x" == http* ]] && url="$x"; done
+case "$url" in
+  https://zip.example/code) [[ -n "$out" ]] && printf zip > "$out";;
+  */v1/me) echo -n 401;;
+  */v1/open-shifts*) echo -n 401;;
+  */index.html) if [[ -n "$out" ]]; then cp ${JSON.stringify(join(dir, "built-index.html"))} "$out"; fi;;
+  */assets/index-abc.js) cat ${JSON.stringify(join(dir, "main.js"))};;
+  */config.json) cat ${JSON.stringify(join(dir, "web.json"))};;
+  *) echo "UNEXPECTED CURL: $args" >&2; exit 9;;
+esac
+`);
+  writeFileSync(join(bin, "corepack"), "#!/usr/bin/env bash\nexit 0\n");
+  writeFileSync(join(bin, "psql"), `#!/usr/bin/env bash\necho "psql absent-check" >> ${JSON.stringify(calls)}\necho "0|none"\n`);
+  writeFileSync(join(bin, "pnpm"), `#!/usr/bin/env bash
+[[ "$1" == "--version" ]] && { echo 9.15.4; exit 0; }
+if [[ "$*" == *"cdk synth"* ]]; then out=""; prev=""; for x in "$@"; do [[ "$prev" == "--output" ]] && out="$x"; prev="$x"; done
+  cfg="$(cat "$PWD/infra/aws/lib/config.ts")"; n=0; extra=0; [[ "$cfg" == *"openShiftSms: true"* && "$cfg" == *"serviceLocation: true"* ]] && n=1
+  [[ "$cfg" == *"assignmentHistory: true"* && "$cfg" == *"notifications: true"* ]] || { echo "the earlier switches were not kept ON" >&2; exit 7; }
+  [[ -f ${JSON.stringify(join(st, "extra"))} && $n == 1 ]] && extra=1
+  mkdir -p "$out"; python3 ${JSON.stringify(join(dir, "mk.py"))} $n new.zip $extra "$out/${STACK}.template.json"; echo "synth stage2=$n" >> ${JSON.stringify(calls)}; exit 0; fi
+if [[ "$*" == *"cdk deploy"* ]]; then app=""; prev=""; for x in "$@"; do [[ "$prev" == "--app" ]] && app="$x"; prev="$x"; done
+  echo "deploy $app" >> ${JSON.stringify(calls)}; cp "$app/${STACK}.template.json" ${JSON.stringify(join(st, "live.json"))}; printf NEWSHA > ${JSON.stringify(join(st, "sha"))}; exit 0; fi
+exit 9
+`);
+  for (const f of ["aws", "curl", "pnpm", "corepack", "psql"]) chmodSync(join(bin, f), 0o755);
+  return { dir, repo, work, bin, calls, head, st };
+}
+type S = ReturnType<typeof setup>;
+function run(s: S, env: Record<string, string> = {}, mode?: string) {
+  return spawnSync("bash", [script, ...(mode ? [mode] : [])], { encoding: "utf8", env: { ...process.env, PATH: `${s.bin}:${process.env.PATH}`, REPO: s.repo, WORK: s.work, OGEVIA_RELEASE_COMMIT: s.head, OGEVIA_DEPLOY_APPROVAL: "RT2-TEST-20261123", OGEVIA_APP_BASE: s.head, OGEVIA_SNAPSHOT_SLEEP: "0", OGEVIA_SNAPSHOT_POLLS: "3", OGEVIA_NO_CONFIRM: "1", OGEVIA_CF_WAIT: "0", ...env } });
+}
+const done = (s: { dir: string }) => rmSync(s.dir, { recursive: true, force: true });
+const calls = (s: S) => readFileSync(s.calls, "utf8");
+const changes = (s: S) => calls(s).split("\n").filter((l) => /^(deploy|web |ledger apply|ledger rollback)/.test(l) || /aws (rds create-db-snapshot)/.test(l) || /aws (s3 sync [^s]|s3 cp|cloudfront|lambda update)/.test(l));
+const gitClean = (s: S) => spawnSync("git", ["-C", s.repo, "status", "--porcelain", "--untracked-files=no"], { encoding: "utf8" }).stdout.trim() === "";
+
+describe("TEST_RT2_N3_ALERT_CARD.sh", () => {
+  it("refuses a different commit, a bad approval reference, modified tracked files and application files that differ from the audited commit, before anything else", () => {
+    const s = setup();
+    try {
+      let r = run(s, { OGEVIA_RELEASE_COMMIT: "0".repeat(40) }); expect(r.status).toBe(2); expect(r.stderr).toContain("not at the release commit");
+      r = run(s, { OGEVIA_DEPLOY_APPROVAL: "x y" }); expect(r.status).toBe(2); expect(r.stderr).toContain("OGEVIA_DEPLOY_APPROVAL must be");
+      // a later commit that changes an application file: refused; one that changes only a document: not refused by this guard
+      mkdirSync(join(s.repo, "apps/web"), { recursive: true }); writeFileSync(join(s.repo, "apps/web/x.ts"), "export const x = 1;\n");
+      const git = (...a: string[]) => spawnSync("git", ["-C", s.repo, "-c", "user.email=t@t", "-c", "user.name=t", ...a], { encoding: "utf8" });
+      git("add", "-A"); git("commit", "-q", "-m", "app change"); const appHead = git("rev-parse", "HEAD").stdout.trim();
+      r = run(s, { OGEVIA_RELEASE_COMMIT: appHead }); expect(r.status).toBe(2); expect(r.stderr).toContain("differ from the audited commit");
+      writeFileSync(join(s.repo, TCREL, "diff_gate_rt2.py"), "# changed\n");
+      r = run(s, { OGEVIA_RELEASE_COMMIT: appHead }); expect(r.status).toBe(2); expect(r.stderr).toContain("tracked files in the checkout are modified");
+      expect(changes(s)).toEqual([]);
+    } finally { done(s); }
+  });
+
+  it("stops before any change when 0113-0119 are not all applied, when 0120 is already applied, when the assembly is not code-only, or when the snapshot cannot be taken", () => {
+    let s = setup();
+    try { writeFileSync(join(s.st, "fail-ledger"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("is not applied and verified in TEST"); expect(changes(s)).toEqual([]); expect(gitClean(s)).toBe(true); } finally { done(s); }
+    s = setup();
+    try { writeFileSync(join(s.st, "applied-0120"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("migration 0120 is not in the expected 'absent' state"); expect(changes(s)).toEqual([]); } finally { done(s); }
+    s = setup();
+    try { writeFileSync(join(s.st, "extra"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stdout).toContain("EXPECTED-ONLY: NO"); expect(r.stderr).toContain("differs from the live TEST API in more than the Handler code"); expect(changes(s)).toEqual([]); expect(gitClean(s)).toBe(true); } finally { done(s); }
+    s = setup();
+    try { writeFileSync(join(s.st, "fail-snapshot"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("cannot create the snapshot"); expect(changes(s).filter((l) => /^(deploy|web|ledger)/.test(l))).toEqual([]); } finally { done(s); }
+  });
+
+  it("a snapshot that never becomes available stops everything before the migration; an existing snapshot can be reused, but only if it belongs to ogevia-postgres", () => {
+    let s = setup();
+    try { writeFileSync(join(s.st, "snapshot-creating"), ""); const r = run(s); expect(r.status).toBe(2); expect(r.stderr).toContain("did not become available in time"); expect(r.stderr).toContain("OGEVIA_EXISTING_SNAPSHOT="); expect(changes(s).filter((l) => /^(deploy|web|ledger)/.test(l))).toEqual([]); } finally { done(s); }
+    s = setup();
+    try { writeFileSync(join(s.st, "wrong-instance"), ""); const r = run(s, { OGEVIA_EXISTING_SNAPSHOT: "some-other-snapshot" }); expect(r.status).toBe(2); expect(r.stderr).toContain("is not a snapshot of ogevia-postgres"); expect(changes(s).filter((l) => /^(deploy|web|ledger)/.test(l))).toEqual([]); } finally { done(s); }
+    s = setup();
+    try { const r = run(s, { OGEVIA_EXISTING_SNAPSHOT: "ogevia-test-rt2-n2-20261124t030750z" }); expect(r.status, r.stderr + r.stdout).toBe(0); expect(r.stdout).toContain("reusing snapshot ogevia-test-rt2-n2-20261124t030750z"); expect(calls(s)).not.toMatch(/rds create-db-snapshot/); } finally { done(s); }
+  }, 60000);
+
+  it("happy path: fresh snapshot, ONLY 0120 (verified), code-only gate, route count unchanged, deploy then web; the open-shifts route answers 401 with and without ?shiftId; email stays off; config restored", () => {
+    const s = setup();
+    try {
+      const r = run(s);
+      expect(r.status, r.stderr + r.stdout).toBe(0);
+      expect(r.stdout).toContain("EXPECTED-ONLY: YES (stage3, off)"); expect(r.stdout).toContain("EXPECTED-ONLY: YES (stage3, post)"); expect(r.stdout).toContain("PASS 289 routes live");
+      expect(r.stdout).toContain("GET /v1/open-shifts without a token: 401"); expect(r.stdout).toMatch(/GET \/v1\/open-shifts\?shiftId=0{8}-.* without a token: 401/);
+      expect(r.stdout).toContain("PASS no email function is wired"); expect(r.stdout).toContain("PASS no NotificationEmail function exists");
+      expect(r.stdout).toContain("PASS the bundle carries commit " + s.head); expect(r.stdout).toContain("RT2 STAGE 3 COMPLETE (TEST)"); expect(r.stdout).toMatch(/Snapshot ogevia-test-rt2-n3-/);
+      const c = calls(s).split("\n"); const idx = (re: RegExp) => c.findIndex((l) => re.test(l));
+      const order = [idx(/^ledger verify 0119/), idx(/^ledger probe 0120/), idx(/^synth stage2=1/), idx(/^aws rds create-db-snapshot/), idx(/^aws rds describe-db-snapshots/), idx(/^ledger apply 0120/), idx(/^ledger verify 0120/), idx(/^deploy .*\/deploy$/), idx(/^web version=/)];
+      expect(order.every((i) => i >= 0), JSON.stringify(order)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+      expect(calls(s)).not.toMatch(/ledger apply (0117|0118|0119)|Ogevia-prd-Service|get-secret-value|delete-db|delete-db-snapshot|synth stage2=0/);
+      expect(gitClean(s)).toBe(true); expect(readFileSync(join(s.repo, "infra/aws/lib/config.ts"), "utf8")).not.toContain("openShiftSms");
+      const cap = spawnSync("bash", ["-c", `cat ${s.work}/rt2n3-*/snapshot-id.txt`], { encoding: "utf8" }).stdout.trim(); expect(cap).toMatch(/^ogevia-test-rt2-n3-[0-9]{8}t[0-9]{6}z$/);
+    } finally { done(s); }
+  }, 90000);
+
+  it("rollbacks in order: web restores the captured files, api restores the ZIP, db removes 0120 only; there is no routes rollback because no route changed", () => {
+    const s = setup();
+    try {
+      let r = run(s); expect(r.status, r.stderr + r.stdout).toBe(0);
+      r = run(s, { OGEVIA_NO_CONFIRM: "0" }, "rollback-api"); expect(r.status).not.toBe(0);
+      r = run(s, {}, "rollback-routes"); expect(r.status).toBe(2); expect(r.stderr).toContain("usage:");
+      r = run(s, {}, "rollback-web"); expect(r.status, r.stderr).toBe(0); expect(calls(s)).toMatch(/s3 sync .*web-before\/assets s3:\/\/test-bucket\/assets/);
+      r = run(s, {}, "rollback-api"); expect(r.status, r.stderr).toBe(0); expect(r.stdout).toContain("ROLLBACK-API OK");
+      r = run(s, {}, "rollback-db"); expect(r.status, r.stderr + r.stdout).toBe(0); expect(r.stdout).toContain("ROLLBACK-DB OK");
+      expect(calls(s).split("\n")).toContain("ledger rollback 0120"); expect(calls(s)).not.toMatch(/ledger rollback (0117|0118|0119)/);
+    } finally { done(s); }
+  }, 150000);
+});
