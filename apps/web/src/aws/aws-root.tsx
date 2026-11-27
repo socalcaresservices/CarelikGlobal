@@ -2,6 +2,7 @@ import { AwsProtectedRoute } from "./aws-auth-pages";
 import { ClientQrCheckin, QrSignInGate } from "./client-qr";
 import { LabelPunchGate, LabelPunchPage } from "./label-punch-page";
 import { VerificationReportsPage } from "./verification-reports-page";
+import { AuthorizationWorklistPage } from "./authorization-worklist-page";
 // AWS build root (VITE_AUTH_PROVIDER=cognito): Cognito managed login (code +
 // PKCE) -> Ogevia AWS API. Nothing in this tree creates a Supabase client.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -105,6 +106,7 @@ export function AwsRoutes({ api, publicApi }: { api: AwsApiClient; publicApi: Aw
                     <Route path="/checkin" element={<ClientQrCheckin />} />
                     <Route path="/l" element={<LabelPunchPage />} />
                     <Route path="/verification" element={<VerificationReportsPage />} />
+                    <Route path="/authorizations/worklist" element={<AuthorizationWorklistPage />} />
                     <Route path="/service-verification" element={<ServiceVerificationPage />} />
                     <Route path="/service-verification/reports" element={<ServiceVerificationReportsPage />} />
                     <Route path="/billing-review" element={<BillingReviewPage />} />

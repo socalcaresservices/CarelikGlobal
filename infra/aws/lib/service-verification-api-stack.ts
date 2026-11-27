@@ -90,7 +90,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness" | "openShiftSms" | "serviceLocation" | "readinessOverrides" | "homeLabels";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness" | "openShiftSms" | "serviceLocation" | "readinessOverrides" | "homeLabels" | "authorizationWorklist";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -362,6 +362,8 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/punch-corrections", feature: "homeLabels" },
   { method: apigw.HttpMethod.POST, path: "/v1/punch-corrections/{requestId}/decide", feature: "homeLabels" },
   { method: apigw.HttpMethod.GET, path: "/v1/verification-reports/{report}", feature: "homeLabels" },
+  // 0125 (pending): the Authorization Worklist (read only). OFF until the owner releases 0125.
+  { method: apigw.HttpMethod.GET, path: "/v1/authorization-worklist", feature: "authorizationWorklist" },
   { method: apigw.HttpMethod.GET, path: "/v1/offices", feature: "offices" },
   { method: apigw.HttpMethod.GET, path: "/v1/client-offices", feature: "offices" },
   { method: apigw.HttpMethod.POST, path: "/v1/offices", feature: "offices" },

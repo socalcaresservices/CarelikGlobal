@@ -30,7 +30,7 @@ export const SWITCHED_PATHS: readonly RegExp[] = [
   /^\/v1\/caregivers\/[^/]+\/signin-override$/, /^\/v1\/signin-overrides$/,
   /^\/v1\/reports\/missing-visits$/, /^\/v1\/shifts\/[^/]+\/missing-visit$/, /^\/v1\/business-documents$/, /^\/v1\/checkin$/, /^\/v1\/clients\/[^/]+\/qr-card$/,
   // 0124 (homeLabels switch): home labels, punches, signing, exceptions, corrections and verification reports.
-  /^\/v1\/verification-settings$/, /^\/v1\/verification-reports\/[^/]+$/, /^\/v1\/home-labels(\/.*)?$/, /^\/v1\/label-punch(\/preview)?$/, /^\/v1\/visit-punch$/, /^\/v1\/visit-exceptions(\/.*)?$/,
+  /^\/v1\/authorization-worklist$/, /^\/v1\/verification-settings$/, /^\/v1\/verification-reports\/[^/]+$/, /^\/v1\/home-labels(\/.*)?$/, /^\/v1\/label-punch(\/preview)?$/, /^\/v1\/visit-punch$/, /^\/v1\/visit-exceptions(\/.*)?$/,
   /^\/v1\/clients\/[^/]+\/service-locations$/, /^\/v1\/services\/[^/]+\/location-rule$/, /^\/v1\/shifts\/[^/]+\/(location-override|expected-locations)$/,
   /^\/v1\/visits\/[^/]+\/(signature-session|sign|sign-later|punch-corrections|signature-followup\/(owner|delivery))$/, /^\/v1\/punch-corrections\/[^/]+\/decide$/,
 ];

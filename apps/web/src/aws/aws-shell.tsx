@@ -33,6 +33,7 @@ import { EnvironmentBanner } from "./environment-marker";
 import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isSidebarCurrent, isVisitListView, landingOf, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, tabsOf, visibleGroups, type NavGroup, type NavLinkDef } from "./nav-model";
 import { useOffices } from "./offices-data";
 import { useHomeLabelsAvailable } from "./home-labels-data";
+import { useWorklistAvailable } from "./authorization-worklist-data";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
@@ -135,6 +136,7 @@ export function AwsShell({ children }: PropsWithChildren) {
   const center = useNotificationCenter(!loading && !!activeOrganizationId);   // the Notifications link appears only where the notifications switch is on
   const { available: officesOn } = useOffices(!loading && !!activeOrganizationId && hasPermission("organization.update"));   // the Offices link appears only where the offices switch is on (hook order: before the early returns)
   const { available: verificationOn } = useHomeLabelsAvailable(!loading && !!activeOrganizationId && hasPermission("visits.read"));   // 0124: the Visit verification link appears only where the homeLabels switch is on
+  const { available: worklistOn } = useWorklistAvailable(!loading && !!activeOrganizationId && hasPermission("authorizations.read"));   // 0125: the Authorization Worklist link appears only where its switch is on
   if (loading) {
     return <div className="flex min-h-screen flex-col"><EnvironmentBanner /><div className="flex flex-1 items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div></div>;
   }
@@ -171,6 +173,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/", label: "Dashboard", group: "Dashboard", show: staff },
     { to: "/action-needed", label: "Action Needed", group: "Dashboard", tabOnly: true, under: "Dashboard", show: staff && canSeeAttention },
     { to: "/clients", label: "Clients", group: "Clients", show: hasPermission("clients.names.read") },
+    { to: "/authorizations/worklist", label: "Authorization worklist", group: "Clients", show: staff && hasPermission("authorizations.read") && worklistOn },
     // There is no Care Plans page: the closest existing screen is the review of authorization changes (see docs/releases/2026-10-26-redesign).
     { to: AUTHORIZATIONS_PATH, label: "Authorization changes", group: "Clients", show: hasPermission("authorizations.update") || hasPermission("shifts.manage") },
     { to: "/care-team", label: "Caregivers", group: "Staff", show: hasPermission("caregivers.manage") || canManageVisits },

@@ -4853,6 +4853,21 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0125 (pending, behind the authorizationWorklist release switch): the Authorization Worklist. Read only; client codes, never names.
+  "GET /v1/authorization-worklist": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const whole = (v: string | undefined, name: string, def: number) => { if (v === undefined || v === "") return def; const n = Number(v); if (!Number.isInteger(n)) throw new ApiError(400, "bad_request", `${name} must be a whole number.`); return n; };
+      const month = optionalDate(query.month, "month");
+      const status = query.status ? oneOf(query.status, "status", ["missing", "expired", "expiring", "exhausted", "nearly_exhausted", "ok", "attention"] as const) : null;
+      const program = query.program ? text(query.program, "program", 120) : null;
+      const data = await tx((db) => rows(db, "select * from ogevia_api.list_authorization_worklist($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [orgParam(event), month, optionalUuid(query.clientId, "clientId"), optionalUuid(query.officeId, "officeId"),
+        program, status, whole(query.expiringDays, "expiringDays", 30), whole(query.nearlyPercent, "nearlyPercent", 85), optionalDate(query.from, "from"), optionalDate(query.to, "to")]));
+      return { rows: data };
+    },
+  },
+
 };
 
 export const ROUTE_KEYS = Object.keys(ROUTES).sort();
