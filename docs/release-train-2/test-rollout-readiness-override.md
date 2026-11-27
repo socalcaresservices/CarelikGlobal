@@ -1,6 +1,6 @@
 # TEST rollout: admin override of a CPR/TB readiness block (migration 0123, switch readinessOverrides)
 
-Status: **PROPOSED. Nothing in this document has been applied to TEST or production.** TEST only (`Ogevia-prod-*`, `ogevia_sv_test`). Production (`Ogevia-prd-*`, `ogevia_prd`) is not part of this rollout and every script named here refuses a production target. Production deployment needs the owner's separate approval.
+Status: **DEPLOYED TO TEST 2026-11-27 (owner-reported script output, not independently observed): migrations 0121 and 0122 applied, then stage 7 (0123, readinessOverrides ON, 299 routes, web at a74d2ca5). TEST VERIFICATION OF THE FIVE CASES: NOT YET DONE. Production NOT touched and pending the owner's approval.** TEST only (`Ogevia-prod-*`, `ogevia_sv_test`). Production (`Ogevia-prd-*`, `ogevia_prd`) is not part of this rollout and every script named here refuses a production target. Production deployment needs the owner's separate approval.
 
 ## What it does (owner request 2026-11-27)
 An authorized administrator (existing permission `caregivers.compliance.manage`) can explicitly lift ONE caregiver-readiness block for ONE caregiver: a required CPR or TB document that is **missing, waiting for review, rejected or expired** (a missing-doc case includes a caregiver who was never approved for work; the work approval remains its own step).
@@ -42,3 +42,7 @@ Use the same `WORK` directory for the rollbacks so the captured references are f
 * `apps/web/src/aws/readiness-override-ui.test.tsx`: 8 tests; `infra/aws/test/readiness-overrides-switch.test.ts`: 3 tests; `infra/aws/test/test-rt2-n7-readiness-override.test.ts`: 5 tests of the deploy script with stand-in tools.
 * Browser run on the local harness (`local-harness/run-readiness-override-pass.sh`), enforcement on, desktop and phone, with before and after screenshots in `docs/ux/readiness-override-evidence/`.
 * Not verified: any TEST result.
+
+## Deployment record (owner-reported output; the end-of-run lines were pasted, earlier lines were not)
+* 0121 and 0122 were NOT in TEST when this stage was first run (ledger 119/0120): the stage stopped at its own guard with nothing changed. They were then applied one at a time under the snapshot `ogevia-test-pre-0121-0122-0123-20261127t210550z` (each recorded with its checksum and verified; ledger 121/0122).
+* Stage 7 then completed: "RT2 STAGE 7 COMPLETE (TEST): migration 0123 applied (ledger recorded), readinessOverrides ON (299 routes), web serves a74d2ca5f389d960ebbf2ca4ca53ad318872ce9c. Snapshot ogevia-test-rt2-n7-20261127t211457z." Rollback reference: `/tmp/rt2n7/work/rt2n7-20261127T211315Z` (outside durable storage: copy it out of /tmp).
