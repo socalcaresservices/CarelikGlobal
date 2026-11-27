@@ -121,6 +121,17 @@ describe("Readiness: work approval and agency setup are not mixed with schedulin
     expect(document.body).not.toHaveTextContent(/Eligible to schedule/i);
   });
 
+  it("an independent hold from the server's compliance read (here the background check) is shown with its actual reason next to Approved, and the unset CPR/TB type is not listed as a hold", async () => {
+    const r = approved({}, [item("background", "Background check", "hard", "unmet", "Not approved", { nextAction: "verify" }), item("training", "Required training", "hard", "met", "Done", { nextAction: "reopen" }), item("signin", "App sign-in", "hard", "met", "Signed in"),
+      item("cpr", "CPR certificate", "flexible", "problem", "Document type not set up", { nextAction: "upload" }), item("tb", "TB clearance", "flexible", "problem", "Document type not set up", { nextAction: "upload" })]);
+    at("readiness", { ...base(r), [`GET /v1/caregivers/${CG}/compliance`]: () => json(200, { compliance: { eligible: false, background: { qualifies: false, state: "not_approved" }, requirements: [{ requirement: "cpr", blocking: false, message: "Document type not set up" }], hold: null } }) });
+    expect(await screen.findByTestId("work-approval-chip")).toHaveTextContent("Work approval: Approved");
+    const hold = await screen.findByTestId("scheduling-hold");
+    expect(hold).toHaveTextContent("Background check: Not approved");
+    expect(hold).not.toHaveTextContent(/CPR certificate: Document type not set up/);
+    expect(document.body).not.toHaveTextContent(/Eligible to schedule/i);
+  });
+
   it("a saved answer, a pending review and an approval use three different words and three different tones", async () => {
     const r = approved({}, [item("background", "Background check", "hard", "unmet", "Requested", { nextAction: "verify" }), item("training", "Required training", "hard", "met", "Done", { nextAction: "reopen" }), item("signin", "App sign-in", "hard", "met", "Signed in"),
       item("cpr", "CPR certificate", "flexible", "pending", "Uploaded, waiting for review", { dueDate: "2026-12-01", nextAction: "upload" }), item("tb", "TB clearance", "flexible", "unmet", "Not uploaded", { dueDate: "2026-12-01", nextAction: "upload" })]);

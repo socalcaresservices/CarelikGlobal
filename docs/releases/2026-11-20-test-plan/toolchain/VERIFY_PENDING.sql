@@ -1,4 +1,4 @@
--- READ-ONLY verification of pending migrations 0113-0121. Writes nothing.
+-- READ-ONLY verification of pending migrations 0113-0122. Writes nothing.
 --   psql -X -At -F '|' -v mig=0113 -v expect=absent|present -f VERIFY_PENDING.sql
 -- One row per check: name|t|detail (t = ok, f = FAILING). The wrapper counts rows and fails on any "|f|".
 -- Tables: must exist (present) / not exist (absent). Functions (by schema + name): must exist, be SECURITY DEFINER, have a pinned
@@ -64,6 +64,14 @@ union all
 select 'the caregiver contact, staff and invitation writes use it ' || :'expect',
        case when :'expect' = 'absent' then (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname in ('set_caregiver_contact','begin_caregiver_invitation','begin_staff_invitation','create_staff','update_staff') and pg_get_functiondef(p.oid) like '%email_used_by_other%') = 0
             else (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname in ('set_caregiver_contact','begin_caregiver_invitation','begin_staff_invitation','create_staff','update_staff') and pg_get_functiondef(p.oid) like '%email_used_by_other%') = 5 end, '' where :'mig' = '0121'
+union all
+select 'function ogevia.caregiver_has_work_approval exists ' || :'expect',
+       case when :'expect' = 'absent' then to_regprocedure('ogevia.caregiver_has_work_approval(uuid,uuid)') is null
+            else to_regprocedure('ogevia.caregiver_has_work_approval(uuid,uuid)') is not null end, '' where :'mig' = '0122'
+union all
+select 'the scheduling check, the compliance hold rule and the profile read use it ' || :'expect',
+       case when :'expect' = 'absent' then (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname in ('readiness_checks','compliance_blockers','caregiver_readiness') and pg_get_functiondef(p.oid) like '%caregiver_has_work_approval%') = 0
+            else (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia' and p.proname in ('readiness_checks','compliance_blockers','caregiver_readiness') and pg_get_functiondef(p.oid) like '%caregiver_has_work_approval%') = 3 end, '' where :'mig' = '0122'
 union all
 select 'ledger row ' || :'mig' || ' ' || :'expect',
        case when :'expect' = 'absent' then not exists (select 1 from ogevia_meta.schema_migrations where version = :'mig')

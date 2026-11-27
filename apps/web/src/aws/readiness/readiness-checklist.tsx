@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Button, Card } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
@@ -10,6 +11,13 @@ import { WORK_STATUS_BADGE, WORK_STATUS_LABEL } from "../care-team-admin";
 import { OVERRIDE_BADGE_TEXT, useCaregiverReadiness, type ReadinessItem } from "./readiness-data";
 import { ProfileRow, StatusChip, rowButton } from "../profile-ui";
 import { chipFor } from "./readiness-chip";
+
+interface ComplianceRead {
+  eligible: boolean;
+  background: { qualifies: boolean; state: string };
+  requirements: { requirement: string; blocking: boolean; message: string | null }[];
+  hold: { reasons: { requirement: string; message: string }[] } | null;
+}
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm";
@@ -191,6 +199,12 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
   const canCompliance = hasPermission("caregivers.compliance.manage");
   const canRead = canManage || canCompliance || hasPermission("readiness.read");
   const q = useCaregiverReadiness(caregiverRecordId, canRead);
+  // The server's own compliance read: whether the caregiver can be scheduled and, if not, why. A failed read only hides the extra reasons; it never shows or hides a hold by guess.
+  const comp = useQuery({
+    queryKey: ["caregiver-compliance", activeOrganizationId, caregiverRecordId],
+    queryFn: async () => (await api.get<{ compliance: ComplianceRead }>(`/v1/caregivers/${encodeURIComponent(caregiverRecordId)}/compliance`, { organizationId: activeOrganizationId })).compliance,
+    enabled: !!activeOrganizationId && canRead, retry: false,
+  });
   const [approve, setApprove] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const inFlight = useRef(false);
   const approveKey = useRef(newIdempotencyKey());
@@ -217,7 +231,15 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
   const canSetup = hasPermission("readiness.manage") || hasPermission("documents.requirements.manage");
   const setupGaps = r.items.filter((i) => (i.requirement === "cpr" || i.requirement === "tb") && /not set up/i.test(i.detail ?? ""));
   // Scheduling holds are shown with the server's own reason. Work approval never implies "eligible to schedule": the two are shown side by side and only the server's holds decide.
-  const holds = r.items.filter((i) => i.blocksShifts);
+  const holdReasons: string[] = r.items.filter((i) => i.blocksShifts).map((h) => `${h.label}: ${h.detail ?? "Needs attention"}`);
+  const c = comp.data;
+  if (c && !c.eligible) {
+    const bg = r.items.find((x) => x.requirement === "background");
+    if (!c.background.qualifies) holdReasons.push(`Background check: ${bg?.detail ?? "No approved result is verified"}`);
+    for (const x of c.requirements) if (x.blocking && x.message) holdReasons.push(`${x.requirement === "cpr" ? "CPR certificate" : "TB clearance"}: ${x.message}`);
+    for (const x of c.hold?.reasons ?? []) if (x.message) holdReasons.push(x.message);
+  }
+  const holds = [...new Set(holdReasons)];
   const attention = r.items.filter((i) => i.state !== "met").length;
   return (
     <section aria-label="Readiness" data-testid="readiness-checklist" className="space-y-2">
@@ -233,7 +255,7 @@ export function ReadinessChecklist({ caregiverRecordId, canManage, hasContact }:
       {holds.length > 0 ? (
         <div role="status" data-testid="scheduling-hold" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
           <p className="font-semibold">Scheduling hold</p>
-          <ul className="list-disc pl-5">{holds.map((h) => <li key={h.requirement}>{h.label}: {h.detail ?? "Needs attention"}</li>)}</ul>
+          <ul className="list-disc pl-5">{holds.map((h) => <li key={h}>{h}</li>)}</ul>
           <p className="text-xs">Work approval is a separate step. These reasons come from the agency's scheduling rules.</p>
         </div>
       ) : null}
