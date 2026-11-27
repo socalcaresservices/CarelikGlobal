@@ -95,6 +95,10 @@ describe("the scheduled worker", () => {
     const m = composeEmail({ to_email: "x@example.invalid", subject: "A shift needs cover", body: "Service on Mon", link: "/schedule", delivery_id: "d" }, "https://app.example.invalid");
     expect(m.text).toContain("https://app.example.invalid/schedule"); expect(m.html).toContain("View shift");
   });
+  it("keeps the line breaks of a multi-line body in the HTML part and escapes markup", () => {
+    const m = composeEmail({ to_email: "x@example.invalid", subject: "S", body: "Line one\nLine <b>two</b>", link: null, delivery_id: "d" }, "https://app.example.invalid");
+    expect(m.html).toContain("Line one<br>Line &lt;b&gt;two&lt;/b&gt;");
+  });
   it("sends due emails, records success, retries transient failures and fails permanent ones; logs hold counts only", async () => {
     await db.admin.query("update ogevia.notification_deliveries set status = 'skipped'");
     await post(w.caregiverA1, "POST /v1/notification-preferences", { category: "cover_shift", inApp: true, email: true });

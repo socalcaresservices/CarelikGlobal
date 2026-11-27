@@ -20,3 +20,11 @@ export function useReadinessOverrides(caregiverRecordId: string | null, enabled:
   return { available: q.isSuccess, rows: q.data ?? [], isLoading: q.isLoading };
 }
 
+
+const REQ = { cpr: "CPR", tb: "TB" } as const;
+export const EXPORT_HEAD = ["Caregiver", "Caregiver code", "Requirement", "Issue", "Expiration date", "Admin Approved", "Approved by", "Approved at", "Reason", "Revoked at", "Revoked by", "Revoke reason", "Issue still applies"];
+/** One row per exception in the order the report shows. A leading = + - @ is neutralised so a spreadsheet never runs a reason as a formula. */
+const safe = (v: string) => (/^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
+export function overrideExportRows(rows: readonly OverrideRecord[]): string[][] {
+  return rows.map((r) => [r.caregiverName, r.caregiverCode, REQ[r.requirement], r.issueLabel, r.validUntil ?? "", r.active ? "Yes" : "No (revoked)", r.approvedByName ?? "", r.approvedAt, r.reason, r.revokedAt ?? "", r.revokedByName ?? "", r.revokeReason ?? "", r.active ? (r.stillApplies ? "Yes" : "No") : ""].map(safe));
+}

@@ -143,3 +143,16 @@ describe("CPR | Expired Doc | Blocked | Approve", () => {
     expect(r).toHaveTextContent("Renewal booked for Friday");
   });
 });
+
+describe("Admin-approved exceptions export", () => {
+  it("builds one export row per exception in report order and neutralises a leading formula character", async () => {
+    const { overrideExportRows } = await import("./readiness/readiness-overrides-data");
+    const base = { id: "1", caregiverRecordId: CG, caregiverCode: "CG-1", caregiverName: "=cmd Reed", requirement: "cpr" as const, issueStatus: "expired", issueLabel: "Expired Doc", validUntil: "2026-11-26", reason: "+Renewal booked", approvedByName: "Olivia Owner", approvedAt: "2026-11-27T18:30:00Z", active: true, revokedAt: null, revokedByName: null, revokeReason: null, stillApplies: true };
+    const rows = overrideExportRows([base, { ...base, id: "2", caregiverName: "Ann Lee", requirement: "tb" as const, active: false, revokedAt: "2026-11-28T10:00:00Z", revokedByName: "Olivia Owner", revokeReason: "Renewed" }]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]![0]).toBe("'=cmd Reed");
+    expect(rows[0]![8]).toBe("'+Renewal booked");
+    expect([rows[0]![2], rows[0]![4], rows[0]![5], rows[0]![12]]).toEqual(["CPR", "2026-11-26", "Yes", "Yes"]);
+    expect([rows[1]![2], rows[1]![5], rows[1]![9], rows[1]![12]]).toEqual(["TB", "No (revoked)", "2026-11-28T10:00:00Z", ""]);
+  });
+});

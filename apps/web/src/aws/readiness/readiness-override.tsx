@@ -1,13 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Button } from "@carelik/ui";
+import { buildXlsx, XLSX_CONTENT_TYPE } from "@carelik/shared";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { formatDateOnly, formatDateTime } from "@/lib/service-verification";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "../aws-workspace";
 import { Dialog, ProfileBlock, ProfileRow, StatusChip, rowButton } from "../profile-ui";
 import type { ReadinessItem, ReadinessOverride } from "./readiness-data";
-import { REFRESH, useReadinessOverrides } from "./readiness-overrides-data";
+import { REFRESH, useReadinessOverrides, EXPORT_HEAD, overrideExportRows } from "./readiness-overrides-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 
@@ -120,6 +121,13 @@ export function OverrideDetails({ caregiverRecordId, item, canRevoke }: { caregi
   );
 }
 
+function download(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Compliance report: every admin-approved exception, whether the issue still applies, who approved it and why. Active first, then the history. */
 export function ReadinessOverridesReport() {
   const { hasPermission } = useOrganization();
@@ -129,6 +137,16 @@ export function ReadinessOverridesReport() {
     <section aria-label="Admin-approved exceptions" data-testid="overrides-report" className="space-y-1">
       <h2 className="text-base font-semibold text-slate-950">Admin-approved exceptions</h2>
       <p className="text-xs text-slate-600">A document issue an administrator allowed work to continue through. The document is not fixed until it is verified again.</p>
+      {q.rows.length > 0 ? (
+        <div className="flex flex-wrap gap-2 print:hidden" data-testid="overrides-export">
+          <button type="button" className={rowButton} onClick={() => {
+            const csv = [EXPORT_HEAD, ...overrideExportRows(q.rows)].map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\r\n");
+            download(`admin-approved-exceptions-${new Date().toISOString().slice(0, 10)}.csv`, new Blob([csv], { type: "text/csv;charset=utf-8" }));
+          }}>Export CSV</button>
+          <button type="button" className={rowButton} onClick={() => download(`admin-approved-exceptions-${new Date().toISOString().slice(0, 10)}.xlsx`, new Blob([buildXlsx([{ name: "Admin-approved exceptions", rows: [EXPORT_HEAD, ...overrideExportRows(q.rows)] }]) as BlobPart], { type: XLSX_CONTENT_TYPE }))}>Export Excel</button>
+          <button type="button" className={rowButton} onClick={() => window.print()}>Print or save as PDF</button>
+        </div>
+      ) : null}
       {q.rows.length === 0 ? <p className="text-sm text-slate-700">None.</p> : (
         <ProfileBlock label="Admin-approved exceptions list">
           {q.rows.map((r) => (
