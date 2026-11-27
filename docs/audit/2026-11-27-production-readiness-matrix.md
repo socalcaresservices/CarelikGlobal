@@ -20,8 +20,8 @@ Legend: Y = yes, N = no, P = partial, ? = unknown/not verified.
 | 4 | Release | TEST/production deployment tooling with guards, backups, rollback (A11, E23) | Y | `docs/releases/*/toolchain` | P | Y | Y | P | Rollback refs for stages 2–3 lost (home disk full); INDEX.md missing |
 | 5 | Release | Release pin guard and expected-only diff gates | Y | `release_pins.py`, PINS_0109/0110 | P (#124) | Y | Y | P | Re-pin after every code commit (done each time) |
 | **Requests, documents, offices** |
-| 6 | Requests | Cancelled/closed requests not counted; unresolved filter; alerts pill (R34, R35, A14) | Y | #113 | Y | Y | Y | N | Request-cleanup switch is **OFF in production**; owner decides the switch-on release |
-| 7 | Documents | Cancel a document request; retire a duplicate type (R37, A14) | Y | #113, 0109 | Y | Y | Y | N | Same switch (OFF in production) |
+| 6 | Requests | Cancelled/closed requests not counted; unresolved filter; alerts pill (R34, R35, A14) | Y | #113 | Y | Y | Y | Y (live) | Production config has requestCleanup ON (deployment-status.md); confirm on screen |
+| 7 | Documents | Cancel a document request; retire a duplicate type (R37, A14) | Y | #113, 0109 | Y | Y | Y | Y (live) | Same switch (ON in production) |
 | 8 | Offices | Create/rename/retire offices; responsible office; filters (R46, A15/A16) | Y | 0110, #114 | Y | Y | Y | Y (live) | — |
 | 9 | Offices | Multiple offices per client/caregiver, one primary, counties, filters (B5) | Y | 0111, f91ea1c1 | Y | Y | Y | Y (live) | — |
 | 10 | Offices | Assignment history (B5) | Y | 0112, 7fca7785 | Y | Y | Y | Y (live) | — |
