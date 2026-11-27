@@ -166,7 +166,18 @@ describe("0122 applied", () => {
 });
 
 const psql = (args: string[]) => spawnSync("psql", ["-X", "-At", "-F", "|", ...args, `postgres://postgres@127.0.0.1:5432/${db.name}`], { encoding: "utf8" });
-describe("deployment check", () => {
+describe("deployment checks", () => {
+  it("CHECK_SCHEDULING_0122 runs read-only and tells the three cases apart for a real caregiver code", async () => {
+    const rec = await approvedCaregiver("Probe");
+    const code = (await q("select caregiver_code from ogevia.caregiver_records where id = $1", [rec]))[0].caregiver_code as string;
+    await setTypesActive(false);
+    const out = psql(["-v", `cg=${code}`, "-f", new URL("../../../../docs/releases/2026-11-20-test-plan/toolchain/CHECK_SCHEDULING_0122.sql", import.meta.url).pathname]);
+    expect(out.stderr).toBe("");
+    expect(out.stdout).toMatch(/caregiver\|.*\|t\|t\|t/);                                   // approval recorded, enforcement on, 0122 present
+    expect(out.stdout).toMatch(/scheduling_check\|cpr\|pending\|type_not_set\|f\|Document type not set up/);
+    expect(out.stdout).toMatch(/compliance_read\|t\|0\|/);
+    expect(out.stdout).not.toMatch(/@/);
+  });
   it("VERIFY_PENDING passes when present (only the ledger row is missing in a test database)", () => {
     const pres = psql(["-v", "mig=0122", "-v", "expect=present", "-f", new URL("../../../../docs/releases/2026-11-20-test-plan/toolchain/VERIFY_PENDING.sql", import.meta.url).pathname]);
     expect(pres.stderr).toBe("");
