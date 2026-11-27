@@ -150,3 +150,28 @@ UNKNOWN scope (need your word): public homepage, Care Match review, finance reco
 
 ## 7. What you decide to unlock production
 1. Merge #124. 2. TEST: publish the RC (API+web), activate enforcement, run runbook A–E, confirm the email. 3. Approve read-only production checks. 4. Name the production switches for Release 1. 5. Answer the section 3 items you want in or out.
+
+## 8. Items explicitly excluded from Release Candidate #124
+"Excluded" means not in the branch/candidate. The reason is either an owner decision, a missing input, or work I did not do; each is labelled so none is mistaken for a decision.
+
+| Excluded item | Why | Kind of reason |
+|---|---|---|
+| NFC/QR visit verification, stickers, signature reports (#125) | Separate PR. Its migration is also numbered 0120, which TEST already holds for the open-shift change, so it must be renumbered to 0124+ first. Built locally only: never deployed to TEST, no real-device test. Mixing it in would add an untested visit-flow change to a readiness release. | Sequencing / risk |
+| UX redesign branch (#108) | Separate lineage with its own tracker rows. Not reconciled with #124's history and not deployed to TEST; it touches nearly every screen. | Sequencing / risk |
+| PRs #121 and #122 (copyable cover-shift text, Open Shifts board + SMS) | #124 already implements the same open-shift workflow. Merging either creates a competing second implementation, which your directive forbids; keeping or closing them is your call. | Owner decision |
+| Live SMS | You said live texting needs separate approval; no provider, number or registration chosen. #124 contains only the mock sender. | Owner decision |
+| Branded invitation sending and per-office branding | Needs a Cognito sender or custom-message trigger and an SES decision. The TEST user pool is not managed by this repository, so it can't be tried through CDK. Code and previews exist but are not enabled. | Owner decision + infrastructure |
+| Production switch-on of bulkImport, staffDuplicates, operationsReadiness, notifications, openShiftSms, readinessOverrides | These ship dark by design; each is enabled one at a time after its own TEST acceptance and your approval. | Release policy |
+| Cover-shift email in production | No production email function or verified production SES identity; AWS BAA/security gate must be reconfirmed before any production email. Email arrival is not even verified in TEST. | Compliance / unverified |
+| Document-expiry reminders | Not built. Notifications support the `cover_shift` category only. Needs a design decision (who is reminded, when, by which channel). | Not built, needs decision |
+| CSV/Excel/PDF for holds, documents and readiness reports | Not built. I added exports only for the admin-approved exceptions report. This one is **my omission, not a business decision**; it can be added without new tools (CSV and the existing Excel builder). | Not done (implementable) |
+| Server-side PDF/Excel report service | A new tool/service; the project rules require a demonstrated gap, alternatives, cost and your approval first. Print-to-PDF covers the exceptions report meanwhile. | Needs approval |
+| Sandata reconciliation, authorization worklist, Patriot payroll/billing handoff, second-agency access | No brief exists anywhere I can read; building from a guess would risk a billing or compliance mistake. | Missing input |
+| Public homepage, Care Match review, finance reconciliation | Scope unknown; no evidence of a request in the readable history. | Missing input |
+| One end-to-end demo | Not built and not prioritised. | Not decided |
+| County dataset | You deferred it on 2026-11-24. | Owner decision |
+| Production database actions: apply 0108 as a no-op, align object ownership | Production changes; need a read-only capture first and your approval. | Production safety |
+| Production read-only prerequisite check (`CHECK_PRD_PREREQS.sql`) | Kept untracked: a push was blocked and you told me to stop production work. | Owner instruction |
+| Written retention period; production BAA confirmation | Legal/compliance decisions for you and counsel, not engineering. | Legal |
+| Stale stacked PRs #53–#73, #98–#110 | Housekeeping, superseded or docs-only; not release scope. | Housekeeping |
+| Real-phone test | Cannot be done from this environment; belongs to the validation runbook. | Environment limit |
