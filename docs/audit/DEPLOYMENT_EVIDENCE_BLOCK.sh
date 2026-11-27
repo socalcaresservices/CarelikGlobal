@@ -50,8 +50,11 @@ for line in sys.argv[2].split("\n"):
     f,k=line.split("|",1); print("  %-28s %s" % (f, "ON (route present)" if k in r else "off"))
 PY
   echo "--- email function"
-  A lambda get-function --function-name "Ogevia-$P-NotificationEmail" --query 'Configuration.[FunctionName,CodeSha256,LastModified]' --output text | mask
-  A lambda get-function-configuration --function-name "Ogevia-$P-NotificationEmail" --query 'Environment.Variables.SES_ALLOWED_RECIPIENTS' --output text | tr ',' '\n' | mask | sed 's/^/  allowed: /'
+  EF=$(A lambda get-function --function-name "Ogevia-$P-NotificationEmail" --query 'Configuration.[FunctionName,CodeSha256,LastModified]' --output text)
+  if echo "$EF" | grep -q "ResourceNotFound"; then echo "  Ogevia-$P-NotificationEmail: NOT PRESENT (no email function in this environment)"; else
+    echo "$EF" | mask
+    A lambda get-function-configuration --function-name "Ogevia-$P-NotificationEmail" --query 'Environment.Variables.SES_ALLOWED_RECIPIENTS' --output text | tr ',' '\n' | mask | sed 's/^/  allowed: /'
+  fi
   python3 - "/tmp/ev-$E.json" <<'PY' | sed -E 's/identity\/[^"]*@/identity\/(masked)@/g'
 import json,sys
 t=json.load(open(sys.argv[1]))
@@ -67,8 +70,9 @@ for POOL in $(aws cognito-idp list-user-pools --max-results 20 --query 'UserPool
   A cognito-idp describe-user-pool --user-pool-id "$POOL" --query 'UserPool.{id:Id,name:Name,triggers:keys(LambdaConfig),emailSender:EmailConfiguration.EmailSendingAccount}' --output json | tr -d '\n '; echo
 done
 echo; echo "################ TEST database (read-only SELECTs through the TEST session tool) ################"
-TC=$(ls -d /tmp/rt2n2/ogevia-rt2/docs/releases/2026-11-20-test-plan/toolchain 2>/dev/null)
-if [ -z "$TC" ]; then echo "TEST toolchain checkout not found in /tmp: rebuild it (git init + fetch b2fe3944f538deaf17e6c28231ca556ff2536a5d) and rerun"; else
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)
+TC=$(ls -d "$HERE/docs/releases/2026-11-20-test-plan/toolchain" /tmp/rt2n2/ogevia-rt2/docs/releases/2026-11-20-test-plan/toolchain 2>/dev/null | head -1)
+if [ -z "$TC" ]; then echo "TEST toolchain checkout not found: run this block from a checkout of the repository"; else
 cd "$TC" && bash TEST_DB_SESSION.sh psql -X -A -F ' | ' <<'SQL'
 begin read only;
 select current_database() as db;
