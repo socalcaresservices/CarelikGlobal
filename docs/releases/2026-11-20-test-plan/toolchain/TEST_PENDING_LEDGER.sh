@@ -3,7 +3,7 @@
 # Same rules as TEST_0112_LEDGER.sh (owner rule 2026-11-10: never untracked SQL; version, filename and SHA-256 recorded in
 # ogevia_meta.schema_migrations in the same transaction; rollback removes the row in the same transaction).
 #
-#   TEST_PENDING_LEDGER.sh probe    <0113|0114|0115|0116|0117|0118|0119|0120>   read-only: identity, ledger, prerequisites, target absent
+#   TEST_PENDING_LEDGER.sh probe    <0113|0114|0115|0116|0117|0118|0119|0120|0121>   read-only: identity, ledger, prerequisites, target absent
 #   TEST_PENDING_LEDGER.sh apply    <migration>             needs OGEVIA_DEPLOY_APPROVAL + a backup: OGEVIA_TEST_SNAPSHOT=<fresh RDS snapshot id of ogevia-postgres> or OGEVIA_TEST_BACKUP=<dump> (+ .sha256)
 #   TEST_PENDING_LEDGER.sh verify   <migration>             read-only: ledger row with the file's checksum, VERIFY_PENDING.sql all true
 #   TEST_PENDING_LEDGER.sh rollback <migration>             needs OGEVIA_DEPLOY_APPROVAL; runs the down script + removes the row atomically
@@ -18,7 +18,7 @@ set +x +H
 umask 077
 stop() { echo "STOP: $*" >&2; exit 2; }
 MODE="${1:-}"; MIG="${2:-}"
-case "$MODE" in probe|apply|verify|rollback) ;; *) stop "usage: probe|apply|verify|rollback <0113|0114|0115|0116|0117|0118|0119|0120>";; esac
+case "$MODE" in probe|apply|verify|rollback) ;; *) stop "usage: probe|apply|verify|rollback <0113|0114|0115|0116|0117|0118|0119|0120|0121>";; esac
 case "$MIG" in
   0113) STEM=0113_notifications;               NEED="0091 0110 0111";;
   0114) STEM=0114_office_branding;             NEED="0113";;
@@ -28,7 +28,8 @@ case "$MIG" in
   0118) STEM=0118_client_service_location;     NEED="0111 0113 0117";;
   0119) STEM=0119_cover_key_legacy_round0;     NEED="0117";;
   0120) STEM=0120_alert_opens_exact_shift;     NEED="0117 0119";;
-  *) stop "migration must be one of 0113 0114 0115 0116 0117 0118 0119 0120";;
+  0121) STEM=0121_one_email_one_person;        NEED="0113";;
+  *) stop "migration must be one of 0113 0114 0115 0116 0117 0118 0119 0120 0121";;
 esac
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(cd "$HERE/../../../.." && pwd)}"

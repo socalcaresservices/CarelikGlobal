@@ -1,4 +1,4 @@
--- READ-ONLY verification of pending migrations 0113-0120. Writes nothing.
+-- READ-ONLY verification of pending migrations 0113-0121. Writes nothing.
 --   psql -X -At -F '|' -v mig=0113 -v expect=absent|present -f VERIFY_PENDING.sql
 -- One row per check: name|t|detail (t = ok, f = FAILING). The wrapper counts rows and fails on any "|f|".
 -- Tables: must exist (present) / not exist (absent). Functions (by schema + name): must exist, be SECURITY DEFINER, have a pinned
@@ -50,12 +50,20 @@ select 'function ogevia.cover_shift_summary exists, not callable by the app role
                  and not has_function_privilege('ogevia_app', to_regprocedure('ogevia.cover_shift_summary(uuid,uuid,uuid)'), 'execute') end, '' where :'mig' = '0120'
 union all
 select 'alert link rule allows the exact-shift link only ' || :'expect',
-       case when :'expect' = 'absent' then coalesce((select pg_get_constraintdef(c.oid) not like '%my-shifts%' from pg_constraint c where c.conrelid = 'ogevia.user_notifications'::regclass and c.conname = 'user_notifications_link_check'), false)
-            else coalesce((select pg_get_constraintdef(c.oid) like '%my-shifts%' from pg_constraint c where c.conrelid = 'ogevia.user_notifications'::regclass and c.conname = 'user_notifications_link_check'), false) end, '' where :'mig' = '0120'
+       case when :'expect' = 'absent' then coalesce((select pg_get_constraintdef(c.oid) not like '%my-shifts%' from pg_constraint c where c.conrelid = to_regclass('ogevia.user_notifications') and c.conname = 'user_notifications_link_check'), false)
+            else coalesce((select pg_get_constraintdef(c.oid) like '%my-shifts%' from pg_constraint c where c.conrelid = to_regclass('ogevia.user_notifications') and c.conname = 'user_notifications_link_check'), false) end, '' where :'mig' = '0120'
 union all
 select 'new alerts carry the exact-shift link ' || :'expect',
        case when :'expect' = 'absent' then coalesce(pg_get_functiondef(to_regprocedure('ogevia.cover_notify(uuid,uuid,uuid,uuid,boolean)')) not like '%/my-shifts?shift=%', false)
             else coalesce(pg_get_functiondef(to_regprocedure('ogevia.cover_notify(uuid,uuid,uuid,uuid,boolean)')) like '%/my-shifts?shift=%', false) end, '' where :'mig' = '0120'
+union all
+select 'function ogevia.email_used_by_other exists ' || :'expect',
+       case when :'expect' = 'absent' then to_regprocedure('ogevia.email_used_by_other(uuid,text,uuid,uuid)') is null
+            else to_regprocedure('ogevia.email_used_by_other(uuid,text,uuid,uuid)') is not null end, '' where :'mig' = '0121'
+union all
+select 'the caregiver contact, staff and invitation writes use it ' || :'expect',
+       case when :'expect' = 'absent' then (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname in ('set_caregiver_contact','begin_caregiver_invitation','begin_staff_invitation','create_staff','update_staff') and pg_get_functiondef(p.oid) like '%email_used_by_other%') = 0
+            else (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'ogevia_api' and p.proname in ('set_caregiver_contact','begin_caregiver_invitation','begin_staff_invitation','create_staff','update_staff') and pg_get_functiondef(p.oid) like '%email_used_by_other%') = 5 end, '' where :'mig' = '0121'
 union all
 select 'ledger row ' || :'mig' || ' ' || :'expect',
        case when :'expect' = 'absent' then not exists (select 1 from ogevia_meta.schema_migrations where version = :'mig')
