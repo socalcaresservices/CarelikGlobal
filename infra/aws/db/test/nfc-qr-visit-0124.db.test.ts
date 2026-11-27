@@ -1,12 +1,12 @@
-// 0120 (PENDING, infra/aws/db/pending): NFC / QR home labels, punches with location results, sign now or later, signing sessions, exceptions, corrections and reports.
+// 0124 (PENDING, infra/aws/db/pending): NFC / QR home labels, punches with location results, sign now or later, signing sessions, exceptions, corrections and reports.
 // SYNTHETIC data only. Each test builds its own client, location, label and shift so the tests do not depend on each other.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ageVisit, api, asActor, createHelperShift, createTestDb, expectPgError, freshClient, seedWorld, type Actor, type TestDb, type World } from "./harness.js";
 
-const UP = new URL("../pending/migrations/0120_nfc_qr_visit_verification.sql", import.meta.url);
-const DOWN = new URL("../pending/rollback/0120_nfc_qr_visit_verification.down.sql", import.meta.url);
+const UP = new URL("../pending/migrations/0124_nfc_qr_visit_verification.sql", import.meta.url);
+const DOWN = new URL("../pending/rollback/0124_nfc_qr_visit_verification.down.sql", import.meta.url);
 let db: TestDb;
 let w: World;
 
@@ -70,7 +70,7 @@ beforeAll(async () => {
 }, 180_000);
 afterAll(async () => db?.drop());
 
-describe("0120 locations and rules", () => {
+describe("0124 locations and rules", () => {
   it("the address needs a city and a ZIP; only authorized staff manage locations; a caregiver sees the place but never the street", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 300);
     await expectPgError(saveLocation(f.client, { city: "X" }), "OGV22", /City/);
@@ -113,7 +113,7 @@ async function retire(a: Actor, client: string) {
   await db.admin.query("update ogevia.shifts set status = 'cancelled' where client_id = $1 and status = 'scheduled'", [client]);
 }
 
-describe("0120 null-safe authorization", () => {
+describe("0124 null-safe authorization", () => {
   it("an open shift (no caregiver) is not readable by a caregiver who is not assigned to it, and agency settings are staff-only", async () => {
     const f = await freshClient(db, w, w.caregiverA1, 300);
     await saveLocation(f.client);
@@ -131,7 +131,7 @@ describe("0120 null-safe authorization", () => {
   });
 });
 
-describe("0120 label administration", () => {
+describe("0124 label administration", () => {
   it("registers a batch of unassigned labels with unique IDs; assigning needs the confirmed address; one active label per location; duplicates are rejected", async () => {
     const [a, b] = await register(w.ownerA, w.orgA, 2);
     const f = await freshClient(db, w, w.caregiverA1, 300);
@@ -199,7 +199,7 @@ describe("0120 label administration", () => {
   });
 });
 
-describe("0120 punches", () => {
+describe("0124 punches", () => {
   it("opening or previewing a link has no punch side effects", async () => {
     const s = await scenario();
     const before = await counts();
@@ -301,7 +301,7 @@ async function asReplicaShiftEnd(shift: string, minutes: number) {
   try { await c.query("set session_replication_role = replica"); await c.query("update ogevia.shifts set ends_at = now() + make_interval(mins => $2) where id = $1", [shift, minutes]); } finally { await c.query("reset session_replication_role"); c.release(); }
 }
 
-describe("0120 punch edge cases", () => {
+describe("0124 punch edge cases", () => {
   it("wrong home, no or other assignment, outside-window arrival and cancellation are not guessed: nothing is clocked and the attempt is kept", async () => {
     const s = await scenario();
     const other = await scenario();
@@ -388,7 +388,7 @@ async function asReplicaShiftTimes(shift: string, fromMin: number, toMin: number
   try { await c.query("set session_replication_role = replica"); await c.query("update ogevia.shifts set starts_at = now() + make_interval(mins => $2), ends_at = now() + make_interval(mins => $3) where id = $1", [shift, fromMin, toMin]); } finally { await c.query("reset session_replication_role"); c.release(); }
 }
 
-describe("0120 signing now or later", () => {
+describe("0124 signing now or later", () => {
   it("sign now: a session is bound to the visit and time revision, single-use, short-lived and replaced by a newer one", async () => {
     const x = await checkedOut();
     const open = (v = x.visit) => call(w.caregiverA1, "select * from ogevia_api.open_signature_session($1)", [v]).then((r) => r[0]);
@@ -490,7 +490,7 @@ async function asReplicaCancel(s: { shift: string; client: string }) {
   if (v) { await ageVisit(db, v, 10); await api.end(db, w.caregiverA1, v); await sign(v); }
 }
 
-describe("0120 corrections, exceptions and reports", () => {
+describe("0124 corrections, exceptions and reports", () => {
   it("a missed clock-out is corrected through a request and a different approver; a material change to a signed visit reopens Signature pending and keeps the original revision", async () => {
     const x = await checkedOut(HOME, 60);
     await sign(x.visit);
@@ -568,8 +568,8 @@ describe("0120 corrections, exceptions and reports", () => {
   });
 });
 
-describe("0120 grants and row security", () => {
-  it("every 0120 table has row security on and no privilege for the application role; no 0120 function is executable by PUBLIC; the application role may call only the 34 API functions", async () => {
+describe("0124 grants and row security", () => {
+  it("every 0124 table has row security on and no privilege for the application role; no 0124 function is executable by PUBLIC; the application role may call only the 34 API functions", async () => {
     const tables = (await db.admin.query(
       `select c.relname, c.relrowsecurity, has_table_privilege('ogevia_app', c.oid, 'select,insert,update,delete') as app_any
          from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -591,12 +591,12 @@ describe("0120 grants and row security", () => {
   });
 });
 
-describe("0120 rollback", () => {
+describe("0124 rollback", () => {
   it("label history rows are append-only", async () => {
     await expect(db.admin.query("update ogevia.home_label_events set reason = 'x'")).rejects.toThrow(/append-only/);
     await expect(db.admin.query("delete from ogevia.visit_punches")).rejects.toThrow(/append-only/);
   });
-  it("the rollback removes every 0120 object and the migration applies again; visits, confirmations and audit rows are untouched", async () => {
+  it("the rollback removes every 0124 object and the migration applies again; visits, confirmations and audit rows are untouched", async () => {
     const visits = (await db.admin.query("select count(*)::int n from ogevia.service_visits")).rows[0].n;
     const audits = (await db.admin.query("select count(*)::int n from ogevia.audit_events")).rows[0].n;
     await run(DOWN);

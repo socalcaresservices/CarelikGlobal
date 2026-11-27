@@ -7,6 +7,8 @@ import { useOrganization } from "@/providers/organization-provider";
 import { supabase } from "@/lib/supabase";
 import { formatDateOnly, formatHours, formatVisitDate } from "@/lib/service-verification";
 
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
 // Reads/writes the pre-existing billing_approvals/billing_submissions
 // pipeline (supabase/migrations/20260812193010 and 20260812193042) -
 // this is the first UI to use it. Ready-to-bill visits (signed, no
@@ -294,9 +296,17 @@ export function BillingPage() {
     );
   }
 
+  const { rows: sortedReady, sort: readySort } = useSortedRows(readyQuery.data ?? [], {
+    date: { get: (r) => r.service_date, kind: "date" }, client: { get: (r) => r.client_name }, service: { get: (r) => r.service_name }, caregiver: { get: (r) => r.caregiver_name },
+    billable: { get: (r) => r.billable_minutes, kind: "number" }, rate: { get: (r) => r.rate_cents, kind: "number" }, amount: { get: (r) => r.estimated_amount_cents, kind: "number" },
+  });
   const unsubmittedApprovals = (approvalsQuery.data ?? []).filter(
     (row) => !row.is_voided && !row.is_submitted,
   );
+  const { rows: sortedApprovals, sort: approvalSort } = useSortedRows(unsubmittedApprovals, {
+    date: { get: (r) => r.service_date, kind: "date" }, client: { get: (r) => r.client_name }, service: { get: (r) => r.service_name },
+    minutes: { get: (r) => r.approved_minutes, kind: "number" }, amount: { get: (r) => r.amount_cents, kind: "number" }, by: { get: (r) => r.approved_by_name },
+  });
 
   if (!canRead) {
     return (
@@ -356,22 +366,22 @@ export function BillingPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                  <th className="pb-2 pr-3 font-medium">Date</th>
-                  <th className="pb-2 pr-3 font-medium">Client</th>
-                  <th className="pb-2 pr-3 font-medium">Service</th>
-                  <th className="pb-2 pr-3 font-medium">Caregiver</th>
-                  <th className="pb-2 pr-3 font-medium">Billable</th>
+                  <SortTh sort={readySort} column="date" kind="date" className="pb-2 pr-3 font-medium">Date</SortTh>
+                  <SortTh sort={readySort} column="client" className="pb-2 pr-3 font-medium">Client</SortTh>
+                  <SortTh sort={readySort} column="service" className="pb-2 pr-3 font-medium">Service</SortTh>
+                  <SortTh sort={readySort} column="caregiver" className="pb-2 pr-3 font-medium">Caregiver</SortTh>
+                  <SortTh sort={readySort} column="billable" kind="number" className="pb-2 pr-3 font-medium">Billable</SortTh>
                   {canReadFinancial ? (
-                    <th className="pb-2 pr-3 font-medium">Rate</th>
+                    <SortTh sort={readySort} column="rate" kind="number" className="pb-2 pr-3 font-medium">Rate</SortTh>
                   ) : null}
                   {canReadFinancial ? (
-                    <th className="pb-2 pr-3 font-medium">Est. amount</th>
+                    <SortTh sort={readySort} column="amount" kind="number" className="pb-2 pr-3 font-medium">Est. amount</SortTh>
                   ) : null}
                   {canApprove ? <th className="pb-2 font-medium" /> : null}
                 </tr>
               </thead>
               <tbody>
-                {(readyQuery.data ?? []).map((row) => (
+                {sortedReady.map((row) => (
                   <Fragment key={row.visit_id}>
                     <tr className="border-b border-slate-100 last:border-0">
                       <td className="py-2 pr-3 whitespace-nowrap text-slate-600">
@@ -541,18 +551,18 @@ export function BillingPage() {
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                   {canSubmit ? <th className="pb-2 pr-3 font-medium" /> : null}
-                  <th className="pb-2 pr-3 font-medium">Date</th>
-                  <th className="pb-2 pr-3 font-medium">Client</th>
-                  <th className="pb-2 pr-3 font-medium">Service</th>
-                  <th className="pb-2 pr-3 font-medium">Minutes</th>
+                  <SortTh sort={approvalSort} column="date" kind="date" className="pb-2 pr-3 font-medium">Date</SortTh>
+                  <SortTh sort={approvalSort} column="client" className="pb-2 pr-3 font-medium">Client</SortTh>
+                  <SortTh sort={approvalSort} column="service" className="pb-2 pr-3 font-medium">Service</SortTh>
+                  <SortTh sort={approvalSort} column="minutes" kind="number" className="pb-2 pr-3 font-medium">Minutes</SortTh>
                   {canReadFinancial ? (
-                    <th className="pb-2 pr-3 font-medium">Amount</th>
+                    <SortTh sort={approvalSort} column="amount" kind="number" className="pb-2 pr-3 font-medium">Amount</SortTh>
                   ) : null}
-                  <th className="pb-2 pr-3 font-medium">Approved by</th>
+                  <SortTh sort={approvalSort} column="by" className="pb-2 pr-3 font-medium">Approved by</SortTh>
                 </tr>
               </thead>
               <tbody>
-                {unsubmittedApprovals.map((row) => (
+                {sortedApprovals.map((row) => (
                   <tr
                     key={row.approval_id}
                     className="border-b border-slate-100 last:border-0"

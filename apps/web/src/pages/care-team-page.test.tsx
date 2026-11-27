@@ -133,4 +133,21 @@ describe("CareTeamPage", () => {
     expect(screen.queryByText("Ashley Rivera")).not.toBeInTheDocument();
     expect(screen.getByText("Jordan Coordinator")).toBeInTheDocument();
   });
+
+  it("sorts the roster by any heading (shared sorting): names A to Z then Z to A; hours as numbers with empty values last", async () => {
+    mockedUseOrganization.mockReturnValue(organizationContext());
+    const rec = (n: number, name: string, hours: number | null) => ({ id: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${n}`, linked_user_id: null, caregiver_code: `CG-00000${n}`, display_name: name, position: "Caregiver I", email: null, phone: null, status: "active", desired_weekly_hours: hours, available_start_date: null });
+    mockedRpc.mockResolvedValue({ data: [rec(1, "Casey Zane", 10), rec(2, "Avery Adams", null), rec(3, "Blake Bell", 30)], error: null } as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Casey Zane")).toBeInTheDocument());
+    const names = () => screen.getAllByRole("link").map((l) => l.textContent).filter((t) => /Zane|Adams|Bell/.test(t ?? ""));
+    expect(names()).toEqual(["Casey Zane", "Avery Adams", "Blake Bell"]);   // the server's order until a heading is chosen
+    fireEvent.click(screen.getByRole("button", { name: /Name/ }));
+    expect(names()).toEqual(["Avery Adams", "Blake Bell", "Casey Zane"]);
+    fireEvent.click(screen.getByRole("button", { name: /Name/ }));
+    expect(names()).toEqual(["Casey Zane", "Blake Bell", "Avery Adams"]);
+    fireEvent.click(screen.getByRole("button", { name: /Hours/ }));
+    expect(names()).toEqual(["Casey Zane", "Blake Bell", "Avery Adams"].sort((a, b) => ({ "Casey Zane": 10, "Blake Bell": 30, "Avery Adams": 99 } as Record<string, number>)[a]! - ({ "Casey Zane": 10, "Blake Bell": 30, "Avery Adams": 99 } as Record<string, number>)[b]!));
+  });
 });
+

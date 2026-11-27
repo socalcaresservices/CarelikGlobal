@@ -1,4 +1,4 @@
-// Home label landing page (0120): a tap on an NFC sticker or a scan of its QR code opens /l#<token>. Opening it only PREVIEWS: the page asks the server what the person can do here.
+// Home label landing page (0124): a tap on an NFC sticker or a scan of its QR code opens /l#<token>. Opening it only PREVIEWS: the page asks the server what the person can do here.
 // A time is saved only when the person presses "Clock in" or "Clock out" (an explicit authenticated action with a retry key). A repeated scan, a reload or a second phone can
 // never turn an arrival into a checkout: the server decides from the preview, and the checkout is a separate, deliberate button.
 import { useEffect, useRef, useState } from "react";

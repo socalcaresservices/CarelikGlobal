@@ -1,7 +1,7 @@
--- 0120 rollback (PENDING). BACKUP REQUIRED if 0120 was ever used: this drops every table below WITH its rows (labels, punches, exceptions, signature follow-ups and events, correction requests, locations, settings).
--- Visits, confirmations, corrections, authorizations and the audit trail are NOT touched; audit events written by 0120 functions stay.
+-- 0124 rollback (PENDING). BACKUP REQUIRED if 0124 was ever used: this drops every table below WITH its rows (labels, punches, exceptions, signature follow-ups and events, correction requests, locations, settings).
+-- Visits, confirmations, corrections, authorizations and the audit trail are NOT touched; audit events written by 0124 functions stay.
 -- Run only in an approved release step after a snapshot. Not applied to any database.
--- Tables first (CASCADE removes only objects that depend on these tables: their triggers and the settings row-type function), then every remaining 0120 function.
+-- Tables first (CASCADE removes only objects that depend on these tables: their triggers and the settings row-type function), then every remaining 0124 function.
 drop table if exists ogevia.punch_correction_requests cascade;
 drop table if exists ogevia.visit_signature_sessions cascade;
 drop table if exists ogevia.visit_signature_events cascade;

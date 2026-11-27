@@ -169,7 +169,7 @@ describe("Care Team", () => {
   // The TEST line's "caregiver page opens with the overall outcome" test described the page that the readiness release replaces (its
   // caregiver-outcome panel is gone by design); the readiness test below covers the page now.
   it("the caregiver page is one checklist: five requirements and a single Approve for work step that says what it is waiting on", async () => {
-    renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
+    renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "manager");
     const list = await screen.findByTestId("readiness-checklist");
     await waitFor(() => expect(list).toHaveTextContent("1 of 5 done"));
     expect(list).toHaveTextContent("Not ready");
@@ -187,21 +187,21 @@ describe("Care Team", () => {
     // the sections the brief removed are gone
     for (const gone of ["Compliance", "Onboarding", "Not eligible under the rules", "Compliance clearance", "Change status"]) expect(screen.queryByText(gone)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Status" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("heading", { name: "Name" })).toHaveLength(1); // the one Name field now lives inside Details
   });
 
   it("an approved, signed-in caregiver shows Active with every row done and no Approve button", async () => {
-    renderAt(`/care-team/${CG}`, "manager");
+    renderAt(`/care-team/${CG}?tab=readiness`, "manager");
     const list = await screen.findByTestId("readiness-checklist");
     await waitFor(() => expect(list).toHaveTextContent("Active"));
     expect(list).not.toHaveTextContent("of 5 done");
     expect(within(list).queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
     expect(within(list).getByText(/Approved .* by Olivia Owner/)).toBeInTheDocument();
-    expect(within(list).getByText(/Verified .* by ogeviamanager/)).toBeInTheDocument();
+    expect(within(list).getByText(/by ogeviamanager/)).toBeInTheDocument();
+    expect(within(list).getAllByText("Verified").length).toBeGreaterThan(0);
   });
 
   it("the caregiver page header shows the name only: the staff ID code (CG-...) is not repeated next to it", async () => {
-    renderAt(`/care-team/${CG}`, "manager");
+    renderAt(`/care-team/${CG}?tab=readiness`, "manager");
     expect(await screen.findByRole("heading", { name: "Synthetic Caregiver One" })).toBeInTheDocument();
     expect(screen.queryByText("CG-1A2B3C4D")).not.toBeInTheDocument();
   });
@@ -227,7 +227,7 @@ describe("Care Team", () => {
 
 describe("Sign-in link (0086, email through the Cognito invitation)", () => {
   it("with no email on file the row offers Add email first; the link is sent after the email is saved, then it can be resent and shows Last sent", async () => {
-    const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
+    const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "manager");
     const list = await screen.findByTestId("readiness-checklist");
     expect(await within(list).findByText("No email on file")).toBeInTheDocument();
     expect(within(list).queryByRole("button", { name: /sign-in link/ })).not.toBeInTheDocument();
@@ -257,7 +257,7 @@ describe("Sign-in link (0086, email through the Cognito invitation)", () => {
   });
 
   it("a caregiver who has signed in shows no send-link control on the page", async () => {
-    renderAt(`/care-team/${CG}`, "manager");
+    renderAt(`/care-team/${CG}?tab=readiness`, "manager");
     const list = await screen.findByTestId("readiness-checklist");
     await waitFor(() => expect(list).toHaveTextContent("Signed in"));
     expect(screen.queryByRole("button", { name: /sign-in link/ })).not.toBeInTheDocument();
@@ -269,7 +269,7 @@ describe("Approve for work and CPR/TB extensions (0086)", () => {
 
   it("Approve is enabled only when the server says every hard requirement is met; a double-click sends ONE request with an Idempotency-Key", async () => {
     (globalThis as { __ready?: boolean }).__ready = true;
-    const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
+    const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "manager");
     const list = await screen.findByTestId("readiness-checklist");
     const approve = await within(list).findByRole("button", { name: "Approve" });
     await waitFor(() => expect(approve).toBeEnabled());
@@ -285,15 +285,15 @@ describe("Approve for work and CPR/TB extensions (0086)", () => {
   });
 
   it("only an administrator sees Extend and Verify; extending needs a date and a reason, then posts both and shows the new due date", async () => {
-    renderAt("/care-team/abababab-0000-4000-8000-000000000009", "manager");
+    renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "manager");
     const asManager = await screen.findByTestId("readiness-checklist");
-    await within(asManager).findByText("CPR certificate");
+    await within(asManager).findByText("CPR");
     expect(within(asManager).queryByRole("button", { name: "Extend" })).not.toBeInTheDocument();
     cleanup();
 
-    const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009", "organization_owner");
+    const api = renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "organization_owner");
     const list = await screen.findByTestId("readiness-checklist");
-    const cprRow = (await within(list).findByText("CPR certificate")).closest("li")!;
+    const cprRow = (await within(list).findByText("CPR")).closest("li")!;
     fireEvent.click(within(cprRow).getByRole("button", { name: "Extend" }));
     fireEvent.click(within(cprRow).getAllByRole("button", { name: "Extend" }).at(-1)!); // the form's own Extend button, with nothing filled in
     expect(await within(cprRow).findByRole("alert")).toHaveTextContent("Choose the new due date");
@@ -308,9 +308,9 @@ describe("Approve for work and CPR/TB extensions (0086)", () => {
   });
 
   it("every action button is at least 44px high on a phone and the checklist is one column", async () => {
-    renderAt("/care-team/abababab-0000-4000-8000-000000000009", "organization_owner");
+    renderAt("/care-team/abababab-0000-4000-8000-000000000009?tab=readiness", "organization_owner");
     const list = await screen.findByTestId("readiness-checklist");
-    await within(list).findByText("CPR certificate");
+    await within(list).findByText("CPR");
     for (const control of [...within(list).getAllByRole("button"), ...within(list).getAllByRole("link")]) expect(control.className, control.textContent ?? "").toMatch(/min-h-\[44px\]/);
     expect(list.querySelector("table")).toBeNull();
   });

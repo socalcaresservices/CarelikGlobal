@@ -1,7 +1,7 @@
-# NFC and QR visit verification (migration 0120): build record
+# NFC and QR visit verification (migration 0124): build record
 
 Owner brief: `OWNER_BRIEF.md` (saved verbatim, 2026-11-23). Branch `claude/amazing-clarke-8b309z`, based on `origin/main` 698ae23. Draft PR, **not deployed, no migration applied anywhere, switch OFF in every environment.**
-Built to be merged later with the other open work (PR #124 holds migrations 0113-0116; this one is 0120). Pilot with synthetic data in TEST; Sandata stays the EVV system of record (nothing here replaces or calls it).
+Built to be merged later with the other open work (PR #124 owns 0113-0123; this was 0120 and was renumbered to 0124 on integration, 2026-11-27). Pilot with synthetic data in TEST; Sandata stays the EVV system of record (nothing here replaces or calls it).
 
 Status words: **WORKING (local)** = built and passing the tests listed below against a local PostgreSQL 16 and the real API handler; **PARTIAL** = part built, gap named; **NOT BUILT**; **NOT VERIFIED** = needs TEST or a real phone. Nothing in this record is a TEST or production result.
 
@@ -45,7 +45,7 @@ Status words: **WORKING (local)** = built and passing the tests listed below aga
 
 1. **An unsigned visit in `awaiting_signature` blocks the caregiver's next visit** (migration 0005 unique indexes; start refuses). "Sign later" therefore uses the **existing "unable to confirm" path**: the visit locks in `administrator_review` with 0 billable minutes, the actual checkout is kept, the caregiver is free, and `visit_signature_followups` carries the *Signature pending* work item. A later valid signature clears the follow-up; billing still needs the existing human approval. *Alternative (not done):* relax the one-open-visit rule, which touches core visit behavior.
 2. **Visit times are immutable; a correction creates a new row and keeps the original confirmation** (0083). The brief wants a fresh signature after a material change: done in the follow-up table, without changing 0083.
-3. **The baseline start function cannot start a visit on a chosen shift.** Migration 0102 (TEST) adds one that can. 0120 uses it when present and otherwise uses the baseline and refuses cleanly if the baseline picked another shift. Both paths are tested.
+3. **The baseline start function cannot start a visit on a chosen shift.** Migration 0102 (TEST) adds one that can. 0124 uses it when present and otherwise uses the baseline and refuses cleanly if the baseline picked another shift. Both paths are tested.
 4. **The existing per-client QR card (0102) stays untouched.** Per-location labels supersede it in purpose; recommend retiring the card after the pilot (owner decision, nothing removed here).
 
 ## 3. Decisions for the owner (only the ones that matter)
@@ -65,14 +65,14 @@ Status words: **WORKING (local)** = built and passing the tests listed below aga
 
 ## 5. Files
 
-New: `infra/aws/db/pending/migrations/0120_nfc_qr_visit_verification.sql` and `rollback/…down.sql`; `apps/sv-api/src/home-labels.ts`; `apps/web/src/aws/{stroke-pad,visit-signing,label-punch-page,home-labels-data,home-labels-panel,verification-reports-page}.tsx|ts`; tests listed in section 6; this folder.
+New: `infra/aws/db/pending/migrations/0124_nfc_qr_visit_verification.sql` and `rollback/…down.sql`; `apps/sv-api/src/home-labels.ts`; `apps/web/src/aws/{stroke-pad,visit-signing,label-punch-page,home-labels-data,home-labels-panel,verification-reports-page}.tsx|ts`; tests listed in section 6; this folder.
 Shared files touched (small, for merge): `apps/sv-api/src/routes.ts` (import, `VERIFICATION_REPORTS`, `punchFields`, 29 routes appended at the end of `ROUTES`), `infra/aws/lib/service-verification-api-stack.ts` (29 routes behind `feature: "homeLabels"`), `infra/aws/lib/config.ts` (type only), `apps/web/src/lib/aws-api.ts` (`SWITCHED_PATHS`), `apps/web/src/aws/{aws-root,aws-shell,client-detail-page}.tsx` (a route, a gate, one menu link shown only when the switch is on, one panel), `infra/aws/db/pending/README.md` (one row), `apps/sv-api/test/tenant-isolation-sweep.db.test.ts` (id and value rules for the new routes; one role-sweep allowance).
 
 ## 6. Tests actually run (local; PostgreSQL 16; synthetic data)
 
 | Command | Result |
 |---|---|
-| `OGEVIA_TEST_DATABASE_URL=… vitest run --config vitest.db.config.ts db/test/nfc-qr-visit-0120` (infra/aws; PostgreSQL 16 locally, CI uses 18) | 2 files, **29 passed** (28 on the TEST baseline incl. 0089-0102, 1 on the production baseline) |
+| `OGEVIA_TEST_DATABASE_URL=… vitest run --config vitest.db.config.ts db/test/nfc-qr-visit-0124` (infra/aws; PostgreSQL 16 locally, CI uses 18) | 2 files, **29 passed** (28 on the TEST baseline incl. 0089-0102, 1 on the production baseline) |
 | same folder, **full** `vitest.db.config.ts` (infra/aws) | 126 files, **1,320 passed** |
 | `apps/sv-api` **full** `vitest.db.config.ts` | 33 files, **195 passed** |
 | `apps/sv-api` unit | 8 files, **119 passed** (incl. 9 new: tokens, sealing, stroke validation, PNG) |
@@ -81,7 +81,7 @@ Shared files touched (small, for merge): `apps/sv-api/src/routes.ts` (import, `V
 | `infra/aws` unit (`pnpm test`) | 900 passed, **3 failed = the release-pin tripwire (section 3, item 1)**; the new switch test (3) passes: 29 routes, OFF in every environment, JWT-only when on, nothing else changes |
 | `pnpm typecheck` (7 packages), `pnpm build`, web `eslint` | clean / exit 0 |
 | **`pnpm test:all` (the release gate)** | **Failed in step 1 before the re-pin** (3 release-pin tests; now re-pinned and passing, 5/5) and, in this shallow clone only, 11 tests skipped in `operator-prd-tarball.test.ts` because this clone is shallow (the pinned code commit is not in it; not caused by this change). Steps 2 and 3 (database and API suites) passed in full. The gate is not passed until the re-pin is done and the suite is run in a full clone. |
-| Rollback | the down script removes every 0120 object, leaves visits/confirmations/audit rows untouched, and the migration re-applies (tested) |
+| Rollback | the down script removes every 0124 object, leaves visits/confirmations/audit rows untouched, and the migration re-applies (tested) |
 
 The sweep and the null-safety review found two real defects in the first draft, both fixed and covered: an open shift (no caregiver) was readable by any caregiver (NULL in an `or` chain read as "allowed"), and agency settings were readable by caregivers.
 
@@ -90,7 +90,7 @@ The sweep and the null-safety review found two real defects in the first draft, 
 * **Target row belongs to the claimed organization:** every API function checks the caller's permission or membership for `p_organization_id` *and* reads the target row with `organization_id = p_organization_id` (labels by code and by id, locations, exceptions, correction requests, shifts, visits). The label punch takes **no organization from the caller**: the agency is the label's own, and the caller must be an active caregiver there. Proof: `tenant-isolation-sweep.db.test.ts` probes all 289 routes (29 of them from this change) as an agency-B manager naming agency A and naming his own agency with agency A's ids: 0 leaks, 0 existence differences, agency A unchanged.
 * **Specific relationship, not just membership:** a punch needs the caregiver's own assignment/shift and a running visit of their own; a signing session needs the caregiver's own visit; a caregiver sees an expected place only for a shift that is theirs (the null-safety defect found and fixed here was exactly this check).
 * **`search_path` pinned:** all 45 (`set search_path = ogevia, pg_temp`), asserted by test.
-* **Grants:** `revoke all … from public` on every function; `EXECUTE` only for the 34 API functions to `ogevia_app`; the 11 internal functions have no grant; nothing for `anon`. All 13 tables have row security on, no policy and no privilege for the application role. Asserted by test ("0120 grants and row security").
+* **Grants:** `revoke all … from public` on every function; `EXECUTE` only for the 34 API functions to `ogevia_app`; the 11 internal functions have no grant; nothing for `anon`. All 13 tables have row security on, no policy and no privilege for the application role. Asserted by test ("0124 grants and row security").
 * **Client-supplied ids:** the organization and ids a caller sends are only ever re-validated against the caller's own rights; times, status, location result and agency are never taken from the caller.
 * Tokens: the label token is 256 random bits, stored as a SHA-256 hash plus an AES-GCM sealed copy (existing QR key parameter, agency-bound context, discarded when the link is revoked); tokens, codes and strokes are not logged (API test asserts the log carries none).
 
@@ -115,7 +115,7 @@ The sweep and the null-safety review found two real defects in the first draft, 
 
 ## 8. Release steps (not performed; each needs the owner's explicit go)
 
-1. Merge with the other work; renumber 0120 if another branch took it; re-pin (section 3).
-2. Snapshot, then apply 0120 to TEST through the ledgered runner (`BACKUP REQUIRED` rollback).
+1. Merge with the other work; renumber 0124 if another branch took it; re-pin (section 3).
+2. Snapshot, then apply 0124 to TEST through the ledgered runner (`BACKUP REQUIRED` rollback).
 3. Turn `features.homeLabels` on for TEST only; run the TEST acceptance table with real phones; record results here.
 4. Production only after the release checklist (`docs/release-process/RELEASE_CHECKLIST_TEMPLATE.md`) and the owner's GO.

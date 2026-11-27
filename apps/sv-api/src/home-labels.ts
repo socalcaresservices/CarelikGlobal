@@ -1,4 +1,4 @@
-// NFC / QR home labels and signature strokes (0120). Pure helpers used by the 0120 routes in routes.ts: label codes and tokens, sealing a token for reprint, stroke validation, and
+// NFC / QR home labels and signature strokes (0124). Pure helpers used by the 0124 routes in routes.ts: label codes and tokens, sealing a token for reprint, stroke validation, and
 // a small server-side PNG renderer. Nothing here talks to the database or to S3, and nothing here logs a token, a stroke or an image.
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
 import { deflateSync } from "node:zlib";

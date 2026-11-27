@@ -1,7 +1,7 @@
--- 0120 (PENDING: infra/aws/db/pending) | CLASS: ADDITIVE (new tables and functions only; no existing table, column, function or row is changed). Not applied to any database.
+-- 0124 (PENDING: infra/aws/db/pending) | CLASS: ADDITIVE (new tables and functions only; no existing table, column, function or row is changed). Not applied to any database.
 -- NFC / QR home-label visit verification, GPS location checks at punches, sign-now-or-later, signing sessions, exceptions and reports.
--- Brief: docs/releases/2026-11-23-nfc-qr-visits/ (owner brief "Ogevia NFC and QR visit verification", 2026-11-23). Number 0120 leaves 0113-0119 free for the other open branches
--- (PR #124 holds 0113-0116); renumber at merge if needed. Release switch: homeLabels (OFF everywhere). Rollback: pending/rollback/0120_nfc_qr_visit_verification.down.sql.
+-- Brief: docs/releases/2026-11-23-nfc-qr-visits/ (owner brief "Ogevia NFC and QR visit verification", 2026-11-23). Renumbered from 0120 on integration with PR #124
+-- Release switch: homeLabels (OFF everywhere). Rollback: pending/rollback/0124_nfc_qr_visit_verification.down.sql.
 --
 -- REUSES (nothing re-implemented): ogevia_api.start_ad_hoc_service_visit (authorization, readiness, shift matching, one open visit), ogevia_api.end_service_visit,
 -- ogevia_api.confirm_service_visit (signature evidence, verified/billable minutes), ogevia_api.correct_service_visit and close_missed_service_visit (audited corrections),
@@ -1454,7 +1454,7 @@ begin
 end;
 $$;
 
--- CSV export of a 0120 report: the caller needs reports.export; the export is audited (report key and row count only, never the rows).
+-- CSV export of a 0124 report: the caller needs reports.export; the export is audited (report key and row count only, never the rows).
 create function ogevia_api.authorize_verification_export(p_organization_id uuid, p_report text, p_row_count integer)
 returns void language plpgsql security definer set search_path = ogevia, pg_temp as $$
 begin

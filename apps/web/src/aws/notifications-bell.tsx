@@ -8,6 +8,7 @@ import { useAwsApi } from "./aws-workspace";
 import { TONE } from "./attention";
 import { HelpLine } from "./ui/help-line";
 import { notificationLabel, useNotifications } from "./notifications";
+import { useNotificationCenter } from "./notification-center-data";
 
 /** The header's notifications: unread count by word and number, and a short list. Opening an item's page is done from Action needed; nothing here changes an issue. */
 export function NotificationsBell() {
@@ -15,6 +16,7 @@ export function NotificationsBell() {
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
   const q = useNotifications();
+  const center = useNotificationCenter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!q.data && !q.isError) return null;
@@ -65,6 +67,7 @@ export function NotificationsBell() {
           {error ? <p role="alert" className="mt-1 text-sm text-red-700">{error}</p> : null}
           <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 border-t border-og-line pt-0.5">
             <Link className="inline-flex min-h-[44px] items-center text-sm font-semibold underline md:min-h-[28px]" to="/action-needed" onClick={() => setOpen(false)}>Open Action needed</Link>
+            {center.available ? <Link className="inline-flex min-h-[44px] items-center text-sm font-semibold underline md:min-h-[28px]" to="/notifications" onClick={() => setOpen(false)} data-testid="bell-center-link">Notification centre{center.unread > 0 ? ` (${center.unread} new)` : ""}</Link> : null}
             <HelpLine details="Critical items always notify the staff who can see them. Urgent items follow your agency's setting. Routine items are listed in Action needed and never notify. Nothing is sent by email, text or push.">Urgent items follow your agency&rsquo;s setting.</HelpLine>
           </div>
         </section>

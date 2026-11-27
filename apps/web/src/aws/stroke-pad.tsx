@@ -1,4 +1,4 @@
-// A signature pad that records STROKES (pointer positions with times), never an image. 0120: the server draws the picture itself from validated strokes, so a pasted, dropped or
+// A signature pad that records STROKES (pointer positions with times), never an image. 0124: the server draws the picture itself from validated strokes, so a pasted, dropped or
 // uploaded picture has no way in: this component has no file input and refuses paste and drop. The server validates the strokes; nothing here is a security boundary on its own.
 import { useEffect, useRef, type PointerEvent } from "react";
 

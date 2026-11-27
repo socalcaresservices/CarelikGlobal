@@ -1,4 +1,4 @@
-// 0120: the home label page and the sign-now / sign-later panel. SYNTHETIC data; the fake API records every request.
+// 0124: the home label page and the sign-now / sign-later panel. SYNTHETIC data; the fake API records every request.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { CognitoAuthProvider, type CognitoAuthClient } from "@carelik/auth";

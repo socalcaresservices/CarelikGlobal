@@ -1,4 +1,4 @@
-// 0120 helpers: label codes and tokens, sealing, signature stroke validation and the server-side PNG. Synthetic values only; no database, no network.
+// 0124 helpers: label codes and tokens, sealing, signature stroke validation and the server-side PNG. Synthetic values only; no database, no network.
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../src/errors";

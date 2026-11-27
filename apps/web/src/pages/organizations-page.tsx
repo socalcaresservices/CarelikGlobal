@@ -8,6 +8,8 @@ import { toAppUrl } from "@/lib/tenant-resolver";
 import { PlatformPlanManager } from "@/components/platform-plan-manager";
 import { PlatformSubscriberBillingPanel } from "@/components/platform-subscriber-billing-panel";
 
+import { SortTh } from "@/aws/ui/sort-th";
+import { useSortedRows } from "@/aws/ui/table-sort";
 // Platform-only registry view, backed by list_platform_organizations()
 // (supabase/migrations/20260807131803_subscriptions_and_registry.sql)
 // rather than a direct organizations read - platform staff have no RLS
@@ -270,6 +272,12 @@ export function OrganizationsPage() {
     enabled: isPlatformOwner
   });
 
+  const { rows, sort } = useSortedRows(registryQuery.data ?? [], {
+    org: { get: (r) => r.display_name }, plan: { get: (r) => r.subscription_plan }, status: { get: (r) => `${r.status} ${r.subscription_status}` },
+    storage: { get: (r) => (r.storage_limit_gb > 0 ? r.storage_used_bytes / (r.storage_limit_gb * 1024 ** 3) : 0), kind: "number" }, users: { get: (r) => r.user_count, kind: "number" },
+    login: { get: (r) => r.last_login_at, kind: "date" }, owner: { get: (r) => r.primary_owner_name },
+  });
+
   if (!isPlatformOwner) {
     return (
       <section className="mx-auto max-w-4xl">
@@ -281,8 +289,6 @@ export function OrganizationsPage() {
       </section>
     );
   }
-
-  const rows = registryQuery.data ?? [];
 
   return (
     <section className="mx-auto max-w-6xl space-y-6 pb-12">
@@ -306,13 +312,13 @@ export function OrganizationsPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                  <th className="pb-2 font-medium">Organization</th>
-                  <th className="pb-2 font-medium">Plan</th>
-                  <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Storage</th>
-                  <th className="pb-2 font-medium">Users</th>
-                  <th className="pb-2 font-medium">Last login</th>
-                  <th className="pb-2 font-medium">Primary owner</th>
+                  <SortTh sort={sort} column="org" className="pb-2 font-medium">Organization</SortTh>
+                  <SortTh sort={sort} column="plan" className="pb-2 font-medium">Plan</SortTh>
+                  <SortTh sort={sort} column="status" className="pb-2 font-medium">Status</SortTh>
+                  <SortTh sort={sort} column="storage" kind="number" className="pb-2 font-medium">Storage</SortTh>
+                  <SortTh sort={sort} column="users" kind="number" className="pb-2 font-medium">Users</SortTh>
+                  <SortTh sort={sort} column="login" kind="date" className="pb-2 font-medium">Last login</SortTh>
+                  <SortTh sort={sort} column="owner" className="pb-2 font-medium">Primary owner</SortTh>
                   <th className="pb-2 font-medium" />
                 </tr>
               </thead>

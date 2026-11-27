@@ -4,7 +4,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 /** Shift lists, every view of open and own shifts. */
-export const SHIFT_QUERY_KEYS = ["aws-shifts", "aws-open-shifts", "aws-my-shifts", "aws-shift-series"] as const;
+export const SHIFT_QUERY_KEYS = ["aws-shifts", "aws-open-shifts", "aws-alert-shift", "aws-my-shifts", "aws-shift-series"] as const;
 /** The Home dashboard and the counts that follow from shifts: action items, attention, authorization use, hours and caregiver load. */
 export const DASHBOARD_QUERY_KEYS = ["action-issues", "attention-overview", "aws-attention", "aws-utilisation", "aws-hour-limits", "aws-caregiver-load"] as const;
 

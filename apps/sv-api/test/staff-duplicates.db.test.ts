@@ -21,6 +21,8 @@ beforeAll(async () => {
   try {
     await c.query("begin"); await c.query("set local role ogevia_owner");
     await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0106_staff_duplicates.sql", import.meta.url), "utf8"));
+    // The merge route uses the 0116 functions (conflict choices, snapshots): 0116 is applied with 0106.
+    await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0116_staff_merge_hardening.sql", import.meta.url), "utf8"));
     await c.query("reset role"); await c.query("commit");
   } catch (e) { await c.query("rollback"); throw e; } finally { c.release(); }
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence: new MemoryEvidenceStore(), identity: new MemoryIdentityAdmin(), log: (l: unknown) => logs.push(l) });

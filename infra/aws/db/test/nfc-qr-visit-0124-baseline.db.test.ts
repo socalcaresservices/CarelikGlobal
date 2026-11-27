@@ -1,4 +1,4 @@
-// 0120 on the PRODUCTION baseline (0001-0088 only, without the TEST-only 0089-0102): the shift-aware start from 0102 is absent, so the baseline start is used and a
+// 0124 on the PRODUCTION baseline (0001-0088 only, without the TEST-only 0089-0102): the shift-aware start from 0102 is absent, so the baseline start is used and a
 // choice it cannot honour is refused cleanly. SYNTHETIC data only.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -14,11 +14,11 @@ beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 1400);
   const c = await db.admin.connect();
-  try { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL("../pending/migrations/0120_nfc_qr_visit_verification.sql", import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } finally { c.release(); }
+  try { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL("../pending/migrations/0124_nfc_qr_visit_verification.sql", import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } finally { c.release(); }
 }, 180_000);
 afterAll(async () => db?.drop());
 
-describe("0120 on the production baseline", () => {
+describe("0124 on the production baseline", () => {
   it("the shift-aware start is absent here; one matching visit still clocks in, and a choice the baseline start cannot honour is refused with nothing clocked", async () => {
     expect((await db.admin.query("select to_regprocedure('ogevia.start_service_visit(uuid,uuid,uuid,text[],text,uuid,text,uuid)') p")).rows[0].p).toBeNull();
     const f = await freshClient(db, w, w.caregiverA1, 600);

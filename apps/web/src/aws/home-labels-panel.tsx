@@ -1,4 +1,4 @@
-// Home labels (0120): a client's service address, its NFC/QR sticker, and the agency's label inventory. Stickers carry an opaque link and a printed ID only: no client name, no address.
+// Home labels (0124): a client's service address, its NFC/QR sticker, and the agency's label inventory. Stickers carry an opaque link and a printed ID only: no client name, no address.
 // Everything here appears only where the homeLabels switch is on (the settings request succeeded) and for staff who may manage clients.
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

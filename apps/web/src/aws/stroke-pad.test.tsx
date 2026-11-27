@@ -1,4 +1,4 @@
-// 0120: the signature pad records strokes and offers no way to bring in a picture. SYNTHETIC only.
+// 0124: the signature pad records strokes and offers no way to bring in a picture. SYNTHETIC only.
 import { cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PAD_HEIGHT, PAD_WIDTH, StrokePad, type Strokes } from "./stroke-pad";

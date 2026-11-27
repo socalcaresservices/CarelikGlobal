@@ -1,4 +1,4 @@
-// Sign now or sign later (0120). The recorded date and times are shown to the signer; the caregiver's phone sends strokes with a short-lived session bound to this visit and
+// Sign now or sign later (0124). The recorded date and times are shown to the signer; the caregiver's phone sends strokes with a short-lived session bound to this visit and
 // these times. Nothing here saves a checkout (that was saved first) and nothing here changes a time, a status or a billable amount.
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

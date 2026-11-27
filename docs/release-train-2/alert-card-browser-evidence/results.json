@@ -1,0 +1,107 @@
+[
+  {
+    "name": "card: title is 'Open shift in Winchester', date and time and service appear once",
+    "ok": true,
+    "detail": "● Open shift in Winchester (unread) Fri 11/27/2026 5:00 AM–5:50 AM · Respite Open — you can request it 11/25/2026 11:19 AM View shift ⋯"
+  },
+  {
+    "name": "card: no client name, client code, ZIP, street or office name",
+    "ok": true,
+    "detail": "● Open shift in Winchester (unread) Fri 11/27/2026 5:00 AM–5:50 AM · Respite Open — you can request it 11/25/2026 11:19 AM View shift ⋯"
+  },
+  {
+    "name": "card: status is visible before tapping",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "card: one unread dot",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "card: View shift is the primary action and easy to tap (>=44px)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "card: Mark read and Archive are not on the card",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "card: the overflow button is easy to tap",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "card: the menu offers Mark read and Archive",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "card: no horizontal scroll and the date and time are fully on screen",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "View shift: the address carries the shift",
+    "ok": true,
+    "detail": "https://localhost/my-shifts?shift=844761aa-0da4-4ff9-bc7c-32a42ca0a922"
+  },
+  {
+    "name": "shift page: the shift from the alert is shown first with Request this shift",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "shift page: the coordinating office is on this page",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "shift page: after requesting it says Requested — waiting for the office",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "card: now shows Requested — waiting for the office",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "link after sign-in: the exact shift opens (not the home page)",
+    "ok": true,
+    "detail": "https://localhost/my-shifts?shift=844761aa-0da4-4ff9-bc7c-32a42ca0a922"
+  },
+  {
+    "name": "office: one card for the shift with 'Shift starts … PT'",
+    "ok": true,
+    "detail": "Caregiver requests for open shifts (2) Nobody is assigned until you confirm. Shift starts Fri, Nov 27, 5:00 AM PT Fri 11/27/2026 5:00 AM–5:50 AM · Demo Tanaka · Respite · 50 min Choose who to confirm "
+  },
+  {
+    "name": "office: both requests show the date and time they were made in Pacific time, first asked first",
+    "ok": true,
+    "detail": "Asked Wed, Nov 25, 11:19 AM PT | Asked Wed, Nov 25, 11:19 AM PT"
+  },
+  {
+    "name": "office: numbered in the order they asked (Alex 1, Blair 2) with the earliest eligible marked on Alex",
+    "ok": true,
+    "detail": "1. Alex Caregiver (CG-ALEX) Asked Wed, Nov 25, 11:19 AM PT Earliest eligible request No problem found right now. || 2. Blair Caregiver (CG-BLAIR) Asked Wed, Nov 25, 11:19 AM PT No problem found right now."
+  },
+  {
+    "name": "other caregiver: the shift page says Filled, with no Request button",
+    "ok": true,
+    "detail": "Filled. Someone else was confirmed for this shift. No action needed. Fri 11/27/2026 5:00 AM–5:50 AM · Respite · Winchester Coordinated by Temecula Office"
+  },
+  {
+    "name": "other caregiver: the card status reads Filled",
+    "ok": true,
+    "detail": "Filled"
+  },
+  {
+    "name": "selected caregiver: the shift page says they are confirmed",
+    "ok": true,
+    "detail": ""
+  }
+]

@@ -12,3 +12,5 @@ export * from "./permissions";
 export * from "./search";
 export * from "./services";
 export * from "./tenant";
+export * from "./invitation-email";
+export * from "./xlsx-template";

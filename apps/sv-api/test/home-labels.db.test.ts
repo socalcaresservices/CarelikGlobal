@@ -1,4 +1,4 @@
-// 0120 through the real handler: labels, punches, strokes-only signing with the session, the direct-confirmation path, reports and CSV. SYNTHETIC data only; the evidence store is in memory.
+// 0124 through the real handler: labels, punches, strokes-only signing with the session, the direct-confirmation path, reports and CSV. SYNTHETIC data only; the evidence store is in memory.
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -18,7 +18,7 @@ beforeAll(async () => {
   db = await createTestDb({ includeLiveTest: true });
   w = await seedWorld(db, 1400);
   const c = await db.admin.connect();
-  try { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0120_nfc_qr_visit_verification.sql", import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } finally { c.release(); }
+  try { await c.query("begin"); await c.query("set local role ogevia_owner"); await c.query(readFileSync(new URL("../../../infra/aws/db/pending/migrations/0124_nfc_qr_visit_verification.sql", import.meta.url), "utf8")); await c.query("reset role"); await c.query("commit"); } finally { c.release(); }
   handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence: store, identity: new MemoryIdentityAdmin(), log: (r) => logs.push(JSON.stringify(r)) });
 }, 180_000);
 afterAll(async () => { vi.unstubAllEnvs(); await db?.drop(); });
@@ -46,7 +46,7 @@ async function setup() {
 const punch = (token: string, body: Record<string, unknown>, key: string | null = randomUUID(), sub = w.caregiverA1.sub) =>
   call("POST /v1/label-punch", { sub, body: { token, ...body }, ...(key === null ? { key: null } : { key }) });
 
-describe("0120 routes", () => {
+describe("0124 routes", () => {
   it("label administration is permission-checked and agency-isolated; the supplier list carries sticker IDs only; the link opens only through the audited call", async () => {
     expect((await call("POST /v1/home-labels", { sub: w.caregiverA1.sub, body: { organizationId: w.orgA, count: 2 } })).status).toBe(403);
     expect((await call("POST /v1/home-labels", { sub: w.managerB.sub, body: { organizationId: w.orgA, count: 2 } })).status).toBe(403);

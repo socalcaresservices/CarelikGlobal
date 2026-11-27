@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { nameWithCode } from "./name-label";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { Button, Card, QuickActionMenu } from "@carelik/ui";
 import { newIdempotencyKey } from "@/lib/sv-backend";
 import { useOrganization } from "@/providers/organization-provider";
@@ -32,7 +32,9 @@ import { SortButton, SortTh } from "./ui/sort-th";
 import { useSortedRows } from "./ui/table-sort";
 import { CaregiverPicker } from "./caregiver-picker";
 import { CaregiverMarker } from "./office-assignments";
+import { useNotificationCenter } from "./notification-center-data";
 import { refreshAfterShiftChange } from "./shift-refresh";
+import { STATUS_SENTENCE, type CoverShiftSummary } from "./cover-shift-status";
 import { schedulingRefusal } from "./scheduling-refusal";
 
 /**
@@ -294,6 +296,10 @@ const ACTION_TITLE: Record<Exclude<Action, null>, string> = {
 
 function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false, withDate = true }: { s: Shift; canManage: boolean; onDone: (text: string) => void; highlight?: boolean; autoAssign?: boolean; withDate?: boolean }) {
   const [action, setAction] = useState<Action>(null);
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const notifyAvailable = useNotificationCenter(canManage).available;   // the action appears only where the notifications switch is on
+  const [notifying, setNotifying] = useState(false);
   const overrides = useSigninOverrides(canManage);
   const viaOverride = !s.hasSignIn && !!s.caregiverRecordId && (overrides.data ?? []).some((o) => o.caregiverRecordId === s.caregiverRecordId);
   const [expanded, setExpanded] = useState(stateOfShift(s) === "needs_coverage" || highlight);
@@ -314,6 +320,26 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
     ...(canManage && !s.makeupForShiftId && (s.coverageState === "cancelled" || s.coverageState === "completed") ? [{ label: "Schedule make-up", action: "makeup" as const }] : []),
     { label: "History", action: "history" },
   ];
+  const canNotify = notifyAvailable && editable && s.coverageState === "needs_coverage" && future;
+  type AlertResult = { state: string; notified?: number; alreadyNotified?: number; subject?: string; office?: string; clientId?: string; missing?: string[]; offices?: Array<{ officeId: string; name: string }> };
+  const [alertBlock, setAlertBlock] = useState<AlertResult | null>(null);
+  const [alertOffice, setAlertOffice] = useState("");
+  async function notifyCaregivers(officeId?: string) {
+    setNotifying(true);
+    try {
+      const r = await api.post<{ result: AlertResult }>(`/v1/shifts/${s.shiftId}/notify-cover`, { organizationId: activeOrganizationId, ...(officeId ? { officeId } : {}) }, { idempotencyKey: newIdempotencyKey() });
+      const x = r.result;
+      // Two states need a person: choose the coordinating office (several offices, none assigned to the shift) or complete the client's service address (city and ZIP).
+      if (x.state === "office_required" || x.state === "address_incomplete") { setAlertBlock(x); setAlertOffice(""); return; }
+      setAlertBlock(null);
+      onDone(x.state === "disabled" ? "Open-shift alerts are off. The agency Administrator can turn them on in Notifications."
+        : x.state === "not_needed" ? "This shift does not need cover any more, so nobody was notified."
+        : x.state === "office_audience_off" ? `Alerts are turned off for ${x.office ?? "this office"} (Notifications settings), so nobody was notified.`
+        : (x.notified ?? 0) > 0 ? `${x.notified} caregiver${x.notified === 1 ? " was" : "s were"} notified: ${x.subject ?? ""}`
+        : (x.alreadyNotified ?? 0) > 0 ? "Eligible caregivers were already notified about this shift." : "No eligible caregiver to notify for this shift.");
+    } catch (cause) { onDone(cause instanceof Error ? cause.message : "Could not notify caregivers. Nothing was sent."); }
+    finally { setNotifying(false); }
+  }
   const pick = (a: Exclude<Action, null>) => setAction(action === a && (a === "history" || a === "makeup") ? null : a);
   const stateKey = stateOfShift(s);
   const chip = <span data-testid="shift-state" className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${DISPLAY_BADGE[stateKey] ?? STATE_BADGE[s.coverageState]}`}>{DISPLAY_LABEL[stateKey] ?? STATE_LABEL[s.coverageState]}</span>;
@@ -329,6 +355,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       {primary && !action ? <Button type="button" size="sm" variant={primary.action === "assign" ? "primary" : "secondary"} className="min-h-11 whitespace-nowrap md:min-h-7 md:py-0" {...(primary.action === "assign" ? { "aria-label": `Assign caregiver to shift for ${shiftLabel}` } : {})} onClick={() => pick(primary.action)}>{primary.label}</Button> : null}
       {items.length === 1 && !primary ? <button type="button" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8" onClick={() => pick(items[0]!.action)}>{items[0]!.label}</button> : (
         <QuickActionMenu label="More actions" className="[&>button]:min-h-11 [&>button]:min-w-11 md:[&>button]:min-h-7 md:[&>button]:min-w-7">
+          {canNotify ? <button type="button" disabled={notifying} className="block min-h-11 w-full px-3 text-left text-slate-900 hover:bg-slate-50 md:min-h-10" onClick={() => void notifyCaregivers()}>Send open-shift alert</button> : null}
           {items.map((i) => <button key={i.action} type="button" className={`block min-h-11 w-full px-3 text-left hover:bg-slate-50 md:min-h-10 ${i.danger ? "text-red-800" : "text-slate-900"}`} onClick={() => pick(i.action)}>{i.label}</button>)}
         </QuickActionMenu>
       )}
@@ -351,6 +378,27 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
   ) : action ? <ShiftActions s={s} action={action} onClose={() => setAction(null)} onDone={(t) => { setAction(null); onDone(t); }} /> : null;
   const tone = highlight ? "bg-sky-50 outline outline-2 outline-slate-900" : "";
   // The shift's change forms open in the side drawer (full screen on a phone) so the list does not move under the person's hands.
+  const alertDrawer = (
+    <Drawer open={alertBlock !== null} title="Open-shift alert" onClose={() => setAlertBlock(null)}>
+      {alertBlock?.state === "office_required" ? (
+        <div className="space-y-3 text-sm" data-testid="alert-office">
+          <p>This agency has more than one office and this shift has none assigned. Choose the office that coordinates it. The alert goes to that office's audience and names it.</p>
+          {(alertBlock.offices ?? []).length === 0 ? <p role="alert" className="text-red-700">There is no active office. Add one in Settings → Offices first.</p> : (
+            <label className="block font-semibold">Coordinating office
+              <select className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-base" value={alertOffice} onChange={(e) => setAlertOffice(e.target.value)} data-testid="alert-office-select">
+                <option value="">Choose an office</option>{(alertBlock.offices ?? []).map((o) => <option key={o.officeId} value={o.officeId}>{o.name}</option>)}
+              </select>
+            </label>)}
+          <Button type="button" disabled={!alertOffice || notifying} onClick={() => void notifyCaregivers(alertOffice)}>{notifying ? "Sending…" : "Send the alert"}</Button>
+        </div>
+      ) : alertBlock?.state === "address_incomplete" ? (
+        <div className="space-y-3 text-sm" data-testid="alert-address">
+          <p role="alert" className="text-red-800">This client's service address is missing the {(alertBlock.missing ?? []).map((m) => (m === "zip" ? "ZIP code" : m)).join(" and ")}. The alert is not sent until it is complete: caregivers are told the service city, never the office's.</p>
+          <Link className="inline-flex min-h-[44px] items-center font-semibold underline" to={`/clients/${alertBlock.clientId}?edit=location#service-location`} onClick={() => setAlertBlock(null)}>Open the client record to complete it</Link>
+        </div>
+      ) : null}
+    </Drawer>
+  );
   const formsDrawer = (
     <Drawer open={action !== null && forms !== null} title={action ? `${ACTION_TITLE[action]}: ${shiftLabel}` : "Shift"} onClose={() => setAction(null)}>
       <dl data-testid="shift-drawer-summary" className="mb-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
@@ -381,6 +429,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
           </div>
         </details>
         {formsDrawer}
+        {alertDrawer}
       </li>
     );
   }
@@ -397,6 +446,7 @@ function ShiftRow({ s, canManage, onDone, highlight = false, autoAssign = false,
       </tr>
       {hasNotes ? <tr><td colSpan={COLS + (withDate ? 1 : 0)} className="space-y-0 pb-0.5 pl-2 text-xs">{notes}</td></tr> : null}
       {formsDrawer}
+      {alertDrawer}
     </tbody>
   );
 }
@@ -500,6 +550,8 @@ export function SchedulePage() {
     }
     return [...by.values()];
   }, [filtered]);
+  // Alerts and emails link to /schedule. A caregiver has no office schedule, so send them to the board where open shifts can be requested.
+  if (!canManage && !hasPermission("visits.manage") && hasPermission("availability.manage_own")) return <Navigate to={`/my-shifts${params.get("shift") ? `?shift=${encodeURIComponent(params.get("shift")!)}` : ""}`} replace />;
   if (!canManage && !hasPermission("visits.manage")) return <p className="text-sm text-slate-600">You do not have access to the schedule.</p>;
   const unit = view === "day" ? "day" : view === "week" ? "week" : "month";
   const link = "inline-flex min-h-11 items-center px-1 text-sm font-medium text-og-link underline underline-offset-2 md:min-h-8";
@@ -602,10 +654,46 @@ export function SchedulePage() {
   );
 }
 
-interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; city?: string | null; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
+interface OpenShift { shiftId: string; startsAt: string; endsAt: string; minutes: number; clientCode: string; city?: string | null; officeName?: string | null; serviceName: string | null; coverageState: string; myRequestStatus?: "requested" | null }
+
+function useOpenShifts() {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  return useQuery({
+    queryKey: ["aws-open-shifts", activeOrganizationId],
+    queryFn: async () => (await api.get<{ shifts: OpenShift[] }>("/v1/open-shifts", { organizationId: activeOrganizationId })).shifts,
+    enabled: !!activeOrganizationId,
+  });
+}
+
+/** The caregiver opened an alert for one shift. If it is open, the board below puts it first with the request button (or Requested, once asked). Otherwise say what it is now. */
+function AlertShiftStatus({ shiftId }: { shiftId: string }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const { when, time } = useAgencyClock();
+  const open = useOpenShifts();
+  const info = useQuery({
+    queryKey: ["aws-alert-shift", activeOrganizationId, shiftId],
+    queryFn: async () => (await api.get<{ alertShift?: CoverShiftSummary }>("/v1/open-shifts", { organizationId: activeOrganizationId, shiftId })).alertShift ?? null,
+    enabled: !!activeOrganizationId,
+    retry: false,
+  });
+  if (!open.data || info.isLoading) return null;
+  if (open.data.some((o) => o.shiftId === shiftId)) return null;                       // the board card below says it
+  if (info.isError) return <p role="status" data-testid="alert-shift-status" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">This shift could not be loaded. Refresh the page.</p>;
+  if (!info.data) return <p role="status" data-testid="alert-shift-status" data-status="unavailable" className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-sm font-semibold text-slate-900">{STATUS_SENTENCE.unavailable}</p>;
+  const sh = info.data;
+  return (
+    <div role="status" data-testid="alert-shift-status" data-status={sh.status} className={`rounded-lg border p-2 text-sm ${sh.status === "yours" ? "border-emerald-300 bg-emerald-50" : "border-slate-300 bg-slate-50"}`}>
+      <p className="font-semibold text-slate-950">{STATUS_SENTENCE[sh.status]}</p>
+      {sh.startsAt && sh.status !== "unavailable" ? <p className="text-slate-800">{when(sh.startsAt)}–{time(sh.endsAt)}{sh.serviceName ? ` · ${sh.serviceName}` : ""}{sh.city ? ` · ${sh.city}` : ""}</p> : null}
+      {sh.officeName && sh.status !== "unavailable" ? <p className="text-xs text-slate-600" data-testid="alert-shift-office">Coordinated by {sh.officeName}</p> : null}
+    </div>
+  );
+}
 
 /** Wave 1 (G09), changed by 0063: open shifts the caregiver is assigned to. Asking sends a request; the office confirms one caregiver. */
-function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
+function OpenShiftsSection({ onPicked, focusId }: { onPicked: (text: string) => void; focusId?: string | null }) {
   const api = useAwsApi();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = useOrganization();
@@ -614,11 +702,7 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
   const [error, setError] = useState<{ shiftId: string; text: string } | null>(null);
   // One key per shift, so a double tap or a retry is the same request.
   const keys = useRef(new Map<string, string>());
-  const open = useQuery({
-    queryKey: ["aws-open-shifts", activeOrganizationId],
-    queryFn: async () => (await api.get<{ shifts: OpenShift[] }>("/v1/open-shifts", { organizationId: activeOrganizationId })).shifts,
-    enabled: !!activeOrganizationId,
-  });
+  const open = useOpenShifts();
   async function pickUp(shiftId: string) {
     if (busyId) return;
     if (!keys.current.has(shiftId)) keys.current.set(shiftId, newIdempotencyKey());
@@ -658,12 +742,15 @@ function OpenShiftsSection({ onPicked }: { onPicked: (text: string) => void }) {
       <h2 id="open-shifts-heading" className="text-base font-semibold text-slate-950">Open shifts you can ask for</h2>
       <Hint details="The office confirms one caregiver, and the shift appears in your list once it does." show>Asking does not give you the shift.</Hint>
       <ul className="space-y-1.5">
-        {open.data.map((s) => (
-          <li key={s.shiftId} className="rounded-lg border border-sky-200 bg-sky-50 p-2">
+        {[...open.data].sort((a, b) => Number(b.shiftId === focusId) - Number(a.shiftId === focusId)).map((s) => (
+          <li key={s.shiftId} data-testid={s.shiftId === focusId ? "alert-shift" : undefined} ref={s.shiftId === focusId ? (el) => el?.scrollIntoView?.({ block: "center" }) : undefined}
+            className={`rounded-lg border p-2 ${s.shiftId === focusId ? "border-sky-600 bg-sky-100 ring-2 ring-sky-500" : "border-sky-200 bg-sky-50"}`}>
+            {s.shiftId === focusId ? <p className="text-xs font-semibold uppercase text-sky-900">The shift from your alert</p> : null}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <div className="min-w-0">
                 <p className="font-semibold text-slate-950">{when(s.startsAt)}–{time(s.endsAt)}</p>
                 <p className="text-sm text-slate-800">Client {s.clientCode}{s.city ? ` · ${s.city}` : ""}{s.serviceName ? ` · ${s.serviceName}` : ""} · {formatDuration(s.minutes)}</p>
+                {s.officeName ? <p className="text-xs text-slate-600" data-testid="open-shift-office">Coordinated by {s.officeName}</p> : null}
               </div>
               {s.myRequestStatus === "requested" ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -689,6 +776,8 @@ export function MyShiftsPage() {
   const { activeOrganizationId } = useOrganization();
   const { today, time, tz } = useAgencyClock();
   const [selectedDate, setSelectedDate] = useState(today);
+  const [urlParams] = useSearchParams();
+  const alertShift = /^[0-9a-f-]{36}$/i.test(urlParams.get("shift") ?? "") ? urlParams.get("shift") : null;
   const [open, setOpen] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [state, setState] = useState<{ busy: boolean; error: string | null; done: string | null }>({ busy: false, error: null, done: null });
@@ -742,7 +831,8 @@ export function MyShiftsPage() {
         </div>
       </section>
       {state.done ? <p role="status" className="text-sm text-emerald-800">{state.done}</p> : null}
-      <OpenShiftsSection onPicked={(text) => setState({ busy: false, error: null, done: text })} />
+      {alertShift ? <AlertShiftStatus shiftId={alertShift} /> : null}
+      <OpenShiftsSection focusId={alertShift} onPicked={(text) => setState({ busy: false, error: null, done: text })} />
       {shifts.isLoading ? <p className="text-sm text-slate-500">Loading…</p> : null}
       {shifts.isError ? <p role="alert" className="text-sm text-red-700">{(shifts.error as Error).message}</p> : null}
       {shifts.data && visible.length === 0 ? <p className="text-sm text-og-sub">No shifts shown for this date.</p> : null}

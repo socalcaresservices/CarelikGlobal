@@ -1,4 +1,4 @@
-// Home labels, visit exceptions and the verification reports (0120, behind the homeLabels release switch). Where the switch is off the routes do not exist and the browser sees a
+// Home labels, visit exceptions and the verification reports (0124, behind the homeLabels release switch). Where the switch is off the routes do not exist and the browser sees a
 // failed request, so `available` is true only when the settings request actually succeeded. Every control stays out of sight unless it did.
 import { useQuery } from "@tanstack/react-query";
 import { useContext } from "react";

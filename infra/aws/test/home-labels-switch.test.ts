@@ -1,4 +1,4 @@
-// The NFC / QR visit-verification routes (pending migration 0120) are added to an environment's API only when `features.homeLabels` is on. The switch is OFF in every environment.
+// The NFC / QR visit-verification routes (pending migration 0124) are added to an environment's API only when `features.homeLabels` is on. The switch is OFF in every environment.
 import { Template } from "aws-cdk-lib/assertions";
 import { describe, expect, it } from "vitest";
 import { ROUTES } from "../../../apps/sv-api/src/routes.js";
@@ -13,7 +13,7 @@ const routes = (cfg: OgeviaEnvironmentConfig) => {
 };
 const LABEL_ROUTES = SERVICE_VERIFICATION_ROUTES.filter((r) => r.feature === "homeLabels").map((r) => `${r.method} ${r.path}`).sort();
 
-describe("home label (0120) route switch", () => {
+describe("home label (0124) route switch", () => {
   it("marks 29 routes, every one of them a handler in the API route table, none public", () => {
     expect(LABEL_ROUTES).toHaveLength(29);
     for (const k of LABEL_ROUTES) { expect(ROUTES[k], k).toBeTruthy(); expect(ROUTES[k]!.public ?? false, k).toBe(false); }

@@ -110,9 +110,13 @@ describe("Care Team list: offices, counties, colour", () => {
 });
 
 describe("Caregiver profile", () => {
-  it("manages offices (primary change, add, remove), service counties and the colour; the colour saves red, yellow or blue", async () => {
+  it("manages offices (primary change, add, remove) and service counties from the Overview rows; each editor opens only on Manage or Edit", async () => {
     const { posts } = renderAt(`/care-team/${CG1}`, MANAGER);
-    const list = await screen.findByRole("list", { name: "Assigned Offices" }, { timeout: 15000 });
+    const officesRow = await screen.findByTestId("row-offices", undefined, { timeout: 15000 });
+    await waitFor(() => expect(officesRow).toHaveTextContent("Temecula Office"));
+    expect(within(officesRow).queryByRole("list", { name: "Assigned Offices" })).not.toBeInTheDocument();   // saved value first, editor closed
+    fireEvent.click(within(officesRow).getByRole("button", { name: "Manage assigned offices" }));
+    const list = await within(officesRow).findByRole("list", { name: "Assigned Offices" });
     expect(list).toHaveTextContent("Temecula Office");
     expect(within(list).getAllByText("Primary")).toHaveLength(1);
     fireEvent.click(within(list).getByRole("button", { name: "Make primary" }));
@@ -120,23 +124,32 @@ describe("Caregiver profile", () => {
     fireEvent.click(within(list).getByRole("button", { name: "Remove Moreno Valley Office" }));
     await waitFor(() => expect(posts).toContainEqual({ path: `/v1/caregivers/${CG1}/offices`, body: { organizationId: ORG, primaryOfficeId: TEM, secondaryOfficeIds: [] } }));
     expect(screen.queryByLabelText("Add an office")).not.toBeInTheDocument();   // both active offices are already assigned and the retired one cannot take new assignments
-    const counties = await screen.findByRole("list", { name: "Service Counties" });
+    const countiesRow = screen.getByTestId("row-counties");
+    fireEvent.click(within(countiesRow).getByRole("button", { name: "Edit service counties" }));
+    const counties = await within(countiesRow).findByRole("list", { name: "Service Counties" });
     fireEvent.click(within(counties).getByRole("button", { name: "Remove San Bernardino County" }));
     await waitFor(() => expect(posts).toContainEqual({ path: `/v1/caregivers/${CG1}/service-counties`, body: { organizationId: ORG, counties: ["Riverside"] } }));
     fireEvent.change(screen.getByLabelText("Add a county"), { target: { value: "Orange" } });
     await waitFor(() => expect(posts).toContainEqual({ path: `/v1/caregivers/${CG1}/service-counties`, body: { organizationId: ORG, counties: ["Riverside", "San Bernardino", "Orange"] } }));
-    const group = screen.getByRole("radiogroup", { name: "Caregiver Color" });
+    expect(screen.queryByRole("radiogroup", { name: "Caregiver Color" })).not.toBeInTheDocument();   // the palette is no longer on the main profile
+  });
+  it("the optional Schedule color is one row under Assignments & availability; the colour saves red, yellow or blue and the swatch beside the name stays", async () => {
+    const { posts } = renderAt(`/care-team/${CG1}?tab=assignments`, MANAGER);
+    const row = await screen.findByTestId("row-schedule-color", undefined, { timeout: 15000 });
+    fireEvent.click(within(row).getByRole("button", { name: "Edit schedule color" }));
+    const group = await screen.findByRole("radiogroup", { name: "Caregiver Color" });
     for (const c of ["Red", "Yellow", "Blue"]) expect(within(group).getByRole("radio", { name: new RegExp(c) })).toBeInTheDocument();
     fireEvent.click(within(group).getByRole("radio", { name: /Blue/ }));
     await waitFor(() => expect(posts).toContainEqual({ path: `/v1/caregivers/${CG1}/color`, body: { organizationId: ORG, color: "blue" } }));
     fireEvent.click(within(group).getByRole("radio", { name: "No color" }));
     await waitFor(() => expect(posts).toContainEqual({ path: `/v1/caregivers/${CG1}/color`, body: { organizationId: ORG, color: null } }));
-    expect(screen.getAllByTestId("caregiver-swatch").length).toBeGreaterThan(0);   // the saved yellow shows beside the name in the heading
+    expect(screen.getAllByTestId("caregiver-swatch").length).toBeGreaterThan(0);   // the saved colour shows beside the name in the heading
   });
-  it("a user who may only view (visits.manage) sees the assignments but no editing controls", async () => {
+  it("a user who may only view (visits.manage) sees the assigned offices and counties but no editing controls", async () => {
     renderAt(`/care-team/${CG1}`, ["visits.manage", "visits.read"]);
-    const list = await screen.findByRole("list", { name: "Assigned Offices" }, { timeout: 15000 });
-    expect(within(list).queryByRole("button")).not.toBeInTheDocument();
+    const row = await screen.findByTestId("row-offices", undefined, { timeout: 15000 });
+    await waitFor(() => expect(row).toHaveTextContent("Temecula Office"));
+    expect(within(row).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Caregiver Color" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Add a county")).not.toBeInTheDocument();
   });
