@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- a test double: request bodies are free-form JSON */
 // The Caregiver holds page (compliance holds and the admin-approved exceptions of 0123) has its own menu entry under Operations for people who may read compliance, so it opens even when
 // the action queue and the holds list are empty. SYNTHETIC data only.
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
