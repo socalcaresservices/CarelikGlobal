@@ -110,6 +110,29 @@ describe("Visit verification page", () => {
     await waitFor(() => expect(requests.some((r) => r.path === "/v1/punch-corrections/dddddddd-0000-4000-8000-000000000004/decide")).toBe(true));
     expect(requests.find((r) => r.path.endsWith("/decide"))!.body).toEqual({ organizationId: ORG, approve: true, note: "Verified with the caregiver", locationDecision: "accepted" });
   });
+  it("a signing link can be emailed: the address is sent once, the 6-digit code is shown for the phone call and is not in the email; a failed email falls back to the copyable link", async () => {
+    const row = { visitId: "v8", visitNumber: "V-8", state: "pending", reason: "signing_later", directRequired: false, caregiverName: "Synthetic CG", clientCode: "CL-8", pendingHours: 2, lastRequestAt: null };
+    let fail = false;
+    const { requests } = renderPage({ reports: { unsigned_checkouts: [row] }, post: (r) => r.path === "/v1/visits/v8/signature-link-email"
+      ? (fail ? json(201, { requestId: "r2", emailSent: false, error: "recipient_not_allowed", token: "cd".repeat(32), code: "654321" }) : json(201, { requestId: "r1", emailSent: true, code: "123456" })) : json(200, {}) });
+    fireEvent.click(await screen.findByRole("tab", { name: "Checked out without signature" }, T));
+    const table = await screen.findByRole("table", { name: "Checked out without signature" });
+    fireEvent.click(within(table).getByRole("button", { name: "Send signing link" }));
+    expect(within(table).queryByRole("button", { name: "Email the link" })).toBeNull();            // needs an address first
+    fireEvent.change(within(table).getByLabelText("Name"), { target: { value: "Synthetic Parent" } });
+    fireEvent.change(within(table).getByLabelText("How you checked who they are"), { target: { value: "Called the number on file" } });
+    fireEvent.change(within(table).getByLabelText(/Email address/), { target: { value: "parent@example.test" } });
+    fireEvent.click(within(table).getByRole("button", { name: "Email the link" }));
+    expect(await within(table).findByTestId("emailed-note")).toHaveTextContent("123456");
+    const sent = requests.find((r) => r.path === "/v1/visits/v8/signature-link-email")!;
+    expect(sent.body).toMatchObject({ organizationId: ORG, recipientEmail: "parent@example.test", recipientName: "Synthetic Parent", recipientRole: "client", expiresInDays: 7 });
+    expect(within(table).queryByTestId("signing-link")).toBeNull();                                // the link itself is never shown after a successful email
+    fail = true;
+    fireEvent.change(within(table).getByLabelText(/Email address/), { target: { value: "parent@example.test" } });
+    fireEvent.click(within(table).getByRole("button", { name: "Email the link" }));
+    expect(await within(table).findByTestId("signing-link")).toHaveTextContent(`confirm-visit#${"cd".repeat(32)}`);
+    expect(within(table).getByText(/could not be sent/)).toBeInTheDocument();
+  });
   it("the CSV button appears only with the export permission and asks the server for the file", async () => {
     const created: string[] = [];
     (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL = (b) => { created.push(String(b.size)); return "blob:x"; };

@@ -49,6 +49,7 @@ export async function handler(event: HttpApiEvent | Record<string, unknown>) {
       config,
       db: dbInstance,
       evidence: s3EvidenceStore(new S3Client({ region: config.region }), config.evidenceBucket, config.evidenceKeyArn),
+      ...(config.emailFunctionName && config.appOrigin ? { email: { send: invokeEmail(new LambdaClient({ region: config.region }), config.emailFunctionName), appOrigin: config.appOrigin } } : {}),
       identity: config.identityFunctionName ? lambdaIdentityAdmin(invokeIdentity(new LambdaClient({ region: config.region }), config.identityFunctionName)) : unavailableIdentityAdmin,
     });
   }

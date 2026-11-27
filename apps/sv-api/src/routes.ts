@@ -5,6 +5,8 @@ import { ApiError, storageUnavailable } from "./errors";
 import { MAX_IMPORT_BYTES, parseImportFile, type ImportKind } from "./import-file";
 import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
+import type { SendEmail } from "./notify";
+import { composeSignatureEmail } from "./signature-email";
 import { hashLabelToken, labelContext, LABEL_CODE, LABEL_TOKEN, newLabelBatch, openLabelToken, renderSignaturePng, rowsToCsv, validateStrokes } from "./home-labels";
 import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
@@ -29,6 +31,8 @@ export interface RouteContext {
   readonly evidence: EvidenceStore;
   /** Creates caregiver sign-ins and resends invitations (0025); database checks run first. */
   readonly identity: IdentityAdmin;
+  /** Sends one email (signing links). Absent where the environment has no email function. */
+  readonly email?: { readonly send: SendEmail; readonly appOrigin: string };
 }
 
 export interface Route {
@@ -4865,6 +4869,57 @@ export const ROUTES: Record<string, Route> = {
       const data = await tx((db) => rows(db, "select * from ogevia_api.list_authorization_worklist($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [orgParam(event), month, optionalUuid(query.clientId, "clientId"), optionalUuid(query.officeId, "officeId"),
         program, status, whole(query.expiringDays, "expiringDays", 30), whole(query.nearlyPercent, "nearlyPercent", 85), optionalDate(query.from, "from"), optionalDate(query.to, "to")]));
       return { rows: data };
+    },
+  },
+
+  // Signing-link email (behind the signatureEmail release switch). Staff type the address of the person on file; the server makes the 0036 secure link, emails ONLY the link (the
+  // 6-digit code is never in the email: it comes back to the staff member to give by phone), and records the delivery without the address, link or code. An open earlier link is revoked first (one open link
+  // per visit). If the email cannot be sent the link and code come back to the staff member so it can be copied instead; nothing is lost.
+  "POST /v1/visits/{visitId}/signature-link-email": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, email }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const recipientName = text(body.recipientName, "recipientName", 200, { required: true });
+      const recipientRole = oneOf(body.recipientRole, "recipientRole", ["client", "parent", "guardian", "authorized_representative"] as const);
+      const identityCheck = text(body.identityCheck, "identityCheck", 500, { required: true });
+      const to = typeof body.recipientEmail === "string" ? body.recipientEmail.trim() : "";
+      if (to.length > 254 || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(to)) throw new ApiError(400, "bad_request", "Enter a valid email address.");
+      const days = body.expiresInDays === undefined ? 7 : body.expiresInDays;
+      if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 30) throw new ApiError(400, "bad_request", "expiresInDays must be a whole number from 1 to 30.");
+      // Checked before anything is created, so an unavailable sender leaves no orphan link.
+      if (!email) throw new ApiError(503, "email_unavailable", "Email is not set up for this agency yet. Make a link and copy it instead.");
+
+      // One open link per visit: revoke the earlier one (its reason is recorded; the history keeps it).
+      const existing = await tx((db) => rows(db, "select * from ogevia_api.list_visit_confirmation_requests($1)", [visit]));
+      for (const r of existing.filter((x) => x.state === "open")) {
+        await tx((db) => db.query("select ogevia_api.revoke_visit_confirmation_request($1,$2,$3)", [r.requestId, "Replaced by a new emailed link", stableUuid(`${key}:revoke:${String(r.requestId)}`)]));
+        await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,'link_revoked',$3,'email','replaced')", [org, visit, r.requestId]));
+      }
+      const token = newOpaqueToken();
+      const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      const tokenHash = hashOpaqueToken(token);
+      const [made] = await tx((db) => rows(db, "select * from ogevia_api.create_visit_confirmation_request($1,'link',$2,$3,$4,$5,$6,$7,$8)", [visit, recipientName, recipientRole, identityCheck, tokenHash, confirmationCodeHash(tokenHash, code), days, key]));
+      const request = made as { requestId: string; expiresAt: string; isNew: boolean };
+      // A retry of the same request: the link cannot be shown or emailed again. Make a new one.
+      if (!request.isNew) throw new ApiError(409, "conflict", "This link was already made. Make a new link to email it.");
+      await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,'request_created',$3,'email','created')", [org, visit, request.requestId]));
+
+      const [branding] = await tx((db) => rows(db, "select * from ogevia_api.get_organization_branding($1)", [org]));
+      const composed = composeSignatureEmail({ agencyName: String((branding as { displayName?: string } | undefined)?.displayName ?? "Your care agency"), url: `${email.appOrigin}/confirm-visit#${token}`, expiresAt: new Date(request.expiresAt) });
+      let result: Awaited<ReturnType<SendEmail>>;
+      for (let attempt = 0; ; attempt++) {
+        try { result = await email.send({ to, subject: composed.subject, text: composed.text, html: composed.html, deliveryId: request.requestId }); }
+        catch { result = { ok: false, error: "send_failed", transient: true }; }
+        if (result.ok || !result.transient || attempt >= 1) break;
+      }
+      await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,$3,$4,'email',$5)", [org, visit, result.ok ? "email_queued" : "delivery_failed", request.requestId, result.ok ? "accepted" : result.error.slice(0, 40)]));
+      return result.ok
+        ? { requestId: request.requestId, expiresAt: request.expiresAt, emailSent: true, code }   // the code is for the staff member to give by phone; the link is only in the email
+        : { requestId: request.requestId, expiresAt: request.expiresAt, emailSent: false, error: result.error, token, code };
     },
   },
 

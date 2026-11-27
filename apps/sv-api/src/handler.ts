@@ -11,6 +11,7 @@ import type { ConnectionSource } from "./db";
 import { toApiError } from "./errors";
 import type { EvidenceStore } from "./evidence";
 import { unavailableIdentityAdmin, type IdentityAdmin } from "./identity";
+import type { SendEmail as SendEmailFn } from "./notify";
 import { errorBody, json, type HttpApiEvent, type HttpResult } from "./http";
 import { ROUTES } from "./routes";
 
@@ -41,6 +42,8 @@ export interface HandlerDeps {
   readonly db: ConnectionSource;
   readonly evidence: EvidenceStore;
   readonly identity?: IdentityAdmin;
+  /** Sends one email through the email function (only where an agency environment has one). Absent = signing-link emails are unavailable. */
+  readonly email?: { readonly send: SendEmailFn; readonly appOrigin: string };
   readonly log?: Logger;
   readonly now?: () => number;
 }
@@ -90,6 +93,7 @@ export function createHandler(deps: HandlerDeps) {
         event,
         evidence: deps.evidence,
         identity: deps.identity ?? unavailableIdentityAdmin,
+        ...(deps.email ? { email: deps.email } : {}),
         tx: async (work) => {
           const client = await deps.db.connect();
           let broken = false;

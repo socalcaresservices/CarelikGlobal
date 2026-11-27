@@ -119,6 +119,7 @@ function RowActions({ report, row, onChanged }: { report: string; row: Row; onCh
   const [open, setOpen] = useState<null | "resolve" | "link">(null);
   const [text, setText] = useState(""); const [name, setName] = useState(""); const [role, setRole] = useState("client"); const [check, setCheck] = useState(""); const [reason, setReason] = useState("poor_connectivity");
   const [link, setLink] = useState<string | null>(null);
+  const [mail, setMail] = useState(""); const [emailed, setEmailed] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const org = activeOrganizationId;
   const run = useMutation({ mutationFn: async (task: () => Promise<void>) => task(), onSuccess: () => { onChanged(); }, onError: (c) => setNote(fail(c)) });
@@ -178,6 +179,14 @@ function RowActions({ report, row, onChanged }: { report: string; row: Row; onCh
         <label className="block">Name<input value={name} onChange={(e) => setName(e.target.value)} className={input} /></label>
         <label className="block">Who<select value={role} onChange={(e) => setRole(e.target.value)} className={input}><option value="client">Client</option><option value="parent">Parent</option><option value="guardian">Guardian</option><option value="authorized_representative">Authorized representative</option></select></label>
         <label className="block">How you checked who they are<input value={check} onChange={(e) => setCheck(e.target.value)} className={input} /></label>
+        <label className="block">Email address (optional: email the link)<input type="email" value={mail} onChange={(e) => setMail(e.target.value)} className={input} autoComplete="off" /></label>
+        {mail.trim() ? <Button type="button" disabled={run.isPending || name.trim().length < 2 || check.trim().length < 5 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail.trim())} onClick={() => run.mutate(async () => {
+          setNote(null); setEmailed(null);
+          const made = await api.post<{ requestId: string; emailSent: boolean; code?: string; token?: string; error?: string }>(`/v1/visits/${visit}/signature-link-email`, { organizationId: org, recipientName: name.trim(), recipientRole: role, recipientEmail: mail.trim(), identityCheck: check.trim(), expiresInDays: 7 }, { idempotencyKey: newIdempotencyKey() });
+          if (made.emailSent) { setEmailed(`Email sent. Give them this 6-digit code by phone: ${made.code}. The code is not in the email.`); setMail(""); }
+          else { setNote("The email could not be sent. The link is shown below: copy it instead."); if (made.token) setLink(`${window.location.origin}/confirm-visit#${made.token}   code ${made.code}`); }
+        })}>Email the link</Button> : null}
+        {emailed ? <p role="status" className="rounded bg-emerald-50 p-2" data-testid="emailed-note">{emailed}</p> : null}
         <Button type="button" disabled={run.isPending || name.trim().length < 2 || check.trim().length < 5} onClick={() => run.mutate(async () => {
           const made = await api.post<{ requestId: string; token: string | null; code: string | null }>(`/v1/visits/${visit}/confirmation-requests`, { channel: "link", recipientName: name.trim(), recipientRole: role, identityCheck: check.trim(), expiresInDays: 7 }, { idempotencyKey: newIdempotencyKey() });
           await api.post(`/v1/visits/${visit}/signature-followup/delivery`, { organizationId: org, action: "request_created", requestId: made.requestId, channel: "copied", status: "created" });

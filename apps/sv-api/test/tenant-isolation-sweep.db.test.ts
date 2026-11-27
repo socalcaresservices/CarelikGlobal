@@ -61,7 +61,7 @@ beforeAll(async () => {
   } finally { adm.release(); }
   w = await seedWorld(db, 600);
   const evidence = new MemoryEvidenceStore();
-  handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), log: () => {} });
+  handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), email: { send: async () => ({ ok: true, messageId: "synthetic" }), appOrigin: "https://app.example.test" }, log: () => {} });
   const A = w.orgA;
   const f = await freshClient(db, w, w.caregiverA1, 6000, A, { before: 40, after: 40 });
   const rec = (await db.admin.query("select id from ogevia.caregiver_records where linked_user_id = $1 and organization_id = $2", [w.caregiverA1.userId, A])).rows[0].id as string;
@@ -292,6 +292,7 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "token" && /label-punch/.test(route)) return "f".repeat(64);
   if (name === "link" && /home-labels\/resolve/.test(route)) return `https://app.example.test/l#${"f".repeat(64)}`;
   if (name === "nearlyPercent") return 85;
+  if (name === "recipientEmail") return "synthetic@example.test";
   if (name === "ownerUserId") return ids.userId;
   if (name === "latitude") return 34.0522;
   if (name === "longitude") return -118.2437;

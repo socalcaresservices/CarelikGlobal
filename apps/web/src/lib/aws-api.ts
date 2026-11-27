@@ -32,7 +32,7 @@ export const SWITCHED_PATHS: readonly RegExp[] = [
   // 0124 (homeLabels switch): home labels, punches, signing, exceptions, corrections and verification reports.
   /^\/v1\/authorization-worklist$/, /^\/v1\/verification-settings$/, /^\/v1\/verification-reports\/[^/]+$/, /^\/v1\/home-labels(\/.*)?$/, /^\/v1\/label-punch(\/preview)?$/, /^\/v1\/visit-punch$/, /^\/v1\/visit-exceptions(\/.*)?$/,
   /^\/v1\/clients\/[^/]+\/service-locations$/, /^\/v1\/services\/[^/]+\/location-rule$/, /^\/v1\/shifts\/[^/]+\/(location-override|expected-locations)$/,
-  /^\/v1\/visits\/[^/]+\/(signature-session|sign|sign-later|punch-corrections|signature-followup\/(owner|delivery))$/, /^\/v1\/punch-corrections\/[^/]+\/decide$/,
+  /^\/v1\/visits\/[^/]+\/(signature-session|sign|sign-later|punch-corrections|signature-link-email|signature-followup\/(owner|delivery))$/, /^\/v1\/punch-corrections\/[^/]+\/decide$/,
 ];
 export const isSwitchedPath = (path: string) => SWITCHED_PATHS.some((re) => re.test(path));
 
