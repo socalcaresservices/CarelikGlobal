@@ -136,3 +136,6 @@ This branch now contains PR #124 (merged in, so it carries #124's own migrations
 * **Where it appears:** Visit verification > Checked out without signature > Send signing link > "Email address" + "Email the link".
 * **Tests:** text 4, route 3 (success, failure/retry, unavailable/permission/isolation/validation), web 1, CDK switch 2, sweep (321 routes, 0 leaks).
 * **Not verified:** a real SES send (needs a verified sender identity in the environment: owner decision, `docs/release-train-2/email-sender.md`); how the email looks in real mail clients; delivery to a real address. The address is typed by staff from the file: this app has no stored signer email.
+
+## 11. Secure-link signing page is now stroke-based (2026-11-28)
+`POST /v1/public/visit-confirmations/{token}/respond` no longer accepts a signature picture: a drawn signature arrives as strokes, the server validates them and draws the PNG itself (same rule as the caregiver's phone); `signaturePng`, `image`, `dataUrl`, `file`, `png` are refused with 422 and nothing is stored. The recipient page uses the stroke pad. The link's own controls are unchanged (single use, expiry, phone code, bound to the visit snapshot). Tests: workflow.db (61, incl. refusal cases), confirm-visit page (2). Closes the "PARTIAL" note in section 1 (fresh pad / no image upload).

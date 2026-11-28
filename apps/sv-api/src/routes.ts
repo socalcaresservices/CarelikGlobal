@@ -3493,10 +3493,13 @@ export const ROUTES: Record<string, Route> = {
       const disputeReason = outcome === "disputed" ? text(body.disputeReason, "disputeReason", 1000, { required: true }) : null;
       const attested = body.attested === true;
       const responseKey = uuid(body.responseKey, "responseKey");
-      const signature = method === "draw" ? validateSignaturePng(body.signaturePng) : null;
-      if (method !== "draw" && body.signaturePng !== undefined && body.signaturePng !== null) {
-        throw new ApiError(422, "validation_failed", "A signature image is only accepted for a drawn signature.");
+      // The drawn signature arrives as STROKES, never as a picture: an image, a data URL or a file is refused, and the server draws the PNG itself from validated strokes
+      // (the same rule as signing on the caregiver's phone). The link is single-use, expires, needs the code and is bound to the visit as it was when the link was made.
+      for (const forbidden of ["signaturePng", "image", "dataUrl", "file", "png"]) {
+        if (body[forbidden] !== undefined && body[forbidden] !== null) throw new ApiError(422, "validation_failed", "A signature image cannot be accepted. Sign on the screen.");
       }
+      if (method !== "draw" && body.strokes !== undefined && body.strokes !== null) throw new ApiError(422, "validation_failed", "Signature strokes are only accepted for a drawn signature.");
+      const signature = method === "draw" ? validateSignaturePng(renderSignaturePng(validateStrokes(body.strokes)).toString("base64")) : null;
       // Check the link and code (a wrong code is counted and committed) before storing anything.
       const [found] = await tx((db) => rows(db, "select * from ogevia_api.public_open_visit_confirmation($1, $2)", [tokenHash, codeHash]));
       // A retry after the response was recorded: the link is answered, so look the response up by its key.
