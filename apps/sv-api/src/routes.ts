@@ -4875,6 +4875,42 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0126 (pending, behind the serviceAddresses release switch): service address history. Staff only. One current home address per client; alternate and historical addresses are kept;
+  // a wrong address that never had a sticker can be deleted. Every state change needs a reason (except making an address current) and is recorded.
+  "GET /v1/clients/{clientId}/service-addresses": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      addresses: await tx((db) => rows(db, "select * from ogevia_api.list_client_service_addresses($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])),
+    }),
+  },
+
+  "GET /v1/clients/{clientId}/service-addresses/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      history: await tx((db) => rows(db, "select * from ogevia_api.list_service_location_history($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])),
+    }),
+  },
+
+  "POST /v1/service-locations/{serviceLocationId}/state": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const state = oneOf(body.state, "state", ["active", "alternate", "historical"] as const);
+      const reason = text(body.reason, "reason", 300, { required: state !== "active" });
+      await tx((db) => db.query("select ogevia_api.set_service_location_state($1,$2,$3,$4)", [uuid(body.organizationId, "organizationId"), uuid(p(event).serviceLocationId, "serviceLocationId"), state, reason ?? null]));
+      return { state };
+    },
+  },
+
+  "POST /v1/service-locations/{serviceLocationId}/delete": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.delete_service_location($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).serviceLocationId, "serviceLocationId"), text(body.reason, "reason", 300, { required: true })]));
+      return { deleted: true };
+    },
+  },
+
   // Signing-link email (behind the signatureEmail release switch). Staff type the address of the person on file; the server makes the 0036 secure link, emails ONLY the link (the
   // 6-digit code is never in the email: it comes back to the staff member to give by phone), and records the delivery without the address, link or code. An open earlier link is revoked first (one open link
   // per visit). If the email cannot be sent the link and code come back to the staff member so it can be copied instead; nothing is lost.

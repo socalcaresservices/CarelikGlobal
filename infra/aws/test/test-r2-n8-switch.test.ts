@@ -42,7 +42,7 @@ S1 = ["GET /v1/cover-notification-history", "GET /v1/cover-notification-settings
 S7 = ["GET /v1/readiness-overrides", "POST /v1/caregivers/{caregiverRecordId}/readiness-override", "POST /v1/readiness-overrides/{overrideId}/revoke"]
 S2 = ["GET /v1/sms-settings", "POST /v1/sms-settings", "GET /v1/my-sms", "POST /v1/my-sms", "GET /v1/sms-oncall", "POST /v1/sms-oncall", "GET /v1/sms-history",
       "GET /v1/clients/{clientId}/service-location", "POST /v1/clients/{clientId}/service-location"]
-SW = {"homeLabels": ["GET /v1/clients/{clientId}/service-locations", "POST /v1/clients/{clientId}/service-locations", "POST /v1/services/{serviceId}/location-rule", "POST /v1/shifts/{shiftId}/location-override", "GET /v1/shifts/{shiftId}/expected-locations", "GET /v1/verification-settings", "POST /v1/verification-settings", "GET /v1/home-labels", "POST /v1/home-labels", "POST /v1/home-labels/assign", "POST /v1/home-labels/resolve", "POST /v1/home-labels/{labelId}/deactivate", "POST /v1/home-labels/{labelId}/replace", "POST /v1/home-labels/{labelId}/link", "GET /v1/home-labels/{labelId}/history", "POST /v1/label-punch/preview", "POST /v1/label-punch", "POST /v1/visit-punch", "POST /v1/visits/{visitId}/signature-session", "POST /v1/visits/{visitId}/sign", "POST /v1/visits/{visitId}/sign-later", "POST /v1/visits/{visitId}/signature-followup/owner", "POST /v1/visits/{visitId}/signature-followup/delivery", "GET /v1/visit-exceptions", "POST /v1/visit-exceptions/{exceptionId}/resolve", "GET /v1/visit-exceptions/{exceptionId}/history", "POST /v1/visits/{visitId}/punch-corrections", "POST /v1/punch-corrections/{requestId}/decide", "GET /v1/verification-reports/{report}"], "authorizationWorklist": ["GET /v1/authorization-worklist"], "signatureEmail": ["POST /v1/visits/{visitId}/signature-link-email"]}
+SW = {"homeLabels": ["GET /v1/clients/{clientId}/service-locations", "POST /v1/clients/{clientId}/service-locations", "POST /v1/services/{serviceId}/location-rule", "POST /v1/shifts/{shiftId}/location-override", "GET /v1/shifts/{shiftId}/expected-locations", "GET /v1/verification-settings", "POST /v1/verification-settings", "GET /v1/home-labels", "POST /v1/home-labels", "POST /v1/home-labels/assign", "POST /v1/home-labels/resolve", "POST /v1/home-labels/{labelId}/deactivate", "POST /v1/home-labels/{labelId}/replace", "POST /v1/home-labels/{labelId}/link", "GET /v1/home-labels/{labelId}/history", "POST /v1/label-punch/preview", "POST /v1/label-punch", "POST /v1/visit-punch", "POST /v1/visits/{visitId}/signature-session", "POST /v1/visits/{visitId}/sign", "POST /v1/visits/{visitId}/sign-later", "POST /v1/visits/{visitId}/signature-followup/owner", "POST /v1/visits/{visitId}/signature-followup/delivery", "GET /v1/visit-exceptions", "POST /v1/visit-exceptions/{exceptionId}/resolve", "GET /v1/visit-exceptions/{exceptionId}/history", "POST /v1/visits/{visitId}/punch-corrections", "POST /v1/punch-corrections/{requestId}/decide", "GET /v1/verification-reports/{report}"], "authorizationWorklist": ["GET /v1/authorization-worklist"], "signatureEmail": ["POST /v1/visits/{visitId}/signature-link-email"], "serviceAddresses": ["GET /v1/clients/{clientId}/service-addresses", "GET /v1/clients/{clientId}/service-addresses/history", "POST /v1/service-locations/{serviceLocationId}/state", "POST /v1/service-locations/{serviceLocationId}/delete"]}
 def build(switches, key, extra=False):
     env = {"DB_NAME": "ogevia_sv_test", "COVER_ALERT_ADDRESS_RULES": "on", "SMS_MODE": "mock", "SERVICE_LOCATION": "on", "EMAIL_FUNCTION_NAME": "Ogevia-prod-NotificationEmail"}
     r = {"Handler886CB40B": {"Type": "AWS::Lambda::Function", "Properties": {"Code": {"S3Bucket": "cdk-hnb659fds-assets-300094796789-us-west-2", "S3Key": key}, "Environment": {"Variables": env}}, "Metadata": {"aws:asset:path": "asset." + key}},
@@ -107,6 +107,7 @@ case "$url" in
   */v1/home-labels|*/v1/verification-settings|*/v1/visit-exceptions|*/label-punch/preview|*/v1/label-punch|*/signature-session) if has "/v1/home-labels"; then echo -n 401; else echo -n 404; fi;;
   */v1/authorization-worklist) if has "/v1/authorization-worklist"; then echo -n 401; else echo -n 404; fi;;
   */signature-link-email) if has "signature-link-email"; then echo -n 401; else echo -n 404; fi;;
+  */service-addresses|*/service-addresses/history|*/service-locations/*/state|*/service-locations/*/delete) if has "service-addresses"; then echo -n 401; else echo -n 404; fi;;
   */index.html) if [[ -n "$out" ]]; then cp ${JSON.stringify(join(dir, "built-index.html"))} "$out"; fi;;
   */assets/index-abc.js) cat ${JSON.stringify(join(dir, "main.js"))};;
   */config.json) cat ${JSON.stringify(join(dir, "web.json"))};;
@@ -118,7 +119,7 @@ esac
 [[ "$1" == "--version" ]] && { echo 9.15.4; exit 0; }
 if [[ "$*" == *"cdk synth"* ]]; then out=""; prev=""; for x in "$@"; do [[ "$prev" == "--output" ]] && out="$x"; prev="$x"; done
   cfg="$(cat "$PWD/infra/aws/lib/config.ts")"; extra=0; sws=""
-  for x in homeLabels authorizationWorklist signatureEmail; do [[ "$cfg" == *"$x: true"* ]] && sws="$sws,$x"; done
+  for x in homeLabels authorizationWorklist signatureEmail serviceAddresses; do [[ "$cfg" == *"$x: true"* ]] && sws="$sws,$x"; done
   [[ "$cfg" == *"assignmentHistory: true"* && "$cfg" == *"notifications: true"* && "$cfg" == *"openShiftSms: true"* && "$cfg" == *"serviceLocation: true"* && "$cfg" == *"readinessOverrides: true"* ]] || { echo "the earlier switches were not kept ON" >&2; exit 7; }
   [[ "$cfg" == *"notificationEmail:"* && "$cfg" == *"allowedRecipients: ["* ]] || { echo "the email configuration was not kept" >&2; exit 7; }
   [[ -f ${JSON.stringify(join(st, "extra"))} && -n "$sws" ]] && extra=1
@@ -172,6 +173,7 @@ describe("TEST_R2_N8_SWITCH.sh", () => {
     { sw: "homeLabels", stage: "stage8a", routes: 29, before: [], migs: ["0123", "0124"] },
     { sw: "authorizationWorklist", stage: "stage8b", routes: 1, before: ["homeLabels"], migs: ["0123", "0125"] },
     { sw: "signatureEmail", stage: "stage8c", routes: 1, before: ["homeLabels", "authorizationWorklist"], migs: ["0123", "0124"] },
+    { sw: "serviceAddresses", stage: "stage8d", routes: 4, before: ["homeLabels", "authorizationWorklist", "signatureEmail"], migs: ["0123", "0124", "0126"] },
   ];
   for (const c of CASES) {
     it(`happy path for ${c.sw}: only its ${c.routes} route(s) are added, the database is read but never changed, the earlier switches and the email function stay, deploy then web, config restored`, () => {
@@ -180,7 +182,7 @@ describe("TEST_R2_N8_SWITCH.sh", () => {
         const r = run(s, { OGEVIA_SWITCH: c.sw, OGEVIA_SWITCHES_ON: c.before.join(",") });
         expect(r.status, r.stderr + r.stdout).toBe(0);
         expect(r.stdout).toContain(`EXPECTED-ONLY: YES (${c.stage}, off)`); expect(r.stdout).toContain(`EXPECTED-ONLY: YES (${c.stage}, on)`);
-        const total = 270 + 10 + 9 + 3 + c.before.reduce((n, x) => n + (x === "homeLabels" ? 29 : 1), 0) + c.routes;
+        const total = 270 + 10 + 9 + 3 + c.before.reduce((n, x) => n + (x === "homeLabels" ? 29 : x === "serviceAddresses" ? 4 : 1), 0) + c.routes;
         expect(r.stdout).toContain(`PASS ${total} routes live`);
         expect(r.stdout).toContain("PASS Handler still has SMS_MODE=mock and SERVICE_LOCATION=on"); expect(r.stdout).toContain("PASS the NotificationEmail function is still there");
         expect(r.stdout).toContain("PASS the bundle carries commit " + s.head); expect(r.stdout).toContain("RELEASE 2 STAGE 8 COMPLETE (TEST)"); expect(r.stdout).toContain("The database was not changed by this script");

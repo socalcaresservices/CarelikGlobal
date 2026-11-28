@@ -90,7 +90,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness" | "openShiftSms" | "serviceLocation" | "readinessOverrides" | "homeLabels" | "authorizationWorklist" | "signatureEmail";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness" | "openShiftSms" | "serviceLocation" | "readinessOverrides" | "homeLabels" | "serviceAddresses" | "authorizationWorklist" | "signatureEmail";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -364,6 +364,11 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.GET, path: "/v1/verification-reports/{report}", feature: "homeLabels" },
   // 0125 (pending): the Authorization Worklist (read only). OFF until the owner releases 0125.
   { method: apigw.HttpMethod.GET, path: "/v1/authorization-worklist", feature: "authorizationWorklist" },
+  // 0126 (pending): service address history (current / alternate / historical addresses, switch, delete a wrong entry). OFF until the owner releases 0126.
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-addresses", feature: "serviceAddresses" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-addresses/history", feature: "serviceAddresses" },
+  { method: apigw.HttpMethod.POST, path: "/v1/service-locations/{serviceLocationId}/state", feature: "serviceAddresses" },
+  { method: apigw.HttpMethod.POST, path: "/v1/service-locations/{serviceLocationId}/delete", feature: "serviceAddresses" },
   // Signing-link email (needs notificationEmail + notifications so the API has an email function). OFF until the owner releases it.
   { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-link-email", feature: "signatureEmail" },
   { method: apigw.HttpMethod.GET, path: "/v1/offices", feature: "offices" },

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# RELEASE 2, TEST STAGE 8 - ONE switch per run: homeLabels (NFC/QR visit verification, migration 0124, 29 routes) OR authorizationWorklist (migration 0125, 1 route) OR signatureEmail (1 route), plus the web build.
+# RELEASE 2, TEST STAGE 8 - ONE switch per run: homeLabels (NFC/QR visit verification, migration 0124, 29 routes) OR authorizationWorklist (migration 0125, 1 route) OR signatureEmail (1 route) OR serviceAddresses (migration 0126, 4 routes), plus the web build.
 # TEST ONLY (stacks Ogevia-prod-*, database ogevia_sv_test). Never touches Ogevia-prd-* or ogevia_prd. The DATABASE IS NOT CHANGED by this script: migrations 0124 and 0125 must already be applied and verified (TEST_PENDING_LEDGER.sh).
-# Starting point = TEST after stage 7 (migrations 0113-0125 applied; the email function live). One script, stopping at the first failure.
+# Starting point = TEST after stage 7 (migrations 0113-0126 applied; the email function live). One script, stopping at the first failure.
 #   1 guards (commit, clean tree, application files identical to the audited commit, account, approval reference, the extra recipient) and tools
 #   2 read-only capture of the live TEST API, Handler code and web files (the rollback reference); read-only checks that 0123, 0124 and 0125 are applied; the switch's routes do not exist yet (404)
 #   3 TWO assemblies are synthesized and gated BEFORE anything changes ("off": only the code assets differ from live; "on": exactly this switch's routes). Every switch that is ON on TEST today, and the email configuration, stay as they are.
 #   4 typed confirmation; cdk deploy of the ONE API stack and post-deploy checks (the routes answer 401 without a token; the earlier routes, the Handler variables and the email function are untouched)
 #   5 web: build for TEST stamped with the commit, upload (no delete), invalidate CloudFront, verify what the site serves
-#   OGEVIA_SWITCH=<homeLabels|authorizationWorklist|signatureEmail> [OGEVIA_SWITCHES_ON=<comma list of the Release 2 switches already ON in TEST>] OGEVIA_EXTRA_RECIPIENT=<the caregiver test address>
+#   OGEVIA_SWITCH=<homeLabels|authorizationWorklist|signatureEmail|serviceAddresses> [OGEVIA_SWITCHES_ON=<comma list of the Release 2 switches already ON in TEST>] OGEVIA_EXTRA_RECIPIENT=<the caregiver test address>
 #   REPO=<checkout at the release commit> OGEVIA_RELEASE_COMMIT=<full sha> OGEVIA_APP_BASE=<the same sha> WORK=<work dir> OGEVIA_DEPLOY_APPROVAL=<owner TEST authorization reference> bash TEST_R2_N8_SWITCH.sh [deploy]
 #   OGEVIA_NO_CONFIRM=1 skips the typed confirmation (automated test only).
 # Rollback modes (typed confirmation each; run in this order):  rollback-web | rollback-routes | rollback-api   (the database is rolled back separately with TEST_PENDING_LEDGER.sh rollback 0125 / 0124)
@@ -40,7 +40,7 @@ for d in "$WORK"/node-v22.*-linux-*/bin; do [[ -d "$d" ]] && export PATH="$d:$PA
 TC="$REPO/docs/releases/2026-11-20-test-plan/toolchain"
 STACK=Ogevia-prod-ServiceVerificationApi
 ZERO=00000000-0000-0000-0000-000000000000
-SW="${OGEVIA_SWITCH:?set OGEVIA_SWITCH to homeLabels, authorizationWorklist or signatureEmail}"
+SW="${OGEVIA_SWITCH:?set OGEVIA_SWITCH to homeLabels, authorizationWorklist, signatureEmail or serviceAddresses}"
 case "$SW" in
   homeLabels)            STAGE=stage8a; NEW_ROUTES=29; MIGS="0124"
     OFFICE_ROUTES_GET="/v1/home-labels /v1/verification-settings /v1/visit-exceptions"
@@ -49,10 +49,12 @@ case "$SW" in
     OFFICE_ROUTES_GET="/v1/authorization-worklist"; OFFICE_ROUTES_POST="";;
   signatureEmail)        STAGE=stage8c; NEW_ROUTES=1;  MIGS="0124"
     OFFICE_ROUTES_GET=""; OFFICE_ROUTES_POST="/v1/visits/$ZERO/signature-link-email";;
-  *) stop "OGEVIA_SWITCH must be homeLabels, authorizationWorklist or signatureEmail";;
+  serviceAddresses)      STAGE=stage8d; NEW_ROUTES=4;  MIGS="0124 0126"
+    OFFICE_ROUTES_GET="/v1/clients/$ZERO/service-addresses /v1/clients/$ZERO/service-addresses/history"; OFFICE_ROUTES_POST="/v1/service-locations/$ZERO/state /v1/service-locations/$ZERO/delete";;
+  *) stop "OGEVIA_SWITCH must be homeLabels, authorizationWorklist, signatureEmail or serviceAddresses";;
 esac
 SWITCHES_ON="${OGEVIA_SWITCHES_ON:-}"
-for x in ${SWITCHES_ON//,/ }; do [[ "$x" =~ ^(homeLabels|authorizationWorklist|signatureEmail)$ && "$x" != "$SW" ]] || stop "OGEVIA_SWITCHES_ON may list only the OTHER Release 2 switches that are already ON"; done
+for x in ${SWITCHES_ON//,/ }; do [[ "$x" =~ ^(homeLabels|authorizationWorklist|signatureEmail|serviceAddresses)$ && "$x" != "$SW" ]] || stop "OGEVIA_SWITCHES_ON may list only the OTHER Release 2 switches that are already ON"; done
 IDENTITY=ogevia.com
 RECIPIENT=admin.ogevia@gmail.com
 : "${OGEVIA_EXTRA_RECIPIENT:?set OGEVIA_EXTRA_RECIPIENT to the caregiver test address (it is not stored in Git; the live TEST email function already allows it)}"

@@ -8,7 +8,10 @@ import { AwsApiContext } from "./aws-workspace";
 export interface ServiceLocation {
   locationId: string; kind: "home" | "community"; name: string; street: string | null; city: string; state: string; zip: string; geoStatus: string; needsAttention: boolean; radiusM: number;
   labelId: string | null; labelCode: string | null; labelInstalledAt: string | null;
+  /** 0126 (address history): present only where the serviceAddresses switch is on. */
+  isCurrent?: boolean; addressState?: "current" | "alternate" | "historical"; inactiveAt?: string | null; inactiveReason?: string | null; canDelete?: boolean;
 }
+export interface AddressEvent { occurredAt: string; action: string; actorName: string | null; reason: string | null; locationId: string; details: { before?: { street?: string; city?: string; zip?: string }; name?: string; city?: string; zip?: string; scrubbed?: boolean; switchedTo?: string } }
 export interface LabelRow {
   labelId: string; labelCode: string; status: "unassigned" | "active" | "disabled" | "replaced"; clientCode: string | null; locationName: string | null; locationCity: string | null;
   installedAt: string | null; endedAt: string | null; replacedByCode: string | null; lastUsedAt: string | null; createdAt: string; locationNeedsAttention: boolean | null;

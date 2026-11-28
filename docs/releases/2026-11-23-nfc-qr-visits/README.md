@@ -139,3 +139,13 @@ This branch now contains PR #124 (merged in, so it carries #124's own migrations
 
 ## 11. Secure-link signing page is now stroke-based (2026-11-28)
 `POST /v1/public/visit-confirmations/{token}/respond` no longer accepts a signature picture: a drawn signature arrives as strokes, the server validates them and draws the PNG itself (same rule as the caregiver's phone); `signaturePng`, `image`, `dataUrl`, `file`, `png` are refused with 422 and nothing is stored. The recipient page uses the stroke pad. The link's own controls are unchanged (single use, expiry, phone code, bound to the visit snapshot). Tests: workflow.db (61, incl. refusal cases), confirm-visit page (2). Closes the "PARTIAL" note in section 1 (fresh pad / no image upload).
+
+## 12. Service address history (owner request 2026-11-28; migration 0126, switch `serviceAddresses`)
+**Built and tested; deployed to TEST only when the step in `docs/releases/2026-11-28-release-2-test/RUNBOOK.md` section 2b is run. Not in production.**
+- **One current home address per client** (a database rule). Adding a second home address saves it as an **alternate**: it can have its own sticker but does not become current by being typed in.
+- **Switching** which address is current is one recorded step; the previous one becomes an alternate. Two-parent homes and clients who live with different parents use this.
+- **Inactive states:** *alternate* (kept, with its sticker, can come back) and *historical* (no longer used; its sticker is turned off). Both need a reason, are recorded with who and when, and are never deleted.
+- **Delete** exists only for a home address entered by mistake that **never had a sticker**. Its text is scrubbed from the history, which keeps only the fact of the deletion and the reason. An address with any sticker history can only be made historical.
+- **At the sticker:** an arrival at the sticker of a non-current address is refused with a plain message and shows in Visit exceptions; a departure is never blocked, so a visit that started before a switch can always be ended.
+- **Not built (decide if wanted):** scheduled switches by date (for example every other week). The switch is manual today.
+- Community places are not limited to one current place.

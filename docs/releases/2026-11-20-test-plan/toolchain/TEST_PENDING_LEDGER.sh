@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# TEST database only: Release Train 2 migrations 0113-0125 (0124 NFC/QR and 0125 Authorization Worklist are Release 2), ONE migration per run, each in ONE transaction with its ledger row.
+# TEST database only: Release Train 2 migrations 0113-0126 (0124 NFC/QR, 0125 Authorization Worklist and 0126 service address history are Release 2), ONE migration per run, each in ONE transaction with its ledger row.
 # Same rules as TEST_0112_LEDGER.sh (owner rule 2026-11-10: never untracked SQL; version, filename and SHA-256 recorded in
 # ogevia_meta.schema_migrations in the same transaction; rollback removes the row in the same transaction).
 #
-#   TEST_PENDING_LEDGER.sh probe    <0113|0114|0115|0116|0117|0118|0119|0120|0121|0122|0123|0124|0125>   read-only: identity, ledger, prerequisites, target absent
+#   TEST_PENDING_LEDGER.sh probe    <0113|0114|0115|0116|0117|0118|0119|0120|0121|0122|0123|0124|0125|0126>   read-only: identity, ledger, prerequisites, target absent
 #   TEST_PENDING_LEDGER.sh apply    <migration>             needs OGEVIA_DEPLOY_APPROVAL + a backup: OGEVIA_TEST_SNAPSHOT=<fresh RDS snapshot id of ogevia-postgres> or OGEVIA_TEST_BACKUP=<dump> (+ .sha256)
 #   TEST_PENDING_LEDGER.sh verify   <migration>             read-only: ledger row with the file's checksum, VERIFY_PENDING.sql all true
 #   TEST_PENDING_LEDGER.sh rollback <migration>             needs OGEVIA_DEPLOY_APPROVAL; runs the down script + removes the row atomically
@@ -18,7 +18,7 @@ set +x +H
 umask 077
 stop() { echo "STOP: $*" >&2; exit 2; }
 MODE="${1:-}"; MIG="${2:-}"
-case "$MODE" in probe|apply|verify|rollback) ;; *) stop "usage: probe|apply|verify|rollback <0113|0114|0115|0116|0117|0118|0119|0120|0121|0122|0123|0124|0125>";; esac
+case "$MODE" in probe|apply|verify|rollback) ;; *) stop "usage: probe|apply|verify|rollback <0113|0114|0115|0116|0117|0118|0119|0120|0121|0122|0123|0124|0125|0126>";; esac
 case "$MIG" in
   0113) STEM=0113_notifications;               NEED="0091 0110 0111";;
   0114) STEM=0114_office_branding;             NEED="0113";;
@@ -33,7 +33,8 @@ case "$MIG" in
   0123) STEM=0123_readiness_override;          NEED="0103 0122";;
   0124) STEM=0124_nfc_qr_visit_verification;   NEED="0110 0111";;
   0125) STEM=0125_authorization_worklist;      NEED="0110 0111";;
-  *) stop "migration must be one of 0113 0114 0115 0116 0117 0118 0119 0120 0121 0122 0123 0124 0125";;
+  0126) STEM=0126_service_address_history;     NEED="0110 0111 0124";;
+  *) stop "migration must be one of 0113 0114 0115 0116 0117 0118 0119 0120 0121 0122 0123 0124 0125 0126";;
 esac
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(cd "$HERE/../../../.." && pwd)}"

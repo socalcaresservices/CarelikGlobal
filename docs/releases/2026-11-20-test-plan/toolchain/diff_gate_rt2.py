@@ -10,7 +10,7 @@ Read-only: compares two CloudFormation templates (JSON files) and exits 0 only i
                      environment variables on the Handler. Nothing removed, nothing else changed.
       --expect post  after deployment: NO difference at all
 
-Stages `stage8a` (homeLabels, 29 routes), `stage8b` (authorizationWorklist, 1 route), `stage8c` (signatureEmail, 1 route): one per run, each after stage 7; use --expect off, then on, then post.
+Stages `stage8a` (homeLabels, 29 routes), `stage8b` (authorizationWorklist, 1 route), `stage8c` (signatureEmail, 1 route), `stage8d` (serviceAddresses, 4 routes): one per run, each after stage 7; use --expect off, then on, then post.
 Stage `stage7` (after stage 6 is live): 3 routes (the readiness override approve, revoke and list), new Handler code, nothing else; use --expect off, then on, then post.
 Stage `stage3` (after stage 2 is live): CODE ONLY (the exact-shift lookup rides on the existing GET /v1/open-shifts route as ?shiftId=). Use --expect off, then --expect post.
 Stage `stage2` (after stage 1 is live): 9 routes (7 texting, 2 service location), Handler env SMS_MODE=mock and SERVICE_LOCATION=on, new code assets; no new resource of any other kind.
@@ -35,6 +35,10 @@ STAGES = {
     },
     "stage8c": {   # Release 2, signatureEmail (uses the email function that is already live): 1 route and new Handler code
         "routes": {"POST /v1/visits/{visitId}/signature-link-email"},
+        "schedules": set(), "permission_prefixes": (), "handler_env": {},
+    },
+    "stage8d": {   # Release 2, serviceAddresses (migration 0126): 4 routes and new Handler code
+        "routes": {"GET /v1/clients/{clientId}/service-addresses", "GET /v1/clients/{clientId}/service-addresses/history", "POST /v1/service-locations/{serviceLocationId}/state", "POST /v1/service-locations/{serviceLocationId}/delete"},
         "schedules": set(), "permission_prefixes": (), "handler_env": {},
     },
     "stage7": {   # admin override of a CPR/TB readiness block (0123): 3 routes behind readinessOverrides and new Handler code; no schedule, permission or environment variable is added

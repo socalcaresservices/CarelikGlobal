@@ -23,10 +23,10 @@ TC=docs/releases/2026-11-20-test-plan/toolchain
 bash $TC/TEST_DB_SESSION.sh bash $TC/TEST_PENDING_LEDGER.sh probe  0124
 bash $TC/TEST_DB_SESSION.sh bash $TC/TEST_PENDING_LEDGER.sh apply  0124
 bash $TC/TEST_DB_SESSION.sh bash $TC/TEST_PENDING_LEDGER.sh verify 0124
-# same three commands for 0125
+# same three commands for 0125, then for 0126 (service address history; needs 0124)
 ```
 `probe` refuses if a prerequisite is missing or the migration is already recorded; `verify` checks the ledger checksum plus 13 tables and 34 functions for 0124 (definer, pinned search_path, no PUBLIC execute, app role may execute) and the one 0125 function. The verification file itself is tested locally (`verify-pending-0124-0125.db.test.ts`).
-Both migrations are additive; 0124's rollback drops its 13 tables **with their rows** (the snapshot is the restore point), 0125's drops one function.
+Both migrations are additive; 0124's rollback drops its 13 tables **with their rows** (the snapshot is the restore point), 0125's drops one function, 0126's drops its history table and the inactive columns (the addresses stay; the three 0124 functions it replaces are restored exactly).
 
 ## 2. Code and switches (API + web): `TEST_R2_N8_SWITCH.sh`, one switch per run
 The script follows the stage-7 pattern (guards, read-only capture of the live TEST state, both assemblies gated by `diff_gate_rt2.py` BEFORE anything changes, typed confirmation, `cdk deploy` of the one API stack, post-deploy checks, web publish and check). It **does not touch the database** (it only re-verifies 0123 and the migration the switch needs). Tested with stand-in tools (`test-r2-n8-switch.test.ts`: refusals, gate violation, happy path for each switch, rollbacks); **not yet run against real AWS**.
@@ -45,6 +45,13 @@ OGEVIA_SWITCH=signatureEmail OGEVIA_SWITCHES_ON=homeLabels,authorizationWorklist
 ```
 Expected route additions: 29, 1, 1 (all JWT). The script stops at the first failure and says why. Rollback for a run: `OGEVIA_SWITCH=<same> bash $TC/TEST_R2_N8_SWITCH.sh rollback-web`, then `rollback-routes`, then `rollback-api` (each asks you to type a confirmation).
 
+## 2b. Step 4: service address history (migration 0126, switch `serviceAddresses`, 4 routes) and the Home stickers screens
+Do the database step first (section 1, for 0126; take a fresh snapshot), then:
+```bash
+OGEVIA_SWITCH=serviceAddresses OGEVIA_SWITCHES_ON=homeLabels,authorizationWorklist,signatureEmail bash $TC/TEST_R2_N8_SWITCH.sh
+```
+Confirmation text: `DEPLOY-TEST-serviceAddresses`. Expected: 4 routes added (all JWT), 334 live after. This run also publishes the web build, which carries the **Home stickers** menu entry and page, the validated "Sticker ID or sticker link" field, and the address controls. **Rules built in:** one current home address per client (database-enforced); a second address is added as an *alternate* and can carry its own sticker; making an address current is one step and the previous one becomes an alternate; *historical* turns that address's sticker off; a wrong address can be deleted only if it never had a sticker (its text is scrubbed from the history); at the sticker of a non-current address an **arrival** is refused ("not the current service address") and appears in Visit exceptions, a **departure** is never blocked. Only home addresses are limited to one current; community places are not.
+
 ## 3. Acceptance in TEST (synthetic client, caregiver, manager; owner signs off)
 | # | Check | Expected |
 |---|---|---|
@@ -60,6 +67,13 @@ Expected route additions: 29, 1, 1 (all JWT). The script stops at the first fail
 | 10 | Email to a non-allow-listed address | "could not be sent"; link and code are shown for copying; delivery failure recorded |
 | 11 | Reports | six reports load; office filter works; CSV (export permission) / Excel / Print |
 | 12 | Isolation | a second synthetic agency sees none of the above |
+| 13 | Home stickers menu and page (Operations) | the menu entry opens a page with the three steps; Register creates IDs; each row has "Print, copy link or change" |
+| 14 | Sticker ID or link field | `OGL-7K3M9XQ2`-style ID or the full link is accepted; `OGL-1111111` shows "never contains 1" and "exactly 8 characters"; a registered ID assigns |
+| 15 | Two-parent home: add a second home address | saved as **Alternate (not current)**; give it its own sticker; the first stays current |
+| 16 | Make the alternate current | one step; the other becomes Alternate; at the old address's sticker a clock-in is refused with a plain reason and shows under Visit exceptions; the new address's sticker clocks in; a clock-**out** at the old sticker still works |
+| 17 | Mark inactive / historical, with a reason | reason required; historical turns that sticker off; the address stays in the history; "Use this address again" works |
+| 18 | Delete an address entered by mistake | allowed only if it never had a sticker; refused otherwise with the reason; the history shows "Address deleted" and no street text |
+| 19 | Address history | opens on request, newest first, who and why; an edit shows the previous address |
 
 Record device models, browsers, prompts shown, and screenshots under this folder.
 

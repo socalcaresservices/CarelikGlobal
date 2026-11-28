@@ -7,7 +7,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Button, Card } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { classifyLabelInput, LABEL_ID_EXAMPLE, labelUrl, nfcSupported, qrScanSupported, readNfcLink, scanQrLink, useHomeLabelsAvailable, type LabelRow, type ServiceLocation } from "./home-labels-data";
+import { classifyLabelInput, LABEL_ID_EXAMPLE, labelUrl, nfcSupported, qrScanSupported, readNfcLink, scanQrLink, useHomeLabelsAvailable, type AddressEvent, type LabelRow, type ServiceLocation } from "./home-labels-data";
 
 const input = "mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-base";
 const fail = (cause: unknown) => (cause instanceof Error && cause.message ? cause.message : "Could not save. Check your connection and try again.");
@@ -109,8 +109,15 @@ export function HomeLabelsPanel({ clientId }: { clientId: string }) {
   const canManage = hasPermission("clients.manage") && hasPermission("clients.names.manage");
   const { available } = useHomeLabelsAvailable(canManage);
   const key = ["service-locations", activeOrganizationId, clientId];
+  // 0126: with the serviceAddresses switch on, the list carries every address in every state. Where it is off (404) the earlier list of current addresses is used and the new controls stay hidden.
   const list = useQuery({ queryKey: key, enabled: available && canManage, retry: false,
-    queryFn: async () => (await api.get<{ locations: ServiceLocation[] }>(`/v1/clients/${clientId}/service-locations`, { organizationId: activeOrganizationId })).locations });
+    queryFn: async () => {
+      try { return (await api.get<{ addresses: ServiceLocation[] }>(`/v1/clients/${clientId}/service-addresses`, { organizationId: activeOrganizationId })).addresses; }
+      catch (cause) {
+        if ((cause as { status?: number }).status !== 404) throw cause;
+        return (await api.get<{ locations: ServiceLocation[] }>(`/v1/clients/${clientId}/service-locations`, { organizationId: activeOrganizationId })).locations;
+      }
+    } });
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "Client home", street: "", city: "", zip: "", latitude: "", longitude: "" });
   const [note, setNote] = useState<string | null>(null);
@@ -132,7 +139,9 @@ export function HomeLabelsPanel({ clientId }: { clientId: string }) {
       <p className="text-sm text-slate-600">The sticker identifies this address. The caregiver's phone supplies its location at clock-in and clock-out to compare with it.</p>
       <p className="text-sm"><Link to="/home-stickers" className="underline">Need a sticker? Register and print stickers under Home stickers</Link>, then enter its ID below.</p>
       {list.isPending ? <p>Loading…</p> : null}
-      {(list.data ?? []).filter((l) => l.kind === "home").map((l) => <LocationRow key={l.locationId} location={l} onChanged={refresh} />)}
+      {(list.data ?? []).some((l) => l.addressState !== undefined) ? <p className="mt-2 text-sm text-slate-700" data-testid="address-rule">Only one home address is <strong>current</strong> at a time. A second address you add is kept as an <strong>alternate</strong>: give it its own sticker, then make it current when the client moves between homes.</p> : null}
+      {(list.data ?? []).filter((l) => l.kind === "home").map((l) => <LocationRow key={l.locationId} location={l} clientId={clientId} onChanged={refresh} />)}
+      {(list.data ?? []).some((l) => l.addressState !== undefined) ? <AddressHistory clientId={clientId} /> : null}
       {(list.data ?? []).some((l) => l.kind === "home") ? null : list.isSuccess ? <p>No service address yet.</p> : null}
       {adding ? <div className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3">
         <label className="block text-sm font-medium">Street address<input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} className={input} /></label>
@@ -153,17 +162,90 @@ export function HomeLabelsPanel({ clientId }: { clientId: string }) {
   );
 }
 
-function LocationRow({ location: l, onChanged }: { location: ServiceLocation; onChanged: () => void }) {
-  const [open, setOpen] = useState(false);
+const STATE_LABEL: Record<string, string> = { current: "Current address", alternate: "Alternate (not current)", historical: "Historical (no longer used)" };
+const STATE_STYLE: Record<string, string> = { current: "bg-emerald-100 text-emerald-900", alternate: "bg-amber-100 text-amber-900", historical: "bg-slate-200 text-slate-800" };
+
+/** The controls for one address: make it current, mark it inactive (alternate or historical) with a reason, or delete it when it was entered by mistake and never used. */
+function AddressControls({ location: l, onChanged }: { location: ServiceLocation; onChanged: () => void }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const [mode, setMode] = useState<null | "inactive" | "delete">(null);
+  const [kind, setKind] = useState<"alternate" | "historical">("alternate");
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function send(path: string, body: Record<string, unknown>) {
+    setBusy(true); setNote(null);
+    try { await api.post(path, { organizationId: activeOrganizationId, ...body }); setMode(null); setReason(""); onChanged(); } catch (cause) { setNote(fail(cause)); } finally { setBusy(false); }
+  }
+  const cur = l.addressState === "current";
   return (
-    <div className="mt-3 rounded-xl border border-slate-200 p-3" data-testid="location-row">
-      <p className="font-semibold">{l.name}</p>
+    <div className="mt-2 space-y-2 text-sm" data-testid="address-controls">
+      <div className="flex flex-wrap gap-2">
+        {!cur ? <Button type="button" disabled={busy} onClick={() => void send(`/v1/service-locations/${l.locationId}/state`, { state: "active" })}>{l.addressState === "historical" ? "Use this address again" : "Make this the current address"}</Button> : null}
+        {cur || l.addressState === "alternate" ? <Button type="button" onClick={() => { setMode(mode === "inactive" ? null : "inactive"); setKind(cur ? "alternate" : "historical"); }}>{cur ? "Mark inactive…" : "Mark historical…"}</Button> : null}
+        {l.canDelete ? <Button type="button" onClick={() => setMode(mode === "delete" ? null : "delete")}>Delete (entered by mistake)…</Button> : null}
+      </div>
+      {mode === "inactive" ? <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+        {cur ? <fieldset><legend className="font-medium">This address is…</legend>
+          <label className="flex items-start gap-2"><input type="radio" name={`k-${l.locationId}`} checked={kind === "alternate"} onChange={() => setKind("alternate")} className="mt-1 h-5 w-5" /><span><strong>Alternate</strong>: the client also lives here at times. It is kept, with its sticker, and can be made current again.</span></label>
+          <label className="flex items-start gap-2"><input type="radio" name={`k-${l.locationId}`} checked={kind === "historical"} onChange={() => setKind("historical")} className="mt-1 h-5 w-5" /><span><strong>Historical</strong>: no longer used. Its sticker is turned off. The record is kept.</span></label></fieldset> : null}
+        {cur ? <p className="text-xs text-amber-900">The client will have no current address until you make another one current. Clock-in by sticker is refused meanwhile.</p> : <p className="text-xs">Its sticker is turned off. The record is kept.</p>}
+        <label className="block font-medium">Reason (required)<input value={reason} onChange={(e) => setReason(e.target.value)} className={input} maxLength={300} /></label>
+        <Button type="button" disabled={busy || reason.trim().length < 3} onClick={() => void send(`/v1/service-locations/${l.locationId}/state`, { state: cur ? kind : "historical", reason: reason.trim() })}>Save</Button>
+      </div> : null}
+      {mode === "delete" ? <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+        <p>This removes the address and its entry from the history. It is only possible because this address never had a sticker. Otherwise mark it historical.</p>
+        <label className="block font-medium">Reason (required)<input value={reason} onChange={(e) => setReason(e.target.value)} className={input} maxLength={300} placeholder="Typed the wrong street" /></label>
+        <Button type="button" disabled={busy || reason.trim().length < 3} onClick={() => void send(`/v1/service-locations/${l.locationId}/delete`, { reason: reason.trim() })}>Delete this address</Button>
+      </div> : null}
+      {note ? <p role="alert" className="text-red-700">{note}</p> : null}
+    </div>
+  );
+}
+
+const ACTION_TEXT: Record<string, string> = { created: "Address added", updated: "Address edited", activated: "Made the current address", made_alternate: "Made an alternate", made_historical: "Made historical", deleted: "Address deleted" };
+function AddressHistory({ clientId }: { clientId: string }) {
+  const api = useAwsApi();
+  const { activeOrganizationId } = useOrganization();
+  const [open, setOpen] = useState(false);
+  const h = useQuery({ queryKey: ["service-address-history", activeOrganizationId, clientId], enabled: open, retry: false,
+    queryFn: async () => (await api.get<{ history: AddressEvent[] }>(`/v1/clients/${clientId}/service-addresses/history`, { organizationId: activeOrganizationId })).history });
+  return (
+    <div className="mt-3">
+      <button type="button" className="text-sm underline" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide address history" : "Show address history"}</button>
+      {open ? <ul className="mt-2 space-y-1 text-sm" data-testid="address-history">
+        {h.isPending ? <li>Loading…</li> : null}
+        {h.isError ? <li role="alert">The history could not be loaded.</li> : null}
+        {(h.data ?? []).map((e, i) => <li key={i} className="rounded-lg border border-slate-200 p-2">
+          <span className="font-medium">{ACTION_TEXT[e.action] ?? e.action}</span> · {new Date(e.occurredAt).toLocaleDateString()}{e.actorName ? ` · ${e.actorName}` : ""}
+          {e.details?.city && !e.details.scrubbed ? <span> · {e.details.city} {e.details.zip}</span> : null}
+          {e.details?.before?.street ? <span> · was {e.details.before.street}, {e.details.before.city} {e.details.before.zip}</span> : null}
+          {e.reason ? <span className="block text-slate-700">Reason: {e.reason}</span> : null}
+        </li>)}
+        {h.isSuccess && h.data.length === 0 ? <li>No history yet.</li> : null}
+      </ul> : null}
+    </div>
+  );
+}
+
+function LocationRow({ location: l, clientId, onChanged }: { location: ServiceLocation; clientId: string; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  void clientId;
+  const state = l.addressState;
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 p-3" data-testid="location-row" data-state={state ?? "legacy"}>
+      <p className="font-semibold">{l.name}{state ? <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${STATE_STYLE[state] ?? ""}`}>{STATE_LABEL[state] ?? state}</span> : null}</p>
       <p className="text-sm">{l.street}, {l.city}, {l.state} {l.zip}</p>
-      {l.needsAttention ? <p role="status" className="text-sm text-amber-800">This address has not been located on a map, so phone locations cannot be checked against it yet.</p> : null}
+      {state && state !== "current" && l.inactiveReason ? <p className="text-sm text-slate-700">{l.inactiveReason}{l.inactiveAt ? ` · ${day(l.inactiveAt)}` : ""}</p> : null}
+      {l.needsAttention && state !== "historical" ? <p role="status" className="text-sm text-amber-800">This address has not been located on a map, so phone locations cannot be checked against it yet.</p> : null}
       {l.labelId && l.labelCode
         ? <><p className="mt-1 text-sm" data-testid="label-line">Sticker {l.labelCode} · active{l.labelInstalledAt ? ` since ${day(l.labelInstalledAt)}` : ""}</p>
-          <LabelActions label={{ labelId: l.labelId, labelCode: l.labelCode, status: "active", clientCode: null, locationName: l.name, locationCity: l.city, installedAt: l.labelInstalledAt, endedAt: null, replacedByCode: null, lastUsedAt: null, createdAt: "", locationNeedsAttention: l.needsAttention }} onChanged={onChanged} /></>
+          {state === "alternate" ? <p className="text-sm text-amber-900">This sticker only works when this address is the current one. Until then clock-in with it is refused.</p> : null}
+          <LabelActions label={{ labelId: l.labelId, labelCode: l.labelCode, status: "active", clientCode: null, locationName: l.name, locationCity: l.city, installedAt: l.labelInstalledAt, endedAt: null, replacedByCode: null, lastUsedAt: null, createdAt: "", locationNeedsAttention: null }} onChanged={onChanged} /></>
+        : state === "historical" ? <p className="mt-1 text-sm text-slate-700">No sticker. Make the address current again to give it one.</p>
         : <>{open ? <AssignLabel locationId={l.locationId} street={`${l.street}, ${l.city} ${l.zip}`} onDone={() => { setOpen(false); onChanged(); }} /> : <Button type="button" className="mt-2" onClick={() => setOpen(true)}>Assign a sticker</Button>}</>}
+      {state ? <AddressControls location={l} onChanged={onChanged} /> : null}
     </div>
   );
 }
