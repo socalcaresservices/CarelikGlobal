@@ -59,6 +59,32 @@ describe("the dedicated pool and the invitation settings", () => {
     expect(pool.AdminCreateUserConfig.InviteMessageTemplate.EmailMessage).toContain(COGNITO_PASSWORD);
     expect(pool.EmailConfiguration).toEqual({ EmailSendingAccount: "COGNITO_DEFAULT" });
   });
+  it("with the setting on, a custom-message trigger Lambda is attached to the pool: logs-only role, no VPC, Cognito may invoke it; with it off there is none", () => {
+    const cfg: OgeviaEnvironmentConfig = { ...ENVIRONMENTS.prd, auth: { ...ENVIRONMENTS.prd.auth, invitationEmail: { companyName: "SoCal Care Services", supportEmail: "help@example.org" } } };
+    const auth = Template.fromStack(buildOgeviaApp(newApp(), cfg, "plan").find((p) => p.stack.stackName.endsWith("-Auth"))!.stack);
+    const fns = Object.values(auth.findResources("AWS::Lambda::Function"));
+    expect(fns).toHaveLength(1);
+    const f = fns[0]!.Properties as any;
+    expect(f.VpcConfig).toBeUndefined(); expect(f.Timeout).toBe(3);
+    expect(f.Environment.Variables).toMatchObject({ BRAND_COMPANY: "SoCal Care Services", BRAND_SUPPORT_EMAIL: "help@example.org" });
+    const pool = Object.values(auth.findResources("AWS::Cognito::UserPool"))[0]!.Properties as any;
+    expect(pool.LambdaConfig.CustomMessage).toBeDefined();
+    auth.hasResourceProperties("AWS::Lambda::Permission", { Action: "lambda:InvokeFunction", Principal: "cognito-idp.amazonaws.com" });
+    const stmts = Object.values(auth.findResources("AWS::IAM::ManagedPolicy")).flatMap((p) => (p.Properties as any).PolicyDocument.Statement as any[]);
+    expect(stmts.every((x) => ([] as string[]).concat(x.Action).every((a) => a.startsWith("logs:")))).toBe(true);
+    const off = Template.fromStack(buildOgeviaApp(newApp(), ENVIRONMENTS.prd, "plan").find((p) => p.stack.stackName.endsWith("-Auth"))!.stack);
+    off.resourceCountIs("AWS::Lambda::Function", 0);
+    expect((Object.values(off.findResources("AWS::Cognito::UserPool"))[0]!.Properties as any).LambdaConfig).toBeUndefined();
+  });
+  it("Reply-To is configuration only: the default sender keeps Cognito's From and gains the reply address; an SES sender gains it too; a bad one is refused; the template is unchanged", () => {
+    const withReply = prdWith({ companyName: "SoCal Care Services", replyTo: "admin.ogevia@gmail.com" });
+    expect(withReply.EmailConfiguration).toEqual({ EmailSendingAccount: "COGNITO_DEFAULT", ReplyToEmailAddress: "admin.ogevia@gmail.com" });
+    expect(withReply.AdminCreateUserConfig.InviteMessageTemplate.EmailMessage).toBe(prdWith({ companyName: "SoCal Care Services" }).AdminCreateUserConfig.InviteMessageTemplate.EmailMessage);
+    const arn = "arn:aws:ses:us-west-2:123456789012:identity/ogevia.com";
+    expect(prdWith({ companyName: "X Care", replyTo: "support@ogevia.com", sender: { from: "Ogevia <support@ogevia.com>", sesIdentityArn: arn } }).EmailConfiguration)
+      .toEqual({ EmailSendingAccount: "DEVELOPER", From: "Ogevia <support@ogevia.com>", SourceArn: arn, ReplyToEmailAddress: "support@ogevia.com" });
+    expect(() => prdWith({ companyName: "X Care", replyTo: "not an address" })).toThrow(/replyTo/);
+  });
   it("an SES sender switches the pool to the developer account with the verified identity", () => {
     const arn = "arn:aws:ses:us-west-2:123456789012:identity/ogevia.com";
     const pool = prdWith({ companyName: "SoCal Care Services", sender: { from: "SoCal Care Services <no-reply@ogevia.com>", sesIdentityArn: arn } });

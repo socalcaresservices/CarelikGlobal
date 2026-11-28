@@ -63,7 +63,8 @@ describe("Confirm visit page (recipient, no account)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send confirmation" }));
     expect(await screen.findByText("Thank you. Your confirmation was sent.")).toBeInTheDocument();
     const sent = calls.find((c) => c.path.endsWith("/respond"))!;
-    expect(sent.body).toMatchObject({ code: "123456", outcome: "confirmed", method: "typed", signerName: "Synthetic Parent Rivera", attested: true, signaturePng: null });
+    expect(sent.body).toMatchObject({ code: "123456", outcome: "confirmed", method: "typed", signerName: "Synthetic Parent Rivera", attested: true });
+    expect(sent.body).not.toHaveProperty("strokes"); expect(sent.body).not.toHaveProperty("signaturePng");
     expect(String(sent.body.responseKey)).toMatch(/^[0-9a-f-]{36}$/);
     // The token is only ever a path segment of the API call, never in a query string.
     expect(calls.every((c) => !c.path.includes("?"))).toBe(true);

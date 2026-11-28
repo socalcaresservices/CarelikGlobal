@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { Button, Card } from "@carelik/ui";
 import type { AwsApiClient } from "@/lib/aws-api";
 import { formatClockTime, formatDateOnly, formatDuration, setAgencyTimeZone } from "@/lib/service-verification";
-import { SignaturePad } from "@/components/signature-pad";
+import { StrokePad, type Strokes } from "./stroke-pad";
 import { useLinkToken } from "./care-public-pages";
 
 interface VisitToConfirm {
@@ -49,7 +49,7 @@ export function ConfirmVisitPage({ api }: { api: AwsApiClient }) {
   const [choice, setChoice] = useState<"confirmed" | "disputed" | null>(null);
   const [method, setMethod] = useState<"draw" | "typed">("draw");
   const [name, setName] = useState("");
-  const [signature, setSignature] = useState<string | null>(null);
+  const [signature, setSignature] = useState<Strokes | null>(null);
   const [attested, setAttested] = useState(false);
   const [dispute, setDispute] = useState("");
   const [done, setDone] = useState<"confirmed" | "disputed" | null>(null);
@@ -94,7 +94,7 @@ export function ConfirmVisitPage({ api }: { api: AwsApiClient }) {
         signerName: name.trim(),
         disputeReason: choice === "disputed" ? dispute.trim() : null,
         attested: choice === "confirmed" ? attested : false,
-        signaturePng: choice === "confirmed" && method === "draw" ? signature : null,
+        ...(choice === "confirmed" && method === "draw" ? { strokes: signature } : {}),
         responseKey: responseKey.current,
       });
       setDone(choice);
@@ -171,7 +171,7 @@ export function ConfirmVisitPage({ api }: { api: AwsApiClient }) {
               <Button type="button" variant={method === "draw" ? "primary" : "secondary"} onClick={() => setMethod("draw")}>Sign with finger</Button>
               <Button type="button" variant={method === "typed" ? "primary" : "secondary"} onClick={() => { setMethod("typed"); setSignature(null); }}>Type my name instead</Button>
             </div>
-            {method === "draw" ? <SignaturePad onChange={setSignature} label="Your signature" /> : <p className="text-sm text-slate-600">Your typed full name above is your confirmation.</p>}
+            {method === "draw" ? <StrokePad onChange={setSignature} label="Your signature" /> : <p className="text-sm text-slate-600">Your typed full name above is your confirmation.</p>}
             <label className="flex gap-2 text-sm text-slate-800">
               <input type="checkbox" checked={attested} onChange={(e) => setAttested(e.target.checked)} className="mt-1 h-5 w-5" />
               <span>I confirm that {visit.caregiverFirstName} provided {visit.serviceName} on {formatDateOnly(visit.serviceDate)} from {times}.</span>

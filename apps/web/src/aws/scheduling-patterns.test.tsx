@@ -230,9 +230,11 @@ describe("Scheduling page", () => {
       const panel = await screen.findByTestId("pickup-requests");
       expect(panel).toHaveTextContent("Caregiver requests for open shifts (1)");
       expect(panel).toHaveTextContent("Nobody is assigned until you confirm");
-      expect(panel).toHaveTextContent("Asked by Synthetic Caregiver One (CG-1)");
+      expect(panel).toHaveTextContent("Synthetic Caregiver One (CG-1)");
+      expect(panel).toHaveTextContent("Nobody asking can be confirmed right now");   // the only request is blocked: nobody is preselected
       expect(within(panel).getByRole("note")).toHaveTextContent("Would be refused now: Over the daily hour limit.");
-      fireEvent.click(within(panel).getByRole("button", { name: "Decline" }));
+      fireEvent.click(within(panel).getByTestId("pickup-choice"));
+      fireEvent.click(within(panel).getByRole("button", { name: "Decline this request" }));
       fireEvent.click(within(panel).getByRole("button", { name: "Decline request" }));
       expect(await within(panel).findByRole("alert")).toHaveTextContent("Reason missing. Say why you are declining.");
       fireEvent.change(within(panel).getByLabelText("Reason for declining"), { target: { value: "Synthetic: someone closer" } });

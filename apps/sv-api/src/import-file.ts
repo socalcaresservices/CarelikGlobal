@@ -1,5 +1,6 @@
-// R11: CSV-only import; no archive parsing. Cells are never evaluated.
+// R11: CSV and XLSX import. Cells are never evaluated (src/xlsx-reader.ts reads stored text only).
 import { ApiError } from "./errors";
+import { readXlsxTable } from "./xlsx-reader";
 
 export type ImportKind = "people" | "clients";
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -52,10 +53,16 @@ export async function parseImportFile(kind: ImportKind, fileName: string, bytes:
   if (bytes.length === 0) throw new ApiError(422, "invalid_file", "The file is empty.");
   if (bytes.length > MAX_IMPORT_BYTES) throw new ApiError(413, "file_too_large", "The file is larger than 2 MB. Split it and import the parts.");
   const lower = fileName.toLowerCase();
-  if (!lower.endsWith(".csv") || (bytes[0] === 0x50 && bytes[1] === 0x4b) || bytes.includes(0)) {
-    throw new ApiError(422, "invalid_file", "Upload a .csv file. Save Excel workbooks as CSV first.");
+  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  let table: string[][];
+  if (lower.endsWith(".xlsx")) {
+    if (!isZip) throw new ApiError(422, "invalid_file", "That file is not a real .xlsx workbook. Save it again from your spreadsheet.");
+    table = readXlsxTable(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  } else {
+    // A renamed archive, or an old .xls, must never be read as text.
+    if (!lower.endsWith(".csv") || isZip || bytes.includes(0)) throw new ApiError(422, "invalid_file", "Upload a .csv or .xlsx file. Older .xls files: save as .xlsx or CSV first.");
+    table = parseCsv(bytes.toString("utf8"));
   }
-  const table = parseCsv(bytes.toString("utf8"));
   if (table.length < 2) throw new ApiError(422, "invalid_file", "The file needs a header row and at least one data row.");
   const header = (table[0] ?? []).map(norm);
   const spec = FIELDS[kind];

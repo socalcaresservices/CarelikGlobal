@@ -24,17 +24,17 @@ describe("parseImportFile", () => {
     const r = await parseImportFile("clients", "c.csv", buf("first_name,last_name,city,client type\nCy,Sample,Springfield,Respite\n"));
     expect(r.rows[0]).toMatchObject({ first_name: "Cy", last_name: "Sample", city: "Springfield", client_type: "Respite" });
   });
-  it("refuses Excel, text and archives even when renamed CSV", async () => {
-    for (const [name, content] of [["people.xlsx", "first_name,last_name\nA,B"], ["people.txt", "first_name,last_name\nA,B"], ["renamed.csv", "PK archive"], ["binary.csv", "first_name,last_name\nA,\0B"]]) {
+  it("refuses text files, old Excel and archives even when renamed CSV", async () => {
+    for (const [name, content] of [["people.xls", "first_name,last_name\nA,B"], ["people.xlsx", "first_name,last_name\nA,B"], ["people.txt", "first_name,last_name\nA,B"], ["renamed.csv", "PK archive"], ["binary.csv", "first_name,last_name\nA,\0B"]]) {
       await expect(parseImportFile("people", name!, buf(content!))).rejects.toMatchObject({ status: 422, code: "invalid_file" });
     }
   });
   it("malformed or wrong files are refused with a plain message", async () => {
     await expect(parseImportFile("people", "x.csv", Buffer.alloc(0))).rejects.toMatchObject({ status: 422 });
-    await expect(parseImportFile("people", "x.pdf", buf("%PDF-1.4"))).rejects.toThrow(/Upload a \.csv file/);
+    await expect(parseImportFile("people", "x.pdf", buf("%PDF-1.4"))).rejects.toThrow(/Upload a \.csv or \.xlsx file/);
     await expect(parseImportFile("people", "x.csv", buf("first_name\nA\n"))).rejects.toThrow(/missing: last name/);
     await expect(parseImportFile("people", "x.csv", buf("first_name,last_name\n"))).rejects.toThrow(/header row and at least one data row/);
-    await expect(parseImportFile("people", "x.xlsx", Buffer.from("PK not really a workbook"))).rejects.toThrow(/Upload a \.csv file/);
+    await expect(parseImportFile("people", "x.xlsx", Buffer.from("PK not really a workbook"))).rejects.toThrow(/could not be read/);
     await expect(parseImportFile("people", "big.csv", Buffer.alloc(MAX_IMPORT_BYTES + 1, 97))).rejects.toMatchObject({ status: 413 });
   });
   it("more than 2,000 data rows is refused", async () => {

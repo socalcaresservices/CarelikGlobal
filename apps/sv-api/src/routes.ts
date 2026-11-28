@@ -5,8 +5,12 @@ import { ApiError, storageUnavailable } from "./errors";
 import { MAX_IMPORT_BYTES, parseImportFile, type ImportKind } from "./import-file";
 import { assertExportSize, buildReportCsv, REPORT_KEYS, sha256Hex, type ExportParams, type ReportKey } from "./exports";
 import { signatureObjectKey, validateSignaturePng, type EvidenceStore } from "./evidence";
+import type { SendEmail } from "./notify";
+import { composeSignatureEmail } from "./signature-email";
+import { hashLabelToken, labelContext, LABEL_CODE, LABEL_TOKEN, newLabelBatch, openLabelToken, renderSignaturePng, rowsToCsv, validateStrokes } from "./home-labels";
 import { clientDocumentObjectKey, documentObjectKey, lateFormObjectKey, logoObjectKey, MAX_DOCUMENT_BYTES, MAX_LOGO_BYTES, validateDocumentFile, validateLogoFile } from "./documents";
 import type { HttpApiEvent } from "./http";
+import { sanitizeOfficeLook, type OfficeLook } from "@carelik/shared";
 import type { IdentityAdmin } from "./identity";
 import {
   date,
@@ -27,6 +31,8 @@ export interface RouteContext {
   readonly evidence: EvidenceStore;
   /** Creates caregiver sign-ins and resends invitations (0025); database checks run first. */
   readonly identity: IdentityAdmin;
+  /** Sends one email (signing links). Absent where the environment has no email function. */
+  readonly email?: { readonly send: SendEmail; readonly appOrigin: string };
 }
 
 export interface Route {
@@ -308,6 +314,86 @@ function exportFilename(report: ReportKey, p: ExportParams): string {
 
 const p = (event: HttpApiEvent) => event.pathParameters ?? {};
 const orgParam = (event: HttpApiEvent) => uuid(q(event).organizationId, "organizationId");
+/**
+ * Release Train 2 (open-shift alerts): when ON (CDK sets COVER_ALERT_ADDRESS_RULES=on together with the notifications switch) a client's service address must have BOTH a city and a
+ * 5-digit ZIP code, on creation and on every edit. The alert itself is also blocked in the database for a client that has neither, so older clients are completed on the client record.
+ */
+const addressRules = () => process.env.COVER_ALERT_ADDRESS_RULES === "on";
+/** 0118: city, ZIP, county and coordinating office are edited together on the client profile; the Details edit no longer carries (or changes) the city. */
+const serviceLocationOn = () => process.env.SERVICE_LOCATION === "on";
+const serviceZip = (value: unknown, required: boolean) => {
+  const z = text(value, "serviceZip", 5, { required });
+  if (z !== null && z !== undefined && !/^[0-9]{5}$/.test(z)) throw new ApiError(400, "bad_request", "Enter a 5-digit ZIP code.");
+  return z ?? null;
+};
+const requireCity = (city: string | null | undefined) => { if (!city || !city.trim()) throw new ApiError(400, "bad_request", "Enter the city of the service address."); return city; };
+/**
+ * Release Train 2 (0114): the caregiver's office look for the invitation email. Only when INVITATION_BRANDING=on (set by CDK together with the Cognito trigger), and it
+ * can never block an invitation: any failure (for example 0114 not applied) means the company look.
+ */
+async function invitationLook(tx: (work: (db: Queryable) => Promise<unknown>) => Promise<unknown>, org: string, caregiverRecordId: string): Promise<OfficeLook | undefined> {
+  if (process.env.INVITATION_BRANDING !== "on") return undefined;
+  try {
+    const raw = await tx(async (db) => (await first(db, "select ogevia_api.get_invitation_look($1,$2) as r", [org, caregiverRecordId])).r);
+    const look = sanitizeOfficeLook(raw);
+    return Object.keys(look).length > 0 ? look : undefined;
+  } catch { return undefined; }
+}
+
+
+/** The fields every punch carries: what the person chose and what the phone reported. Times, status and agency are never taken from the caller. */
+function punchFields(body: Record<string, unknown>) {
+  const num = (v: unknown, name: string, limit: number) => {
+    if (v === undefined || v === null) return null;
+    if (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) > limit) throw new ApiError(400, "bad_request", `${name} is not valid.`);
+    return v;
+  };
+  const lat = num(body.latitude, "latitude", 90), lng = num(body.longitude, "longitude", 180);
+  if ((lat === null) !== (lng === null)) throw new ApiError(400, "bad_request", "Send both latitude and longitude, or neither.");
+  const acc = body.accuracyM === undefined || body.accuracyM === null ? null : Math.round(Number(body.accuracyM));
+  if (acc !== null && (!Number.isFinite(acc) || acc < 0 || acc > 1_000_000)) throw new ApiError(400, "bad_request", "accuracyM is not valid.");
+  return { intent: oneOf(body.intent, "intent", ["arrival", "departure"] as const), shift: optionalUuid(body.shiftId, "shiftId"), visit: optionalUuid(body.visitId, "visitId"), lat, lng, acc, confirm: body.confirm === true };
+}
+
+/** 0124 reports: the database function, its filters and the CSV columns (the same columns the screen shows; nothing sensitive exists in a row to omit). */
+const VERIFICATION_REPORTS = {
+  visit_exceptions: {
+    sql: "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+    params: (org: string, c: unknown[], status: string | null, query: Record<string, string | undefined>) => [org, status, query.kind ?? null, c[0], c[1], c[2], c[3], c[4], c[5]],
+    columns: [["Opened", "openedAt"], ["Age (hours)", "ageHours"], ["Kind", "kind"], ["Status", "status"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"],
+      ["Scheduled start", "scheduledStart"], ["Scheduled end", "scheduledEnd"], ["Actual in", "actualTimeIn"], ["Actual out", "actualTimeOut"], ["Reviewer", "reviewerName"], ["Resolved", "resolvedAt"], ["Resolution", "resolution"]],
+  },
+  unsigned_checkouts: {
+    sql: "select * from ogevia_api.list_unsigned_checkouts($1,$2,$3,$4,$5,$6,$7,$8)",
+    params: (org: string, c: unknown[], _s: string | null, query: Record<string, string | undefined>) => [org, c[0], c[1], c[2], c[3], c[4], query.includeResolved === "true", c[5]],
+    columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Checked out", "checkoutAt"], ["Pending since", "pendingSince"],
+      ["Pending (hours)", "pendingHours"], ["State", "state"], ["Reason", "reason"], ["Direct signing required", "directRequired"], ["Last request", "lastRequestAt"], ["Last delivery", "lastDelivery"], ["Owner", "ownerName"], ["Resolved", "resolvedAt"]],
+  },
+  time_signature_register: {
+    sql: "select * from ogevia_api.list_time_signature_register($1,$2,$3,$4,$5,$6,$7,$8)",
+    params: (org: string, c: unknown[], status: string | null) => [org, c[0], c[1], c[2], c[3], c[4], status, c[5]],
+    columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Scheduled start", "scheduledStart"], ["Scheduled end", "scheduledEnd"],
+      ["Actual in", "actualTimeIn"], ["Actual out", "actualTimeOut"], ["Punch in", "punchInMethod"], ["Punch out", "punchOutMethod"], ["Expected start", "expectedStart"], ["Expected end", "expectedEnd"],
+      ["Location in", "locationIn"], ["Location out", "locationOut"], ["Signature", "signatureStatus"], ["Signature method", "signatureMethod"], ["Signed", "signedAt"], ["Visit status", "visitStatus"]],
+  },
+  corrections_audit: {
+    sql: "select * from ogevia_api.list_corrections_audit($1,$2,$3)",
+    params: (org: string, c: unknown[]) => [org, c[0], c[1]],
+    columns: [["When", "occurredAt"], ["Kind", "kind"], ["Subject", "subject"], ["Original", "original"], ["Revised", "revised"], ["Requester", "requester"], ["Approver", "approver"], ["Reason", "reason"], ["Re-sign required", "needsResigning"], ["Location decision", "locationDecision"]],
+  },
+  billing_review: {
+    sql: "select * from ogevia_api.list_punch_billing_review($1,$2,$3,$4,$5,$6,$7)",
+    params: (org: string, c: unknown[]) => [org, c[0], c[1], c[2], c[3], c[4], c[5]],
+    columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client code", "clientCode"], ["Service", "serviceName"], ["Recorded (min)", "recordedMinutes"], ["Reviewed (min)", "reviewedMinutes"],
+      ["Billable (min)", "billableMinutes"], ["Open exceptions", "openExceptions"], ["Signature", "signatureStatus"], ["Billing hold", "billingHold"], ["Hold reasons", "holdReasons"]],
+  },
+  label_inventory: {
+    sql: "select * from ogevia_api.list_home_labels($1,$2,$3,1000,$4)",
+    params: (org: string, c: unknown[], status: string | null) => [org, status, c[3], c[5]],
+    columns: [["Sticker ID", "labelCode"], ["Status", "status"], ["Client code", "clientCode"], ["Location", "locationName"], ["City", "locationCity"], ["Installed", "installedAt"], ["Ended", "endedAt"],
+      ["Replaced by", "replacedByCode"], ["Last used", "lastUsedAt"], ["Registered", "createdAt"]],
+  },
+} satisfies Record<string, { sql: string; params: (org: string, c: unknown[], status: string | null, query: Record<string, string | undefined>) => unknown[]; columns: Array<[string, string]> }>;
 
 /**
  * Route table keyed by the API Gateway routeKey. Every route here MUST also be
@@ -595,8 +681,15 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
       const c = clientDetails(body);
-      const [created] = await tx((db) =>
-        rows(db, "select * from ogevia_api.create_client($1, $2, $3, $4, $5, $6, $7)", [c.org, c.first, c.last, c.city, c.type, c.label, key]));
+      const rules = addressRules();
+      if (rules) requireCity(c.city);
+      const zip = serviceZip(body.serviceZip, rules);
+      // one transaction: a client is never created with an address the rules refuse
+      const [created] = await tx(async (db) => {
+        const made = await rows(db, "select * from ogevia_api.create_client($1, $2, $3, $4, $5, $6, $7)", [c.org, c.first, c.last, c.city, c.type, c.label, key]);
+        if (rules && zip && made[0]) await db.query("select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [c.org, made[0].clientId, zip, c.city]);
+        return made;
+      });
       return { client: created };
     },
   },
@@ -608,8 +701,37 @@ export const ROUTES: Record<string, Route> = {
       const body = parseBody(event.body, event.isBase64Encoded);
       const key = idempotencyKey(event.headers);
       const c = clientDetails(body);
-      await tx((db) => db.query("select ogevia_api.update_client($1, $2, $3, $4, $5, $6, $7, $8)", [c.org, client, c.first, c.last, c.city, c.type, c.label, key]));
+      const location = serviceLocationOn();   // 0118: the service location section owns the city and ZIP; this edit leaves them as they are
+      const rules = addressRules() && !location;
+      if (rules) requireCity(c.city);
+      const zip = serviceZip(body.serviceZip, false);
+      await tx(async (db) => {
+        if (location) c.city = ((await first(db, "select ogevia_api.get_client_service_location($1,$2) as r", [c.org, client])).r as { city: string | null }).city ?? null;   // the service city: the Details edit keeps it as it is
+        // with the rules on, the service ZIP must exist after this edit: either sent now or already on the client record
+        if (rules && !zip) {
+          const { location } = await first(db, "select ogevia_api.get_matching_zip($1,$2,'client') as location", [c.org, client]);
+          if (!location?.zip) throw new ApiError(400, "bad_request", "Enter the 5-digit ZIP code of the service address.");
+        }
+        await db.query("select ogevia_api.update_client($1, $2, $3, $4, $5, $6, $7, $8)", [c.org, client, c.first, c.last, c.city, c.type, c.label, key]);
+        if (rules && zip) await db.query("select ogevia_api.set_client_service_zip($1,$2,$3,$4)", [c.org, client, zip, c.city]);
+      });
       return { ok: true };
+    },
+  },
+
+  // 0118: the client's service address, service county and coordinating office, read and saved together. OFF unless features.serviceLocation.
+  "GET /v1/clients/{clientId}/service-location": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ location: await tx(async (db) => (await first(db, "select ogevia_api.get_client_service_location($1,$2) as r", [orgParam(event), uuid(p(event).clientId, "clientId")])).r) }),
+  },
+  "POST /v1/clients/{clientId}/service-location": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const city = requireCity(text(body.city, "city", 80));
+      const zip = serviceZip(body.zip, true);
+      return { location: await tx(async (db) => (await first(db, "select ogevia_api.set_client_service_location($1,$2,$3,$4,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), city, zip, text(body.county, "county", 40) ?? null, optionalUuid(body.officeId, "officeId") ?? null])).r) };
     },
   },
 
@@ -1040,7 +1162,7 @@ export const ROUTES: Record<string, Route> = {
       const email = text(body.email, "email", 254, { required: true })!;
       const normalized = await tx(async (db) =>
         ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
-      const signIn = await identity.invite(normalized);
+      const signIn = await identity.invite(normalized, await invitationLook(tx, org, record));
       const [invitation] = await tx((db) =>
         rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
       return { invitation };
@@ -1055,7 +1177,7 @@ export const ROUTES: Record<string, Route> = {
       const org = uuid(body.organizationId, "organizationId");
       const email = await tx(async (db) =>
         ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
-      await identity.resend(email);
+      await identity.resend(email, await invitationLook(tx, org, record));
       const sendCount = await tx(async (db) =>
         ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
       return { invitation: { sendCount } };
@@ -1754,7 +1876,19 @@ export const ROUTES: Record<string, Route> = {
   // a retry is the same answer; readiness, overlap and authorization are re-checked in the database.
   "GET /v1/open-shifts": {
     mutating: false,
-    handle: async ({ event, tx }) => ({ shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])) }),
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      // 0120: with ?shiftId= the answer also says what happened to the one shift an alert pointed at (status, service city, time); same rule as the board, no client detail
+      const alertShift = query.shiftId === undefined ? undefined : uuid(query.shiftId, "shiftId");
+      return {
+        shifts: await tx((db) => rows(db, "select * from ogevia_api.list_open_shifts($1)", [orgParam(event)])),
+        ...(alertShift === undefined ? {} : await (async () => {
+          const r = await tx(async (db) => (await first(db, "select ogevia_api.get_cover_shift($1,$2) as r", [orgParam(event), alertShift])).r) as { status?: string } | null;
+          // a shift the caller has no connection to (or that does not exist) is answered exactly like no shift: the key is simply absent, so nothing can be learned from the difference
+          return r && r.status !== "unavailable" ? { alertShift: r } : {};
+        })()),
+      };
+    },
   },
 
   // 0063: asking for an open shift only records a request; the shift is not assigned until an administrator confirms (confirm below).
@@ -1950,6 +2084,32 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // Release Train 2 (behind the `operationsReadiness` release switch): the operations readiness view in ONE call. It only COMPOSES existing database functions (the attention overview, expiring
+  // authorization hours, the compliance summary), each in its own transaction and each under that function's own permission check. A part that fails or is not allowed comes back as null and is
+  // named in `unavailable`: the page then says so instead of showing zero.
+  "GET /v1/operations-readiness": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const org = orgParam(event);
+      const unavailable: string[] = [];
+      const part = async <T>(name: string, work: () => Promise<T>): Promise<T | null> => { try { return await work(); } catch { unavailable.push(name); return null; } };
+      // The caller's permissions in THIS agency (the same source as /v1/me). A part the caller may not see is named as unavailable, never composed as empty.
+      const context = await tx((db) => rows(db, "select * from ogevia_api.get_my_context()", []));
+      const mine = context.find((m) => m.organizationId === org);
+      const perms = new Set<string>(Array.isArray(mine?.permissions) ? (mine!.permissions as string[]) : []);
+      const may = (...any: string[]) => any.some((x) => perms.has(x));
+      const overview = await part("overview", () => tx(async (db) => {
+        if (!may("visits.read", "shifts.manage", "documents.read", "readiness.read")) throw new ApiError(403, "forbidden", "Not allowed.");
+        const o = (await first(db, "select ogevia_api.get_attention_overview($1,$2) as o", [org, 48])).o;
+        return o && typeof o === "object" ? withClientNames(o, await nameDirectory(db, org)) : o;
+      }));
+      const expiring = await part("expiring", async () => { if (!may("visits.read")) throw new ApiError(403, "forbidden", "Not allowed."); return tx((db) => rows(db, "select * from ogevia_api.list_expiring_authorization_hours($1)", [org])); });
+      const compliance = await part("compliance", async () => { if (!may("readiness.read")) throw new ApiError(403, "forbidden", "Not allowed."); return tx(async (db) => (await first(db, "select ogevia_api.get_compliance_summary($1) as c", [org])).c); });
+      if (overview === null && expiring === null && compliance === null) throw new ApiError(403, "forbidden", "You do not have permission to see operations readiness.");
+      return { readiness: { asOf: new Date().toISOString(), overview, expiring, compliance, unavailable } };
+    },
+  },
+
   // Appearance (0054): agency defaults (organization.update) and each person's own choices. A null value means "follow the next level".
   "GET /v1/appearance": {
     mutating: false,
@@ -2039,6 +2199,45 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0123 (pending, behind the readinessOverrides release switch): an administrator lifts ONE caregiver-readiness block (a CPR or TB document that is missing, waiting for review, rejected or
+  // expired) for one caregiver and one exact issue, with a reason; revoking restores the block. The server recomputes the issue and refuses a stale or different one, so the browser only
+  // names what the administrator reviewed. The document's status is never changed; the original work approval and every override are kept.
+  "POST /v1/caregivers/{caregiverRecordId}/readiness-override": {
+    mutating: true,
+    status: 201,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        override: await tx(async (db) => (await first(db, "select ogevia_api.approve_readiness_override($1,$2,$3,$4,$5,$6) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).caregiverRecordId, "caregiverRecordId"),
+          oneOf(body.requirement, "requirement", ["cpr", "tb"] as const), text(body.issueKey, "issueKey", 200, { required: true }),
+          text(body.reason, "reason", 500, { required: true }), key])).r),
+      };
+    },
+  },
+  "POST /v1/readiness-overrides/{overrideId}/revoke": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      return {
+        override: await tx(async (db) => (await first(db, "select ogevia_api.revoke_readiness_override($1,$2,$3,$4) as r", [
+          uuid(body.organizationId, "organizationId"), uuid(p(event).overrideId, "overrideId"), text(body.reason, "reason", 500, { required: true }), key])).r),
+      };
+    },
+  },
+  "GET /v1/readiness-overrides": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return {
+        overrides: await tx(async (db) => (await first(db, "select ogevia_api.list_readiness_overrides($1,$2,$3) as r", [
+          orgParam(event), optionalUuid(query.caregiverRecordId, "caregiverRecordId"), query.activeOnly === "true"])).r),
+      };
+    },
+  },
+
   // 0092 (pending, behind the bulkImport release switch): R11 bulk import of people or clients from a CSV/XLSX file. The file is parsed here, the rows are
   // validated and created by ogevia_api.import_rows in ONE transaction (preview first, then confirm). The organization comes from the signed-in session via
   // the database guards; the file never names a tenant. The file content and the row values are never logged.
@@ -2061,6 +2260,21 @@ export const ROUTES: Record<string, Route> = {
     },
   },
 
+  // 0115 (pending, behind the importRollback release switch): the import history and rollback of one import (all or nothing; records become Inactive, nothing is deleted).
+  "GET /v1/imports": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ imports: await tx((db) => rows(db, "select * from ogevia_api.list_import_batches($1,50)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/imports/{batchId}/rollback": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.rollback_import_batch($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).batchId, "batchId"), text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
   // 0093 (pending, behind the staffDuplicates release switch): R6. The report is read-only; the merge marks a duplicate staff profile inactive and linked (never deletes),
   // refuses unless the two records really match, and refuses a record that has a sign-in or invitation.
   "GET /v1/staff/duplicates": {
@@ -2070,15 +2284,41 @@ export const ROUTES: Record<string, Route> = {
     }),
   },
 
+  // 0116 (same staffDuplicates switch; apply 0116 with 0106): the wizard's preview, the merge with explicit choices for conflicting fields, the merge history and the guarded undo.
+  "GET /v1/staff/merge-preview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { preview: await tx(async (db) => (await first(db, "select ogevia_api.preview_staff_merge($1,$2,$3) as r", [orgParam(event), uuid(query.keepProfileId, "keepProfileId"), uuid(query.duplicateProfileId, "duplicateProfileId")])).r) };
+    },
+  },
+
   "POST /v1/staff/{profileId}/merge": {
     mutating: true,
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       const reason = text(body.reason, "reason", 500, { required: true })!;
-      return {
-        result: await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles($1,$2,$3,$4) as r", [
-          uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason])).r),
-      };
+      const resolutions = body.resolutions === undefined || body.resolutions === null ? {}
+        : typeof body.resolutions === "object" && !Array.isArray(body.resolutions) && Object.values(body.resolutions as Record<string, unknown>).every((v) => v === "keep" || v === "duplicate") ? body.resolutions
+        : (() => { throw new ApiError(400, "bad_request", "resolutions must choose keep or duplicate for each field."); })();
+      // `result` stays the plain state string ("merged" / "already_merged") as in 0106; the link id (for the undo) is additive.
+      const r = await tx(async (db) => (await first(db, "select ogevia_api.merge_staff_profiles_v2($1,$2,$3,$4,$5::jsonb) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).profileId, "profileId"), uuid(body.duplicateProfileId, "duplicateProfileId"), reason, JSON.stringify(resolutions)])).r) as { state: string; linkId?: string };
+      return { result: r.state, linkId: r.linkId ?? null };
+    },
+  },
+
+  "GET /v1/staff-merges": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ merges: await tx((db) => rows(db, "select * from ogevia_api.list_staff_merges($1,50)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/staff-merges/{linkId}/undo": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.unmerge_staff_profiles($1,$2,$3) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).linkId, "linkId"), text(body.reason, "reason", 500, { required: true })])).r) };
     },
   },
 
@@ -2157,13 +2397,13 @@ export const ROUTES: Record<string, Route> = {
       if (!invited) {
         const normalized = await tx(async (db) =>
           ((await db.query("select ogevia_api.begin_caregiver_invitation($1, $2, $3) as email", [org, record, email])).rows[0] as { email: string }).email);
-        const signIn = await identity.invite(normalized);
+        const signIn = await identity.invite(normalized, await invitationLook(tx, org, record));
         const [invitation] = await tx((db) =>
           rows(db, "select * from ogevia_api.complete_caregiver_invitation($1, $2, $3, $4, $5)", [org, record, normalized, signIn.sub, signIn.existingAccount]));
         return { invitation };
       }
       const resendTo = await tx(async (db) => ((await db.query("select ogevia_api.begin_invitation_resend($1, $2) as email", [org, record])).rows[0] as { email: string }).email);
-      await identity.resend(resendTo);
+      await identity.resend(resendTo, await invitationLook(tx, org, record));
       const sendCount = await tx(async (db) => ((await db.query("select ogevia_api.record_invitation_resent($1, $2) as n", [org, record])).rows[0] as { n: number }).n);
       return { invitation: { sendCount } };
     },
@@ -3253,10 +3493,13 @@ export const ROUTES: Record<string, Route> = {
       const disputeReason = outcome === "disputed" ? text(body.disputeReason, "disputeReason", 1000, { required: true }) : null;
       const attested = body.attested === true;
       const responseKey = uuid(body.responseKey, "responseKey");
-      const signature = method === "draw" ? validateSignaturePng(body.signaturePng) : null;
-      if (method !== "draw" && body.signaturePng !== undefined && body.signaturePng !== null) {
-        throw new ApiError(422, "validation_failed", "A signature image is only accepted for a drawn signature.");
+      // The drawn signature arrives as STROKES, never as a picture: an image, a data URL or a file is refused, and the server draws the PNG itself from validated strokes
+      // (the same rule as signing on the caregiver's phone). The link is single-use, expires, needs the code and is bound to the visit as it was when the link was made.
+      for (const forbidden of ["signaturePng", "image", "dataUrl", "file", "png"]) {
+        if (body[forbidden] !== undefined && body[forbidden] !== null) throw new ApiError(422, "validation_failed", "A signature image cannot be accepted. Sign on the screen.");
       }
+      if (method !== "draw" && body.strokes !== undefined && body.strokes !== null) throw new ApiError(422, "validation_failed", "Signature strokes are only accepted for a drawn signature.");
+      const signature = method === "draw" ? validateSignaturePng(renderSignaturePng(validateStrokes(body.strokes)).toString("base64")) : null;
       // Check the link and code (a wrong code is counted and committed) before storing anything.
       const [found] = await tx((db) => rows(db, "select * from ogevia_api.public_open_visit_confirmation($1, $2)", [tokenHash, codeHash]));
       // A retry after the response was recorded: the link is answered, so look the response up by its key.
@@ -3645,6 +3888,160 @@ export const ROUTES: Record<string, Route> = {
       const query = event.queryStringParameters ?? {};
       const type = query.subjectType === "client" || query.subjectType === "caregiver" ? query.subjectType : (() => { throw new ApiError(400, "bad_request", "subjectType must be client or caregiver."); })();
       return { events: await tx((db) => rows(db, "select * from ogevia_api.list_assignment_history($1,$2,$3,50)", [orgParam(event), type, uuid(query.subjectId, "subjectId")])) };
+    },
+  },
+
+  // 0113 (pending, behind the `notifications` release switch): cover-shift notifications, the notification centre, preferences and the office history.
+  // Nothing here sends mail: the email outbox is drained by the scheduled worker (notify-worker.ts). Bodies never carry a client name or code.
+  "GET /v1/notification-center": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const state = oneOf(query.state ?? "inbox", "state", ["inbox", "unread", "archived", "all"] as const);
+      const category = query.category === undefined || query.category === "" ? null : oneOf(query.category, "category", ["cover_shift", "cover_office"] as const);
+      const limit = query.limit === undefined ? 30 : wholeNumber(Number(query.limit), "limit", 1, 100);
+      const before = query.before === undefined || query.before === "" ? null : (Number.isNaN(Date.parse(query.before)) ? (() => { throw new ApiError(400, "bad_request", "before must be a date and time."); })() : new Date(query.before).toISOString());
+      return { notifications: await tx(async (db) => (await first(db, "select ogevia_api.list_user_notifications($1,$2,$3,$4,$5::timestamptz) as r", [orgParam(event), state, category, limit, before])).r) };
+    },
+  },
+
+  "POST /v1/notification-center/mark": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const action = oneOf(body.action, "action", ["read", "read_all", "archive", "unarchive"] as const);
+      const ids = body.ids === undefined || body.ids === null ? [] : Array.isArray(body.ids) && body.ids.length <= 200 ? body.ids.map((id) => uuid(id, "ids")) : (() => { throw new ApiError(400, "bad_request", "ids must be a list of up to 200 ids."); })();
+      return { changed: await tx(async (db) => Number((await first(db, "select ogevia_api.mark_user_notifications($1,$2::uuid[],$3) as r", [uuid(body.organizationId, "organizationId"), ids, action])).r)) };
+    },
+  },
+
+  "GET /v1/notification-preferences": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ preferences: await tx(async (db) => (await first(db, "select ogevia_api.get_my_notification_preferences($1) as r", [orgParam(event)])).r) }),
+  },
+
+  "POST /v1/notification-preferences": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { preferences: await tx(async (db) => (await first(db, "select ogevia_api.set_my_notification_preferences($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), oneOf(body.category, "category", ["cover_shift", "cover_office"] as const), booleanValue(body.inApp, "inApp"), booleanValue(body.email, "email")])).r) };
+    },
+  },
+
+  "GET /v1/cover-notification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => (await first(db, "select ogevia_api.get_cover_notification_settings($1) as r", [orgParam(event)])).r) }),
+  },
+
+  "POST /v1/cover-notification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_notification_settings($1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+        uuid(body.organizationId, "organizationId"), booleanValue(body.enabled, "enabled"), booleanValue(body.emailEnabled, "emailEnabled"), booleanValue(body.autoNotify, "autoNotify"),
+        wholeNumber(body.windowHours, "windowHours", 1, 336), wholeNumber(body.maxRecipients, "maxRecipients", 1, 200), oneOf(body.audience, "audience", ["office", "agency"] as const),
+        text(body.subjectTemplate, "subjectTemplate", 120, { required: true }), text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
+  // The per-office audience override (office, agency or none; null removes it) and the list of offices with their override.
+  // 0117: automatic texting for open shifts (mock sender only). OFF unless features.openShiftSms.
+  "GET /v1/sms-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: await tx(async (db) => (await first(db, "select ogevia_api.get_sms_settings($1) as r", [orgParam(event)])).r) }),
+  },
+  "POST /v1/sms-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      // only the known keys reach the database function, each checked here and again there
+      const s: Record<string, unknown> = {
+        enabled: booleanValue(body.enabled, "enabled"), provider: oneOf(body.provider, "provider", ["mock", "live"] as const),
+        senderLabel: text(body.senderLabel, "senderLabel", 24), senderId: text(body.senderId, "senderId", 20),
+        dailyLimit: wholeNumber(body.dailyLimit, "dailyLimit", 1, 5000), hourlyLimit: wholeNumber(body.hourlyLimit, "hourlyLimit", 1, 1000), perRecipientDaily: wholeNumber(body.perRecipientDaily, "perRecipientDaily", 1, 20),
+        quietStart: text(body.quietStart, "quietStart", 5, { required: true }), quietEnd: text(body.quietEnd, "quietEnd", 5, { required: true }),
+        recruitmentDays: wholeNumber(body.recruitmentDays, "recruitmentDays", 1, 14), escalationHours: wholeNumber(body.escalationHours, "escalationHours", 1, 72),
+        recruitOn: booleanValue(body.recruitOn, "recruitOn"), receiptOn: booleanValue(body.receiptOn, "receiptOn"), cancelOn: booleanValue(body.cancelOn, "cancelOn"),
+        confirmOn: booleanValue(body.confirmOn, "confirmOn"), officeOn: booleanValue(body.officeOn, "officeOn"),
+      };
+      return { settings: await tx(async (db) => (await first(db, "select ogevia_api.set_sms_settings($1,$2::jsonb) as r", [org, JSON.stringify(s)])).r) };
+    },
+  },
+  "GET /v1/my-sms": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ sms: await tx(async (db) => (await first(db, "select ogevia_api.get_my_sms($1) as r", [orgParam(event)])).r) }),
+  },
+  "POST /v1/my-sms": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const consent = booleanValue(body.consent, "consent");
+      return { sms: await tx(async (db) => (await first(db, "select ogevia_api.set_my_sms($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), consent ? text(body.phone, "phone", 25, { required: true }) : null, consent, text(body.consentVersion, "consentVersion", 20) ?? "v1"])).r) };
+    },
+  },
+  "GET /v1/sms-oncall": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ contacts: await tx((db) => rows(db, "select * from ogevia_api.list_sms_oncall($1)", [orgParam(event)])) }),
+  },
+  "POST /v1/sms-oncall": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const action = oneOf(body.action, "action", ["add", "remove"] as const);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.set_sms_oncall($1,$2,$3,$4,$5,$6) as r", [
+        uuid(body.organizationId, "organizationId"), action, action === "add" && body.officeId ? uuid(body.officeId, "officeId") : null,
+        action === "add" ? text(body.label, "label", 40, { required: true }) : null, action === "add" ? text(body.phone, "phone", 25, { required: true }) : null,
+        action === "remove" ? uuid(body.id, "id") : null])).r) };
+    },
+  },
+  "GET /v1/sms-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ messages: await tx((db) => rows(db, "select * from ogevia_api.list_sms_history($1, $2)", [orgParam(event), 100])) }),
+  },
+
+  "GET /v1/cover-office-audiences": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ offices: await tx((db) => rows(db, "select * from ogevia_api.list_cover_office_audiences($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/offices/{officeId}/cover-audience": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const audience = body.audience === null || body.audience === undefined ? null : oneOf(body.audience, "audience", ["office", "agency", "none"] as const);
+      return { audience: await tx(async (db) => (await first(db, "select ogevia_api.set_cover_office_audience($1,$2,$3,$4) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), audience, text(body.reason, "reason", 500, { required: true })])).r) };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/notify-cover": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { result: await tx(async (db) => (await first(db, "select ogevia_api.notify_cover_shift($1,$2,$3) as r", [uuid(body.organizationId, "organizationId"), uuid(p(event).shiftId, "shiftId"), optionalUuid(body.officeId, "officeId")])).r) };
+    },
+  },
+
+  "GET /v1/cover-notification-history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_cover_notification_history($1,50)", [orgParam(event)])) }),
+  },
+
+  // 0114 (pending, behind the `invitationBranding` release switch): each office's look for sign-in invitation emails. The look is applied by the Cognito custom-message trigger.
+  "GET /v1/office-branding": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ offices: await tx((db) => rows(db, "select * from ogevia_api.list_office_branding($1)", [orgParam(event)])) }),
+  },
+
+  "POST /v1/offices/{officeId}/branding": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      return { branding: await tx(async (db) => (await first(db, "select ogevia_api.set_office_branding($1,$2,$3,$4,$5) as r", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).officeId, "officeId"), text(body.accentColor, "accentColor", 7), text(body.logoUrl, "logoUrl", 300), text(body.supportEmail, "supportEmail", 254)])).r) };
     },
   },
 
@@ -4082,6 +4479,8 @@ export const ROUTES: Record<string, Route> = {
     handle: async ({ event, tx }) => {
       const body = parseBody(event.body, event.isBase64Encoded);
       const args = [uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), text(body.zip, "zip", 5, { required: true })];
+      if (addressRules()) requireCity(text(body.city, "city", 100)) ;
+      if (!/^[0-9]{5}$/.test(String(args[2] ?? ""))) throw new ApiError(400, "bad_request", "Enter a 5-digit ZIP code.");
       if (body.city === undefined) {
         await tx((db) => db.query("select ogevia_api.set_client_service_zip($1,$2,$3)", args));
       } else {
@@ -4103,6 +4502,463 @@ export const ROUTES: Record<string, Route> = {
         return { city: saved.city ?? (candidates.length === 1 ? candidates[0] : null), candidates };
       }
       return { status: await tx(async (db) => (await first(db, "select ogevia_api.location_data_status($1) as status", [org])).status) };
+    },
+  },
+
+  // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+  // 0124 (pending, behind the homeLabels release switch): NFC / QR home labels, punches with location results, sign now or later, exceptions, corrections and reports.
+  // Writes go through the database functions only; the browser supplies a label token, an intent, a retry key and the phone location, never a time, an organization or a status.
+  // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+  "GET /v1/clients/{clientId}/service-locations": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      locations: await tx((db) => rows(db, "select * from ogevia_api.list_service_locations($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])),
+    }),
+  },
+
+  "POST /v1/clients/{clientId}/service-locations": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const coord = (value: unknown, name: string, limit: number) => {
+        if (value === undefined || value === null || value === "") return null;
+        if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > limit) throw new ApiError(400, "bad_request", `${name} is not valid.`);
+        return value;
+      };
+      const radius = body.radiusM === undefined || body.radiusM === null ? null : Number(body.radiusM);
+      if (radius !== null && (!Number.isInteger(radius) || radius < 50 || radius > 1000)) throw new ApiError(400, "bad_request", "radiusM must be 50 to 1000 metres.");
+      const geo = body.geoStatus === undefined || body.geoStatus === null ? null : oneOf(body.geoStatus, "geoStatus", ["not_checked", "located", "approximate", "not_found"] as const);
+      const id = await tx(async (db) => (await first(db, "select ogevia_api.save_service_location($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) as id", [
+        uuid(body.organizationId, "organizationId"), uuid(p(event).clientId, "clientId"), optionalUuid(body.locationId, "locationId"),
+        oneOf(body.kind, "kind", ["home", "community"] as const), text(body.name, "name", 80, { required: true }), text(body.street, "street", 120, { required: true }),
+        text(body.city, "city", 80, { required: true }), text(body.state, "state", 2), text(body.zip, "zip", 10, { required: true }),
+        coord(body.latitude, "latitude", 90), coord(body.longitude, "longitude", 180), geo, radius])).id);
+      return { locationId: id };
+    },
+  },
+
+  "POST /v1/services/{serviceId}/location-rule": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_service_location_rule($1,$2,$3,$4,$5)", [uuid(body.organizationId, "organizationId"), uuid(p(event).serviceId, "serviceId"),
+        oneOf(body.expectedStart, "expectedStart", ["home", "community"] as const), oneOf(body.expectedEnd, "expectedEnd", ["home", "community"] as const), booleanValue(body.allowOverride, "allowOverride")]));
+      return { saved: true };
+    },
+  },
+
+  "POST /v1/shifts/{shiftId}/location-override": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_shift_location_override($1,$2,$3,$4,$5)", [uuid(body.organizationId, "organizationId"), uuid(p(event).shiftId, "shiftId"),
+        oneOf(body.expectedStart, "expectedStart", ["home", "community"] as const), oneOf(body.expectedEnd, "expectedEnd", ["home", "community"] as const), text(body.reason, "reason", 300, { required: true })]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/shifts/{shiftId}/expected-locations": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const [expected] = await tx((db) => rows(db, "select * from ogevia_api.get_expected_locations($1,$2)", [orgParam(event), uuid(p(event).shiftId, "shiftId")]));
+      return { expected: expected ?? null };
+    },
+  },
+
+  "GET /v1/verification-settings": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ settings: (await tx((db) => rows(db, "select * from ogevia_api.get_verification_settings($1)", [orgParam(event)])))[0] ?? null }),
+  },
+
+  "POST /v1/verification-settings": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const n = (v: unknown, name: string) => { if (typeof v !== "number" || !Number.isInteger(v)) throw new ApiError(400, "bad_request", `${name} must be a whole number.`); return v; };
+      await tx((db) => db.query("select ogevia_api.save_verification_settings($1,$2,$3,$4,$5,$6,$7,$8)", [uuid(body.organizationId, "organizationId"),
+        n(body.earlyCheckoutMinutes, "earlyCheckoutMinutes"), n(body.overdueGraceMinutes, "overdueGraceMinutes"), n(body.materialTimeChangeMinutes, "materialTimeChangeMinutes"),
+        n(body.signatureSessionSeconds, "signatureSessionSeconds"), n(body.accuracyLimitM, "accuracyLimitM"),
+        booleanValue(body.holdBillingWhileSignaturePending, "holdBillingWhileSignaturePending"), booleanValue(body.holdBillingOnOpenExceptions, "holdBillingOnOpenExceptions")]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/home-labels": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const status = query.status ? oneOf(query.status, "status", ["unassigned", "active", "disabled", "replaced"] as const) : null;
+      return { labels: await tx((db) => rows(db, "select * from ogevia_api.list_home_labels($1,$2,$3,200,$4)", [orgParam(event), status, optionalUuid(query.clientId, "clientId"), optionalUuid(query.officeId, "officeId")])) };
+    },
+  },
+
+  // Registers a batch of unassigned stickers. The response is the supplier list: sticker IDs only (no client, no address, no link).
+  "POST /v1/home-labels": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const count = typeof body.count === "number" ? body.count : NaN;
+      const batch = newLabelBatch(org, count);
+      const batchId = await tx(async (db) => (await first(db, "select ogevia_api.register_home_labels($1,$2::jsonb) as id", [org, JSON.stringify(batch.map(({ code, hash, sealed }) => ({ code, hash, sealed })))])).id);
+      return { batchId, codes: batch.map((b) => b.code) };
+    },
+  },
+
+  "POST /v1/home-labels/assign": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const code = text(body.labelCode, "labelCode", 20, { required: true })!.toUpperCase();
+      if (!LABEL_CODE.test(code)) throw new ApiError(400, "bad_request", "That is not a valid label ID.");
+      return { labelId: await tx(async (db) => (await first(db, "select ogevia_api.assign_home_label($1,$2,$3,$4,$5) as id", [uuid(body.organizationId, "organizationId"), code,
+        uuid(body.serviceLocationId, "serviceLocationId"), booleanValue(body.confirmedAddress, "confirmedAddress"), body.reassign === true])).id) };
+    },
+  },
+
+  // Capture by tap or scan: the app sends the sticker's link, the server finds which sticker of THIS agency it is. Staff only.
+  "POST /v1/home-labels/resolve": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const found = typeof body.link === "string" ? /[0-9a-f]{64}/.exec(body.link) : null;
+      if (!found) throw new ApiError(400, "bad_request", "That is not an Ogevia label link.");
+      const [label] = await tx((db) => rows(db, "select * from ogevia_api.resolve_home_label_code($1,$2)", [uuid(body.organizationId, "organizationId"), hashLabelToken(found[0])]));
+      return { label };
+    },
+  },
+
+  "POST /v1/home-labels/{labelId}/deactivate": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.deactivate_home_label($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).labelId, "labelId"), text(body.reason, "reason", 300, { required: true })]));
+      return { deactivated: true };
+    },
+  },
+
+  "POST /v1/home-labels/{labelId}/replace": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const code = text(body.newLabelCode, "newLabelCode", 20, { required: true })!.toUpperCase();
+      if (!LABEL_CODE.test(code)) throw new ApiError(400, "bad_request", "That is not a valid label ID.");
+      return { labelId: await tx(async (db) => (await first(db, "select ogevia_api.replace_home_label($1,$2,$3,$4) as id", [uuid(body.organizationId, "organizationId"), uuid(p(event).labelId, "labelId"), code,
+        text(body.reason, "reason", 300, { required: true })])).id) };
+    },
+  },
+
+  // Preview, print and "copy link for tag programming": the link is opened only for an active or unassigned label, and every view is recorded.
+  "POST /v1/home-labels/{labelId}/link": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const org = uuid(body.organizationId, "organizationId");
+      const sealed = await tx(async (db) => (await first(db, "select ogevia_api.get_home_label_link($1,$2) as t", [org, uuid(p(event).labelId, "labelId")])).t as string);
+      return { token: openLabelToken(sealed, labelContext(org)) };
+    },
+  },
+
+  "GET /v1/home-labels/{labelId}/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_home_label_history($1,$2)", [orgParam(event), uuid(p(event).labelId, "labelId")])) }),
+  },
+
+  // Opening the link or scanning previews only: nothing here can create, change or end a visit.
+  "POST /v1/label-punch/preview": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      if (typeof body.token !== "string" || !LABEL_TOKEN.test(body.token)) return { state: "unavailable" };
+      return tx(async (db) => (await first(db, "select ogevia_api.preview_home_label($1) as r", [hashLabelToken(body.token as string)])).r);
+    },
+  },
+
+  // The only writer of punches from a label. `intent` is chosen by the person on the screen after the preview ("Clock in" / "Clock out"), never inferred from a repeated scan.
+  // The agency comes from the label itself; the caller names no organization.
+  "POST /v1/label-punch": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      if (typeof body.token !== "string" || !LABEL_TOKEN.test(body.token)) throw new ApiError(400, "bad_request", "That label link is not valid.");
+      const a = punchFields(body);
+      return tx(async (db) => (await first(db, "select ogevia_api.record_punch($1,null,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+        hashLabelToken(body.token as string), a.intent, a.shift, a.visit, a.lat, a.lng, a.acc, key, a.confirm])).r);
+    },
+  },
+
+  // Clock in or out from the assigned visit screen (a visit that starts or ends at an approved community place). Same database function, no label.
+  "POST /v1/visit-punch": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const a = punchFields(body);
+      if (a.intent === "arrival" && !a.shift) throw new ApiError(400, "bad_request", "shiftId is required to clock in from the visit screen.");
+      return tx(async (db) => (await first(db, "select ogevia_api.record_punch(null,$1,$2,$3,$4,$5,$6,$7,$8,$9) as r", [
+        uuid(body.organizationId, "organizationId"), a.intent, a.shift, a.visit, a.lat, a.lng, a.acc, key, a.confirm])).r);
+    },
+  },
+
+  "POST /v1/visits/{visitId}/signature-session": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const [session] = await tx((db) => rows(db, "select * from ogevia_api.open_signature_session($1)", [uuid(p(event).visitId, "visitId")]));
+      return { session };
+    },
+  },
+
+  // Sign now. The phone sends STROKES, never an image: an upload, a paste or a file is refused. The server checks the session, draws the PNG itself, stores it privately,
+  // then consumes the session, registers the evidence and confirms the visit in ONE transaction.
+  "POST /v1/visits/{visitId}/sign": {
+    mutating: true,
+    handle: async ({ event, tx, evidence }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const sessionId = uuid(body.sessionId, "sessionId");
+      for (const forbidden of ["signaturePng", "image", "dataUrl", "file", "png"]) {
+        if (body[forbidden] !== undefined) throw new ApiError(422, "validation_failed", "A signature image cannot be accepted. Sign on the screen.");
+      }
+      const signerRole = oneOf(body.signerRole, "signerRole", SIGNER_ROLES);
+      const signerName = text(body.signerName, "signerName", 200, { required: true })!;
+      const relationship = text(body.signerRelationship, "signerRelationship", 100);
+      if (signerRole !== "client" && !relationship) throw new ApiError(400, "bad_request", "signerRelationship is required when someone signs for the client.");
+      if (body.attested !== true) throw new ApiError(422, "validation_failed", "The confirmation statement must be accepted.");
+      const strokes = validateStrokes(body.strokes);
+
+      const replay = () => tx((db) => rows(db, "select * from ogevia_api.get_confirmation_replay($1, $2)", [visit, key]));
+      const [prior] = await replay();
+      if (prior) return { result: await tx((db) => withOutcome(db, visit, prior)) };
+
+      // The session is checked first (and a refusal is recorded); nothing is drawn or stored for a session that is not valid.
+      const bad = await tx(async (db) => (await first(db, "select ogevia_api.check_signature_session($1,$2) as r", [sessionId, visit])).r as string | null);
+      if (bad) throw new ApiError(409, "conflict", "This signing screen is no longer valid. Open it again to sign.");
+
+      const png = validateSignaturePng(renderSignaturePng(strokes).toString("base64"));
+      const objectKey = signatureObjectKey(org, visit);
+      let versionId: string | null;
+      try { ({ versionId } = await evidence.put(objectKey, png.bytes, png.sha256)); }
+      catch { throw new ApiError(503, "evidence_unavailable", "The signature could not be saved. Please try again."); }
+
+      try {
+        const [result] = await tx(async (db) => {
+          await db.query("select ogevia_api.consume_signature_session($1,$2)", [sessionId, visit]);
+          const r = await db.query("select ogevia_api.register_visit_evidence($1, $2, $3, 'image/png', $4, $5, $6) as id", [visit, objectKey, versionId, png.bytes.length, png.sha256Hex, key]);
+          const [confirmed] = await rows(db, "select * from ogevia_api.confirm_service_visit($1, $2, 'draw', $3, $4, $5, null, $6, $7)", [
+            visit, signerRole, (r.rows[0] as { id: string }).id, signerName, relationship, key, ATTESTATION_VERSION]);
+          return [await withOutcome(db, visit, confirmed)];
+        });
+        return { result };
+      } catch (error) {
+        if ((error as { code?: string }).code === "OGI09" || (error as { code?: string }).code === "OGC09") {
+          const [committed] = await replay();
+          if (committed) return { result: await tx((db) => withOutcome(db, visit, committed)) };
+          throw new ApiError(409, "conflict", "This signing screen is no longer valid. Open it again to sign.");
+        }
+        throw error;
+      }
+    },
+  },
+
+  "POST /v1/visits/{visitId}/sign-later": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const reason = oneOf(body.reasonCode, "reasonCode", ["signing_later", "client_unavailable", "declined"] as const);
+      const key = event.headers?.["idempotency-key"] || event.headers?.["Idempotency-Key"] ? idempotencyKey(event.headers) : null;
+      return { followupId: await tx(async (db) => (await first(db, "select ogevia_api.defer_visit_signature($1,$2,$3) as id", [uuid(p(event).visitId, "visitId"), reason, key])).id) };
+    },
+  },
+
+  "POST /v1/visits/{visitId}/signature-followup/owner": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.set_signature_followup_owner($1,$2,$3,$4)", [uuid(body.organizationId, "organizationId"), uuid(p(event).visitId, "visitId"), optionalUuid(body.ownerUserId, "ownerUserId"), body.assignToMe === true]));
+      return { saved: true };
+    },
+  },
+
+  // Records that a link was created, copied, emailed or revoked. It never carries the link, the code or the recipient's address.
+  "POST /v1/visits/{visitId}/signature-followup/delivery": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,$3,$4,$5,$6)", [uuid(body.organizationId, "organizationId"), uuid(p(event).visitId, "visitId"),
+        oneOf(body.action, "action", ["request_created", "link_copied", "email_queued", "delivery_failed", "link_revoked"] as const), optionalUuid(body.requestId, "requestId"),
+        oneOf(body.channel, "channel", ["copied", "email", "paper"] as const), text(body.status, "status", 40, { required: true })]));
+      return { logged: true };
+    },
+  },
+
+  "GET /v1/visit-exceptions": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      return { exceptions: await tx((db) => rows(db, "select * from ogevia_api.list_visit_exceptions($1,$2,$3,$4,$5,$6,$7,$8,$9)", [orgParam(event),
+        query.status ? oneOf(query.status, "status", ["open", "in_review", "resolved", "dismissed"] as const) : null,
+        query.kind ? oneOf(query.kind, "kind", ["missing_punch", "failed_punch", "overdue_clock_out", "location_issue", "overlap", "disputed_signature", "correction_request"] as const) : null,
+        optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId"), optionalUuid(query.officeId, "officeId")])) };
+    },
+  },
+
+  "POST /v1/visit-exceptions/{exceptionId}/resolve": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.resolve_visit_exception($1,$2,$3,$4)", [uuid(body.organizationId, "organizationId"), uuid(p(event).exceptionId, "exceptionId"),
+        oneOf(body.action, "action", ["reviewing", "resolved", "dismissed"] as const), text(body.note, "note", 500, { required: true })]));
+      return { saved: true };
+    },
+  },
+
+  "GET /v1/visit-exceptions/{exceptionId}/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({ history: await tx((db) => rows(db, "select * from ogevia_api.list_visit_exception_history($1,$2)", [orgParam(event), uuid(p(event).exceptionId, "exceptionId")])) }),
+  },
+
+  "POST /v1/visits/{visitId}/punch-corrections": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const timeIn = body.requestedTimeIn === undefined || body.requestedTimeIn === null ? null : timestamp(body.requestedTimeIn, "requestedTimeIn");
+      return { requestId: await tx(async (db) => (await first(db, "select ogevia_api.request_punch_correction($1,$2,$3,$4,$5) as id", [uuid(p(event).visitId, "visitId"),
+        oneOf(body.reasonCode, "reasonCode", ["poor_connectivity", "dead_phone", "lost_tag", "delayed_login", "other"] as const), text(body.reasonNote, "reasonNote", 1000, { required: true }), timeIn,
+        timestamp(body.requestedTimeOut, "requestedTimeOut")])).id) };
+    },
+  },
+
+  "POST /v1/punch-corrections/{requestId}/decide": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = event.headers?.["idempotency-key"] || event.headers?.["Idempotency-Key"] ? idempotencyKey(event.headers) : null;
+      return { visitId: await tx(async (db) => (await first(db, "select ogevia_api.decide_punch_correction($1,$2,$3,$4,$5,$6) as id", [uuid(body.organizationId, "organizationId"),
+        uuid(p(event).requestId, "requestId"), booleanValue(body.approve, "approve"), text(body.note, "note", 500, { required: true }),
+        body.locationDecision === undefined ? "not_applicable" : oneOf(body.locationDecision, "locationDecision", ["accepted", "not_applicable", "rejected"] as const), key])).id) };
+    },
+  },
+
+  // Reports. JSON for the screen; format=csv for the file (needs reports.export and is audited by report key and row count only). Rows never hold a signature image,
+  // precise GPS or a signing link, so neither the screen nor the file can show them.
+  "GET /v1/verification-reports/{report}": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const report = oneOf(p(event).report, "report", Object.keys(VERIFICATION_REPORTS) as Array<keyof typeof VERIFICATION_REPORTS>);
+      const query = q(event);
+      const org = orgParam(event);
+      const common = [optionalDate(query.from, "from"), optionalDate(query.to, "to"), optionalUuid(query.caregiverUserId, "caregiverUserId"), optionalUuid(query.clientId, "clientId"), optionalUuid(query.serviceId, "serviceId"), optionalUuid(query.officeId, "officeId")];
+      const def = VERIFICATION_REPORTS[report];
+      const status = query.status ? oneOf(query.status, "status", ["open", "in_review", "resolved", "dismissed", "draft", "awaiting_signature", "signed", "administrator_review", "unassigned", "active", "disabled", "replaced"] as const) : null;
+      const data = await tx((db) => rows(db, def.sql, def.params(org, common, status, query)));
+      if (query.format !== "csv") return { rows: data };
+      await tx((db) => db.query("select ogevia_api.authorize_verification_export($1,$2,$3)", [org, report, data.length]));
+      return { rowCount: data.length, filename: `${report.replace(/_/g, "-")}.csv`, csv: rowsToCsv(data, def.columns) };
+    },
+  },
+
+  // 0125 (pending, behind the authorizationWorklist release switch): the Authorization Worklist. Read only; client codes, never names.
+  "GET /v1/authorization-worklist": {
+    mutating: false,
+    handle: async ({ event, tx }) => {
+      const query = q(event);
+      const whole = (v: string | undefined, name: string, def: number) => { if (v === undefined || v === "") return def; const n = Number(v); if (!Number.isInteger(n)) throw new ApiError(400, "bad_request", `${name} must be a whole number.`); return n; };
+      const month = optionalDate(query.month, "month");
+      const status = query.status ? oneOf(query.status, "status", ["missing", "expired", "expiring", "exhausted", "nearly_exhausted", "ok", "attention"] as const) : null;
+      const program = query.program ? text(query.program, "program", 120) : null;
+      const data = await tx((db) => rows(db, "select * from ogevia_api.list_authorization_worklist($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [orgParam(event), month, optionalUuid(query.clientId, "clientId"), optionalUuid(query.officeId, "officeId"),
+        program, status, whole(query.expiringDays, "expiringDays", 30), whole(query.nearlyPercent, "nearlyPercent", 85), optionalDate(query.from, "from"), optionalDate(query.to, "to")]));
+      return { rows: data };
+    },
+  },
+
+  // 0126 (pending, behind the serviceAddresses release switch): service address history. Staff only. One current home address per client; alternate and historical addresses are kept;
+  // a wrong address that never had a sticker can be deleted. Every state change needs a reason (except making an address current) and is recorded.
+  "GET /v1/clients/{clientId}/service-addresses": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      addresses: await tx((db) => rows(db, "select * from ogevia_api.list_client_service_addresses($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])),
+    }),
+  },
+
+  "GET /v1/clients/{clientId}/service-addresses/history": {
+    mutating: false,
+    handle: async ({ event, tx }) => ({
+      history: await tx((db) => rows(db, "select * from ogevia_api.list_service_location_history($1,$2)", [orgParam(event), uuid(p(event).clientId, "clientId")])),
+    }),
+  },
+
+  "POST /v1/service-locations/{serviceLocationId}/state": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const state = oneOf(body.state, "state", ["active", "alternate", "historical"] as const);
+      const reason = text(body.reason, "reason", 300, { required: state !== "active" });
+      await tx((db) => db.query("select ogevia_api.set_service_location_state($1,$2,$3,$4)", [uuid(body.organizationId, "organizationId"), uuid(p(event).serviceLocationId, "serviceLocationId"), state, reason ?? null]));
+      return { state };
+    },
+  },
+
+  "POST /v1/service-locations/{serviceLocationId}/delete": {
+    mutating: true,
+    handle: async ({ event, tx }) => {
+      const body = parseBody(event.body, event.isBase64Encoded);
+      await tx((db) => db.query("select ogevia_api.delete_service_location($1,$2,$3)", [uuid(body.organizationId, "organizationId"), uuid(p(event).serviceLocationId, "serviceLocationId"), text(body.reason, "reason", 300, { required: true })]));
+      return { deleted: true };
+    },
+  },
+
+  // Signing-link email (behind the signatureEmail release switch). Staff type the address of the person on file; the server makes the 0036 secure link, emails ONLY the link (the
+  // 6-digit code is never in the email: it comes back to the staff member to give by phone), and records the delivery without the address, link or code. An open earlier link is revoked first (one open link
+  // per visit). If the email cannot be sent the link and code come back to the staff member so it can be copied instead; nothing is lost.
+  "POST /v1/visits/{visitId}/signature-link-email": {
+    status: 201,
+    mutating: true,
+    handle: async ({ event, tx, email }) => {
+      const visit = uuid(p(event).visitId, "visitId");
+      const body = parseBody(event.body, event.isBase64Encoded);
+      const key = idempotencyKey(event.headers);
+      const org = uuid(body.organizationId, "organizationId");
+      const recipientName = text(body.recipientName, "recipientName", 200, { required: true });
+      const recipientRole = oneOf(body.recipientRole, "recipientRole", ["client", "parent", "guardian", "authorized_representative"] as const);
+      const identityCheck = text(body.identityCheck, "identityCheck", 500, { required: true });
+      const to = typeof body.recipientEmail === "string" ? body.recipientEmail.trim() : "";
+      if (to.length > 254 || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(to)) throw new ApiError(400, "bad_request", "Enter a valid email address.");
+      const days = body.expiresInDays === undefined ? 7 : body.expiresInDays;
+      if (typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 30) throw new ApiError(400, "bad_request", "expiresInDays must be a whole number from 1 to 30.");
+      // Checked before anything is created, so an unavailable sender leaves no orphan link.
+      if (!email) throw new ApiError(503, "email_unavailable", "Email is not set up for this agency yet. Make a link and copy it instead.");
+
+      // One open link per visit: revoke the earlier one (its reason is recorded; the history keeps it).
+      const existing = await tx((db) => rows(db, "select * from ogevia_api.list_visit_confirmation_requests($1)", [visit]));
+      for (const r of existing.filter((x) => x.state === "open")) {
+        await tx((db) => db.query("select ogevia_api.revoke_visit_confirmation_request($1,$2,$3)", [r.requestId, "Replaced by a new emailed link", stableUuid(`${key}:revoke:${String(r.requestId)}`)]));
+        await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,'link_revoked',$3,'email','replaced')", [org, visit, r.requestId]));
+      }
+      const token = newOpaqueToken();
+      const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      const tokenHash = hashOpaqueToken(token);
+      const [made] = await tx((db) => rows(db, "select * from ogevia_api.create_visit_confirmation_request($1,'link',$2,$3,$4,$5,$6,$7,$8)", [visit, recipientName, recipientRole, identityCheck, tokenHash, confirmationCodeHash(tokenHash, code), days, key]));
+      const request = made as { requestId: string; expiresAt: string; isNew: boolean };
+      // A retry of the same request: the link cannot be shown or emailed again. Make a new one.
+      if (!request.isNew) throw new ApiError(409, "conflict", "This link was already made. Make a new link to email it.");
+      await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,'request_created',$3,'email','created')", [org, visit, request.requestId]));
+
+      const [branding] = await tx((db) => rows(db, "select * from ogevia_api.get_organization_branding($1)", [org]));
+      const composed = composeSignatureEmail({ agencyName: String((branding as { displayName?: string } | undefined)?.displayName ?? "Your care agency"), url: `${email.appOrigin}/confirm-visit#${token}`, expiresAt: new Date(request.expiresAt) });
+      let result: Awaited<ReturnType<SendEmail>>;
+      for (let attempt = 0; ; attempt++) {
+        try { result = await email.send({ to, subject: composed.subject, text: composed.text, html: composed.html, deliveryId: request.requestId }); }
+        catch { result = { ok: false, error: "send_failed", transient: true }; }
+        if (result.ok || !result.transient || attempt >= 1) break;
+      }
+      await tx((db) => db.query("select ogevia_api.log_signature_delivery($1,$2,$3,$4,'email',$5)", [org, visit, result.ok ? "email_queued" : "delivery_failed", request.requestId, result.ok ? "accepted" : result.error.slice(0, 40)]));
+      return result.ok
+        ? { requestId: request.requestId, expiresAt: request.expiresAt, emailSent: true, code }   // the code is for the staff member to give by phone; the link is only in the email
+        : { requestId: request.requestId, expiresAt: request.expiresAt, emailSent: false, error: result.error, token, code };
     },
   },
 

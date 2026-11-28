@@ -25,7 +25,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cognitoIssuer } from "./auth-contract.js";
 import { APPROVED_PUBLIC_ROUTE_KEYS, PUBLIC_ROUTE_ACKNOWLEDGEMENT } from "./public-routes.js";
-import { assertDatabaseConfig, assertVerified, type OgeviaEnvironmentConfig } from "./config.js";
+import { assertDatabaseConfig, assertVerified, customOriginsFor, notificationEmailOf, type OgeviaEnvironmentConfig } from "./config.js";
 import {
   SIGNATURE_OBJECT_KEY_PATTERN,
   signatureBucketName,
@@ -66,6 +66,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 /** The real Service Verification handler (apps/sv-api), bundled by esbuild at synth. */
 export const HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/index.ts");
 export const IDENTITY_HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/identity-handler.ts");
+export const EMAIL_HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/email-index.ts");
 
 /**
  * Caregiver invitations (0025). Fixed name so the Lambda VPC endpoint policy
@@ -73,6 +74,11 @@ export const IDENTITY_HANDLER_ENTRY = resolve(REPO_ROOT, "apps/sv-api/src/identi
  */
 export function identityFunctionName(config: Pick<OgeviaEnvironmentConfig, "envName">): string {
   return `Ogevia-${config.envName}-IdentityAdmin`;
+}
+
+/** Release Train 2: the notification email function (exists only when the environment names a sender). Fixed name so the Lambda endpoint policy can name it. */
+export function emailFunctionName(config: Pick<OgeviaEnvironmentConfig, "envName">): string {
+  return `Ogevia-${config.envName}-NotificationEmail`;
 }
 
 /**
@@ -84,7 +90,7 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   readonly path: string;
   readonly public?: boolean;
   /** Added to an environment's API only when that environment's `features` switch is on. */
-  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory";
+  readonly feature?: "staffManagement" | "signInOverride" | "bulkImport" | "staffDuplicates" | "liveTestRepairs" | "requestCleanup" | "offices" | "officeAssignments" | "assignmentHistory" | "notifications" | "invitationBranding" | "importRollback" | "operationsReadiness" | "openShiftSms" | "serviceLocation" | "readinessOverrides" | "homeLabels" | "serviceAddresses" | "authorizationWorklist" | "signatureEmail";
 }> = [
   { method: apigw.HttpMethod.GET, path: "/v1/me" },
   { method: apigw.HttpMethod.GET, path: "/v1/visits/active" },
@@ -240,6 +246,9 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/checkin", feature: "liveTestRepairs" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/qr-card", feature: "liveTestRepairs" },
   { method: apigw.HttpMethod.GET, path: "/v1/staff/duplicates", feature: "staffDuplicates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/staff/merge-preview", feature: "staffDuplicates" },
+  { method: apigw.HttpMethod.GET, path: "/v1/staff-merges", feature: "staffDuplicates" },
+  { method: apigw.HttpMethod.POST, path: "/v1/staff-merges/{linkId}/undo", feature: "staffDuplicates" },
   { method: apigw.HttpMethod.POST, path: "/v1/staff/{profileId}/merge", feature: "staffDuplicates" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/cpr-tb/extend" },
   { method: apigw.HttpMethod.GET, path: "/v1/caregivers/{caregiverRecordId}/cpr-tb/extensions" },
@@ -323,6 +332,45 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/care-notifications/read", feature: "requestCleanup" },
   { method: apigw.HttpMethod.POST, path: "/v1/documents/{documentId}/cancel", feature: "requestCleanup" },
   { method: apigw.HttpMethod.POST, path: "/v1/document-types/{documentTypeId}/retire", feature: "requestCleanup" },
+  // 0124 (pending): NFC / QR home labels, punches, sign now or later, exceptions, corrections and reports (docs/releases/2026-11-23-nfc-qr-visits). OFF in every environment until the owner releases 0120.
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-locations", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-locations", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/services/{serviceId}/location-rule", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/location-override", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/shifts/{shiftId}/expected-locations", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/verification-settings", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/verification-settings", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/home-labels", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/assign", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/resolve", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/{labelId}/deactivate", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/{labelId}/replace", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/home-labels/{labelId}/link", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/home-labels/{labelId}/history", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/label-punch/preview", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/label-punch", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visit-punch", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-session", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/sign", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/sign-later", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-followup/owner", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-followup/delivery", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visit-exceptions", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visit-exceptions/{exceptionId}/resolve", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/visit-exceptions/{exceptionId}/history", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/punch-corrections", feature: "homeLabels" },
+  { method: apigw.HttpMethod.POST, path: "/v1/punch-corrections/{requestId}/decide", feature: "homeLabels" },
+  { method: apigw.HttpMethod.GET, path: "/v1/verification-reports/{report}", feature: "homeLabels" },
+  // 0125 (pending): the Authorization Worklist (read only). OFF until the owner releases 0125.
+  { method: apigw.HttpMethod.GET, path: "/v1/authorization-worklist", feature: "authorizationWorklist" },
+  // 0126 (pending): service address history (current / alternate / historical addresses, switch, delete a wrong entry). OFF until the owner releases 0126.
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-addresses", feature: "serviceAddresses" },
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-addresses/history", feature: "serviceAddresses" },
+  { method: apigw.HttpMethod.POST, path: "/v1/service-locations/{serviceLocationId}/state", feature: "serviceAddresses" },
+  { method: apigw.HttpMethod.POST, path: "/v1/service-locations/{serviceLocationId}/delete", feature: "serviceAddresses" },
+  // Signing-link email (needs notificationEmail + notifications so the API has an email function). OFF until the owner releases it.
+  { method: apigw.HttpMethod.POST, path: "/v1/visits/{visitId}/signature-link-email", feature: "signatureEmail" },
   { method: apigw.HttpMethod.GET, path: "/v1/offices", feature: "offices" },
   { method: apigw.HttpMethod.GET, path: "/v1/client-offices", feature: "offices" },
   { method: apigw.HttpMethod.POST, path: "/v1/offices", feature: "offices" },
@@ -333,6 +381,40 @@ export const SERVICE_VERIFICATION_ROUTES: ReadonlyArray<{
   { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/reactivate", feature: "officeAssignments" },
   { method: apigw.HttpMethod.GET, path: "/v1/people-facets", feature: "officeAssignments" },
   { method: apigw.HttpMethod.GET, path: "/v1/assignment-history", feature: "assignmentHistory" },
+  // Release Train 2 (0113): cover-shift notifications and the notification centre. OFF unless features.notifications.
+  // Release Train 2 (0114): each office's look for invitation emails. OFF unless features.invitationBranding.
+  // Release Train 2 (0115): bulk import history and rollback. OFF unless features.importRollback.
+  { method: apigw.HttpMethod.GET, path: "/v1/imports", feature: "importRollback" },
+  { method: apigw.HttpMethod.POST, path: "/v1/imports/{batchId}/rollback", feature: "importRollback" },
+  // Release Train 2 (0117): automatic texting for open shifts (mock sender only). OFF unless features.openShiftSms (which also needs features.notifications).
+  { method: apigw.HttpMethod.GET, path: "/v1/sms-settings", feature: "openShiftSms" },
+  { method: apigw.HttpMethod.POST, path: "/v1/sms-settings", feature: "openShiftSms" },
+  { method: apigw.HttpMethod.GET, path: "/v1/my-sms", feature: "openShiftSms" },
+  { method: apigw.HttpMethod.POST, path: "/v1/my-sms", feature: "openShiftSms" },
+  { method: apigw.HttpMethod.GET, path: "/v1/sms-oncall", feature: "openShiftSms" },
+  { method: apigw.HttpMethod.POST, path: "/v1/sms-oncall", feature: "openShiftSms" },
+  { method: apigw.HttpMethod.GET, path: "/v1/sms-history", feature: "openShiftSms" },
+  // 0123: an administrator lifts one CPR/TB document readiness block for one caregiver and one exact issue, with a reason (and can revoke it). OFF unless features.readinessOverrides (needs migration 0123).
+  { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/readiness-override", feature: "readinessOverrides" },
+  { method: apigw.HttpMethod.POST, path: "/v1/readiness-overrides/{overrideId}/revoke", feature: "readinessOverrides" },
+  { method: apigw.HttpMethod.GET, path: "/v1/readiness-overrides", feature: "readinessOverrides" },
+  // Release Train 2 (0118): the client's service address, county and coordinating office together. OFF unless features.serviceLocation (needs the offices and county switches).
+  { method: apigw.HttpMethod.GET, path: "/v1/clients/{clientId}/service-location", feature: "serviceLocation" },
+  { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-location", feature: "serviceLocation" },
+  // Release Train 2: operations readiness in one call (composes existing functions; no migration). OFF unless features.operationsReadiness.
+  { method: apigw.HttpMethod.GET, path: "/v1/operations-readiness", feature: "operationsReadiness" },
+  { method: apigw.HttpMethod.GET, path: "/v1/office-branding", feature: "invitationBranding" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/branding", feature: "invitationBranding" },
+  { method: apigw.HttpMethod.GET, path: "/v1/notification-center", feature: "notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/notification-center/mark", feature: "notifications" },
+  { method: apigw.HttpMethod.GET, path: "/v1/notification-preferences", feature: "notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/notification-preferences", feature: "notifications" },
+  { method: apigw.HttpMethod.GET, path: "/v1/cover-notification-settings", feature: "notifications" },
+  { method: apigw.HttpMethod.GET, path: "/v1/cover-office-audiences", feature: "notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/offices/{officeId}/cover-audience", feature: "notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/cover-notification-settings", feature: "notifications" },
+  { method: apigw.HttpMethod.POST, path: "/v1/shifts/{shiftId}/notify-cover", feature: "notifications" },
+  { method: apigw.HttpMethod.GET, path: "/v1/cover-notification-history", feature: "notifications" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/offices", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/caregivers/{caregiverRecordId}/offices", feature: "officeAssignments" },
   { method: apigw.HttpMethod.POST, path: "/v1/clients/{clientId}/service-county", feature: "officeAssignments" },
@@ -450,6 +532,7 @@ export class ServiceVerificationApiStack extends Stack {
       terminationProtection: props.config.terminationProtection,
     });
     const { config } = props;
+    if (config.features.openShiftSms && !config.features.notifications) throw new Error("features.openShiftSms needs features.notifications (texting uses the open-shift alert run)");
     let qrKey: CfnParameter | undefined;
     if (config.features.liveTestRepairs) {
       if (config.envName !== "prod" || config.database.purpose !== "test-slice") throw new Error("Accepted live repair routes are TEST-only");
@@ -661,6 +744,42 @@ export class ServiceVerificationApiStack extends Stack {
       }),
     );
 
+    // Release Train 2: notification email (OFF unless the environment sets features.notifications AND notificationEmail). OUTSIDE the VPC for the same reason as the
+    // identity function; no database, S3, KMS or secret access. Its role may call ses:SendEmail only on the one verified identity (and its configuration set).
+    const notificationEmail = notificationEmailOf(config);
+    let emailHandler: lambda.Function | undefined;
+    if (notificationEmail) {
+      const emailLogGroup = new logs.LogGroup(this, "EmailLogGroup", { retention: config.logRetention, removalPolicy: RemovalPolicy.RETAIN });
+      const emailRole = new iam.Role(this, "EmailRole", { assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"), description: "Ogevia notification email function (SES send on one identity)" });
+      const emailPolicy = new iam.ManagedPolicy(this, "EmailPolicy", { description: "Ogevia notification email: own logs + ses:SendEmail on the one identity", roles: [emailRole] });
+      emailPolicy.addStatements(
+        new iam.PolicyStatement({ sid: "WriteOwnLogGroup", actions: ["logs:CreateLogStream", "logs:PutLogEvents"], resources: [emailLogGroup.logGroupArn] }),
+        new iam.PolicyStatement({ sid: "SendFromOneIdentity", actions: ["ses:SendEmail"], resources: [notificationEmail.sesIdentityArn, ...(notificationEmail.recipientIdentityArns ?? []), ...(notificationEmail.configurationSetArn ? [notificationEmail.configurationSetArn] : [])] }),
+      );
+      emailHandler = new nodejs.NodejsFunction(this, "EmailHandler", {
+        functionName: emailFunctionName(config),
+        description: "Ogevia notification email: sends one cover-shift message through SES",
+        runtime: lambda.Runtime.NODEJS_24_X,
+        architecture: lambda.Architecture.ARM_64,
+        entry: EMAIL_HANDLER_ENTRY,
+        handler: "handler",
+        projectRoot: REPO_ROOT,
+        depsLockFilePath: resolve(REPO_ROOT, "pnpm-lock.yaml"),
+        bundling: { format: nodejs.OutputFormat.CJS, target: "node22", minify: true, sourceMap: false, forceDockerBundling: false },
+        memorySize: 256,
+        timeout: Duration.seconds(10),
+        role: emailRole,
+        logGroup: emailLogGroup,
+        environment: { SES_FROM: notificationEmail.from, ...(notificationEmail.replyTo ? { SES_REPLY_TO: notificationEmail.replyTo } : {}), ...(notificationEmail.configurationSet ? { SES_CONFIGURATION_SET: notificationEmail.configurationSet } : {}), ...(notificationEmail.allowedRecipients ? { SES_ALLOWED_RECIPIENTS: notificationEmail.allowedRecipients.join(",") } : {}) },
+      });
+      emailHandler.node.addDependency(emailPolicy);
+      Validations.of(emailHandler).acknowledge({
+        id: "HIPAA.Security-LambdaInsideVPC",
+        reason: "Deliberately outside the VPC: the API Lambda has no internet route and NAT is deferred. The function has no database, S3, KMS or secret access; it only calls ses:SendEmail on one verified identity and logs outcome codes, never an address or a body.",
+      });
+      policy.addStatements(new iam.PolicyStatement({ sid: "InvokeNotificationEmail", actions: ["lambda:InvokeFunction"], resources: [emailHandler.functionArn] }));
+    }
+
     this.handler = new nodejs.NodejsFunction(this, "Handler", {
       description: "Ogevia Service Verification API",
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -708,6 +827,11 @@ export class ServiceVerificationApiStack extends Stack {
         // Lambda Node.js 20+: adds the Amazon RDS CA bundle for verified TLS.
         NODE_EXTRA_CA_CERTS: "/var/runtime/ca-cert.pem",
         IDENTITY_FUNCTION_NAME: identityFunctionName(config),
+        ...(config.features.invitationBranding && config.auth.invitationEmail ? { INVITATION_BRANDING: "on" } : {}),
+        ...(config.features.notifications ? { COVER_ALERT_ADDRESS_RULES: "on" } : {}),
+        ...(config.features.openShiftSms ? { SMS_MODE: "mock" } : {}),
+        ...(config.features.serviceLocation ? { SERVICE_LOCATION: "on" } : {}),   // the mock sender only: nothing is ever sent
+        ...(notificationEmail ? { EMAIL_FUNCTION_NAME: emailFunctionName(config), APP_ORIGIN: customOriginsFor(config)[0] ?? "https://app.invalid" } : {}),
       },
     });
 
@@ -823,6 +947,16 @@ export class ServiceVerificationApiStack extends Stack {
         }),
       ],
     });
+
+    // Release Train 2: the notification run (cover-shift auto-notify and the email outbox). Created only when features.notifications is on; every five minutes; an agency
+    // with all settings off costs one empty query. Same handler, constant payload that API Gateway can never produce.
+    if (config.features.notifications) {
+      new events.Rule(this, "NotifySweep", {
+        description: "Creates cover-shift notifications for agencies with auto-notify on and sends due notification emails (with retry).",
+        schedule: events.Schedule.rate(Duration.minutes(5)),
+        targets: [new targets.LambdaFunction(this.handler, { event: events.RuleTargetInput.fromObject({ "ogevia-task": "notify-sweep" }), retryAttempts: 1 })],
+      });
+    }
 
     // Exact finding IDs. lib/template-scan.ts independently fails any wildcard
     // action and any Resource "*" outside the ENI action list.

@@ -157,7 +157,8 @@ describe("enforcement ACTIVE (a synthetic agency only): pending is exactly as bl
     const held = (await db.admin.query("select id, (starts_at at time zone 'America/Los_Angeles')::date::text d from ogevia.shifts where caregiver_record_id = $1 and status = 'scheduled'", [recs.M])).rows[0];
     await call(w.managerA, "select * from ogevia_api.cancel_shift($1,$2,'Synthetic: client unwell',null)", [w.orgA, held.id]);
     const sameMonth = held.d.slice(0, 7);
-    const day = (await add(4)).slice(0, 7) === sameMonth ? await add(5) : held.d;
+    const later = await add(5);   // a later day in the SAME calendar month as the cancelled visit; on the last days of a month (add(5) lands in the next month) use the cancelled visit's own day
+    const day = later.slice(0, 7) === sameMonth ? later : held.d;
     await expectPgError(call(w.managerA, "select * from ogevia_api.schedule_makeup_shift($1,$2,$3::date,'13:00'::time,'14:00'::time,$4,null)", [w.orgA, held.id, day, recs.M]), "OGR30", /CPR missing\./);
   });
 

@@ -1,0 +1,18 @@
+# Email sender and Reply-To (Release Train 2) — what is configured, what is not, and what you must check
+
+Decision (owner, 2026-11-23): in TEST, prefer **Ogevia <admin.ogevia@gmail.com>** as the From address of branded invitations; if that cannot be the From address, send from the configured Ogevia sender and set **Reply-To = admin.ogevia@gmail.com**. Later: **support@ogevia.com** for invitations, resends and password resets; **scheduling@ogevia.com** for open-shift notifications. Keep both configurable, never in a template. The agency name stays in the invitation subject; each agency keeps its own branding and help contact.
+
+## Result: I could NOT confirm that the current setup can send from that address (no AWS access here, nothing was sent)
+| Question | Answer |
+|---|---|
+| What sends invitations and password resets today? | Cognito, with its **default sender** (`emailSendingAccount: COGNITO_DEFAULT`). A Cognito default sender cannot be changed to another From address. (The default From is Cognito's own, `no-reply@verificationemail.com` per AWS documentation: confirm it in the first TEST email's headers.) |
+| Can `admin.ogevia@gmail.com` be the From address? | Only through Amazon SES with that address **verified as an SES identity** in `us-west-2` (SES sends a link to that inbox; someone must click it), and the pool switched to `DEVELOPER` email with that identity. Not done. **Caution:** mail "from" a gmail.com address that is sent by SES fails DMARC alignment (Google owns that domain's policy), so Gmail, Yahoo and others may junk or refuse it. I recommend using it for a short TEST only, or not at all, and moving to an `@ogevia.com` identity (verify the domain once; DKIM/SPF then align). |
+| The TEST pool | It is the shared pilot pool, **not managed by this repository**, so CDK cannot set its sender. The owner sets it by hand (below). |
+| What the repository now supports | Configuration only: `auth.invitationEmail.replyTo` (Cognito `ReplyToEmailAddress`, works with the default sender), `auth.invitationEmail.sender` (From + SES identity), `notificationEmail.from` / `notificationEmail.replyTo` (open-shift notifications). Tests assert each and that the template does not change when they do. |
+
+## Actual addresses used (until you act): **From = Cognito's default sender; Reply-To = none**. Nothing in the repository sets `admin.ogevia@gmail.com` anywhere.
+
+## What to do in TEST (owner, console, reversible)
+1. **Reply-To (recommended first step, no verification needed):** Cognito console → the TEST user pool → Messaging → Email → Edit → "REPLY-TO email address" = `admin.ogevia@gmail.com`; keep "Send email with Cognito". Invite a test caregiver to your own inbox; the From is Cognito's default and a reply goes to admin.ogevia@gmail.com. Check how it appears (sender name, spam folder) and tell me the From you see.
+2. **Only if you still want gmail as the From:** SES console (us-west-2) → Identities → Create identity → Email address `admin.ogevia@gmail.com` → click the verification link; then Cognito → Messaging → Email → "Send email with Amazon SES", FROM = `Ogevia <admin.ogevia@gmail.com>`, SES region us-west-2, the identity. Expect junk-folder risk (above); revert by switching back to Cognito's default.
+3. **Later, `@ogevia.com`:** verify the domain in SES (DNS records; Easy DKIM), then set in `config.ts` (production pool): `auth.invitationEmail: { …, replyTo: "support@ogevia.com", sender: { from: "Ogevia <support@ogevia.com>", sesIdentityArn } }` and `notificationEmail: { from: "Ogevia <scheduling@ogevia.com>", replyTo: "scheduling@ogevia.com", sesIdentityArn }`. No template edit; reviewed change set as usual.

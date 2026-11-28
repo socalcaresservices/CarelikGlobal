@@ -1106,7 +1106,14 @@ describe("missing-signature recovery (0036) through the API", () => {
     expect(opened.body.visit.organizationId).toBeUndefined();
 
     const responseKey = randomUUID();
-    const respond = { code, outcome: "confirmed", method: "draw", signerName: "Synthetic Parent Kim", attested: true, signaturePng: syntheticPng().toString("base64"), responseKey };
+    const respond = { code, outcome: "confirmed", method: "draw", signerName: "Synthetic Parent Kim", attested: true, strokes: { width: 600, height: 200, strokes: [Array.from({ length: 40 }, (_, i) => [200 + 60 * Math.cos(i / 6), 100 + 40 * Math.sin(i / 4), i * 15]), Array.from({ length: 40 }, (_, i) => [330 + 60 * Math.cos(i / 6), 100 + 40 * Math.sin(i / 4), 700 + i * 15])] }, responseKey };
+    // a picture is refused outright, with or without strokes, and nothing is stored
+    const refusedBefore = evidence.objects.size;
+    for (const bad of [{ signaturePng: syntheticPng().toString("base64") }, { image: "data:image/png;base64,AAAA" }, { strokes: undefined }]) {
+      const r = await pub("POST /v1/public/visit-confirmations/{token}/respond", token, { ...respond, ...bad });
+      expect([400, 422], JSON.stringify(Object.keys(bad))).toContain(r.status);
+    }
+    expect(evidence.objects.size).toBe(refusedBefore);
     const r1 = await pub("POST /v1/public/visit-confirmations/{token}/respond", token, respond);
     expect(r1.status, JSON.stringify(r1.body)).toBe(201);
     // A network retry with the same response key is answered the same way, and stores nothing new.

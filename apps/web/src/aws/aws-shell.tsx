@@ -23,6 +23,8 @@ import { cn } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { EXCEPTIONS_ROUTE } from "./action-needed";
 import { NotificationsBell } from "./notifications-bell";
+import { useNotificationCenter } from "./notification-center-data";
+import { useOperationsReadinessAvailable } from "./operations-readiness-data";
 import { PageHelpButton, PageHelpProvider } from "./ui/page-help";
 import { PendingInvitations } from "./pending-invitations";
 import { AppearanceApplier } from "./appearance/use-appearance";
@@ -30,6 +32,8 @@ import { useAttentionCounts, useBranding, useLogo, useMyDisplayName, viewKind } 
 import { EnvironmentBanner } from "./environment-marker";
 import { AUTHORIZATIONS_PATH, currentLink, isCalendarView, isExceptionsView, isReportView, isSidebarCurrent, isVisitListView, landingOf, linkKey, REPORTS_PATH, SERVICES_PATH, SHIFT_REQUESTS_PATH, tabsOf, visibleGroups, type NavGroup, type NavLinkDef } from "./nav-model";
 import { useOffices } from "./offices-data";
+import { useHomeLabelsAvailable } from "./home-labels-data";
+import { useWorklistAvailable } from "./authorization-worklist-data";
 
 export const EXCEPTIONS_PATH = EXCEPTIONS_ROUTE;
 const DEFAULT_ACCENT = "#0f172a"; // slate-900: the colour used before agency branding existed
@@ -128,7 +132,11 @@ export function AwsShell({ children }: PropsWithChildren) {
     if (drawerShown) closeButtonRef.current?.focus();
   }, [drawerShown]);
 
+  const opsReadiness = useOperationsReadinessAvailable(!loading && !!activeOrganizationId && (hasPermission("visits.read") || hasPermission("shifts.manage")));   // the link appears only where the switch is on
+  const center = useNotificationCenter(!loading && !!activeOrganizationId);   // the Notifications link appears only where the notifications switch is on
   const { available: officesOn } = useOffices(!loading && !!activeOrganizationId && hasPermission("organization.update"));   // the Offices link appears only where the offices switch is on (hook order: before the early returns)
+  const { available: verificationOn } = useHomeLabelsAvailable(!loading && !!activeOrganizationId && hasPermission("visits.read"));   // 0124: the Visit verification link appears only where the homeLabels switch is on
+  const { available: worklistOn } = useWorklistAvailable(!loading && !!activeOrganizationId && hasPermission("authorizations.read"));   // 0125: the Authorization Worklist link appears only where its switch is on
   if (loading) {
     return <div className="flex min-h-screen flex-col"><EnvironmentBanner /><div className="flex flex-1 items-center justify-center"><p className="text-sm text-slate-500">Loading…</p></div></div>;
   }
@@ -165,6 +173,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: "/", label: "Dashboard", group: "Dashboard", show: staff },
     { to: "/action-needed", label: "Action Needed", group: "Dashboard", tabOnly: true, under: "Dashboard", show: staff && canSeeAttention },
     { to: "/clients", label: "Clients", group: "Clients", show: hasPermission("clients.names.read") },
+    { to: "/authorizations/worklist", label: "Authorization worklist", group: "Clients", show: staff && hasPermission("authorizations.read") && worklistOn },
     // There is no Care Plans page: the closest existing screen is the review of authorization changes (see docs/releases/2026-10-26-redesign).
     { to: AUTHORIZATIONS_PATH, label: "Authorization changes", group: "Clients", show: hasPermission("authorizations.update") || hasPermission("shifts.manage") },
     { to: "/care-team", label: "Caregivers", group: "Staff", show: hasPermission("caregivers.manage") || canManageVisits },
@@ -181,6 +190,10 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: REPORTS_PATH, label: "Visits", group: "Operations", show: canReadVisits, matchView: isVisitListView },
     { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "Operations", show: canBill ? canReadVisits : staff && canManageVisits, matchView: isExceptionsView },
     { to: "/outage-visits", label: "Outage records", group: "Operations", show: staff && canManageVisits },
+    { to: "/verification", label: "Visit verification", group: "Operations", show: staff && canReadVisits && verificationOn },
+    { to: "/home-stickers", label: "Home stickers", group: "Operations", show: staff && hasPermission("clients.manage") && verificationOn },
+    // Compliance: caregivers on a hold AND the admin-approved exceptions (0123). Always listed for people who may read compliance, so it can be opened even when the action queue is empty.
+    { to: "/compliance", label: "Caregiver holds", group: "Operations", show: staff && hasPermission("readiness.read") },
     { to: "/settings/roles", label: "Roles & Permissions", group: "Settings", show: staff && hasPermission("staff.read") },
     // Agency Settings opens the first agency page the person may use (branding, then services, then continuity); the others are its tabs.
     { to: agencyTo, label: "Agency Settings", group: "Settings", show: staff && (canSettings || canServices || canContinuity) },
@@ -191,6 +204,9 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: SERVICES_PATH, label: "Services", group: "Settings", show: staff && canServices && agencyTo !== SERVICES_PATH },
     { to: "/continuity", label: "Continuity", group: "Settings", show: staff && canContinuity && agencyTo !== "/continuity" },
     // Appearance is everyone's; it is also in the menu footer next to Profile.
+    { to: "/operations-readiness", label: "Operations readiness", group: "Dashboard", show: staff && opsReadiness },
+    // Release Train 2 (0113): the notification centre. Caregivers find it under My Work; staff reach it from the Dashboard group and the header bell.
+    { to: "/notifications", label: center.unread > 0 ? `Notifications (${center.unread})` : "Notifications", group: staff ? "Dashboard" : "My Work", show: center.available && (staff || hasCaregiverAccess) },
     { to: "/settings/appearance", label: "Appearance", group: "Settings", tabOnly: true, under: "Agency Settings", show: true },
     // The caregiver's own day. There is no separate tasks page: verifying a visit is the caregiver's task.
     { to: "/my-shifts", label: "My Schedule", group: "My Work", show: hasCaregiverAccess },

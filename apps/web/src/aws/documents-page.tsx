@@ -17,6 +17,7 @@ import { actionBtn, actionBtnPrimary, linkClass } from "./ui-classes";
 import { InfoTip } from "./ui/info-tip";
 import { ApiRequestError } from "@/lib/aws-api";
 import { MobileSortControl, SortButton, SortTh } from "./ui/sort-th";
+import { ExportMenu } from "./export-menu";
 import { useSortedRows } from "./ui/table-sort";
 
 
@@ -487,6 +488,8 @@ export function DocumentsPage() {
         lead={canRead ? "Staff credentials and their status. Uploaded is not verified until someone reviews it." : "Documents your agency has asked for. Take a clear photo or choose a PDF, add the dates on it, and upload."}
       />
 
+      {canRead && shown.length > 0 ? <ExportMenu basename="documents" sheet="Documents" rows={shown.map((d) => ({ caregiver: d.personName, document: d.documentTypeName, status: d.displayStatus.replace(/_/g, " "), review: (d.reviewState ?? "").replace(/_/g, " "), currency: (d.currencyStatus ?? "").replace(/_/g, " "), issued: d.issuedOn ?? "", expires: d.verifiedExpiresOn ?? d.expiresOn ?? "", due: d.dueOn ?? "", daysUntil: d.daysUntil ?? "", uploaded: d.latestUploadedAt ?? "" }))}
+        columns={[["Caregiver", "caregiver"], ["Document", "document"], ["Status", "status"], ["Review", "review"], ["Currency", "currency"], ["Issued", "issued"], ["Expires", "expires"], ["Due", "due"], ["Days until", "daysUntil"], ["Last uploaded", "uploaded"]]} /> : null}
       {canRead && (holds > 0 || pending > 0) ? (
         <p role="status" className="flex flex-wrap items-center gap-x-3 rounded-og border border-amber-600 bg-amber-50 px-2.5 py-1.5 text-sm text-amber-900" data-testid="compliance-strip">
           <span><span aria-hidden="true">▲ </span>{holds > 0 ? `${holds} ${holds === 1 ? "caregiver is" : "caregivers are"} on a compliance hold` : null}{holds > 0 && pending > 0 ? " · " : null}{pending > 0 ? `${pending} with requirements pending` : null}</span>

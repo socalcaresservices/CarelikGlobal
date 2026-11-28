@@ -9,7 +9,7 @@
 // counted separately ("validation first") and listed, never silently counted as covered. Public (token) routes have no agency identity at all: reason recorded below.
 import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ageVisit, api, asActor, freshClient, seedWorld, signedVisit, type Actor, type TestDb, type World } from "../../../infra/aws/db/test/harness";
 import { createTestDbWithPending } from "../../../infra/aws/db/test/pending";
 import { MemoryEvidenceStore } from "../src/evidence";
@@ -48,6 +48,7 @@ function blocks(): Record<string, string> {
 const BLOCKS = blocks();
 
 beforeAll(async () => {
+  vi.stubEnv("OGEVIA_QR_ENCRYPTION_KEY", "c".repeat(64));   // 0124: label links are sealed with the existing QR key parameter
   db = await createTestDbWithPending();   // includes the PENDING migration (infra/aws/db/pending) so the staff routes are swept too
   // Every PENDING migration (infra/aws/db/pending/migrations: sign-in override, client labels, bulk import, duplicate staff) is applied too, so the routes that depend on them are
   // swept against the real functions and tables, not against "function does not exist".
@@ -60,7 +61,7 @@ beforeAll(async () => {
   } finally { adm.release(); }
   w = await seedWorld(db, 600);
   const evidence = new MemoryEvidenceStore();
-  handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), log: () => {} });
+  handler = createHandler({ config: CONFIG, db: { connect: () => db.admin.connect() }, evidence, identity: new MemoryIdentityAdmin(), email: { send: async () => ({ ok: true, messageId: "synthetic" }), appOrigin: "https://app.example.test" }, log: () => {} });
   const A = w.orgA;
   const f = await freshClient(db, w, w.caregiverA1, 6000, A, { before: 40, after: 40 });
   const rec = (await db.admin.query("select id from ogevia.caregiver_records where linked_user_id = $1 and organization_id = $2", [w.caregiverA1.userId, A])).rows[0].id as string;
@@ -99,6 +100,7 @@ beforeAll(async () => {
     confirmationRequestId: confirmationRequest?.request_id ?? rnd(), documentTypeId: docType ?? rnd(), officeId: rnd(), clientTypeId: clientType ?? rnd(), lateVisitId: lateVisit,
     // kinds with no cheap real row here: well-formed unknown ids (the 404 then proves "not found", not "other agency"); counted and listed separately
     careRequestId: rnd(), offerId: rnd(), impactId: rnd(), holdId: rnd(), versionId: rnd(), documentId: rnd(), lateConfirmationId: rnd(), adjustmentId: rnd(),
+    labelId: rnd(), exceptionId: rnd(), sessionId: rnd(), serviceLocationId: rnd(),   // 0124: replaced by real org A rows below (the session id stays a well-formed unknown id: a real one lives five minutes)
     pickupRequestId: rnd(), openShiftId: shift, availabilityRequestId: rnd(), caregiverServiceApprovalId: rnd(), excludeShiftId: shift, excludeClientId: f.client, authorizationLineageId: rnd(), correctedByUserId: w.managerA.userId,
   };
   // --- real rows for the rest, made through the product's own routes as org A people ------------------------------------------------------------------
@@ -135,6 +137,8 @@ beforeAll(async () => {
   real("pickupRequestId", firstId(pk.body, ["requestId", "id"]));
   const csa = await make(w.ownerA, "POST /v1/caregiver-services", { caregiverRecordId: rec, serviceId: f.service });
   real("caregiverServiceApprovalId", csa.body.approvalId ?? csa.body.id);
+  // 0123 readiness override: a real org A override, so the revoke route reaches the database check (a missing CPR on org A's caregiver, approved by org A's owner)
+  real("overrideId", (await db.admin.query("insert into ogevia.caregiver_readiness_overrides (organization_id, caregiver_record_id, requirement, issue_status, issue_key, reason, approved_by) values ($1,$2,'cpr','missing','missing:none:','Synthetic override for the isolation sweep',$3) returning id", [A, rec, w.ownerA.userId])).rows[0].id);
   // staff management (pending migration 0086): a real staff type and a real staff profile of org A
   const st = await make(w.ownerA, "POST /v1/staff-types", { name: "Synthetic Staff Type" });
   real("staffTypeId", st.body.staffType?.id);
@@ -196,6 +200,14 @@ beforeAll(async () => {
   // an amendment below what is already used records an impact for the signed visits (org A people only)
   const am = await make(w.managerA, "POST /v1/authorizations/{authorizationId}/amend", { monthlyAuthorizedMinutes: 10, periodStart: (await db.admin.query("select to_char(period_start,'YYYY-MM-DD') d from ogevia.client_authorizations where id=$1", [f.auth])).rows[0].d, periodEnd: (await db.admin.query("select to_char(period_end,'YYYY-MM-DD') d from ogevia.client_authorizations where id=$1", [f.auth])).rows[0].d });
   real("impactId", am.body.affectedVisits?.[0]?.impactId);
+  // 0124 (pending migration, homeLabels switch): a real service location, a real label (assigned and with a link) and a real exception of org A
+  const sloc = await make(w.ownerA, "POST /v1/clients/{clientId}/service-locations", { kind: "home", name: "Synthetic Home", street: "1 Synthetic Way", city: "Synthetictown", zip: "90001", latitude: 34.0522, longitude: -118.2437 });
+  real("serviceLocationId", sloc.body.locationId);
+  const lreg = await make(w.ownerA, "POST /v1/home-labels", { count: 2 });
+  const lassign = ids.serviceLocationId && lreg.body.codes ? await make(w.ownerA, "POST /v1/home-labels/assign", { labelCode: lreg.body.codes[0], serviceLocationId: ids.serviceLocationId, confirmedAddress: true }) : { body: {} as any };
+  real("labelId", lassign.body.labelId);
+  const exId = (await db.admin.query("insert into ogevia.visit_exceptions (organization_id, kind, dedupe_key, visit_id, caregiver_user_id, client_id) values ($1,'location_issue','sweep:synthetic',$2,$3,$4) returning id", [A, signed, w.caregiverA1.userId, f.client])).rows[0].id as string;
+  real("exceptionId", exId);
   real("holdId", (await make(w.managerA, "POST /v1/clients/{clientId}/service-holds")).body.holdId);
   for (const k of ["careRequestId", "offerId", "caregiverServiceApprovalId", "authorizationLineageId"]) if (!madeReal.has(k)) synthetic.add(k);
 }, 120_000);
@@ -245,6 +257,23 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "decisionId") return ids.decisionId;
   if (route === "POST /v1/business-documents" && name === "id") return undefined;
   if (ids[name]) return ids[name];
+  // Release Train 2 (0113-0116): well-formed values, so every probe reaches the database check
+  if (name === "keepProfileId") return ids.profileId;
+  if (name === "serviceZip") return "92596";
+  if (name === "audience" && route === "POST /v1/offices/{officeId}/cover-audience") return "none";
+  if (name === "batchId") return (ids.batchId ??= randomUUID());
+  if (name === "linkId") return (ids.linkId ??= randomUUID());
+  if (name === "resolutions") return {};
+  if (name === "ids" && route === "POST /v1/notification-center/mark") return [randomUUID()];
+  // 0117 texting: well-formed values, so every probe reaches the database check
+  // 0118 service location: well-formed values
+  if (/service-location/.test(route)) { if (name === "zip") return "92596"; if (name === "city") return "Winchester"; if (name === "county") return "Riverside"; if (name === "officeId") return ids.officeId; }
+  if (name === "phone") return "9515550123";
+  if (name === "consent") return true;
+  if (route === "POST /v1/sms-oncall" && name === "action") return "add";
+  if (route === "POST /v1/sms-oncall" && name === "label") return "On-call";
+  if (route === "POST /v1/sms-settings" && (name === "quietStart" || name === "quietEnd")) return name === "quietStart" ? "21:00" : "08:00";
+  if (route === "POST /v1/sms-settings" && name === "provider") return "mock";
   // 0111 office assignments, counties and colour: well-formed values, so every probe reaches the database check
   if (name === "primaryOfficeId") return ids.officeId;
   if (name === "secondaryOfficeIds") return [];
@@ -254,6 +283,25 @@ function valueFor(route: string, name: string, block: string, org: string): unkn
   if (name === "subjectType") return "client";
   if (name === "subjectId") return ids.clientId;
   if (name === "status" && route === "GET /v1/availability/requests") return "pending";
+  // 0124: well-formed values so every probe reaches the database check
+  if (name === "kind" && /service-locations/.test(route)) return "home";
+  if (name === "kind" && /visit-exceptions/.test(route)) return undefined;
+  if (name === "locationId") return undefined;
+  if (name === "report" && /verification-reports/.test(route)) return "billing_review";
+  if (name === "labelCode" || name === "newLabelCode") return "OGL-ABCDEFGH";
+  if (name === "token" && /label-punch/.test(route)) return "f".repeat(64);
+  if (name === "link" && /home-labels\/resolve/.test(route)) return `https://app.example.test/l#${"f".repeat(64)}`;
+  if (name === "nearlyPercent") return 85;
+  if (name === "recipientEmail") return "synthetic@example.test";
+  if (name === "ownerUserId") return ids.userId;
+  if (name === "latitude") return 34.0522;
+  if (name === "longitude") return -118.2437;
+  if (name === "accuracyM") return 20;
+  if (name === "radiusM") return 150;
+  if (name === "accuracyLimitM") return 100;
+  if (/Seconds$/.test(name)) return 600;
+  if (name === "attested" && /\/sign$/.test(route)) return true;
+  if (name === "strokes") return { width: 600, height: 200, strokes: [Array.from({ length: 40 }, (_, i) => [200 + 60 * Math.cos(i / 6), 100 + 40 * Math.sin(i / 4), i * 15]), Array.from({ length: 40 }, (_, i) => [330 + 60 * Math.cos(i / 6), 100 + 40 * Math.sin(i / 4), 700 + i * 15])] };
   if (name === "kind") return route === "GET /v1/readiness/flags" ? "service" : "weekly";
   if (name === "pairs") return [{ caregiverRecordId: ids.caregiverRecordId, serviceId: ids.serviceId }];
   if (name === "userIds") return [ids.userId];
@@ -444,13 +492,14 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
     return out;
   };
 
-  it("caregiver A2 (assigned to one client only): the only POST routes that succeed are her own availability request, experience and notification read", async () => {
-    expect((await ok2xx(w.caregiverA2, POSTS)).sort()).toEqual(["POST /v1/availability/requests", "POST /v1/experience/me", "POST /v1/notifications/read"]);
+  it("caregiver A2 (assigned to one client only): the only POST routes that succeed are her own availability request, experience notification read and (0124) her own clock-in attempt, which names only her own visits", async () => {
+    // Release Train 2 (0113): her own notification centre (mark read/archive) and her own notification preferences, nothing else.
+    expect((await ok2xx(w.caregiverA2, POSTS)).sort()).toEqual(["POST /v1/availability/requests", "POST /v1/experience/me", "POST /v1/my-sms", "POST /v1/notification-center/mark", "POST /v1/notification-preferences", "POST /v1/notifications/read", "POST /v1/visit-punch"]);
   });
 
   it("caregiver A2: every GET answer is the stranger's answer (nothing) except her own scoped data, and none shows another caregiver's visit, shift, record, approval, authorization, document, hold or name", async () => {
     const OWN_SCOPE = ["GET /v1/appearance", "GET /v1/attention", "GET /v1/branding", "GET /v1/clients/assigned", "GET /v1/document-types", "GET /v1/experience-tags", "GET /v1/experience/me",
-      "GET /v1/notification-settings", "GET /v1/notifications", "GET /v1/work-hour-policy"];
+      "GET /v1/my-sms", "GET /v1/notification-center", "GET /v1/notification-preferences", "GET /v1/notification-settings", "GET /v1/notifications", "GET /v1/work-hour-policy"];
     const o = ids;
     const forbidden: Record<string, string> = { [o.visitId!]: "A1's signed visit", [o.lateVisitId!]: "A1's second visit", [o.caregiverRecordId!]: "A1's Care Team record", [o.userId!]: "A1's user id",
       [o.assignmentId!]: "A1's assignment", [o.confirmationRequestId!]: "A3's confirmation request", [o.billingApprovalId!]: "billing approval", [o.adjustmentId!]: "rounding adjustment",
@@ -489,10 +538,11 @@ describe("role sweep inside org A: a caregiver, a scheduler and a manager are re
     const got = (await ok2xx(w.schedulerA, POSTS)).sort();
     // shifts.manage, care_requests.manage and the read-evaluations (matching, readiness): scheduling and coverage work only.
     // 0109: care-notifications/read clears only the scheduler's OWN care-request alerts (care_requests.read), like notifications/read.
+    // Release Train 2 (0113): her own notification centre and preferences, and "Notify caregivers" for a shift (shifts.manage; it only creates notifications, assigns no one).
     expect(got).toEqual([
       "POST /v1/authorization-impacts/{impactId}/acknowledge", "POST /v1/care-alert-staff", "POST /v1/care-notifications/read", "POST /v1/care-portals", "POST /v1/care-portals/revoke", "POST /v1/care-requests/{requestId}/offers",
-      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
-      "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel"]);
+      "POST /v1/hour-limits", "POST /v1/matching/candidates", "POST /v1/my-sms", "POST /v1/notification-center/mark", "POST /v1/notification-preferences", "POST /v1/notifications/read", "POST /v1/readiness/evaluate", "POST /v1/shift-pickups/{requestId}/decline",
+      "POST /v1/shift-series/{seriesId}/end", "POST /v1/shifts/{shiftId}/cancel", "POST /v1/shifts/{shiftId}/notify-cover"]);
     // billing reads: the scheduler holds no billing permission, so they are the stranger's (empty) answer
     for (const route of ["GET /v1/billing-approvals", "GET /v1/billing-review", "GET /v1/billing-rounding/policies", "GET /v1/billing-rounding/preview", "GET /v1/accounts", "GET /v1/continuity/status"]) {
       const r = await callAs(w.schedulerA, route, w.orgA);

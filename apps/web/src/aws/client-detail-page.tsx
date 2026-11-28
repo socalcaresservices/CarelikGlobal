@@ -1,6 +1,8 @@
 import { ClientQrCard } from "./client-qr";
+import { HomeLabelsPanel } from "./home-labels-panel";
 import { HoursBreakdown } from "@/components/hours-breakdown";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNotificationCenter } from "./notification-center-data";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { agencyMonth, useAgencyClock } from "./agency-clock";
@@ -28,6 +30,8 @@ import { SummarySection } from "./ui/summary-section";
 import { actionBtn, actionBtnPrimary } from "./ui-classes";
 import { InfoTip } from "./ui/info-tip";
 import { ClientOfficeControl } from "./offices";
+import { ServiceLocationCard } from "./service-location";
+import { useServiceLocation } from "./service-location-data";
 
 const message = (cause: unknown, fallback: string) => (cause instanceof Error ? cause.message : fallback);
 const inputClass = "mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-base";
@@ -47,7 +51,10 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   const api = useAwsApi();
   const refresh = useRefreshClient();
   const { activeOrganizationId } = useOrganization();
-  const initial = { first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" };
+  const place = useServiceLocation(c.clientId).available;   // 0118: the service location section owns the city and ZIP; Details no longer carries them
+  const rules = useNotificationCenter().available && !place;   // open-shift alerts are on: the service address needs a city AND a ZIP code
+  const savedZip = useQuery({ queryKey: ["aws-client-zip", c.clientId], enabled: rules, retry: false, queryFn: async () => ((await api.get<{ location: { zip?: string | null } | null }>(`/v1/clients/${encodeURIComponent(c.clientId)}/zip`, { organizationId: activeOrganizationId })).location?.zip ?? "") });
+  const initial = { first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", zip: "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" };
   const [form, setForm] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [dupConfirmed, setDupConfirmed] = useState(false);
@@ -55,17 +62,19 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   const dupes = useDuplicateClients(nameChanged && editing ? form.first : "", nameChanged && editing ? form.last : "", c.clientId);
   const [state, setState] = useState<{ busy: boolean; error: string | null; done: boolean }>({ busy: false, error: null, done: false });
   const key = useRef(newIdempotencyKey());
-  useEffect(() => setForm({ first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" }),
-    [c.legalFirstName, c.legalLastName, c.city, c.clientTypeId, c.caregiverDisplayCode]);
+  useEffect(() => setForm({ first: c.legalFirstName ?? "", last: c.legalLastName ?? "", city: c.city ?? "", zip: savedZip.data ?? "", type: c.clientTypeId ?? "", label: c.caregiverDisplayCode ?? "" }),
+    [c.legalFirstName, c.legalLastName, c.city, c.clientTypeId, c.caregiverDisplayCode, savedZip.data]);
   const set = (k: keyof typeof form) => (v: string) => { setForm((f) => ({ ...f, [k]: v })); key.current = newIdempotencyKey(); setState((s) => ({ ...s, done: false })); };
   async function save() {
     if (!form.first.trim() || !form.last.trim()) return setState({ busy: false, error: "Enter the client's first and last name.", done: false });
     if (nameChanged && (dupes.data ?? []).some((m) => m.match === "same_name") && !dupConfirmed) return setState({ busy: false, error: "A client with this name already exists. Confirm it is a different person, or change the name.", done: false });
+    if (rules && !form.city.trim()) return setState({ busy: false, error: "Enter the city of the service address.", done: false });
+    if (rules && !/^[0-9]{5}$/.test(form.zip.trim())) return setState({ busy: false, error: "Enter the 5-digit ZIP code of the service address.", done: false });
     setState({ busy: true, error: null, done: false });
     try {
       await api.post(`/v1/clients/${encodeURIComponent(c.clientId)}/details`, {
         organizationId: activeOrganizationId, firstName: form.first.trim(), lastName: form.last.trim(),
-        city: form.city.trim() || null, clientTypeId: form.type || null, caregiverLabel: form.label.trim() || null,
+        city: form.city.trim() || null, ...(rules ? { serviceZip: form.zip.trim() } : {}), clientTypeId: form.type || null, caregiverLabel: form.label.trim() || null,
       }, { idempotencyKey: key.current });
       key.current = newIdempotencyKey();
       await refresh();
@@ -78,23 +87,23 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
   }
   if (!canManage) {
     return (
-      <SummarySection title="Details" summary={`City: ${c.city ?? "—"} · Type: ${c.clientTypeName ?? "—"} · Code: ${c.clientCode} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
+      <SummarySection title="Details" summary={`${place ? "" : `City: ${c.city ?? "—"} · `}Type: ${c.clientTypeName ?? "—"} · Code: ${c.clientCode} · Caregivers see: ${c.caregiverDisplayCode ?? c.clientCode}`}>
         <p className="text-sm text-slate-700">Name and contact changes are made by the office.</p>
-        <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>
+        {place ? null : <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>}
       </SummarySection>
     );
   }
   if (!editing) {
     return (
-      <SummarySection title="Details" id="details" testId="details-readonly" summary={[c.city, c.clientTypeName].filter(Boolean).join(" · ") || "No city or type"}>
+      <SummarySection title="Details" id="details" testId="details-readonly" summary={[place ? null : c.city, c.clientTypeName].filter(Boolean).join(" · ") || (place ? "No type" : "No city or type")}>
         <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div><dt className="text-xs text-slate-600">Name</dt><dd>{clientName(c) ?? "Not set"}</dd></div>
-          <div><dt className="text-xs text-slate-600">City</dt><dd>{c.city ?? "—"}</dd></div>
+          {place ? null : <div><dt className="text-xs text-slate-600">City</dt><dd>{c.city ?? "—"}</dd></div>}
           <div><dt className="text-xs text-slate-600">Type</dt><dd>{c.clientTypeName ?? "—"}</dd></div>
           <div><dt className="text-xs text-slate-600">Client code</dt><dd>{c.clientCode}</dd></div>
           <div><dt className="text-xs text-slate-600">Caregivers see</dt><dd>{c.caregiverDisplayCode ?? c.clientCode}</dd></div>
         </dl>
-        <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>
+        {place ? null : <div className="mt-2"><ClientOfficeControl clientId={c.clientId} /></div>}
         <button type="button" className={`mt-2 ${actionBtn}`} onClick={() => { setEditing(true); setState({ busy: false, error: null, done: false }); }}>Edit details</button>
         {state.done ? <p role="status" className="mt-2 text-sm text-emerald-800">Saved. The change is in the client&apos;s history.</p> : null}
       </SummarySection>
@@ -107,7 +116,8 @@ function DetailsCard({ c, canManage }: { c: AdminClient; canManage: boolean }) {
       <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="mt-3 grid gap-3 sm:grid-cols-2">
         <div><label htmlFor="edit-first" className="block text-sm font-medium text-slate-700">First name</label><input id="edit-first" value={form.first} maxLength={80} autoComplete="off" onChange={(e) => set("first")(e.target.value)} className={inputClass} /></div>
         <div><label htmlFor="edit-last" className="block text-sm font-medium text-slate-700">Last name</label><input id="edit-last" value={form.last} maxLength={80} autoComplete="off" onChange={(e) => set("last")(e.target.value)} className={inputClass} /></div>
-        <div><label htmlFor="edit-city" className="block text-sm font-medium text-slate-700">City (optional)</label><input id="edit-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>
+        {place ? null : <div><label htmlFor="edit-city" className="block text-sm font-medium text-slate-700">{rules ? "City of the service address" : "City (optional)"}</label><input id="edit-city" value={form.city} maxLength={80} autoComplete="off" onChange={(e) => set("city")(e.target.value)} className={inputClass} /></div>}
+        {rules ? <div><label htmlFor="edit-zip" className="block text-sm font-medium text-slate-700">ZIP code of the service address</label><input id="edit-zip" value={form.zip} maxLength={5} inputMode="numeric" autoComplete="off" onChange={(e) => set("zip")(e.target.value.replace(/\D/g, ""))} className={inputClass} /></div> : null}
         <ClientTypeField id="edit-type" value={form.type} onChange={set("type")} />
         <div className="sm:col-span-2"><label htmlFor="edit-label" className="block text-sm font-medium text-slate-700">Label caregivers see instead of {c.clientCode} (optional)</label><input id="edit-label" value={form.label} maxLength={40} autoComplete="off" onChange={(e) => set("label")(e.target.value)} className={inputClass} /></div>
         {nameChanged ? <DuplicateWarning matches={dupes.data} confirmed={dupConfirmed} onConfirm={setDupConfirmed} /> : null}
@@ -429,6 +439,7 @@ export function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const { hasPermission } = useOrganization();
   const clients = useClients();
+  const serviceLocationAvailable = useServiceLocation(clientId ?? "").available;   // 0118 (a hook: it stays above every early return)
   if (!hasPermission("clients.names.read")) return <p className="text-sm text-slate-600">You do not have access to client records.</p>;
   if (clients.isLoading) return <p className="text-sm text-slate-500">Loading…</p>;
   if (clients.isError) return <p role="alert" className="text-sm text-red-700">{(clients.error as Error).message}</p>;
@@ -453,9 +464,10 @@ export function ClientDetailPage() {
       <div id="readiness"><ReadinessCard clientId={c.clientId} /></div>
       <div id="documents"><ClientDocumentsCard clientId={c.clientId} /></div>
       <DetailsCard c={c} canManage={canManage} />
+      {canManage ? <ServiceLocationCard clientId={c.clientId} /> : null}
       {hasPermission("matching.read") ? <ClientExperience clientId={c.clientId} /> : null}
-      {hasPermission("matching.manage") ? <MatchingLocation clientId={c.clientId} /> : null}
-      {canManage ? <><StatusCard c={c} /><ClientQrCard key={c.clientId} clientId={c.clientId} /></> : null}
+      {hasPermission("matching.manage") && !serviceLocationAvailable ? <MatchingLocation clientId={c.clientId} /> : null}
+      {canManage ? <><StatusCard c={c} /><ClientQrCard key={c.clientId} clientId={c.clientId} /><HomeLabelsPanel key={`labels-${c.clientId}`} clientId={c.clientId} /></> : null}
       <div id="history"><ClientHistoryCard clientId={c.clientId} /></div>
     </div>
   );

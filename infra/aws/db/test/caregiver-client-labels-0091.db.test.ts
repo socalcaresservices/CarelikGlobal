@@ -25,7 +25,7 @@ beforeAll(async () => {
   db = await createTestDb();
   w = await seedWorld(db, 900);
   assigned = await freshClient(db, w, w.caregiverA1, 100000);
-  other = await freshClient(db, w, w.caregiverA2, 100000);
+  other = await freshClient(db, w, w.caregiverA2, 100000, w.orgA, { before: 5, after: 100 });
   await name(assigned.client, "Alexandra", "Fernandez-Synthetic", "Springfield");
   await name(other.client, "Brenda", "Quillfeather-Synthetic", "Shelbyville");
   await run(UP);

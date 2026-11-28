@@ -26,17 +26,22 @@ const base = () => ({
 
 describe("CPR/TB setup incomplete on the caregiver profile", () => {
   it("an administrator gets a link to the setup instead of Upload", async () => {
-    renderAws(`/care-team/${CG}`, ADMIN, base(), "organization_owner");
-    const row = (await screen.findByText("CPR certificate", undefined, { timeout: 15000 })).closest("li")!;
-    const link = within(row).getByRole("link", { name: "Set up CPR and TB" });
+    renderAws(`/care-team/${CG}?tab=readiness`, ADMIN, base(), "organization_owner");
+    const row = (await screen.findByText("CPR", undefined, { timeout: 15000 })).closest("li")!;
+    // one shared setup action, not one per row; the row says what is wrong and offers no Upload
+    const link = within(screen.getByTestId("cpr-tb-setup")).getByRole("link", { name: "Set up CPR and TB" });
     expect(link).toHaveAttribute("href", "/care-team#readiness-setup");
+    expect(screen.getAllByRole("link", { name: "Set up CPR and TB" })).toHaveLength(1);
+    expect(within(row).getByText("Setup needed")).toBeInTheDocument();
+    expect(within(row).getByText(/Document type not set up/)).toBeInTheDocument();
     expect(within(row).queryByRole("link", { name: "Upload" })).toBeNull();
   }, 30000);
 
   it("a manager without the setup permission is told to ask an administrator", async () => {
-    renderAws(`/care-team/${CG}`, MANAGER, base(), "manager");
-    const row = (await screen.findByText("TB clearance", undefined, { timeout: 15000 })).closest("li")!;
-    expect(within(row).getByText("Ask an administrator")).toBeInTheDocument();
-    expect(within(row).queryByRole("link", { name: /Set up|Upload/ })).toBeNull();
+    renderAws(`/care-team/${CG}?tab=readiness`, MANAGER, base(), "manager");
+    const row = (await screen.findByText("TB", undefined, { timeout: 15000 })).closest("li")!;
+    expect(within(screen.getByTestId("cpr-tb-setup")).getByText(/Ask an administrator to set up CPR and TB/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Set up|Upload/ })).toBeNull();
+    expect(within(row).getByText("Setup needed")).toBeInTheDocument();
   }, 30000);
 });
