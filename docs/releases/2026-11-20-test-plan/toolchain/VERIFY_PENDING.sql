@@ -1,4 +1,4 @@
--- READ-ONLY verification of pending migrations 0113-0123. Writes nothing.
+-- READ-ONLY verification of pending migrations 0113-0125. Writes nothing.
 --   psql -X -At -F '|' -v mig=0113 -v expect=absent|present -f VERIFY_PENDING.sql
 -- One row per check: name|t|detail (t = ok, f = FAILING). The wrapper counts rows and fails on any "|f|".
 -- Tables: must exist (present) / not exist (absent). Functions (by schema + name): must exist, be SECURITY DEFINER, have a pinned
@@ -10,7 +10,8 @@ with t(mig, rel) as (values
   ('0114','ogevia.office_branding'),
   ('0115','ogevia.import_batch_records'),('0115','ogevia.import_batch_rollbacks'),
   ('0116','ogevia.staff_merge_snapshots'),('0116','ogevia.staff_merge_reversals'),
-  ('0117','ogevia.sms_settings'),('0117','ogevia.sms_contacts'),('0117','ogevia.sms_oncall'),('0117','ogevia.sms_messages'),('0117','ogevia.sms_inbound_log'),('0118','ogevia.zip_county_reference'),('0123','ogevia.caregiver_readiness_overrides')
+  ('0117','ogevia.sms_settings'),('0117','ogevia.sms_contacts'),('0117','ogevia.sms_oncall'),('0117','ogevia.sms_messages'),('0117','ogevia.sms_inbound_log'),('0118','ogevia.zip_county_reference'),('0123','ogevia.caregiver_readiness_overrides'),
+  ('0124','ogevia.visit_verification_settings'),('0124','ogevia.client_service_locations'),('0124','ogevia.service_location_rules'),('0124','ogevia.shift_location_overrides'),('0124','ogevia.home_labels'),('0124','ogevia.home_label_events'),('0124','ogevia.visit_punches'),('0124','ogevia.visit_exceptions'),('0124','ogevia.visit_exception_events'),('0124','ogevia.visit_signature_followups'),('0124','ogevia.visit_signature_events'),('0124','ogevia.visit_signature_sessions'),('0124','ogevia.punch_correction_requests')
 ), f(mig, sch, fn) as (values
   ('0113','ogevia_api','get_cover_notification_settings'),('0113','ogevia_api','set_cover_notification_settings'),('0113','ogevia_api','set_cover_office_audience'),
   ('0113','ogevia_api','list_cover_office_audiences'),('0113','ogevia_api','notify_cover_shift'),('0113','ogevia_api','system_cover_notify_orgs'),
@@ -23,7 +24,8 @@ with t(mig, rel) as (values
   ('0117','ogevia_api','list_sms_history'),('0117','ogevia_api','system_sms_escalate_orgs'),('0117','ogevia_api','system_sms_inbound'),('0117','ogevia_api','system_sms_claim'),('0117','ogevia_api','system_sms_record'),
   ('0118','ogevia_api','get_client_service_location'),('0118','ogevia_api','set_client_service_location'),
   ('0120','ogevia_api','get_cover_shift'),
-  ('0123','ogevia_api','approve_readiness_override'),('0123','ogevia_api','revoke_readiness_override'),('0123','ogevia_api','list_readiness_overrides')
+  ('0123','ogevia_api','approve_readiness_override'),('0123','ogevia_api','revoke_readiness_override'),('0123','ogevia_api','list_readiness_overrides'),
+  ('0124','ogevia_api','save_service_location'),('0124','ogevia_api','list_service_locations'),('0124','ogevia_api','set_service_location_rule'),('0124','ogevia_api','set_shift_location_override'),('0124','ogevia_api','get_expected_locations'),('0124','ogevia_api','save_verification_settings'),('0124','ogevia_api','get_verification_settings'),('0124','ogevia_api','register_home_labels'),('0124','ogevia_api','assign_home_label'),('0124','ogevia_api','deactivate_home_label'),('0124','ogevia_api','replace_home_label'),('0124','ogevia_api','get_home_label_link'),('0124','ogevia_api','list_home_labels'),('0124','ogevia_api','list_home_label_history'),('0124','ogevia_api','preview_home_label'),('0124','ogevia_api','record_punch'),('0124','ogevia_api','open_signature_session'),('0124','ogevia_api','check_signature_session'),('0124','ogevia_api','consume_signature_session'),('0124','ogevia_api','defer_visit_signature'),('0124','ogevia_api','set_signature_followup_owner'),('0124','ogevia_api','log_signature_delivery'),('0124','ogevia_api','flag_overdue_visits'),('0124','ogevia_api','list_visit_exceptions'),('0124','ogevia_api','resolve_visit_exception'),('0124','ogevia_api','list_visit_exception_history'),('0124','ogevia_api','request_punch_correction'),('0124','ogevia_api','decide_punch_correction'),('0124','ogevia_api','list_unsigned_checkouts'),('0124','ogevia_api','list_time_signature_register'),('0124','ogevia_api','list_corrections_audit'),('0124','ogevia_api','list_punch_billing_review'),('0124','ogevia_api','resolve_home_label_code'),('0124','ogevia_api','authorize_verification_export'),('0125','ogevia_api','list_authorization_worklist')
 ), p as (
   select f.mig, f.sch || '.' || f.fn as name, (select pr.oid from pg_proc pr join pg_namespace n on n.oid = pr.pronamespace where n.nspname = f.sch and pr.proname = f.fn limit 1) as oid
   from f where f.mig = :'mig'
