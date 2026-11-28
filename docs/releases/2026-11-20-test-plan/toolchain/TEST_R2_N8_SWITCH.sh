@@ -212,7 +212,9 @@ st="$(A cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].
 A lambda wait function-updated --function-name "$FN"
 A lambda get-function-configuration --function-name "$FN" --query '{CodeSha256:CodeSha256,Database:{host:Environment.Variables.DB_HOST,name:Environment.Variables.DB_NAME,secretArn:Environment.Variables.DB_SECRET_ARN}}' --output json > "$B/lambda-after.json"
 [[ "$(jq -S .Database "$B/lambda-after.json")" == "$(jq -S .Database "$B/test-lambda.json")" ]] && echo "PASS Handler still targets ogevia_sv_test, same host and secret" || stop "the Handler database settings changed"
-[[ "$(jq -r .CodeSha256 "$B/lambda-after.json")" != "$(jq -r .CodeSha256 "$B/test-lambda.json")" ]] && echo "PASS the Handler code changed" || stop "the Handler code did not change"
+if [[ "$(jq -r .CodeSha256 "$B/lambda-after.json")" != "$(jq -r .CodeSha256 "$B/test-lambda.json")" ]]; then echo "PASS the Handler code changed"
+elif grep -q "function code assets changed: no" "$B/gate-on.txt"; then echo "PASS the Handler code is the release code (an earlier switch of this release already deployed it)"
+else stop "the Handler code did not change"; fi
 A cloudformation get-template --stack-name "$STACK" --template-stage Original --query TemplateBody --output json > "$B/after-live.json"
 python3 "$TC/diff_gate_rt2.py" --stage "$STAGE" --live "$B/after-live.json" --new "$CAND" --expect post || stop "the deployed stack differs from the assembly"
 [[ "$(route_count "$B/after-live.json")" == "$((ROUTES_BEFORE + NEW_ROUTES))" ]] && echo "PASS $((ROUTES_BEFORE + NEW_ROUTES)) routes live" || stop "unexpected live route count"
