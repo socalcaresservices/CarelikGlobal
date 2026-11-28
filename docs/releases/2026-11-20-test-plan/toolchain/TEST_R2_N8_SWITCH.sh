@@ -68,6 +68,8 @@ handler_fn() { A cloudformation list-stack-resources --stack-name "$STACK" --out
 route_count() { python3 -c 'import json,sys; t=json.load(open(sys.argv[1])); t=t.get("TemplateBody",t); print(sum(1 for r in t["Resources"].values() if r.get("Type")=="AWS::ApiGatewayV2::Route"))' "$1"; }
 code_get() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API_URL$1"; }
 code_post() { curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST -H 'content-type: application/json' -d '{}' "$API_URL$1"; }
+# API Gateway can take a few seconds to serve a route that was just created: retry for up to a minute before calling it wrong
+wait_code() { local want="$1" fn="$2" path="$3" c="" n; for n in 1 2 3 4 5 6 7 8 9 10 11 12; do c="$($fn "$path")"; [[ "$c" == "$want" ]] && break; sleep 5; done; echo "$c"; }
 CONFIG="$REPO/infra/aws/lib/config.ts"
 F_OLD='features: { staffManagement: true, signInOverride: true, bulkImport: true, staffDuplicates: false },'
 # edit_config <true|false>: the isolated-TEST features line only (exactly one match), synthesis only; the file is restored right after; the extra address is injected here and never committed.
@@ -219,8 +221,8 @@ A cloudformation get-template --stack-name "$STACK" --template-stage Original --
 python3 "$TC/diff_gate_rt2.py" --stage "$STAGE" --live "$B/after-live.json" --new "$CAND" --expect post || stop "the deployed stack differs from the assembly"
 [[ "$(route_count "$B/after-live.json")" == "$((ROUTES_BEFORE + NEW_ROUTES))" ]] && echo "PASS $((ROUTES_BEFORE + NEW_ROUTES)) routes live" || stop "unexpected live route count"
 c="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API_URL/v1/me")"; echo "GET /v1/me without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401"
-for r in $OFFICE_ROUTES_GET; do c="$(code_get "$r")"; echo "GET $r without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401: the route must exist and require a sign-in"; done
-for r in $OFFICE_ROUTES_POST; do c="$(code_post "$r")"; echo "POST $r without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401: the route must exist and require a sign-in"; done
+for r in $OFFICE_ROUTES_GET; do c="$(wait_code 401 code_get "$r")"; echo "GET $r without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401: the route must exist and require a sign-in"; done
+for r in $OFFICE_ROUTES_POST; do c="$(wait_code 401 code_post "$r")"; echo "POST $r without a token: $c"; [[ "$c" == 401 ]] || stop "expected 401: the route must exist and require a sign-in"; done
 for m in 0123 $MIGS; do bash "$TC/TEST_DB_SESSION.sh" bash "$TC/TEST_PENDING_LEDGER.sh" verify "$m" || stop "the database check after the deploy failed ($m)"; done
 rule="$(A events list-rules --name-prefix Ogevia-prod --query "Rules[?ScheduleExpression=='rate(5 minutes)'].Name" --output text)"; [[ -n "$rule" ]] && echo "PASS the 5-minute run still exists" || stop "the 5-minute run was not found"
 envs="$(A lambda get-function-configuration --function-name "$FN" --query 'Environment.Variables' --output json)"
