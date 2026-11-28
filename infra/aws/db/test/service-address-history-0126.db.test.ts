@@ -194,6 +194,95 @@ describe("0126 delete an address entered by mistake, history and scrubbing", () 
   });
 });
 
+describe("0126 a sticker is never anonymous: only an active, assigned, ready caregiver with an authorization may clock in, and every refusal is logged", () => {
+  /** Earlier tests in this file leave a caregiver's own visit open: close it (test setup only) so each case starts clean. */
+  async function closeOpen(cg: Actor) {
+    const c = await db.admin.connect();
+    try { await c.query("set session_replication_role = replica"); await c.query("update ogevia.service_visits set status = 'voided', voided_at = now(), voided_by = $1, void_reason = 'test cleanup' where caregiver_user_id = $1 and status in ('draft', 'awaiting_signature')", [cg.userId]); }
+    finally { await c.query("reset session_replication_role"); c.release(); }
+  }
+  async function stickerFor(cg: Actor, o: { periodDays?: { before: number; after: number } } = {}) {
+    await db.admin.query("update ogevia.shifts set status = 'cancelled' where caregiver_user_id = $1 and status = 'scheduled'", [cg.userId]);
+    await closeOpen(cg);
+    const f = await freshClient(db, w, cg, 600, w.orgA, o.periodDays);
+    const loc = await addHome(f.client, "10 Synthetic Way");
+    const [lab] = await register(); await assign(lab!.code, loc);
+    await createHelperShift(db, w.orgA, cg.userId, f.client, f.service);
+    return { ...f, loc, lab: lab!, hash: sha(lab!.token) };
+  }
+  const visitsFor = async (client: string) => (await db.admin.query("select count(*)::int n from ogevia.service_visits where client_id = $1", [client])).rows[0].n as number;
+  const exceptions = async (actor: string, reason: string) => (await db.admin.query("select count(*)::int n from ogevia.visit_exceptions where organization_id = $1 and caregiver_user_id = $2 and kind = 'failed_punch' and detail->>'reason' = $3", [w.orgA, actor, reason])).rows[0].n as number;
+  const audits = async (actor: string, action: string) => (await db.admin.query("select count(*)::int n from ogevia.audit_events where organization_id = $1 and actor_user_id = $2 and action = $3", [w.orgA, actor, action])).rows[0].n as number;
+  /** No client code, place, street or visit list: a field may exist but must be empty. */
+  const noClientInfo = (r: any) => {
+    expect(r.clientCode ?? null).toBeNull(); expect(r.city ?? null).toBeNull(); expect(r.shifts ?? null).toBeNull(); expect(r.visit ?? null).toBeNull();
+    expect(JSON.stringify(r)).not.toMatch(/Synthetictown|Synthetic Way|client_id/);
+  };
+
+  it("a signed-in person who is not an active caregiver of the agency (another agency, an office role) is refused: nothing created, no client information, logged once per hour in Visit Exceptions and Audit History", async () => {
+    const s = await stickerFor(w.caregiverA1);
+    for (const who of [w.caregiverB1, w.managerA]) {
+      const pre = await preview(who, s.hash);
+      expect(pre).toMatchObject({ state: "unavailable", reason: "not_authorized" }); noClientInfo(pre);
+      const r = await punch(who, s.hash, "arrival");
+      expect(r).toMatchObject({ outcome: "not_saved", reason: "not_authorized" }); expect(r.message).toMatch(/Nothing was clocked/); noClientInfo(r);
+      await punch(who, s.hash, "arrival"); await preview(who, s.hash);                        // a repeat tap or reload adds nothing
+      expect(await exceptions(who.userId, "not_authorized")).toBe(1);
+      expect(await audits(who.userId, "visit_label.denied")).toBe(1);
+    }
+    expect(await visitsFor(s.client)).toBe(0);
+    expect((await db.admin.query("select count(*)::int n from ogevia.visit_punches where client_id = $1", [s.client])).rows[0].n).toBe(0);
+  });
+
+  it("a suspended account and an inactive Care Team profile are refused; the reason is shown and the attempt is logged; no visit exists", async () => {
+    const s = await stickerFor(w.caregiverA3);
+    await db.admin.query("update ogevia.organization_memberships set status = 'suspended' where user_id = $1 and organization_id = $2", [w.caregiverA3.userId, w.orgA]);
+    expect(await punch(w.caregiverA3, s.hash, "arrival")).toMatchObject({ outcome: "not_saved", reason: "not_authorized" });
+    expect(await preview(w.caregiverA3, s.hash)).toMatchObject({ state: "unavailable", reason: "not_authorized" });
+    expect(await exceptions(w.caregiverA3.userId, "not_authorized")).toBe(1);
+    await db.admin.query("update ogevia.organization_memberships set status = 'active' where user_id = $1 and organization_id = $2", [w.caregiverA3.userId, w.orgA]);
+    await db.admin.query("update ogevia.caregiver_records set status = 'inactive' where linked_user_id = $1", [w.caregiverA3.userId]);
+    const r = await punch(w.caregiverA3, s.hash, "arrival");
+    expect(r).toMatchObject({ outcome: "not_saved", reason: "start_refused" }); expect(r.message).toMatch(/Care Team profile is not active/);
+    expect(await exceptions(w.caregiverA3.userId, "start_refused")).toBe(1);
+    expect(await audits(w.caregiverA3.userId, "visit_punch.denied")).toBe(1);
+    expect(await visitsFor(s.client)).toBe(0);
+    await db.admin.query("update ogevia.caregiver_records set status = 'active' where linked_user_id = $1", [w.caregiverA3.userId]);
+  });
+
+  it("an active caregiver who is not assigned to the client sees no client code or place, is refused, and it is logged", async () => {
+    const s = await stickerFor(w.caregiverA1);
+    await closeOpen(w.caregiverA2);
+    const pre = await preview(w.caregiverA2, s.hash);
+    expect(pre).toMatchObject({ state: "ready", action: "none", reason: "not_assigned" }); noClientInfo(pre);
+    const r = await punch(w.caregiverA2, s.hash, "arrival");
+    expect(r).toMatchObject({ outcome: "not_saved", reason: "not_assigned" }); expect(r.message).toMatch(/not assigned/); noClientInfo(r);
+    expect(await exceptions(w.caregiverA2.userId, "not_assigned")).toBe(1);
+    expect(await audits(w.caregiverA2.userId, "visit_punch.denied")).toBeGreaterThanOrEqual(1);
+    expect(await visitsFor(s.client)).toBe(0);
+    // the assigned caregiver DOES see the client code and place
+    expect(await preview(w.caregiverA1, s.hash)).toMatchObject({ state: "ready", clientCode: expect.any(String), city: "Synthetictown" });
+  });
+
+  it("an assigned caregiver with no current authorization is refused with the reason, logged, and no visit is created", async () => {
+    await db.admin.query("update ogevia.service_visits set status = 'voided' where false");
+    const s = await stickerFor(w.caregiverA2, { periodDays: { before: 60, after: -5 } });
+    const r = await punch(w.caregiverA2, s.hash, "arrival");
+    expect(r).toMatchObject({ outcome: "not_saved", reason: "start_refused" }); expect(r.message).toMatch(/authorization/i);
+    expect(await exceptions(w.caregiverA2.userId, "start_refused")).toBeGreaterThanOrEqual(1);
+    expect(await audits(w.caregiverA2.userId, "visit_punch.denied")).toBeGreaterThanOrEqual(1);
+    expect(await visitsFor(s.client)).toBe(0);
+  });
+
+  it("an eligible, assigned, authorized caregiver clocks in; and an unknown link attaches to nothing and shows nothing", async () => {
+    const s = await stickerFor(w.caregiverA1);
+    expect(await punch(w.caregiverA1, s.hash, "arrival")).toMatchObject({ outcome: "saved" });
+    const unknown = await punch(w.caregiverA2, sha("not-a-real-token"), "arrival");
+    expect(unknown).toMatchObject({ outcome: "not_saved", reason: "label_unavailable" }); noClientInfo(unknown);
+    expect(await preview(w.caregiverA2, sha("not-a-real-token"))).toMatchObject({ state: "unavailable" });
+  });
+});
+
 describe("0126 rollback", () => {
   it("restores the 0124 functions exactly and removes what 0126 added; the addresses stay", async () => {
     const before = (await db.admin.query("select count(*)::int n from ogevia.client_service_locations")).rows[0].n;

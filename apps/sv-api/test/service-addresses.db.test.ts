@@ -66,3 +66,16 @@ describe("service address routes", () => {
     expect((await list(f.client)).body.addresses.map((x: any) => x.locationId).sort()).toEqual([a, b].sort());
   });
 });
+
+describe("a sticker is never an anonymous way in", () => {
+  const token = "ab".repeat(32);
+  it("both sticker routes answer 401 without a sign-in, whatever the body says, and neither is a public route", async () => {
+    for (const [route, body] of [["POST /v1/label-punch/preview", { token }], ["POST /v1/label-punch", { token, intent: "arrival", organizationId: w.orgA }]] as const) {
+      const r = await handler(event(route, { sub: null, body, key: "11111111-2222-4333-8444-555555555555" }));
+      expect(r.statusCode, route).toBe(401);
+      expect(JSON.stringify(r.body)).not.toMatch(/client|city|visit/i);
+    }
+    const { ROUTES } = await import("../src/routes");
+    for (const k of ["POST /v1/label-punch/preview", "POST /v1/label-punch", "POST /v1/visit-punch"]) expect(ROUTES[k]!.public ?? false, k).toBe(false);
+  });
+});

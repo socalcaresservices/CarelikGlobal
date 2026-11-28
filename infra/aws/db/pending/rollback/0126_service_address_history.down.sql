@@ -292,6 +292,7 @@ drop function if exists ogevia.scl_before_insert();
 drop index if exists ogevia.client_service_locations_one_current_home;
 drop table if exists ogevia.service_location_events cascade;
 drop function if exists ogevia.sle_log(uuid, uuid, uuid, text, text, jsonb);
+drop function if exists ogevia.vv_log_denial(uuid, uuid, uuid, text, text);
 drop function if exists ogevia.sle_guard();
 alter table ogevia.client_service_locations drop constraint if exists client_service_locations_state_shape;
 alter table ogevia.client_service_locations drop column if exists inactive_reason, drop column if exists inactive_by, drop column if exists inactive_at, drop column if exists inactive_kind;

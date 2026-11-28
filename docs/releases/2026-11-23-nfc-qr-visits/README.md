@@ -149,3 +149,23 @@ This branch now contains PR #124 (merged in, so it carries #124's own migrations
 - **At the sticker:** an arrival at the sticker of a non-current address is refused with a plain message and shows in Visit exceptions; a departure is never blocked, so a visit that started before a switch can always be ended.
 - **Not built (decide if wanted):** scheduled switches by date (for example every other week). The switch is manual today.
 - Community places are not limited to one current place.
+
+## 13. Stickers are never anonymous (owner requirement 2026-11-28; part of migration 0126)
+A tap or scan only opens Ogevia: the visit page requires a normal Ogevia sign-in, and both API routes answer 401 without one (neither is a public route). After sign-in the database (not the browser) checks, in this order:
+
+| Check | Where it is enforced | If it fails |
+|---|---|---|
+| Signed in | API gateway (JWT) and `require_actor` | 401, nothing else happens |
+| Account active, and an active **caregiver** of the sticker's agency | `is_active_caregiver` (membership active, role caregiver, agency active) | "Your Ogevia account is not set up to use this sticker." No client information. Logged. |
+| Assigned to this client and service | `start_ad_hoc_service_visit` (assignment) and the shift match | "You are not assigned to this client." No client code or place is shown. Logged. |
+| Care Team profile active and readiness (documents, enforced checks) | `start_ad_hoc_service_visit` (profile) and `assert_ready_for_work` (OGR30) | The reason is shown; no visit. Logged. |
+| A current authorization covers the client and service | `start_ad_hoc_service_visit` | "No active authorization covers this client and service." No visit. Logged. |
+| The address is the client's **current** address | 0126 | "Not the current service address." Logged. |
+
+Every refusal: **no visit is created**, **no protected client information is shown** (a client code or place appears only to a caregiver who is assigned), the plain reason is shown, and the attempt is written to **Visit Exceptions** (once per person, client and reason per hour) and to **Audit History** (`visit_label.denied` for a refused tap, `visit_punch.denied` for a refused clock-in). A link that matches no sticker cannot be attached to any agency, so it cannot be logged; it shows nothing either.
+
+## 14. What an unmapped address affects (no map position saved)
+A client address needs a city and ZIP to be saved. A **map position** (latitude and longitude) is optional; without it the address is flagged "not located on a map".
+- **Not affected:** the sticker, clock-in and clock-out (they save), authorization, readiness, billing, and **signing on the phone** (signing now is still offered).
+- **Affected:** the phone's location cannot be compared with the address, so every punch there records the location result **Unavailable** and opens a **Location issue** in Visit Exceptions (one per punch). The **off-site checkout** rule cannot fire (it needs a mapped address and a phone location outside the range), so an unmapped address never sends a visit to "direct client confirmation".
+- **So an unmapped address does not by itself put a visit under Checked out without signature.** A visit lands there when the caregiver chooses **The client cannot sign right now** after clock-out, or when a **mapped** address is checked out from outside its range.

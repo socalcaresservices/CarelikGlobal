@@ -225,6 +225,21 @@ begin
 end;
 $$;
 
+-- A refused tap of a sticker is logged where staff look: Visit Exceptions (once per person, client and reason per hour, so reloading cannot flood it) and Audit History (once per exception).
+-- No client name, address or sticker link is stored: ids, a reason code and the intent only.
+create function ogevia.vv_log_denial(p_org uuid, p_label uuid, p_client uuid, p_reason text, p_intent text)
+returns void language plpgsql security definer set search_path = ogevia, pg_temp as $$
+declare v_actor uuid := ogevia.current_user_id(); v_ex uuid;
+begin
+  v_ex := ogevia.vv_open_exception(p_org, 'failed_punch', 'failed:' || v_actor::text || ':' || coalesce(p_client::text, '-') || ':' || p_reason || ':' || to_char(now(), 'YYYYMMDDHH24'), null, null, v_actor, p_client, null,
+    jsonb_build_object('reason', p_reason, 'intent', p_intent, 'source', 'label'));
+  if v_ex is not null then
+    perform ogevia.write_audit(p_org, 'visit_label.denied', 'home_labels', p_label, null, jsonb_build_object('reason', p_reason, 'intent', p_intent), null);
+  end if;
+end;
+$$;
+revoke all on function ogevia.vv_log_denial(uuid, uuid, uuid, text, text) from public;
+
 -- ---------------------------------------------------------------------------
 -- 0124 functions, replaced (the originals are in the rollback)
 -- ---------------------------------------------------------------------------
@@ -265,7 +280,7 @@ end;
 $$;
 
 create or replace function ogevia_api.preview_home_label(p_label_hash text)
-returns jsonb language plpgsql stable security definer set search_path = ogevia, pg_temp as $$
+returns jsonb language plpgsql volatile security definer set search_path = ogevia, pg_temp as $$
 declare
   v_actor uuid := ogevia.require_actor();
   v_label ogevia.home_labels%rowtype;
@@ -275,15 +290,26 @@ declare
   v_n integer;
   v_code text;
   v_loc ogevia.client_service_locations%rowtype;
+  v_assigned boolean;
 begin
   select * into v_label from ogevia.home_labels h where h.token_hash = p_label_hash;
+  if v_label.id is not null and v_label.status = 'active' and not ogevia.is_active_caregiver(v_label.organization_id) then
+    perform ogevia.vv_log_denial(v_label.organization_id, v_label.id, null, 'not_authorized', 'arrival');   -- signed in, but not an active caregiver of this agency
+  end if;
   if v_label.id is null or v_label.status <> 'active' or not ogevia.is_active_caregiver(v_label.organization_id) then
-    return jsonb_build_object('state', 'unavailable');
+    -- A signed-in person whose account is not an active caregiver of this agency is told so (it reveals nothing about any client); an unknown, replaced or turned-off sticker is just "cannot be used".
+    return jsonb_build_object('state', 'unavailable', 'reason', case when v_label.id is not null and v_label.status = 'active' then 'not_authorized' else 'label_unavailable' end);
   end if;
   v_record := ogevia.my_caregiver_record(v_label.organization_id);
   select coalesce(nullif(btrim(c.caregiver_display_code), ''), c.client_code) into v_code from ogevia.clients c where c.id = v_label.client_id;
   select * into v_loc from ogevia.client_service_locations l where l.id = v_label.service_location_id;
   select * into v_open from ogevia.service_visits v where v.caregiver_user_id = v_actor and v.status in ('draft', 'awaiting_signature') limit 1;
+  v_assigned := (v_open.id is not null and v_open.client_id = v_label.client_id)
+    or exists (select 1 from ogevia.caregiver_assignments a where a.organization_id = v_label.organization_id and a.client_id = v_label.client_id and a.caregiver_user_id = v_actor
+                and a.effective_start <= current_date and (a.effective_end is null or a.effective_end >= current_date))
+    or exists (select 1 from ogevia.shifts s where s.organization_id = v_label.organization_id and s.client_id = v_label.client_id and s.status = 'scheduled'
+                and (s.caregiver_user_id = v_actor or s.caregiver_record_id = v_record) and s.ends_at > now() - interval '12 hours');
+  if not v_assigned then v_code := null; end if;        -- no client code (or place) is shown to a caregiver who is not assigned to this client
   if v_open.id is not null then
     if v_open.client_id = v_label.client_id and v_open.status = 'draft' then
       return jsonb_build_object('state', 'ready', 'action', 'departure', 'organizationId', v_label.organization_id, 'clientCode', v_code, 'city', v_loc.city,
@@ -293,6 +319,7 @@ begin
       'organizationId', v_label.organization_id, 'clientCode', v_code);
   end if;
   if not v_loc.is_active then
+    if v_assigned then perform ogevia.vv_log_denial(v_label.organization_id, v_label.id, v_label.client_id, 'address_not_current', 'arrival'); end if;
     return jsonb_build_object('state', 'blocked', 'reason', 'address_not_current', 'organizationId', v_label.organization_id, 'clientCode', v_code);
   end if;
   select coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'startsAt', s.starts_at, 'endsAt', s.ends_at) order by s.starts_at), '[]'::jsonb), count(*) into v_shifts, v_n
@@ -304,6 +331,7 @@ begin
      and not exists (select 1 from ogevia.service_visits v where v.scheduled_shift_id = s.id and v.status not in ('voided', 'corrected'))
      and (select expected_start from ogevia.vv_expected_kinds(s.organization_id, s.id, s.service_id)) = 'home';
   if v_n = 0 then
+    if not v_assigned then perform ogevia.vv_log_denial(v_label.organization_id, v_label.id, v_label.client_id, 'not_assigned', 'arrival'); end if;
     return jsonb_build_object('state', 'ready', 'action', 'none', 'reason',
       case when exists (select 1 from ogevia.shifts s where s.organization_id = v_label.organization_id and s.client_id = v_label.client_id and s.status = 'scheduled' and (s.caregiver_user_id = v_actor or s.caregiver_record_id = v_record) and s.ends_at > now() - interval '12 hours')
            then 'no_visit_in_window' else 'not_assigned' end,
@@ -357,13 +385,15 @@ begin
 
   if v_source = 'label' then
     select * into v_label from ogevia.home_labels h where h.token_hash = p_label_hash for update;
-    if v_label.id is null or not ogevia.is_active_caregiver(v_label.organization_id) then
-      return jsonb_build_object('outcome', 'not_saved', 'reason', 'label_unavailable', 'message', 'This label cannot be used. Ask the office.');   -- nothing recorded: no agency to attach it to
+    if v_label.id is null then
+      return jsonb_build_object('outcome', 'not_saved', 'reason', 'label_unavailable', 'message', 'This label cannot be used. Ask the office.');   -- an unknown link: there is no agency to attach the attempt to
+    end if;
+    if not ogevia.is_active_caregiver(v_label.organization_id) or (p_organization_id is not null and p_organization_id <> v_label.organization_id) then
+      -- Signed in, but not an active caregiver of this agency (another agency, a disabled or removed account, an office role): nothing is created, no client information is returned, and the attempt is logged.
+      perform ogevia.vv_log_denial(v_label.organization_id, v_label.id, null, 'not_authorized', p_intent);
+      return jsonb_build_object('outcome', 'not_saved', 'reason', 'not_authorized', 'message', 'Your Ogevia account is not set up to use this sticker. Nothing was clocked. Ask the office.');
     end if;
     v_org := v_label.organization_id;
-    if p_organization_id is not null and p_organization_id <> v_org then
-      return jsonb_build_object('outcome', 'not_saved', 'reason', 'label_unavailable', 'message', 'This label cannot be used. Ask the office.');
-    end if;
     v_client := v_label.client_id;
     v_loc_id := v_label.service_location_id;
   else
@@ -503,6 +533,13 @@ begin
     if v_source = 'label' then update ogevia.home_labels set last_used_at = now() where id = v_label.id; end if;
   end if;
 
+  if v_outcome = 'not_saved' and v_reason is not null then
+    if v_reason not in ('no_visit_in_window', 'visit_cancelled', 'start_refused', 'open_visit_elsewhere', 'no_active_visit', 'wrong_home', 'end_refused', 'address_not_current', 'already_clocked_in', 'previous_visit_not_finished', 'too_soon') then
+      perform ogevia.vv_open_exception(v_org, 'failed_punch', 'failed:' || v_actor::text || ':' || coalesce(v_client::text, '-') || ':' || v_reason || ':' || to_char(now(), 'YYYYMMDDHH24'), null, null, v_actor, v_client, null,
+        jsonb_build_object('reason', v_reason, 'intent', p_intent, 'source', v_source));
+    end if;
+    perform ogevia.write_audit(v_org, 'visit_punch.denied', 'visit_punches', v_punch, null, jsonb_build_object('reason', v_reason, 'intent', p_intent, 'source', v_source), null);
+  end if;
   select s.id into v_row_shift from ogevia.shifts s where s.organization_id = v_org and s.id = coalesce(v_open.scheduled_shift_id, v_shift.id, p_shift_id);
   v_resp := jsonb_build_object('outcome', v_outcome, 'reason', v_reason, 'message', v_message, 'intent', p_intent, 'visitId', v_visit, 'savedAt', case when v_outcome = 'saved' then now() end,
     'locationResult', v_loc.result, 'distanceM', v_loc.distance_m, 'signing', v_signing, 'choices', v_choices, 'organizationId', v_org);

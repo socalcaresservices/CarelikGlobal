@@ -117,7 +117,7 @@ export function LabelPunchPage() {
     } finally { inFlight.current = false; setBusy(false); }
   }
 
-  if (!token || p?.state === "unavailable") return <Card><h1 className="text-xl font-semibold">Visit check-in</h1><p>This label cannot be used. Ask the office for help.</p></Card>;
+  if (!token || p?.state === "unavailable") return <Card><h1 className="text-xl font-semibold">Visit check-in</h1><p role="alert" data-testid="denied">{p?.reason === "not_authorized" ? "Your Ogevia account is not set up to use this sticker. Nothing was clocked. Ask the office." : "This label cannot be used. Ask the office for help."}</p></Card>;
   if (preview.isPending) return <Card><h1 className="text-xl font-semibold">Visit check-in</h1><p>Checking your schedule…</p></Card>;
   if (preview.isError || !p) return <Card><h1 className="text-xl font-semibold">Visit check-in</h1><p role="alert">Could not check your schedule. <button type="button" className="underline" onClick={() => void preview.refetch()}>Try again</button></p><p className="text-sm">Nothing was clocked.</p></Card>;
 
@@ -142,8 +142,10 @@ export function LabelPunchPage() {
     <h1 className="text-xl font-semibold">Visit check-in</h1>
     {p.clientCode ? <p>Client {p.clientCode}{p.city ? ` · ${p.city}` : ""}</p> : null}
     {p.state === "blocked" ? <>
-      <p role="status">{p.reason === "previous_visit_not_finished" ? "Finish the signature on your last visit first." : "You have another visit open. Finish it first."}</p>
-      <Button type="button" className="mt-3 min-h-12" onClick={() => navigate("/service-verification")}>Go to your open visit</Button>
+      {p.reason === "address_not_current"
+        ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm" data-testid="denied">This sticker is for an address that is not the current service address. Nothing was clocked. Ask the office.</p>
+        : <><p role="status">{p.reason === "previous_visit_not_finished" ? "Finish the signature on your last visit first." : "You have another visit open. Finish it first."}</p>
+          <Button type="button" className="mt-3 min-h-12" onClick={() => navigate("/service-verification")}>Go to your open visit</Button></>}
     </> : null}
     {p.state === "ready" && p.action === "none" ? <p role="status">{p.reason === "no_visit_in_window" ? "No visit is scheduled for you at this time. Nothing was clocked." : "You are not assigned to this client. Nothing was clocked."}</p> : null}
     {p.state === "ready" && p.action === "departure" && p.visit ? <>

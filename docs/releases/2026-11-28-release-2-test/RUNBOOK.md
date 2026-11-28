@@ -74,8 +74,21 @@ Confirmation text: `DEPLOY-TEST-serviceAddresses`. Expected: 4 routes added (all
 | 17 | Mark inactive / historical, with a reason | reason required; historical turns that sticker off; the address stays in the history; "Use this address again" works |
 | 18 | Delete an address entered by mistake | allowed only if it never had a sticker; refused otherwise with the reason; the history shows "Address deleted" and no street text |
 | 19 | Address history | opens on request, newest first, who and why; an edit shows the previous address |
+| 20 | Sticker needs an eligible sign-in | signed out: the page asks you to sign in; another agency's person, a manager, a suspended account, an inactive Care Team profile: "not set up to use this sticker", no client shown, **no visit**; each appears once under Visit exceptions (Failed punch) and in Audit History |
+| 21 | Unassigned caregiver | "You are not assigned to this client", no client code, no Clock in; logged |
+| 22 | Expired authorization | clock-in refused with the authorization reason; no visit; logged |
 
 Record device models, browsers, prompts shown, and screenshots under this folder.
+
+## 3b. Create a visit under "Checked out without signature" (exact steps, synthetic data only)
+This needs one real phone, the same one you use for the sticker test. Nothing has to be seeded.
+1. **Prepare (computer, as manager):** pick a synthetic client with an authorization covering today and a synthetic caregiver assigned to them. Under **Schedule**, add a shift for that caregiver that starts within the next 60 minutes (or has already started) and ends at least 30 minutes from now.
+2. **Address and sticker:** open the client, **Service address and home label**, add the address (city and ZIP), and **Assign a sticker** (register one first under **Operations, Home stickers**). A map position is optional.
+3. **Clock in (phone, signed in as that caregiver):** tap the sticker (or scan the QR code). Check the preview, then press **Clock in**. Wait **one minute** (an earlier clock-out is refused as "too soon").
+4. **Clock out:** tap the sticker again and press **Clock out**. If the shift has more than the early-checkout allowance left, press **Yes, clock out now**.
+5. **Defer the signature:** on the signing screen press **The client cannot sign right now**, choose **The client is not available to sign**, and confirm.
+6. **See it (computer, as manager):** **Operations, Visit verification**, tab **Checked out without signature**. The visit shows the reason ("Client unavailable"), its age, and an owner can be set. Set an owner and record a delivery attempt to test the rest of that screen.
+Alternative (needs a **mapped** address): clock out with the phone more than the address radius (150 m by default) away. The visit is saved, no signing is offered on the phone, and it appears with the reason **Off-site checkout**.
 
 ## 4. Rollback (reverse order, each step reversible)
 1. Set the three switches back to false and deploy (routes disappear; data stays).

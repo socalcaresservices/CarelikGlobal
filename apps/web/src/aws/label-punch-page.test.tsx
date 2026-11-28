@@ -120,6 +120,24 @@ describe("home label page", () => {
     await screen.findByText(/This label cannot be used/, undefined, { timeout: 15000 });
     expect(screen.queryByRole("button", { name: "Clock in" })).toBeNull();
   });
+  it("a signed-in person whose account cannot use stickers is told so in plain words, sees no client information and has no clock-in button", async () => {
+    renderPage({ preview: () => json(200, { state: "unavailable", reason: "not_authorized" }) });
+    expect(await screen.findByTestId("denied", undefined, { timeout: 15000 })).toHaveTextContent(/Your Ogevia account is not set up to use this sticker\. Nothing was clocked\. Ask the office\./);
+    expect(screen.queryByRole("button", { name: "Clock in" })).toBeNull();
+    expect(screen.queryByText(/Client /)).toBeNull();
+  });
+  it("a sticker for an address that is not the current one is refused in plain words, with no clock-in button", async () => {
+    renderPage({ preview: () => json(200, { state: "blocked", reason: "address_not_current", organizationId: ORG, clientCode: "CL-TEST000001" }) });
+    expect(await screen.findByTestId("denied", undefined, { timeout: 15000 })).toHaveTextContent(/not the current service address\. Nothing was clocked/);
+    expect(screen.queryByRole("button", { name: "Clock in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open visit/i })).toBeNull();
+  });
+  it("an assigned-to-nobody answer shows no client code and no action", async () => {
+    renderPage({ preview: () => json(200, { state: "ready", action: "none", reason: "not_assigned", organizationId: ORG }) });
+    await screen.findByText(/You are not assigned to this client\. Nothing was clocked\./, undefined, { timeout: 15000 });
+    expect(screen.queryByText(/Client /)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clock in" })).toBeNull();
+  });
   it("another open visit blocks a new clock-in and points to it", async () => {
     renderPage({ preview: () => json(200, { state: "blocked", reason: "open_visit_elsewhere", organizationId: ORG, clientCode: "CL-X" }) });
     await screen.findByText(/another visit open/i, undefined, { timeout: 15000 });
