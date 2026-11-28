@@ -10,6 +10,7 @@ Read-only: compares two CloudFormation templates (JSON files) and exits 0 only i
                      environment variables on the Handler. Nothing removed, nothing else changed.
       --expect post  after deployment: NO difference at all
 
+Stages `stage8a` (homeLabels, 29 routes), `stage8b` (authorizationWorklist, 1 route), `stage8c` (signatureEmail, 1 route): one per run, each after stage 7; use --expect off, then on, then post.
 Stage `stage7` (after stage 6 is live): 3 routes (the readiness override approve, revoke and list), new Handler code, nothing else; use --expect off, then on, then post.
 Stage `stage3` (after stage 2 is live): CODE ONLY (the exact-shift lookup rides on the existing GET /v1/open-shifts route as ?shiftId=). Use --expect off, then --expect post.
 Stage `stage2` (after stage 1 is live): 9 routes (7 texting, 2 service location), Handler env SMS_MODE=mock and SERVICE_LOCATION=on, new code assets; no new resource of any other kind.
@@ -24,6 +25,18 @@ ASSET_BUCKET = "cdk-hnb659fds-assets-300094796789-us-west-2"
 SECTIONS = ["AWSTemplateFormatVersion", "Description", "Parameters", "Outputs", "Conditions", "Mappings", "Rules", "Transform"]
 CODE_ONLY_PREFIXES = ("Handler", "IdentityHandler")
 STAGES = {
+    "stage8a": {   # Release 2, homeLabels (NFC/QR visit verification, migration 0124): 29 routes and new Handler code; no schedule, permission or environment variable is added
+        "routes": {"GET /v1/clients/{clientId}/service-locations", "GET /v1/home-labels", "GET /v1/home-labels/{labelId}/history", "GET /v1/shifts/{shiftId}/expected-locations", "GET /v1/verification-reports/{report}", "GET /v1/verification-settings", "GET /v1/visit-exceptions", "GET /v1/visit-exceptions/{exceptionId}/history", "POST /v1/clients/{clientId}/service-locations", "POST /v1/home-labels", "POST /v1/home-labels/assign", "POST /v1/home-labels/resolve", "POST /v1/home-labels/{labelId}/deactivate", "POST /v1/home-labels/{labelId}/link", "POST /v1/home-labels/{labelId}/replace", "POST /v1/label-punch", "POST /v1/label-punch/preview", "POST /v1/punch-corrections/{requestId}/decide", "POST /v1/services/{serviceId}/location-rule", "POST /v1/shifts/{shiftId}/location-override", "POST /v1/verification-settings", "POST /v1/visit-exceptions/{exceptionId}/resolve", "POST /v1/visit-punch", "POST /v1/visits/{visitId}/punch-corrections", "POST /v1/visits/{visitId}/sign", "POST /v1/visits/{visitId}/sign-later", "POST /v1/visits/{visitId}/signature-followup/delivery", "POST /v1/visits/{visitId}/signature-followup/owner", "POST /v1/visits/{visitId}/signature-session"},
+        "schedules": set(), "permission_prefixes": (), "handler_env": {},
+    },
+    "stage8b": {   # Release 2, authorizationWorklist (migration 0125): 1 route and new Handler code
+        "routes": {"GET /v1/authorization-worklist"},
+        "schedules": set(), "permission_prefixes": (), "handler_env": {},
+    },
+    "stage8c": {   # Release 2, signatureEmail (uses the email function that is already live): 1 route and new Handler code
+        "routes": {"POST /v1/visits/{visitId}/signature-link-email"},
+        "schedules": set(), "permission_prefixes": (), "handler_env": {},
+    },
     "stage7": {   # admin override of a CPR/TB readiness block (0123): 3 routes behind readinessOverrides and new Handler code; no schedule, permission or environment variable is added
         "routes": {"GET /v1/readiness-overrides", "POST /v1/caregivers/{caregiverRecordId}/readiness-override", "POST /v1/readiness-overrides/{overrideId}/revoke"},
         "schedules": set(), "permission_prefixes": (), "handler_env": {},

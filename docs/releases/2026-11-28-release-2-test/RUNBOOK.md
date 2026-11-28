@@ -28,12 +28,22 @@ bash $TC/TEST_DB_SESSION.sh bash $TC/TEST_PENDING_LEDGER.sh verify 0124
 `probe` refuses if a prerequisite is missing or the migration is already recorded; `verify` checks the ledger checksum plus 13 tables and 34 functions for 0124 (definer, pinned search_path, no PUBLIC execute, app role may execute) and the one 0125 function. The verification file itself is tested locally (`verify-pending-0124-0125.db.test.ts`).
 Both migrations are additive; 0124's rollback drops its 13 tables **with their rows** (the snapshot is the restore point), 0125's drops one function.
 
-## 2. Code and switches (API + web)
-The existing stage scripts (`TEST_RT2_N*.sh`) are hard-wired to their own migration and route set; **a stage-8 script for this release does not exist yet.** Until it does, do it as a normal reviewed TEST change set:
-1. In the isolated-TEST features line of `infra/aws/lib/config.ts` (the one `TEST_RT2_N7_READINESS_OVERRIDE.sh` edits) keep every switch that is ON today and add `homeLabels: true, authorizationWorklist: true, signatureEmail: true`. Do this first with all three **false** and deploy the code only; then turn them on one at a time (homeLabels, authorizationWorklist, signatureEmail), in that order.
-2. `cdk synth` / `cdk diff` for `Ogevia-prod-ServiceVerificationApi` each time. Expected: switches off = Handler code asset change only; each switch on = exactly its routes (29, 1, 1), all `AuthorizationType: JWT`, nothing else. Anything else: stop.
-3. Web: build for TEST stamped with the commit and publish with the existing method (`deploy-test-slice.sh` / the stage web step), then check the served `index.html` references the new bundle.
-4. Smoke (no token): each new route answers 401 (not 403/404/500) once its switch is on; with the switch off the route does not exist.
+## 2. Code and switches (API + web): `TEST_R2_N8_SWITCH.sh`, one switch per run
+The script follows the stage-7 pattern (guards, read-only capture of the live TEST state, both assemblies gated by `diff_gate_rt2.py` BEFORE anything changes, typed confirmation, `cdk deploy` of the one API stack, post-deploy checks, web publish and check). It **does not touch the database** (it only re-verifies 0123 and the migration the switch needs). Tested with stand-in tools (`test-r2-n8-switch.test.ts`: refusals, gate violation, happy path for each switch, rollbacks); **not yet run against real AWS**.
+```bash
+cd /tmp/ogevia && git pull --ff-only          # or re-clone; use the release commit printed in the PR
+export REPO=/tmp/ogevia OGEVIA_RELEASE_COMMIT=$(git rev-parse HEAD) OGEVIA_APP_BASE=$(git rev-parse HEAD)
+export WORK=/tmp/r2work && mkdir -p $WORK
+export OGEVIA_DEPLOY_APPROVAL=<your reference> OGEVIA_EXTRA_RECIPIENT=<the caregiver test email address already allowed on the TEST email function>
+TC=docs/releases/2026-11-20-test-plan/toolchain
+# run 1
+OGEVIA_SWITCH=homeLabels bash $TC/TEST_R2_N8_SWITCH.sh
+# run 2 (after run 1 is accepted)
+OGEVIA_SWITCH=authorizationWorklist OGEVIA_SWITCHES_ON=homeLabels bash $TC/TEST_R2_N8_SWITCH.sh
+# run 3
+OGEVIA_SWITCH=signatureEmail OGEVIA_SWITCHES_ON=homeLabels,authorizationWorklist bash $TC/TEST_R2_N8_SWITCH.sh
+```
+Expected route additions: 29, 1, 1 (all JWT). The script stops at the first failure and says why. Rollback for a run: `OGEVIA_SWITCH=<same> bash $TC/TEST_R2_N8_SWITCH.sh rollback-web`, then `rollback-routes`, then `rollback-api` (each asks you to type a confirmation).
 
 ## 3. Acceptance in TEST (synthetic client, caregiver, manager; owner signs off)
 | # | Check | Expected |
@@ -58,5 +68,5 @@ Record device models, browsers, prompts shown, and screenshots under this folder
 2. `TEST_PENDING_LEDGER.sh rollback 0125`, then `rollback 0124` (typed approval; 0124 drops its tables **with their rows**).
 3. The stage-7 web/API captures remain the rollback reference for the code.
 
-## 5. Not covered by this package
-A stage-8 automation script with its mocked test and gate (the pattern of `TEST_RT2_N7_*`). It is the next thing to build once the TEST state is confirmed by the `probe` above, so the script matches the real ledger and live template.
+## 5. Status
+0124 and 0125 were applied and verified in TEST by the operator on 2026-11-28 (ledger 125 rows, last 0125; snapshot `ogevia-r2-pre-0124-202611280143`). The code and switch steps (section 2) are next.
