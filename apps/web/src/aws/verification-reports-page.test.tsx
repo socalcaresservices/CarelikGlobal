@@ -13,7 +13,7 @@ const json = (code: number, body: unknown) => new Response(JSON.stringify(body),
 const STAFF = ["visits.read", "visits.manage", "clients.manage", "clients.names.manage", "reports.export", "clients.names.read", "billing.visits.read"];
 type Req = { method: string; path: string; query: URLSearchParams; body: Record<string, unknown> };
 
-function renderPage(opts: { perms?: string[]; on?: boolean; reports?: Record<string, unknown[]>; post?: (r: Req) => Response | null } = {}) {
+function renderPage(opts: { start?: string; perms?: string[]; on?: boolean; reports?: Record<string, unknown[]>; post?: (r: Req) => Response | null } = {}) {
   const requests: Req[] = [];
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
@@ -32,7 +32,7 @@ function renderPage(opts: { perms?: string[]; on?: boolean; reports?: Record<str
     getAccessToken: vi.fn(async () => "t"), signIn: vi.fn(), handleCallback: vi.fn(), startPasswordReset: vi.fn(), signOut: vi.fn() };
   const client = createAwsApiClient({ baseUrl: "https://api.example.test", getAccessToken: () => auth.getAccessToken(), fetch: fetchImpl as never });
   render(
-    <MemoryRouter initialEntries={["/verification"]}>
+    <MemoryRouter initialEntries={[opts.start ?? "/verification"]}>
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <CognitoAuthProvider client={auth as unknown as CognitoAuthClient}><AwsRoutes api={client} publicApi={client} /></CognitoAuthProvider>
       </QueryClientProvider>
@@ -54,7 +54,7 @@ describe("Visit verification page", () => {
     const exception = { exceptionId: "e1", kind: "location_issue", status: "open", openedAt: "2026-11-23T17:00:00Z", ageHours: 3, caregiverName: "Synthetic CG", clientCode: "CL-1", scheduledStart: "2026-11-23T16:00:00Z", actualTimeIn: "2026-11-23T16:01:00Z", actualTimeOut: null, visitId: "v1" };
     const { requests } = renderPage({ reports: { visit_exceptions: [exception] } });
     await screen.findByRole("tab", { name: "Visit exceptions" }, T);
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Visit exceptions", "Checked out without signature", "Visit time and signature register", "Corrections and audit", "Payroll and billing review", "Home label inventory"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Visit exceptions", "Checked out without signature", "Visit time and signature register", "Corrections and audit", "Payroll and billing review", "Home stickers (register and print)"]);
     const table = await screen.findByRole("table", { name: "Visit exceptions" });
     expect(within(table).getByText("Location issue")).toBeInTheDocument();
     expect(requests.find((r) => r.path === "/v1/verification-reports/visit_exceptions")!.query.get("status")).toBe("open");
@@ -159,7 +159,7 @@ describe("home label inventory and the printed label", () => {
       { labelId: "l2", labelCode: "OGL-BBBBBBBB", status: "unassigned", clientCode: null, locationName: null, locationCity: null, installedAt: null, lastUsedAt: null, replacedByCode: null },
     ];
     const { requests } = renderPage({ reports: { labels }, post: (r) => r.path === "/v1/home-labels" ? json(200, { batchId: "b1", codes: ["OGL-CCCCCCCC", "OGL-DDDDDDDD"] }) : null });
-    fireEvent.click(await screen.findByRole("tab", { name: "Home label inventory" }, T));
+    fireEvent.click(await screen.findByRole("tab", { name: "Home stickers (register and print)" }, T));
     const rows = await screen.findAllByTestId("label-row");
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent("OGL-AAAAAAAA");
@@ -170,6 +170,27 @@ describe("home label inventory and the printed label", () => {
     await screen.findByText(/2 stickers registered/);
     expect(requests.find((r) => r.method === "POST" && r.path === "/v1/home-labels")!.body).toEqual({ organizationId: ORG, count: 2 });
     expect(screen.getByRole("button", { name: /Download the supplier file \(IDs only\)/ })).toBeInTheDocument();
+  });
+  it("Home stickers has its own menu entry and page: the three steps are written out, register works and each row says where Print is", async () => {
+    const labels = [{ labelId: "l2", labelCode: "OGL-BBBBBBBB", status: "unassigned", clientCode: null, locationName: null, locationCity: null, installedAt: null, lastUsedAt: null, replacedByCode: null }];
+    const { requests } = renderPage({ start: "/home-stickers", reports: { labels }, post: (r) => r.path === "/v1/home-labels" ? json(200, { batchId: "b1", codes: ["OGL-CCCCCCCC"] }) : null });
+    await screen.findByRole("heading", { name: "Home stickers" }, T);
+    const steps = await screen.findByTestId("sticker-steps");
+    expect(steps).toHaveTextContent(/Register/);
+    expect(steps).toHaveTextContent(/Print, copy link or change/);
+    expect(steps).toHaveTextContent(/Service address and home label/);
+    expect(screen.getAllByRole("link", { name: "Home stickers" }).length).toBeGreaterThan(0);
+    const row = await screen.findByTestId("label-row");
+    expect(within(row).getByRole("button", { name: "Print, copy link or change" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("How many"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register stickers" }));
+    await screen.findByText(/1 stickers registered/);
+    expect(requests.find((r) => r.method === "POST" && r.path === "/v1/home-labels")!.body).toEqual({ organizationId: ORG, count: 1 });
+  });
+  it("Home stickers is not shown where the switch is off, and the menu has no link", async () => {
+    renderPage({ start: "/home-stickers", on: false });
+    await screen.findByText(/not turned on for your agency yet/, undefined, T);
+    expect(screen.queryByRole("link", { name: "Home stickers" })).toBeNull();
   });
   it("a printed label shows the QR code, the sticker ID and an instruction: no client name or address; three layouts", () => {
     for (const layout of ["discreet", "agency", "large"] as const) {

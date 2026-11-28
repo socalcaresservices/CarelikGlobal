@@ -27,7 +27,7 @@ const REPORTS: ReportDef[] = [
     columns: [["When", "occurredAt"], ["Kind", "kind"], ["Subject", "subject"], ["Requested by", "requester"], ["Approved by", "approver"], ["Reason", "reason"], ["New signature", "needsResigning"], ["Location decision", "locationDecision"]] },
   { key: "billing_review", title: "Payroll and billing review", hint: "Recorded and reviewed minutes with signature and exception status shown separately. A billing hold appears only where your agency turned one on.",
     columns: [["Visit", "visitNumber"], ["Date", "serviceDate"], ["Caregiver", "caregiverName"], ["Client", "clientCode"], ["Recorded (min)", "recordedMinutes"], ["Reviewed (min)", "reviewedMinutes"], ["Billable (min)", "billableMinutes"], ["Open exceptions", "openExceptions"], ["Signature", "signatureStatus"], ["Billing hold", "billingHold"]] },
-  { key: "label_inventory", title: "Home label inventory", hint: "Every sticker, its status and where it is installed. Client names and addresses are not shown here.", columns: [] },
+  { key: "label_inventory", title: "Home stickers (register and print)", hint: "Register new stickers, print or program them, and see every sticker with its status. Client names and addresses are not shown here.", columns: [] },
 ];
 const WORDS: Record<string, string> = { missing_punch: "Missing punch", failed_punch: "Punch not saved", overdue_clock_out: "Overdue clock-out", location_issue: "Location issue", overlap: "Overlap", disputed_signature: "Disputed signature", correction_request: "Correction request",
   within_range: "Within range", outside_range: "Outside range", unavailable: "Unavailable", low_accuracy: "Low accuracy", direct_required: "Direct confirmation needed", pending: "Pending", signed: "Signed", not_yet_due: "Not due yet",
@@ -199,4 +199,18 @@ function RowActions({ report, row, onChanged }: { report: string; row: Row; onCh
     </div>;
   }
   return null;
+}
+
+/** Operations > Home stickers: register, print or program, and see every sticker. The same inventory as the last tab of Visit verification, with its own menu entry. */
+export function HomeStickersPage() {
+  const { hasPermission } = useOrganization();
+  const { available } = useHomeLabelsAvailable(hasPermission("visits.read") || hasPermission("organization.update") || hasPermission("clients.manage"));
+  if (!hasPermission("clients.manage") && !hasPermission("visits.read")) return <p className="text-sm text-slate-600">You do not have access to this page.</p>;
+  if (!available) return <p className="text-sm text-slate-600">Home stickers are not turned on for your agency yet.</p>;
+  return (
+    <div className="space-y-3">
+      <h1 className="text-2xl font-semibold">Home stickers</h1>
+      <LabelInventory />
+    </div>
+  );
 }

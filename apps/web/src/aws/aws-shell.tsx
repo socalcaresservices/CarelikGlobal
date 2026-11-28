@@ -191,6 +191,7 @@ export function AwsShell({ children }: PropsWithChildren) {
     { to: REPORTS_PATH, search: "?view=exceptions", label: "Visits to review", group: "Operations", show: canBill ? canReadVisits : staff && canManageVisits, matchView: isExceptionsView },
     { to: "/outage-visits", label: "Outage records", group: "Operations", show: staff && canManageVisits },
     { to: "/verification", label: "Visit verification", group: "Operations", show: staff && canReadVisits && verificationOn },
+    { to: "/home-stickers", label: "Home stickers", group: "Operations", show: staff && hasPermission("clients.manage") && verificationOn },
     // Compliance: caregivers on a hold AND the admin-approved exceptions (0123). Always listed for people who may read compliance, so it can be opened even when the action queue is empty.
     { to: "/compliance", label: "Caregiver holds", group: "Operations", show: staff && hasPermission("readiness.read") },
     { to: "/settings/roles", label: "Roles & Permissions", group: "Settings", show: staff && hasPermission("staff.read") },

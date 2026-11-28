@@ -1,12 +1,13 @@
 // Home labels (0124): a client's service address, its NFC/QR sticker, and the agency's label inventory. Stickers carry an opaque link and a printed ID only: no client name, no address.
 // Everything here appears only where the homeLabels switch is on (the settings request succeeded) and for staff who may manage clients.
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { Button, Card } from "@carelik/ui";
 import { useOrganization } from "@/providers/organization-provider";
 import { useAwsApi } from "./aws-workspace";
-import { labelUrl, nfcSupported, qrScanSupported, readNfcLink, scanQrLink, useHomeLabelsAvailable, type LabelRow, type ServiceLocation } from "./home-labels-data";
+import { classifyLabelInput, LABEL_ID_EXAMPLE, labelUrl, nfcSupported, qrScanSupported, readNfcLink, scanQrLink, useHomeLabelsAvailable, type LabelRow, type ServiceLocation } from "./home-labels-data";
 
 const input = "mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-base";
 const fail = (cause: unknown) => (cause instanceof Error && cause.message ? cause.message : "Could not save. Check your connection and try again.");
@@ -129,6 +130,7 @@ export function HomeLabelsPanel({ clientId }: { clientId: string }) {
     <Card>
       <h2 className="text-lg font-semibold">Service address and home label</h2>
       <p className="text-sm text-slate-600">The sticker identifies this address. The caregiver's phone supplies its location at clock-in and clock-out to compare with it.</p>
+      <p className="text-sm"><Link to="/home-stickers" className="underline">Need a sticker? Register and print stickers under Home stickers</Link>, then enter its ID below.</p>
       {list.isPending ? <p>Loading…</p> : null}
       {(list.data ?? []).filter((l) => l.kind === "home").map((l) => <LocationRow key={l.locationId} location={l} onChanged={refresh} />)}
       {(list.data ?? []).some((l) => l.kind === "home") ? null : list.isSuccess ? <p>No service address yet.</p> : null}
@@ -175,10 +177,11 @@ export function AssignLabel({ locationId, street, onDone }: { locationId: string
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  const parsed = classifyLabelInput(value);
   async function resolveCode(): Promise<string> {
-    const v = value.trim();
-    if (/^OGL-[A-HJ-NP-Z2-9]{8}$/i.test(v)) return v.toUpperCase();
-    const r = await api.post<{ label: { labelCode: string } }>("/v1/home-labels/resolve", { organizationId: activeOrganizationId, link: v });
+    if (parsed.kind === "code") return parsed.code;
+    const r = await api.post<{ label: { labelCode: string } }>("/v1/home-labels/resolve", { organizationId: activeOrganizationId, link: value.trim() });
+    if (!r.label?.labelCode) throw new Error("This sticker is not registered for your agency. Register it first under Operations → Home stickers.");
     return r.label.labelCode;
   }
   async function capture(read: (s: AbortSignal) => Promise<string | null>) {
@@ -197,13 +200,26 @@ export function AssignLabel({ locationId, street, onDone }: { locationId: string
   }
   return (
     <div className="mt-2 space-y-2 rounded-xl bg-slate-50 p-3">
-      <label className="block text-sm font-medium">Sticker ID or link<input value={value} onChange={(e) => setValue(e.target.value)} className={input} placeholder="OGL-XXXXXXXX" autoComplete="off" /></label>
+      <label className="block text-sm font-medium">Sticker ID or sticker link
+        <input value={value} onChange={(e) => setValue(e.target.value)} className={input} placeholder={LABEL_ID_EXAMPLE} autoComplete="off" autoCapitalize="characters" spellCheck={false} aria-describedby="sticker-help sticker-check" />
+      </label>
+      <div id="sticker-help" className="space-y-1 text-xs text-slate-600">
+        <p>Enter <strong>either</strong>:</p>
+        <ul className="list-disc pl-5">
+          <li>the <strong>printed sticker ID</strong>: OGL- and 8 letters or digits, like <span className="font-mono">{LABEL_ID_EXAMPLE}</span> (never I, O, 0 or 1); or</li>
+          <li>the <strong>sticker link</strong> that the tag and QR code hold: it starts with https:// and ends with # and a long code. Use the buttons below to read it from the sticker.</li>
+        </ul>
+        <p>The phone chip's own serial number does not work. The sticker must already be registered under Operations → Home stickers.</p>
+      </div>
+      <p id="sticker-check" role="status" className={"text-sm " + (parsed.kind === "invalid" ? "text-red-700" : "text-emerald-700")}>
+        {parsed.kind === "invalid" ? parsed.message : parsed.kind === "code" ? `Sticker ID ${parsed.code} looks right.` : parsed.kind === "link" ? "Sticker link looks right." : ""}
+      </p>
       <div className="flex flex-wrap gap-2">
         {nfcSupported() ? <Button type="button" onClick={() => void capture(readNfcLink)}>Tap sticker (NFC)</Button> : null}
         {qrScanSupported() ? <Button type="button" onClick={() => void capture(scanQrLink)}>Scan QR code</Button> : null}
       </div>
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-1 h-5 w-5" /><span>The address on file is {street}, and the sticker is installed there.</span></label>
-      <Button type="button" disabled={busy || !confirmed || value.trim().length < 12} onClick={() => void assign()}>{busy ? "Saving…" : "Assign sticker"}</Button>
+      <Button type="button" disabled={busy || !confirmed || (parsed.kind !== "code" && parsed.kind !== "link")} onClick={() => void assign()}>{busy ? "Saving…" : "Assign sticker"}</Button>
       {note ? <p role="status" className="text-sm">{note}</p> : null}
     </div>
   );
@@ -234,6 +250,11 @@ export function LabelInventory() {
     <section aria-label="Home label inventory" className="space-y-3">
       {canManage ? <Card>
         <h2 className="text-lg font-semibold">Register stickers</h2>
+        <ol className="mb-2 list-decimal space-y-1 pl-5 text-sm text-slate-700" data-testid="sticker-steps">
+          <li><strong>Register</strong> here: choose how many. Each gets a printed ID like <span className="font-mono">OGL-7K3M9XQ2</span> and its own link.</li>
+          <li><strong>Print or program</strong> each one: find it in the list below, open <em>Print, copy link or change</em>, then <em>Preview or print</em>. For an NFC tag, <em>Copy link for tag programming</em> and write that link to the tag.</li>
+          <li><strong>Assign</strong> it to the home: open the client, then <em>Service address and home label</em>, and enter the sticker ID.</li>
+        </ol>
         <p className="text-sm text-slate-600">Each sticker gets a unique ID and its own link. The supplier file lists IDs only: no client names or addresses.</p>
         <label className="mt-2 block text-sm font-medium">How many<input inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} className={input} /></label>
         <Button type="button" className="mt-2" disabled={!/^\d+$/.test(count) || Number(count) < 1 || Number(count) > 500} onClick={() => void register()}>Register stickers</Button>
@@ -250,7 +271,7 @@ export function LabelInventory() {
           {l.clientCode ? <p className="text-sm">Client {l.clientCode} · {l.locationName}{l.locationCity ? `, ${l.locationCity}` : ""}{l.installedAt ? ` · installed ${day(l.installedAt)}` : ""}</p> : null}
           {l.lastUsedAt ? <p className="text-sm">Last used {day(l.lastUsedAt)}</p> : <p className="text-sm text-slate-600">Never used</p>}
           {l.replacedByCode ? <p className="text-sm">Replaced by {l.replacedByCode}</p> : null}
-          {canManage ? <><button type="button" className="text-sm underline" onClick={() => setOpenId(openId === l.labelId ? null : l.labelId)}>{openId === l.labelId ? "Hide actions" : "Actions"}</button>
+          {canManage ? <><button type="button" className="text-sm underline" onClick={() => setOpenId(openId === l.labelId ? null : l.labelId)}>{openId === l.labelId ? "Hide" : "Print, copy link or change"}</button>
             {openId === l.labelId ? <LabelActions label={l} onChanged={() => void cache.invalidateQueries({ queryKey: ["home-labels"] })} /> : null}</> : null}
         </li>)}
       </ul>
