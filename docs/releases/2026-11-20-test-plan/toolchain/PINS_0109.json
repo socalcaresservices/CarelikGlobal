@@ -3,7 +3,7 @@
     "switchOff": 259,
     "switchOn": 262
   },
-  "applicationCommit": "021e7bb059e9bc6bcbab6daab94e835131825076",
+  "applicationCommit": "fac35377f882fc2c248a18965c85239653be031d",
   "expectedLedger": {
     "after": "108/0109",
     "before": "107/0107"
