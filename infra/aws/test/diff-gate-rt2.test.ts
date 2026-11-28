@@ -90,3 +90,26 @@ describe("diff_gate_rt2.py (stage stage2)", () => {
     const only = clone(ON2); delete only.Resources[hid].Properties.Environment.Variables.SERVICE_LOCATION; expect(run2(L2, only, "on").code).toBe(1);
   });
 });
+
+// Stage 8: a later switch of the same release is deployed with the SAME Handler code as live (an earlier switch already deployed it). The gate must accept
+// exactly that stage's route and must not demand a Handler difference; it must still refuse a missing route.
+describe("diff_gate_rt2.py stage8b with a Handler identical to live", () => {
+  const synthWorklist = (on: boolean): T => {
+    const cfg = { ...ENVIRONMENTS.prod, features: { ...ENVIRONMENTS.prod.features, requestCleanup: true, offices: true, officeAssignments: true, assignmentHistory: true, authorizationWorklist: on } } as OgeviaEnvironmentConfig;
+    const p = buildOgeviaApp(newApp(), cfg, "plan").find((x) => x.stack.stackName.endsWith("-ServiceVerificationApi"))!;
+    return JSON.parse(JSON.stringify(Template.fromStack(p.stack).toJSON()));
+  };
+  const gate = (live: T, now: T, expect: string) => {
+    const r = spawnSync("python3", [GATE, "--stage", "stage8b", "--live", file("live8.json", live), "--new", file("new8.json", now), "--expect", expect], { encoding: "utf8" });
+    return { code: r.status, out: r.stdout + r.stderr };
+  };
+  it("accepts exactly the one route when the code is already live, and refuses when the route is absent", () => {
+    const live = assets(synthWorklist(false), "same");
+    const on = assets(synthWorklist(true), "same");
+    const ok = gate(live, on, "on");
+    expect(ok.out).toContain("EXPECTED-ONLY: YES (stage8b, on)");
+    expect(ok.code).toBe(0);
+    const none = gate(live, assets(synthWorklist(false), "same"), "on");
+    expect(none.code).toBe(1);
+  }, 120_000);
+});

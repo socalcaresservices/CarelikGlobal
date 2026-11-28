@@ -147,7 +147,8 @@ def compare(live, new, expect, stage):
                 changed.append(k)
                 continue
         bad.append("CHANGED resource %s (%s)" % (k, lr[k].get("Type")))
-    if expect == "on" and not env_added:
+    # the Handler environment is checked whenever the Handler differs from live (or this stage adds variables); a Handler identical to live (an earlier switch of the same release already deployed this code) has nothing to check
+    if expect == "on" and (st["handler_env"] or changed) and not env_added:
         bad.append("expected the Handler environment to gain exactly %s" % st["handler_env"])
     if expect == "post" and (changed or set(nr) - set(lr)):
         bad.append("expected NO difference after deployment, but the templates still differ")
